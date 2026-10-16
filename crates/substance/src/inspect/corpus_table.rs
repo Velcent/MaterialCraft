@@ -53,10 +53,17 @@ impl Display for FactsCells<'_> {
         let x = self.0;
         let n = |v: Option<usize>| v.map_or("-".to_string(), |v| v.to_string());
         let images = x.images.map_or("-".to_string(), |(ok, all)| format!("{ok}/{all}"));
-        let status = if x.failed_sections == 0 {
+        let mut problems = Vec::new();
+        if x.failed_sections > 0 {
+            problems.push(format!("{} section(s) failed", x.failed_sections));
+        }
+        if let Some((passed, checked)) = x.pixels.filter(|(p, c)| p != c) {
+            problems.push(format!("{} of {checked} pixel blocks failed", checked - passed));
+        }
+        let status = if problems.is_empty() {
             "ok".to_string()
         } else {
-            format!("{} section(s) failed", x.failed_sections)
+            problems.join(", ")
         };
         write!(
             f,

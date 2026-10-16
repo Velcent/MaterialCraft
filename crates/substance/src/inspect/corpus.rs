@@ -22,6 +22,15 @@ pub struct RowFacts {
     pub cache_entries: Option<usize>,
     pub document_objects: Option<usize>,
     pub failed_sections: usize,
+    /// (passed, checked) over images and cache entries; `None` unless pixels were verified.
+    pub pixels: Option<(usize, usize)>,
+}
+
+impl RowFacts {
+    /// Every section decoded and, if pixels were verified, every pixel block too.
+    pub fn is_clean(&self) -> bool {
+        self.failed_sections == 0 && self.pixels.is_none_or(|(passed, checked)| passed == checked)
+    }
 }
 
 impl RowFacts {
@@ -44,8 +53,20 @@ impl RowFacts {
             cache_entries: r.cache.as_ref().ok().map(|c| c.channels.total()),
             document_objects: r.document.as_ref().ok().map(|d| d.total()),
             failed_sections: r.failed_sections(),
+            pixels: pixel_totals(r),
         }
     }
+}
+
+fn pixel_totals(r: &ProjectReport) -> Option<(usize, usize)> {
+    let checks = [
+        r.resources.as_ref().ok().and_then(|s| s.pixels.as_ref()),
+        r.cache.as_ref().ok().and_then(|c| c.pixels.as_ref()),
+    ];
+    checks.into_iter().flatten().fold(None, |acc, v| {
+        let (p, c) = acc.unwrap_or((0, 0));
+        Some((p + v.passed, c + v.checked()))
+    })
 }
 
 pub struct Corpus {
@@ -102,4 +123,31 @@ impl Corpus {
 
 fn is_spp(path: &Path) -> bool {
     path.extension().is_some_and(|e| e.eq_ignore_ascii_case("spp"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn facts(failed_sections: usize, pixels: Option<(usize, usize)>) -> RowFacts {
+        RowFacts {
+            file_bytes: 0,
+            version: None,
+            meshes: None,
+            texture_sets: None,
+            images: None,
+            cache_entries: None,
+            document_objects: None,
+            failed_sections,
+            pixels,
+        }
+    }
+
+    #[test]
+    fn a_failed_pixel_block_makes_a_row_unclean() {
+        assert!(facts(0, None).is_clean());
+        assert!(facts(0, Some((5, 5))).is_clean());
+        assert!(!facts(0, Some((4, 5))).is_clean());
+        assert!(!facts(1, None).is_clean());
+    }
 }
