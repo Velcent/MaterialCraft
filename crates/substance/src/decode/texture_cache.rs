@@ -7,6 +7,7 @@
 use super::image::Compression;
 use super::lz4_payload::{self, RecordHeader};
 use super::DecodeError;
+use super::Decompressed;
 use crate::container::bytes::ByteReader;
 
 const RECORD: &str = "texture cache entry";
@@ -151,6 +152,11 @@ impl<'a> CacheTexture<'a> {
 
     pub fn decompress(&self) -> Result<Vec<u8>, DecodeError> {
         lz4_payload::decompress(RECORD, self.compression, self.raw_size, self.payload)
+    }
+
+    /// The pixel bytes, zero-padded if the stored block is short (see [`Decompressed`]). For importing.
+    pub fn decompress_padded(&self) -> Result<Decompressed, DecodeError> {
+        lz4_payload::decompress_padded(RECORD, self.compression, self.raw_size, self.payload)
     }
 }
 

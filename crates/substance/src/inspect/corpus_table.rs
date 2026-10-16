@@ -34,11 +34,20 @@ impl Display for CorpusTable<'_> {
         let clean = self
             .rows
             .iter()
-            .filter(|r| matches!(&r.outcome, Ok(x) if x.failed_sections == 0))
+            .filter(|r| matches!(&r.outcome, Ok(x) if x.is_clean()))
             .count();
+        let verified = self
+            .rows
+            .iter()
+            .any(|r| matches!(&r.outcome, Ok(x) if x.pixels.is_some()));
+        let what = if verified {
+            "every section and pixel block decoded"
+        } else {
+            "every section decoded"
+        };
         writeln!(
             f,
-            "\n{} files · {} opened · {} with every section decoded",
+            "\n{} files · {} opened · {} with {what}",
             self.rows.len(),
             opened,
             clean

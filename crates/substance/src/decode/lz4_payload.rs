@@ -116,6 +116,15 @@ pub(super) fn take_payload<'a>(
     }
 }
 
+/// Pixel bytes padded to the declared size, and how many bytes at the end the stored block did not cover.
+/// Painter occasionally writes an LZ4 block that is slightly short (seen once in the corpus: an 8K image
+/// 22,725 bytes short); importers can accept that with a warning instead of failing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Decompressed {
+    pub bytes: Vec<u8>,
+    pub missing: usize,
+}
+
 /// Decompresses `payload` into exactly `raw_size` bytes, validating sizes before allocating.
 pub(super) fn decompress(
     record: &'static str,
@@ -123,6 +132,27 @@ pub(super) fn decompress(
     raw_size: usize,
     payload: &[u8],
 ) -> Result<Vec<u8>, DecodeError> {
+    let d = decompress_padded(record, compression, raw_size, payload)?;
+    if d.missing > 0 {
+        return Err(DecodeError::invalid(
+            record,
+            format!(
+                "LZ4 block expanded to {} bytes, header says {raw_size}",
+                raw_size - d.missing
+            ),
+        ));
+    }
+    Ok(d.bytes)
+}
+
+/// Like [`decompress`], but a block that decodes cleanly to fewer bytes than declared is zero-padded and the
+/// shortfall reported. Corrupt blocks and wrong uncompressed sizes are still errors.
+pub(super) fn decompress_padded(
+    record: &'static str,
+    compression: Compression,
+    raw_size: usize,
+    payload: &[u8],
+) -> Result<Decompressed, DecodeError> {
     if raw_size > MAX_RAW_SIZE {
         return Err(DecodeError::invalid(
             record,
@@ -130,7 +160,10 @@ pub(super) fn decompress(
         ));
     }
     match compression {
-        Compression::None if payload.len() == raw_size => Ok(payload.to_vec()),
+        Compression::None if payload.len() == raw_size => Ok(Decompressed {
+            bytes: payload.to_vec(),
+            missing: 0,
+        }),
         Compression::None => Err(DecodeError::invalid(
             record,
             format!(
@@ -142,23 +175,20 @@ pub(super) fn decompress(
     }
 }
 
-fn decompress_lz4(record: &'static str, raw_size: usize, payload: &[u8]) -> Result<Vec<u8>, DecodeError> {
+fn decompress_lz4(record: &'static str, raw_size: usize, payload: &[u8]) -> Result<Decompressed, DecodeError> {
     if raw_size > payload.len().saturating_mul(LZ4_MAX_RATIO).saturating_add(16) {
         return Err(DecodeError::invalid(
             record,
             format!("{} LZ4 bytes cannot expand to {raw_size} bytes", payload.len()),
         ));
     }
-    let mut out = vec![0u8; raw_size];
-    let written = lz4_flex::block::decompress_into(payload, &mut out)
+    let mut bytes = vec![0u8; raw_size];
+    let written = lz4_flex::block::decompress_into(payload, &mut bytes)
         .map_err(|e| DecodeError::invalid(record, format!("LZ4 block: {e}")))?;
-    if written != raw_size {
-        return Err(DecodeError::invalid(
-            record,
-            format!("LZ4 block expanded to {written} bytes, header says {raw_size}"),
-        ));
-    }
-    Ok(out)
+    Ok(Decompressed {
+        bytes,
+        missing: raw_size - written,
+    })
 }
 
 #[cfg(test)]
@@ -177,11 +207,24 @@ mod tests {
     }
 
     #[test]
+    fn a_short_block_is_an_error_strictly_and_padded_leniently() {
+        let raw: Vec<u8> = (0..4096u32).map(|i| (i % 7) as u8).collect();
+        let packed = lz4_flex::block::compress(&raw);
+        let d = decompress_padded(R, Compression::Lz4, raw.len() + 10, &packed).unwrap();
+        assert_eq!(
+            (d.missing, &d.bytes[..raw.len()], &d.bytes[raw.len()..]),
+            (10, &raw[..], &[0u8; 10][..])
+        );
+        assert!(decompress(R, Compression::Lz4, raw.len() + 10, &packed).is_err());
+    }
+
+    #[test]
     fn corrupt_or_oversized_claims_fail_without_allocating() {
         assert!(decompress(R, Compression::Lz4, MAX_RAW_SIZE + 1, &[0; 16]).is_err());
         assert!(decompress(R, Compression::Lz4, 1 << 20, &[0xF0; 8]).is_err());
         assert!(decompress(R, Compression::Lz4, 64, &[0xFF; 64]).is_err());
         assert!(decompress(R, Compression::None, 3, &[1, 2]).is_err());
+        assert!(decompress_padded(R, Compression::None, 3, &[1, 2]).is_err());
         assert_eq!(decompress(R, Compression::None, 2, &[1, 2]), Ok(vec![1, 2]));
     }
 

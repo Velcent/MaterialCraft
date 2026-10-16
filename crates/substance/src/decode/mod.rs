@@ -11,3 +11,4 @@ pub mod settings;
 pub mod texture_cache;
 
 pub use error::DecodeError;
+pub use lz4_payload::Decompressed;
