@@ -7,6 +7,7 @@
 //! - [`blend`] and [`normal`]: blend modes and normal-vector maths.
 //! - [`layer`], [`texture_set`], [`doc`], [`report`]: the document model; [`validate`] its invariants.
 //! - [`stack`]: [`Compositor`], layer stack → channel.
+//! - [`working_space`]: the space layers blend in (linear light for sRGB channels).
 //! - [`output`]: [`MaterialMaps`], final PBR maps for the viewer and export.
 
 pub mod blend;
@@ -24,6 +25,7 @@ pub mod report;
 pub mod stack;
 pub mod texture_set;
 pub mod validate;
+pub mod working_space;
 
 pub use blend::BlendMode;
 pub use channel::{Channel, ChannelSpec, ColorSpace};

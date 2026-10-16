@@ -168,3 +168,77 @@ fn tiles_agree_across_entry_points() {
     assert_eq!(target.allocated_tiles(), 1);
     assert!(close(target.get(299, 139)[0], 1.2));
 }
+
+const C: Channel = Channel::BaseColor;
+
+fn color_paint(id: &str, rgb: [f32; 3], coverage: f32) -> Layer {
+    let mut img = TiledImage::new(2, 2, PixelFormat::from_id("rgba32f").unwrap()).unwrap();
+    img.set(0, 0, [rgb[0], rgb[1], rgb[2], coverage]);
+    let mut c = PaintContent::default();
+    c.set_image(C, img);
+    Layer::new(id, id, LayerKind::Paint(c)).with_blend(C, BlendMode::Normal, 1.0)
+}
+
+fn color_at(set: &TextureSet) -> [f32; 4] {
+    Compositor::new(set).composite_tex(C).0.px[0]
+}
+
+#[test]
+fn srgb_channels_blend_in_linear_light() {
+    use crate::paint::working_space::{linear_to_srgb as enc, srgb_to_linear as dec};
+    let mut s = set(2, 2);
+    s.layers.push(color_paint("red", [1.0, 0.0, 0.0], 0.5));
+    s.layers.push(color_paint("blue", [0.0, 0.0, 1.0], 0.5));
+    let d = dec(0.5); // the default, 0.5 sRGB
+    let red = d + (1.0 - d) * 0.5;
+    let expect = [enc(red * 0.5), enc(d * 0.25), enc(d * 0.25 + 0.5), 0.75];
+    let p = color_at(&s);
+    assert!(
+        (0..4).all(|i| close(p[i], expect[i])),
+        "{p:?} vs {expect:?}"
+    );
+    assert!(!close(p[0], 0.375)); // the sRGB-space result
+
+    // Multiply and a uniform fill: values are decoded, multiplied, re-encoded.
+    let mut s = set(2, 2);
+    let fill_c = |v: f32, mode| {
+        Layer::new(
+            "f",
+            "f",
+            LayerKind::Fill(Fill::uniform(vec![(C, [v, v, v, 1.0])])),
+        )
+        .with_blend(C, mode, 1.0)
+    };
+    s.layers.push(fill_c(0.6, BlendMode::Normal));
+    s.layers.push(fill_c(0.5, BlendMode::Multiply));
+    assert!(close(color_at(&s)[1], enc(dec(0.6) * dec(0.5))));
+    // Fully covered 8-bit values come back exactly.
+    s.layers.pop();
+    assert_eq!(color_at(&s)[0], 0.6);
+}
+
+#[test]
+fn channel_space_follows_the_spec() {
+    let mut s = set(2, 2);
+    assert_eq!(Compositor::new(&s).working_space(R), WorkingSpace::Stored);
+    assert_eq!(
+        Compositor::new(&s).working_space(C),
+        WorkingSpace::LinearLight
+    );
+    // Linear channels keep blending stored values (half coverage of 1.0 over 0.5).
+    s.layers
+        .push(paint("p", 2, 2, &[(0, 0, 1.0, 0.5)], BlendMode::Normal));
+    assert!(close(at(&s, 0, 0)[0], 0.75));
+    // A channel declared sRGB composites in linear light.
+    s.channels[0].color_space = crate::paint::ColorSpace::Srgb;
+    assert_eq!(
+        Compositor::new(&s).working_space(R),
+        WorkingSpace::LinearLight
+    );
+    let p = at(&s, 0, 0)[0];
+    use crate::paint::working_space::{linear_to_srgb, srgb_to_linear};
+    assert!(
+        close(p, linear_to_srgb(srgb_to_linear(0.5) * 0.5 + 0.5)),
+        "{p}"
+    );
+}

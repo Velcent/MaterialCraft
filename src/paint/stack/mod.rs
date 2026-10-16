@@ -9,7 +9,8 @@
 //!   against the stack below by the group's strength; any other mode composites the children in
 //!   isolation (from the default, coverage 0) and blends that over the stack with the group's mode.
 //!
-//! The output's RGB is the channel value, alpha the accumulated coverage.
+//! Layers blend in the channel's working space (see [`super::working_space`]): sRGB channels in linear
+//! light. The output's RGB is the channel value in its stored encoding, alpha the accumulated coverage.
 
 use super::blend::BlendMode;
 use super::channel::Channel;
@@ -18,6 +19,10 @@ use super::layer::{FillSource, Layer, LayerKind};
 use super::par::for_each_mut;
 use super::texture_set::TextureSet;
 use super::validate::MAX_GROUP_DEPTH;
+use super::working_space::{SpaceConverter, WorkingSpace};
+use pass::{affects, layer_weights, Pass, Scratch};
+
+mod pass;
 use crate::tex::Tex;
 
 /// Something the compositor could not do exactly. Layers are named by id.
@@ -45,10 +50,24 @@ impl<'a> Compositor<'a> {
     /// Composites `channel` over the pixel rectangle `r` into `out` (`r.area()` pixels, row by row).
     /// This is the per-tile building block; it does not allocate per pixel.
     pub fn composite_rect(&self, channel: Channel, r: Rect, out: &mut [[f32; 4]]) {
-        let d = channel.default_value();
-        out.fill([d[0], d[1], d[2], 0.0]);
+        let pass = Pass {
+            channel,
+            r,
+            space: SpaceConverter::new(self.working_space(channel)),
+        };
+        out.fill(pass.empty());
         let mut scratch = Scratch::default();
-        self.apply_layers(&self.set.layers, channel, r, out, 0, &mut scratch);
+        self.apply_layers(&self.set.layers, &pass, out, 0, &mut scratch);
+        pass.space.to_stored_all(out);
+    }
+
+    /// The space `channel` blends in, from its declared colour space (or the channel's default).
+    pub fn working_space(&self, channel: Channel) -> WorkingSpace {
+        let space = self
+            .set
+            .channel_spec(channel)
+            .map_or(channel.default_color_space(), |s| s.color_space);
+        WorkingSpace::of(space)
     }
 
     /// Recomputes the listed tiles of `target` (sized like the texture set) in parallel.
@@ -149,26 +168,25 @@ impl<'a> Compositor<'a> {
     fn apply_layers(
         &self,
         layers: &[Layer],
-        channel: Channel,
-        r: Rect,
+        pass: &Pass,
         acc: &mut [[f32; 4]],
         depth: usize,
         s: &mut Scratch,
     ) {
         for l in layers {
-            self.apply_layer(l, channel, r, acc, depth, s);
+            self.apply_layer(l, pass, acc, depth, s);
         }
     }
 
     fn apply_layer(
         &self,
         l: &Layer,
-        channel: Channel,
-        r: Rect,
+        pass: &Pass,
         acc: &mut [[f32; 4]],
         depth: usize,
         s: &mut Scratch,
     ) {
+        let (channel, r) = (pass.channel, pass.r);
         let Some(blend) = l.blend_for(channel).filter(|_| affects(l, channel)) else {
             return;
         };
@@ -185,6 +203,7 @@ impl<'a> Compositor<'a> {
                 }
                 s.top.resize(r.area(), [0.0; 4]);
                 img.read_region(r, &mut s.top);
+                pass.space.to_working_all(&mut s.top);
                 for (i, a) in acc.iter_mut().enumerate() {
                     *a = mode.mix(*a, s.top[i], weights.at(i));
                 }
@@ -193,7 +212,7 @@ impl<'a> Compositor<'a> {
                 let Some(v) = f.uniform_value(channel) else {
                     return;
                 };
-                let top = [v[0], v[1], v[2], 1.0];
+                let top = pass.space.to_working([v[0], v[1], v[2], 1.0]);
                 for (i, a) in acc.iter_mut().enumerate() {
                     *a = mode.mix(*a, top, weights.at(i));
                 }
@@ -205,15 +224,14 @@ impl<'a> Compositor<'a> {
                 let mut inner = Scratch::default();
                 if mode == BlendMode::Passthrough {
                     let below = acc.to_vec();
-                    self.apply_layers(children, channel, r, acc, depth + 1, &mut inner);
+                    self.apply_layers(children, pass, acc, depth + 1, &mut inner);
                     for (i, a) in acc.iter_mut().enumerate() {
                         let w = weights.at(i);
                         *a = [0, 1, 2, 3].map(|c| below[i][c] + (a[c] - below[i][c]) * w);
                     }
                 } else {
-                    let d = channel.default_value();
-                    let mut group = vec![[d[0], d[1], d[2], 0.0]; acc.len()];
-                    self.apply_layers(children, channel, r, &mut group, depth + 1, &mut inner);
+                    let mut group = vec![pass.empty(); acc.len()];
+                    self.apply_layers(children, pass, &mut group, depth + 1, &mut inner);
                     for (i, a) in acc.iter_mut().enumerate() {
                         *a = mode.mix(*a, group[i], weights.at(i));
                     }
@@ -223,60 +241,5 @@ impl<'a> Compositor<'a> {
     }
 }
 
-/// Reusable per-tile buffers.
-#[derive(Default)]
-struct Scratch {
-    top: Vec<[f32; 4]>,
-}
-
-/// Per-pixel layer strength over a rect: uniform, or uniform × mask.
-enum Weights {
-    Uniform(f32),
-    Masked(Vec<f32>),
-}
-
-impl Weights {
-    fn at(&self, i: usize) -> f32 {
-        match self {
-            Weights::Uniform(w) => *w,
-            Weights::Masked(m) => m.get(i).copied().unwrap_or(0.0),
-        }
-    }
-}
-
-/// True if the layer is visible and has an enabled blend entry for the channel.
-fn affects(l: &Layer, channel: Channel) -> bool {
-    l.visible
-        && l.blend_for(channel)
-            .is_some_and(|b| b.mode != BlendMode::Disable)
-}
-
-/// The layer's strength over `r`, or `None` where it has no effect at all.
-fn layer_weights(l: &Layer, strength: f32, r: Rect) -> Option<Weights> {
-    let strength = if strength.is_finite() {
-        strength.clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    if strength <= 0.0 {
-        return None;
-    }
-    let Some(mask) = &l.mask else {
-        return Some(Weights::Uniform(strength));
-    };
-    let img = mask.image();
-    if !img.region_allocated(r) {
-        return None; // unallocated mask tiles read as zero: fully masked out
-    }
-    let mut px = vec![[0.0f32; 4]; r.area()];
-    img.read_region(r, &mut px);
-    Some(Weights::Masked(
-        px.iter()
-            .map(|p| (p[0] * p[3]).clamp(0.0, 1.0) * strength)
-            .collect(),
-    ))
-}
-
 #[cfg(test)]
-#[path = "stack_tests.rs"]
 mod tests;

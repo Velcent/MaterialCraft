@@ -97,7 +97,8 @@ impl Channel {
     }
 }
 
-/// How stored values are encoded. Values are composited in their stored encoding.
+/// How stored values are encoded. sRGB channels composite in linear light, linear ones as stored
+/// (see [`super::working_space::WorkingSpace`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ColorSpace {
     Srgb,

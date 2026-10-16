@@ -1,7 +1,8 @@
 //! Blend modes: how a layer's value combines with the stack below, per channel.
 //!
-//! The list follows Substance Painter's blending modes. All formulas work per component on the
-//! stored (normalised) values, `b` = below, `t` = top, and do not clamp unless stated, so float
+//! The list follows Substance Painter's blending modes. All formulas work per component on
+//! working-space values (stored values, or linear light for sRGB channels; see
+//! [`crate::paint::working_space`]), `b` = below, `t` = top, and do not clamp unless stated, so float
 //! channels such as height may leave 0..1. Normal-map modes decode the vectors first (see
 //! [`crate::paint::normal`]).
 
