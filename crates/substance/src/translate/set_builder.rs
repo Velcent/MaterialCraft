@@ -37,8 +37,7 @@ impl SetBuilder<'_> {
             report.add(
                 format!("texture set \"{name}\" / {DEFAULTS_LAYER_NAME}"),
                 Fidelity::Approximated,
-                "uncovered texels show Painter's channel defaults (bottom fill layer); partly covered texels \
-                 blend in stored encoding, Painter blends colour in linear light",
+                "uncovered texels show Painter's channel defaults (bottom fill layer)",
             );
         }
         if let Some(layer) = imported_layer(&set, images, report) {

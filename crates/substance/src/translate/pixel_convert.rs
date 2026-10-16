@@ -2,6 +2,7 @@
 //! alpha and rows top first.
 
 use super::source_format::{Alpha, SourceFormat};
+use materialcraft::paint::working_space::{linear_to_srgb, srgb_to_linear};
 use materialcraft::paint::{ImageError, PixelFormat, TiledImage};
 use std::thread;
 
@@ -104,22 +105,6 @@ pub fn unpremultiply(p: [f32; 4], alpha: Alpha) -> [f32; 4] {
             let c = |v: f32| linear_to_srgb((srgb_to_linear(v) / a).min(1.0));
             [c(p[0]), c(p[1]), c(p[2]), a]
         }
-    }
-}
-
-fn srgb_to_linear(v: f32) -> f32 {
-    if v <= 0.04045 {
-        v / 12.92
-    } else {
-        ((v + 0.055) / 1.055).powf(2.4)
-    }
-}
-
-fn linear_to_srgb(v: f32) -> f32 {
-    if v <= 0.0031308 {
-        v * 12.92
-    } else {
-        1.055 * v.powf(1.0 / 2.4) - 0.055
     }
 }
 
