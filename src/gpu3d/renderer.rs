@@ -1,6 +1,7 @@
 //! GL resources that live as long as the viewport (programs, the built-in shape and its maps) and the frame they draw.
 use super::camera::camera;
 use super::pass::{Drawable, MaterialPass};
+use super::scene::Scene;
 use super::shaders::Program;
 use super::shape::{self, ShapeMesh};
 use super::textures::{aniso_level, max_aniso, MapTextures, Tx};
@@ -42,11 +43,15 @@ impl Renderer {
         Ok(())
     }
 
-    /// Draw background and the built-in shape into the current viewport.
-    pub unsafe fn draw(&mut self, gl: &glow::Context, view: &View, aspect: f32, self_shadow: bool) -> Result<(), String> {
+    /// Draw background and the active scene (or else the built-in shape) into the current viewport.
+    pub unsafe fn draw(&mut self, gl: &glow::Context, view: &View, aspect: f32, self_shadow: bool, scene: &Scene) -> Result<(), String> {
         let cam = camera(view, aspect);
-        let mesh = self.shape.update(gl, view)?;
-        let items = [Drawable { mesh, maps: &self.maps, vtx_lod: shape::vtx_lod(view, self.maps.height_size().0), cull: crate::render3d::shape_culls(view.shape) }];
+        let items = if scene.is_active() {
+            scene.drawables()
+        } else {
+            let mesh = self.shape.update(gl, view)?;
+            vec![Drawable { mesh, maps: &self.maps, vtx_lod: shape::vtx_lod(view, self.maps.height_size().0), cull: crate::render3d::shape_culls(view.shape) }]
+        };
         gl.enable(glow::DEPTH_TEST);
         gl.depth_func(glow::LESS);
         gl.depth_mask(true);

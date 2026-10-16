@@ -37,7 +37,7 @@ fn fit(t: &Tex, size: usize) -> Tex {
     if t.w == size && t.h == size {
         return t.clone();
     }
-    if t.w > size && t.h > size && t.w % size == 0 && t.h % size == 0 {
+    if t.w > size && t.h > size && t.w.is_multiple_of(size) && t.h.is_multiple_of(size) {
         let (fx, fy) = (t.w / size, t.h / size);
         let inv = 1.0 / (fx * fy) as f32;
         let px = par_map(size * size, |i| {

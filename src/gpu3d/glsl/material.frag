@@ -4,6 +4,7 @@ in vec3 vN;
 in vec3 vT;
 in vec2 vUv;
 in vec2 vScale;
+flat in float vTanW;
 uniform sampler2D uBase;
 uniform sampler2D uNormal;
 uniform sampler2D uRma;
@@ -157,7 +158,7 @@ void main() {
     // shapes seen from the inside: walls that face away from the camera are not drawn
     if (uCull == 1 && dot(N, uEye - vPos) < 0.0) discard;
     vec3 T = normalize(vT - N * dot(vT, N));
-    vec3 B = cross(N, T);
+    vec3 B = cross(N, T) * vTanW; // uv v runs opposite to the bitangent
     vec3 V = normalize(uEye - vPos);
     bool back = !gl_FrontFacing;
     gdx = dFdx(vUv);

@@ -15,7 +15,7 @@ impl ShapeMesh {
         let key = (v.shape, v.tess.clamp(8, 768), (v.tiling.max(0.1) * 1000.0) as u32);
         if self.mesh.is_none() || self.key != key {
             let m = build_mesh(v.shape, key.1, v.tiling, None, 0.0, 0.0);
-            let new = GpuMesh::upload(gl, &m)?;
+            let new = GpuMesh::upload(gl, &m, &[])?;
             if let Some(old) = self.mesh.replace(new) {
                 old.free(gl);
             }

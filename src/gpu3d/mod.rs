@@ -6,24 +6,27 @@
 //! and the window is multisampled, so fine texture detail stays sharp at any zoom level.
 //!
 //! Files: `maps` prepares texture data on the CPU, `textures` / `mesh` hold GL objects, `shaders` the programs,
-//! `camera` the matrices, `shape` the built-in preview shape, `pass` the material draw calls and `renderer` ties them
-//! into a frame. This file is the public API shared between the UI and the paint callback.
+//! `camera` the matrices, `shape` the built-in preview shape, `scene` custom multi-part models, `pass` the material draw
+//! calls and `renderer` ties them into a frame. This file is the public API shared between the UI and the paint callback.
 mod camera;
 mod maps;
 mod mesh;
 mod pass;
 mod renderer;
+mod scene;
 mod shaders;
 mod shape;
 mod textures;
 
 pub use maps::{prepare, GpuMaps, MapInputs};
+pub use scene::ScenePart;
 
 use crate::render3d::View;
 use eframe::egui::PaintCallbackInfo;
 use eframe::egui_glow::{self, glow};
 use glow::HasContext;
 use renderer::Renderer;
+use scene::Scene;
 use std::sync::{Arc, Mutex};
 
 /// Shared handle between the UI and the paint callback.
@@ -62,6 +65,8 @@ pub struct Gpu {
     /// GPU name reported by the driver, for the UI.
     pub renderer: String,
     res: Option<Renderer>,
+    /// Custom model drawn instead of `View::shape` while active.
+    scene: Scene,
     pub frames: u64,
 }
 
@@ -71,6 +76,21 @@ impl Gpu {
     }
     pub fn ready(&self) -> bool {
         self.error.is_none()
+    }
+    /// Draw these parts instead of `View::shape` until `clear_scene` is called. Uploads happen on the next paint.
+    pub fn set_scene(&mut self, parts: Vec<ScenePart>) {
+        self.scene.set(parts);
+    }
+    /// Replace the maps of one part (e.g. after the user edits that texture set). Out-of-range parts are ignored.
+    pub fn set_part_maps(&mut self, part: usize, maps: GpuMaps) {
+        self.scene.set_part_maps(part, maps);
+    }
+    /// Go back to the built-in shape; the parts' GPU objects are freed on the next paint.
+    pub fn clear_scene(&mut self) {
+        self.scene.clear();
+    }
+    pub fn has_scene(&self) -> bool {
+        self.scene.is_active()
     }
 }
 
@@ -110,6 +130,12 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
             return;
         }
     }
+    let g = &mut *g;
+    let r = g.res.as_mut().unwrap();
+    if let Err(e) = unsafe { g.scene.sync(gl, r.aniso(aniso_req)) } {
+        g.error = Some(e);
+        return;
+    }
     let self_shadow = g.opts.self_shadow;
     let want_shot = std::mem::take(&mut g.want_shot);
     let vp_px = info.viewport_in_pixels();
@@ -117,8 +143,7 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
         return;
     }
     let aspect = vp_px.width_px as f32 / vp_px.height_px as f32;
-    let r = g.res.as_mut().unwrap();
-    let result = unsafe { r.draw(gl, view, aspect, self_shadow) };
+    let result = unsafe { r.draw(gl, view, aspect, self_shadow, &g.scene) };
     if want_shot && result.is_ok() {
         g.shot = Some(read_back(gl, info));
     }
@@ -150,5 +175,6 @@ pub fn release(shared: &Shared, gl: &glow::Context) {
         if let Some(r) = g.res.take() {
             unsafe { r.free(gl) };
         }
+        unsafe { g.scene.free(gl) };
     }
 }
