@@ -87,7 +87,7 @@ impl Compression {
                 if data.len() < 6 || data[0] & 0x0f != 8 {
                     return Err("bad zlib block".into());
                 }
-                crate::png::inflate(&data[2..])?
+                crate::deflate::inflate(&data[2..])?
             }
         };
         if t.len() != expected {

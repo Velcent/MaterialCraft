@@ -6,6 +6,7 @@
 mod bits;
 mod block;
 mod huffman;
+mod inflate;
 mod lz77;
 pub(crate) mod tables;
 
@@ -13,6 +14,8 @@ use crate::checksum::adler32;
 use bits::BitWriter;
 use block::Block;
 use lz77::{Params, TokenSink};
+
+pub use inflate::inflate;
 
 /// Compression effort.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

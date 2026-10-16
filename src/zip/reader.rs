@@ -251,7 +251,7 @@ impl<R: Read + Seek> ZipReader<R> {
         let raw = Self::read_at(&mut self.src, start, e.compressed_size as usize)?;
         let data = match method {
             Method::Stored => raw,
-            Method::Deflate => crate::png::inflate(&raw)
+            Method::Deflate => crate::deflate::inflate(&raw)
                 .map_err(|m| ZipError::Format(format!("'{}': {m}", e.name)))?,
         };
         if data.len() as u64 != e.size {
