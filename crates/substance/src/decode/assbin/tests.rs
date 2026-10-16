@@ -41,8 +41,14 @@ fn expected() -> AssbinScene {
             },
         ],
         materials: vec![
-            MaterialSummary { name: "Vase".into() },
-            MaterialSummary { name: "Cup".into() },
+            MaterialSummary {
+                name: "Vase".into(),
+                uid: Some(4),
+            },
+            MaterialSummary {
+                name: "Cup".into(),
+                uid: Some(3),
+            },
         ],
     }
 }

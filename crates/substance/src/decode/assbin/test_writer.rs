@@ -89,15 +89,19 @@ fn property(key: &str, kind: u32, data: Buf) -> Buf {
     b
 }
 
+/// A material named `name` whose `$mat.uid` is the name's length.
 pub fn material(name: &str) -> Buf {
     let mut colour = Buf::default();
     colour.zeros(12);
     let mut text = Buf::default();
     text.string(name).zeros(1);
+    let mut uid = Buf::default();
+    uid.0.extend_from_slice(&(name.len() as u64).to_le_bytes());
     let mut b = Buf::default();
-    b.u32(2)
+    b.u32(3)
         .block(property("$clr.diffuse", 1, colour))
-        .block(property("?mat.name", 3, text));
+        .block(property("?mat.name", 3, text))
+        .block(property("$mat.uid", 5, uid));
     b
 }
 

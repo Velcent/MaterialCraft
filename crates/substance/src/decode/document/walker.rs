@@ -19,9 +19,19 @@ const ABSENT: u8 = 0xff;
 /// Smallest field: empty name length and a tag with a 1-byte payload.
 const MIN_FIELD_LEN: usize = 6;
 
-/// Receives what the walk finds.
+/// Receives what the walk finds. Only [`Visitor::object`] and [`Visitor::unknown_tag`] are required;
+/// the other callbacks let a visitor follow field names and read values.
 pub trait Visitor {
     fn object(&mut self, class: &str);
+    /// The object opened by the last unmatched [`Visitor::object`] call has ended.
+    fn end_object(&mut self) {}
+    /// A field name; the next value (scalar, object or list) belongs to it.
+    fn field(&mut self, _name: &[u8]) {}
+    /// A fixed-size or string value with its payload bytes (strings without their length prefix).
+    fn scalar(&mut self, _tag: ValueTag, _payload: &[u8]) {}
+    /// A list of `count` values starts; [`Visitor::end_list`] follows its last element.
+    fn list(&mut self, _count: usize) {}
+    fn end_list(&mut self) {}
     /// A tag we cannot size; the rest of the enclosing object or list was skipped.
     fn unknown_tag(&mut self, tag: u8, offset: usize);
 }
@@ -56,10 +66,14 @@ impl<V: Visitor> Walker<'_, V> {
             return Ok(Flow::Unknown);
         };
         match tag.payload() {
-            Payload::Fixed(n) => r.skip(n).map_err(DecodeError::truncated(RECORD))?,
+            Payload::Fixed(n) => {
+                let payload = r.bytes(n).map_err(DecodeError::truncated(RECORD))?;
+                self.visitor.scalar(tag, payload);
+            }
             Payload::String => {
                 let len = read_u32(r)? as usize;
-                r.skip(len).map_err(DecodeError::truncated(RECORD))?;
+                let payload = r.bytes(len).map_err(DecodeError::truncated(RECORD))?;
+                self.visitor.scalar(tag, payload);
             }
             Payload::List => self.list(r, enter(depth)?)?,
             Payload::Object => self.object(r, enter(depth)?)?,
@@ -84,24 +98,30 @@ impl<V: Visitor> Walker<'_, V> {
         check_count(r, fields, end, MIN_FIELD_LEN)?;
         for _ in 0..fields {
             let name_len = read_u32(r)? as usize;
-            r.skip(name_len).map_err(DecodeError::truncated(RECORD))?;
+            let name = r.bytes(name_len).map_err(DecodeError::truncated(RECORD))?;
+            self.visitor.field(name);
             if let Flow::Unknown = self.tagged(r, depth)? {
                 break;
             }
         }
-        finish(r, end)
+        finish(r, end)?;
+        self.visitor.end_object();
+        Ok(())
     }
 
     fn list(&mut self, r: &mut ByteReader, depth: usize) -> Result<(), DecodeError> {
         let end = read_end(r)?;
         let count = read_u32(r)? as usize;
         check_count(r, count, end, 1)?;
+        self.visitor.list(count);
         for _ in 0..count {
             if let Flow::Unknown = self.tagged(r, depth)? {
                 break;
             }
         }
-        finish(r, end)
+        finish(r, end)?;
+        self.visitor.end_list();
+        Ok(())
     }
 }
 
