@@ -1,0 +1,125 @@
+//! `document.json`: the JSON mapping of every model type. Writing never fails (the document was
+//! validated first); reading checks types and enum values and reports the JSON path of a problem.
+//!
+//! - [`fields`]: typed access to JSON objects; exact `f32` numbers.
+//! - [`extras`]: unknown fields kept across load → save.
+//! - [`texture_set`], [`layer`], [`image_ref`], [`report`]: one file per model type.
+
+pub mod extras;
+pub mod fields;
+pub mod image_ref;
+pub mod layer;
+pub mod report;
+pub mod texture_set;
+
+use super::paths::{self, ImagePlan};
+use super::slot::ImageSlot;
+use super::version::Version;
+use super::{FormatError, FORMAT_VERSION};
+use crate::json::Value;
+use crate::paint::{Document, PixelFormat};
+use extras::Extras;
+use fields::Obj;
+
+/// Value of the `format` field.
+pub const FORMAT_NAME: &str = "mcpaint";
+/// `generator` of written files.
+pub const GENERATOR: &str = concat!("MaterialCraft ", env!("CARGO_PKG_VERSION"));
+
+/// What writing the manifest needs besides the document.
+pub struct WriteCtx<'a> {
+    pub plan: &'a ImagePlan<'a>,
+    pub extras: &'a Extras,
+}
+
+/// An image the manifest refers to, to be loaded into `slot`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageRef {
+    pub slot: ImageSlot,
+    pub path: String,
+    pub format: PixelFormat,
+    pub size: (u32, u32),
+}
+
+/// State collected while reading the manifest.
+#[derive(Default)]
+pub struct ReadCtx {
+    pub extras: Extras,
+    pub images: Vec<ImageRef>,
+}
+
+/// A read manifest: the document without mesh, image pixels, foreign bytes and report, plus
+/// where to find them.
+pub struct Manifest {
+    pub version: Version,
+    /// Texture sets with correctly sized, still empty images.
+    pub doc: Document,
+    pub images: Vec<ImageRef>,
+    pub mesh: String,
+    pub foreign: Vec<String>,
+    pub import_report: Option<String>,
+    pub extras: Extras,
+}
+
+/// The manifest of `doc`. `thumbnail` says whether a thumbnail entry is written.
+pub fn write(doc: &Document, ctx: &WriteCtx, thumbnail: bool) -> Value {
+    let sets: Value = doc
+        .texture_sets
+        .iter()
+        .enumerate()
+        .map(|(i, s)| texture_set::write(i, s, ctx))
+        .collect();
+    let foreign: Value = doc.foreign.iter().map(|f| f.path.as_str()).collect();
+    let mut v = Value::object()
+        .with("format", FORMAT_NAME)
+        .with("format_version", FORMAT_VERSION)
+        .with("generator", GENERATOR)
+        .with("mesh", paths::MESH)
+        .with("texture_sets", sets)
+        .with("foreign", foreign);
+    if doc.import_report.is_some() {
+        v.insert("import_report", paths::IMPORT_REPORT);
+    }
+    if thumbnail {
+        v.insert("thumbnail", paths::THUMBNAIL);
+    }
+    ctx.extras.inject("", &mut v);
+    v
+}
+
+/// Reads a manifest. `format` and `format_version` are checked before anything else.
+pub fn read(root: &Value) -> Result<Manifest, FormatError> {
+    let mut o = Obj::new(root, "")?;
+    if o.opt("format").and_then(Value::as_str) != Some(FORMAT_NAME) {
+        return Err(FormatError::NotMcpaint);
+    }
+    let version = Version::check_readable(o.str("format_version")?)?;
+    o.opt("generator");
+    o.opt("thumbnail");
+    let mut ctx = ReadCtx::default();
+    let mut doc = Document::default();
+    for (i, s) in o.array("texture_sets")?.iter().enumerate() {
+        doc.texture_sets.push(texture_set::read(i, s, &mut ctx)?);
+    }
+    let foreign = o
+        .array("foreign")?
+        .iter()
+        .map(|p| p.as_str().map(str::to_string))
+        .collect::<Option<Vec<String>>>()
+        .ok_or_else(|| o.error("foreign", "expected an array of paths"))?;
+    let manifest = Manifest {
+        version,
+        mesh: o.str("mesh")?.to_string(),
+        import_report: o.opt_str("import_report")?.map(str::to_string),
+        doc,
+        images: Vec::new(),
+        foreign,
+        extras: Extras::default(),
+    };
+    ctx.extras.record("", &o);
+    Ok(Manifest {
+        images: ctx.images,
+        extras: ctx.extras,
+        ..manifest
+    })
+}

@@ -8,6 +8,7 @@
 mod bounds;
 mod derivatives;
 mod error;
+pub mod gltf;
 mod normals;
 mod obj;
 mod tangents;

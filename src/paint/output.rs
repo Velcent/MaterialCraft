@@ -5,13 +5,15 @@
 //! - **normal** = `RNM(baked, RNM(height_normal, normal_channel))`, where RNM is reoriented normal
 //!   mapping ([`crate::paint::normal::reoriented`]), `baked` the baked mesh normal map (flat if
 //!   absent) and `height_normal` the normal derived from the composited height with
-//!   [`crate::ops::normal_from_height`] (flat if the set has no height channel). Flat inputs drop out.
+//!   [`super::height_normal::normal_from_height`] (edges clamped, flat if the set has no height
+//!   channel). Flat inputs drop out.
 //! - **ambient_occlusion** = baked AO × AO channel.
 //!
 //! Baked maps of another resolution are resampled bilinearly. Values stay in each channel's stored
 //! colour space (base colour and emissive are usually sRGB-encoded).
 
 use super::channel::Channel;
+use super::height_normal;
 use super::normal;
 use super::par::for_each_mut;
 use super::stack::{CompositeWarning, Compositor};
@@ -21,7 +23,7 @@ use crate::tex::Tex;
 /// Settings for [`MaterialMaps::build`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OutputOptions {
-    /// Strength passed to [`crate::ops::normal_from_height`]; 0 ignores the height channel for the normal.
+    /// Strength passed to [`super::height_normal::normal_from_height`]; 0 ignores the height channel for the normal.
     pub height_normal_strength: f32,
 }
 
@@ -79,9 +81,7 @@ impl MaterialMaps {
         let height_normal = (set.has_channel(Channel::Height)
             && options.height_normal_strength != 0.0
             && w * h > 0)
-            .then(|| {
-                crate::ops::normal_from_height(&height, options.height_normal_strength, false)
-            });
+            .then(|| height_normal::normal_from_height(&height, options.height_normal_strength));
         let baked_normal = set
             .baked(&BakedKind::Normal)
             .map(|i| resample(&i.to_tex(), w, h));

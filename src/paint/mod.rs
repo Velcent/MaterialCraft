@@ -12,6 +12,8 @@
 pub mod blend;
 pub mod channel;
 pub mod doc;
+pub mod format;
+pub mod height_normal;
 pub mod image;
 pub mod layer;
 pub mod normal;

@@ -1,0 +1,82 @@
+//! Reading and writing `.mcpaint` files, the native Paint-mode document format.
+//!
+//! A `.mcpaint` file is a ZIP archive holding a JSON manifest (`document.json`), the mesh as glTF 2.0
+//! binary (`mesh/model.glb`), every layer, mask and baked image as PNG (integer formats) or OpenEXR
+//! (float formats), untranslated import originals under `foreign/`, the import report and a
+//! thumbnail. The specification is `formats/mcpaint.md` in the MaterialCraft docs.
+//!
+//! - [`images`]: pixel format → PNG/EXR encoding and back.
+//! - [`manifest`]: the JSON mapping of every model type.
+//! - [`paths`] and [`slot`]: entry names derived from ids; which image an entry holds.
+//! - [`writer`] and [`reader`]: assembling and taking apart the archive.
+//!
+//! ```
+//! use materialcraft::paint::{format, Document};
+//! let mut bytes = Vec::new();
+//! format::save(&Document::default(), &mut bytes).unwrap();
+//! let doc = format::load(std::io::Cursor::new(bytes)).unwrap();
+//! assert_eq!(doc, Document::default());
+//! ```
+
+mod batch;
+mod error;
+pub mod images;
+pub mod manifest;
+pub mod paths;
+pub mod reader;
+pub mod slot;
+mod thumbnail;
+pub mod version;
+pub mod writer;
+
+#[cfg(test)]
+mod tests;
+
+pub use error::FormatError;
+pub use reader::LoadOptions;
+pub use thumbnail::Thumbnail;
+pub use writer::SaveOptions;
+
+use crate::paint::Document;
+use std::io::{Read, Seek, Write};
+use std::path::Path;
+
+/// Version written by [`save`]: `major.minor`. Readers reject a newer major version.
+pub const FORMAT_VERSION: &str = "0.1";
+
+/// Writes `doc` as a `.mcpaint` archive with default options (including a thumbnail).
+/// Same document, same bytes.
+pub fn save(doc: &Document, out: impl Write) -> Result<(), FormatError> {
+    save_with(doc, out, &SaveOptions::default())
+}
+
+/// [`save`] with explicit options.
+pub fn save_with(
+    doc: &Document,
+    out: impl Write,
+    options: &SaveOptions,
+) -> Result<(), FormatError> {
+    writer::DocumentWriter::new(options).write(doc, out)
+}
+
+/// Saves to `path` through a temporary file in the same directory, renamed over `path` once
+/// complete, so a failed save never leaves a half-written document behind.
+pub fn save_path(doc: &Document, path: &Path) -> Result<(), FormatError> {
+    writer::save_atomically(path, |out| save(doc, out))
+}
+
+/// Reads a `.mcpaint` archive with default limits.
+pub fn load(input: impl Read + Seek) -> Result<Document, FormatError> {
+    load_with(input, &LoadOptions::default())
+}
+
+/// [`load`] with explicit limits.
+pub fn load_with(input: impl Read + Seek, options: &LoadOptions) -> Result<Document, FormatError> {
+    reader::DocumentReader::open(input, options)?.read()
+}
+
+/// Reads the `.mcpaint` file at `path`.
+pub fn load_path(path: &Path) -> Result<Document, FormatError> {
+    let file = std::fs::File::open(path)?;
+    load(std::io::BufReader::new(file))
+}
