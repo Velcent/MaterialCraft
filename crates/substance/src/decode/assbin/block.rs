@@ -44,11 +44,3 @@ pub fn read_count(r: &mut ByteReader, min_item_len: usize) -> Result<usize, Deco
         )),
     }
 }
-
-/// Skips `count` items of `item_len` bytes each.
-pub fn skip_items(r: &mut ByteReader, count: usize, item_len: usize) -> Result<(), DecodeError> {
-    let len = count
-        .checked_mul(item_len)
-        .ok_or_else(|| DecodeError::invalid(RECORD, "array size overflows"))?;
-    r.skip(len).map_err(DecodeError::truncated(RECORD))
-}

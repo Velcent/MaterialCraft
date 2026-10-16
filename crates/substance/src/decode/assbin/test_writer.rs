@@ -21,6 +21,10 @@ impl Buf {
         self.0.extend_from_slice(&v.to_le_bytes());
         self
     }
+    pub fn f32s(&mut self, values: &[f32]) -> &mut Self {
+        values.iter().for_each(|v| self.0.extend_from_slice(&v.to_le_bytes()));
+        self
+    }
     pub fn zeros(&mut self, n: usize) -> &mut Self {
         self.0.resize(self.0.len() + n, 0);
         self
@@ -85,7 +89,7 @@ fn property(key: &str, kind: u32, data: Buf) -> Buf {
     b
 }
 
-fn material(name: &str) -> Buf {
+pub fn material(name: &str) -> Buf {
     let mut colour = Buf::default();
     colour.zeros(12);
     let mut text = Buf::default();
@@ -97,14 +101,30 @@ fn material(name: &str) -> Buf {
     b
 }
 
-/// The scene block: flags, a root node, meshes, materials and four empty trailing lists.
-pub fn scene(meshes: &[TestMesh], materials: &[&str]) -> Buf {
-    let mut node = Buf::default();
-    node.string("RootNode").zeros(64).u32(0).u32(0).u32(0);
+pub const IDENTITY: [f32; 16] = [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.];
+
+/// A node block with a row-major matrix, mesh indices, child nodes and no metadata.
+pub fn node(name: &str, matrix: [f32; 16], meshes: &[u32], children: Vec<Buf>) -> Buf {
+    let mut b = Buf::default();
+    b.string(name).f32s(&matrix);
+    b.u32(children.len() as u32).u32(meshes.len() as u32);
+    b.u32(meshes.len() as u32);
+    meshes.iter().for_each(|&m| {
+        b.u32(m);
+    });
+    b.u32(children.len() as u32);
+    for child in children {
+        b.block(child);
+    }
+    b
+}
+
+/// The scene block: flags, the root node, meshes, materials and four empty trailing lists.
+pub fn scene_from(root: Buf, meshes: Vec<Buf>, materials: &[&str]) -> Buf {
     let mut s = Buf::default();
-    s.u32(8).block(node).u32(meshes.len() as u32);
+    s.u32(8).block(root).u32(meshes.len() as u32);
     for m in meshes {
-        s.block(mesh(m));
+        s.block(m);
     }
     s.u32(materials.len() as u32);
     for name in materials {
@@ -114,6 +134,12 @@ pub fn scene(meshes: &[TestMesh], materials: &[&str]) -> Buf {
     let mut out = Buf::default();
     out.block(s);
     out
+}
+
+/// A scene whose root node places no mesh.
+pub fn scene(meshes: &[TestMesh], materials: &[&str]) -> Buf {
+    let root = node("RootNode", IDENTITY, &[], Vec::new());
+    scene_from(root, meshes.iter().map(mesh).collect(), materials)
 }
 
 /// A complete uncompressed file.
