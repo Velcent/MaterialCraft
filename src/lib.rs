@@ -12,6 +12,7 @@ pub mod half;
 pub mod gpu3d;
 pub mod jpeg;
 pub mod json;
+pub mod mesh;
 pub mod noise;
 pub mod nodes2;
 pub mod ops;
