@@ -18,6 +18,8 @@ use std::sync::mpsc::{channel, Receiver, TryRecvError};
 mod logo_data {
     include!(concat!(env!("OUT_DIR"), "/logo.rs"));
 }
+#[path = "gui_paint/mod.rs"]
+mod gui_paint;
 
 // ---------------------------------------------------------------- layout constants
 const CARD: f32 = 92.0;
@@ -262,6 +264,8 @@ struct App {
     copy_out: Option<String>,
     logo: Option<egui::TextureHandle>,
     logo_note: String,
+    /// The Paint screen (owns all of its state).
+    paint: gui_paint::PaintMode,
 }
 
 impl App {
@@ -276,6 +280,7 @@ impl App {
         let skip_home = settings.iter().any(|l| l == "skip_home=1");
         let favorites: BTreeSet<String> = settings.iter().find_map(|l| l.strip_prefix("favorites=")).map(|v| v.split(',').filter(|x| !x.is_empty()).map(String::from).collect()).unwrap_or_default();
         let recent: Vec<PathBuf> = read_lines("recent.txt").into_iter().map(PathBuf::from).collect();
+        let paint = gui_paint::PaintMode::from_args();
         App {
             parents: Vec::new(),
             undo: Vec::new(),
@@ -329,7 +334,7 @@ impl App {
             export: ExportUi { open: false, dir: None, prefix: String::new(), sizes: [false, true, false, false, false, false], depth16: false, fmt: Format::Png, quality: 92, skip: BTreeSet::new() },
             bake: BakeUi { open: false, low: None, high: None, out: None, s: BakeSettings { size: 512, ..Default::default() }, job: None, msg: String::new() },
             show_about: false,
-            screen: if skip_home { Screen::Editor } else { Screen::Home },
+            screen: if paint.wants_screen() { Screen::Paint } else if skip_home { Screen::Editor } else { Screen::Home },
             new_dlg: NewDlg { open: false, sel: 1, name: "Graph".into(), size: 2048, depth16: false, dest: None },
             recent,
             home_filter: String::new(),
@@ -357,6 +362,7 @@ impl App {
             copy_out: None,
             logo: Some(logo_handle),
             logo_note,
+            paint,
             g,
         }
     }

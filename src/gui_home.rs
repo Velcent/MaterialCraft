@@ -4,6 +4,7 @@
 enum Screen {
     Home,
     Editor,
+    Paint,
 }
 
 struct NewDlg {
@@ -570,6 +571,12 @@ impl App {
                 if ui.add(egui::Button::new(egui::RichText::new("Mesh map baker...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked() {
                     self.screen = Screen::Editor;
                     self.bake.open = true;
+                }
+                if ui.add(egui::Button::new(egui::RichText::new("Open in Paint mode...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked() && self.paint.pick(gui_paint::Pick::Any) {
+                    self.screen = Screen::Paint;
+                }
+                if ui.add(egui::Button::new(egui::RichText::new("Import Painter project...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked() && self.paint.pick(gui_paint::Pick::Substance) {
+                    self.screen = Screen::Paint;
                 }
                 ui.add_space(6.0);
                 ui.separator();
@@ -1830,6 +1837,13 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.screen == Screen::Paint {
+            if self.paint.ui(ctx) == gui_paint::PaintAction::Home {
+                self.screen = Screen::Home;
+                self.last_title.clear();
+            }
+            return;
+        }
         // graph files dropped from the OS onto the window: import as a node (editor) or open (home screen)
         let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().filter_map(|f| f.path.clone()).collect());
         for p in dropped {
