@@ -1,0 +1,154 @@
+//! GPU PBR viewport (OpenGL 3.3 core through glow / egui_glow paint callbacks).
+//!
+//! Every shape is a tessellated triangle mesh. The height map displaces the vertices in the vertex shader (true
+//! displacement), the fragment shader does GGX PBR with normal mapping, outward parallax relief, height-field contact
+//! shadows, an analytic studio environment and ACES tone mapping. Textures are mip-mapped with anisotropic filtering
+//! and the window is multisampled, so fine texture detail stays sharp at any zoom level.
+//!
+//! Files: `maps` prepares texture data on the CPU, `textures` / `mesh` hold GL objects, `shaders` the programs,
+//! `camera` the matrices, `shape` the built-in preview shape, `pass` the material draw calls and `renderer` ties them
+//! into a frame. This file is the public API shared between the UI and the paint callback.
+mod camera;
+mod maps;
+mod mesh;
+mod pass;
+mod renderer;
+mod shaders;
+mod shape;
+mod textures;
+
+pub use maps::{prepare, GpuMaps, MapInputs};
+
+use crate::render3d::View;
+use eframe::egui::PaintCallbackInfo;
+use eframe::egui_glow::{self, glow};
+use glow::HasContext;
+use renderer::Renderer;
+use std::sync::{Arc, Mutex};
+
+/// Shared handle between the UI and the paint callback.
+pub type Shared = Arc<Mutex<Gpu>>;
+
+pub fn new_shared() -> Shared {
+    Arc::new(Mutex::new(Gpu::default()))
+}
+
+/// Extra viewer options that live next to (not inside) the CPU renderer's `View`.
+#[derive(Clone, Debug)]
+pub struct GpuOpts {
+    /// Contact shadows computed by marching the height field towards the light.
+    pub self_shadow: bool,
+    /// Anisotropic filtering level (1..16). 0 = use the maximum the GPU offers.
+    pub aniso: f32,
+}
+
+impl Default for GpuOpts {
+    fn default() -> Self {
+        GpuOpts { self_shadow: true, aniso: 0.0 }
+    }
+}
+
+#[derive(Default)]
+pub struct Gpu {
+    pub opts: GpuOpts,
+    /// Set when shader compilation or a GL call failed; the UI then falls back to the CPU renderer.
+    pub error: Option<String>,
+    /// Maps waiting to be uploaded on the next paint.
+    pending: Option<GpuMaps>,
+    /// Request a pixel read-back of the next frame (screenshots, tests).
+    pub want_shot: bool,
+    /// Result of a read-back: (width, height, RGBA8 rows from the TOP).
+    pub shot: Option<(usize, usize, Vec<u8>)>,
+    /// GPU name reported by the driver, for the UI.
+    pub renderer: String,
+    res: Option<Renderer>,
+    pub frames: u64,
+}
+
+impl Gpu {
+    pub fn set_maps(&mut self, maps: GpuMaps) {
+        self.pending = Some(maps);
+    }
+    pub fn ready(&self) -> bool {
+        self.error.is_none()
+    }
+}
+
+/// Raw bytes of plain-old-data slices (f32, u32, [u32; 3]) for GL uploads.
+fn bytes_of<T>(v: &[T]) -> &[u8] {
+    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, std::mem::size_of_val(v)) }
+}
+
+/// Draw the viewport into the rectangle of the paint callback. Call from an `egui_glow::CallbackFn`.
+pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Painter, view: &View) {
+    let mut g = match shared.lock() {
+        Ok(g) => g,
+        Err(_) => return,
+    };
+    if g.error.is_some() {
+        return;
+    }
+    let gl: &glow::Context = painter.gl();
+    let aniso_req = g.opts.aniso;
+    // first use: create everything from the pending maps (or neutral defaults)
+    if g.res.is_none() {
+        let maps = g.pending.take().unwrap_or_else(|| prepare(&MapInputs { base: None, normal: None, rough: None, metal: None, ao: None, emissive: None, height: None }));
+        match unsafe { Renderer::new(gl, &maps, aniso_req) } {
+            Ok(r) => {
+                g.renderer = unsafe { gl.get_parameter_string(glow::RENDERER) };
+                g.res = Some(r);
+            }
+            Err(e) => {
+                g.error = Some(e);
+                return;
+            }
+        }
+    } else if let Some(maps) = g.pending.take() {
+        let res = unsafe { g.res.as_mut().unwrap().set_maps(gl, &maps, aniso_req) };
+        if let Err(e) = res {
+            g.error = Some(e);
+            return;
+        }
+    }
+    let self_shadow = g.opts.self_shadow;
+    let want_shot = std::mem::take(&mut g.want_shot);
+    let vp_px = info.viewport_in_pixels();
+    if vp_px.width_px <= 0 || vp_px.height_px <= 0 {
+        return;
+    }
+    let aspect = vp_px.width_px as f32 / vp_px.height_px as f32;
+    let r = g.res.as_mut().unwrap();
+    let result = unsafe { r.draw(gl, view, aspect, self_shadow) };
+    if want_shot && result.is_ok() {
+        g.shot = Some(read_back(gl, info));
+    }
+    g.frames += 1;
+    if let Err(e) = result {
+        g.error = Some(e);
+    }
+}
+
+/// Read the drawn viewport back: (width, height, RGBA8 rows from the top).
+fn read_back(gl: &glow::Context, info: &PaintCallbackInfo) -> (usize, usize, Vec<u8>) {
+    let vp_px = info.viewport_in_pixels();
+    let (w, h) = (vp_px.width_px as usize, vp_px.height_px as usize);
+    let mut buf = vec![0u8; w * h * 4];
+    unsafe {
+        gl.read_pixels(vp_px.left_px, vp_px.from_bottom_px, w as i32, h as i32, glow::RGBA, glow::UNSIGNED_BYTE, glow::PixelPackData::Slice(&mut buf));
+    }
+    // flip: GL rows start at the bottom
+    let mut top = vec![0u8; w * h * 4];
+    for y in 0..h {
+        top[y * w * 4..(y + 1) * w * 4].copy_from_slice(&buf[(h - 1 - y) * w * 4..(h - y) * w * 4]);
+    }
+    (w, h, top)
+}
+
+/// Free all GL objects (call when the viewer is closed or the GL context goes away).
+pub fn release(shared: &Shared, gl: &glow::Context) {
+    if let Ok(mut g) = shared.lock() {
+        if let Some(r) = g.res.take() {
+            unsafe { r.free(gl) };
+        }
+    }
+}
