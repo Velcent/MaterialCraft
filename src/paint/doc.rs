@@ -1,0 +1,83 @@
+//! [`Document`]: a mesh with its texture sets, plus what an importer could not translate.
+
+use super::report::ImportReport;
+use super::texture_set::TextureSet;
+use super::validate::{self, DocError};
+use crate::mesh::Mesh;
+
+/// A file kept untouched from an import (e.g. `foreign/substance/document.bin`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForeignFile {
+    /// Path inside the document, `/`-separated.
+    pub path: String,
+    pub bytes: Vec<u8>,
+}
+
+/// A paint document. Plain data: no I/O, no GUI state.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Document {
+    pub mesh: Mesh,
+    /// One per painted material slot, in display order.
+    pub texture_sets: Vec<TextureSet>,
+    pub foreign: Vec<ForeignFile>,
+    /// Present if the document came from an import.
+    pub import_report: Option<ImportReport>,
+}
+
+impl Document {
+    pub fn new(mesh: Mesh) -> Document {
+        Document {
+            mesh,
+            ..Document::default()
+        }
+    }
+
+    pub fn texture_set(&self, id: &str) -> Option<&TextureSet> {
+        self.texture_sets.iter().find(|s| s.id == id)
+    }
+
+    pub fn texture_set_mut(&mut self, id: &str) -> Option<&mut TextureSet> {
+        self.texture_sets.iter_mut().find(|s| s.id == id)
+    }
+
+    /// The texture set painted on material slot `slot`.
+    pub fn texture_set_for_slot(&self, slot: usize) -> Option<&TextureSet> {
+        self.texture_sets.iter().find(|s| s.material_slot == slot)
+    }
+
+    pub fn foreign_file(&self, path: &str) -> Option<&ForeignFile> {
+        self.foreign.iter().find(|f| f.path == path)
+    }
+
+    /// Bytes used by all layer, mask and baked images.
+    pub fn image_memory_bytes(&self) -> usize {
+        let layers: usize = self
+            .texture_sets
+            .iter()
+            .flat_map(|s| s.walk_layers())
+            .flat_map(|(_, l)| l.images())
+            .map(|(_, i)| i.memory_bytes())
+            .sum();
+        let baked: usize = self
+            .texture_sets
+            .iter()
+            .flat_map(|s| &s.baked)
+            .map(|b| b.image.memory_bytes())
+            .sum();
+        layers + baked
+    }
+
+    /// Checks the invariants the rest of Paint mode relies on; returns the first problem.
+    /// See [`DocError`] for the list.
+    pub fn validate(&self) -> Result<(), DocError> {
+        match self.problems().into_iter().next() {
+            Some(e) => Err(e),
+            None => Ok(()),
+        }
+    }
+
+    /// Every problem [`Self::validate`] would report.
+    pub fn problems(&self) -> Vec<DocError> {
+        validate::problems(self)
+    }
+}

@@ -16,6 +16,7 @@ pub mod mesh;
 pub mod noise;
 pub mod nodes2;
 pub mod ops;
+pub mod paint;
 pub mod png;
 pub mod render3d;
 pub mod tiff;
