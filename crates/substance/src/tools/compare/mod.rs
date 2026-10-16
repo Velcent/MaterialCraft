@@ -6,13 +6,11 @@ mod export_image;
 mod exports;
 mod heatmap;
 mod metrics;
-mod painter_normals;
 mod table;
 mod uv_mask;
 
 pub use exports::{ExportFinder, ExportMap};
 pub use metrics::{Diff, Fit, TOLERANCE};
-pub use painter_normals::PainterNormals;
 pub use table::{CompareRow, CompareTable};
 pub use uv_mask::UvMask;
 
@@ -31,9 +29,8 @@ pub struct CompareOptions {
     pub project_time: Option<SystemTime>,
     /// Where to write diff heatmaps, if wanted.
     pub diff_dir: Option<PathBuf>,
-    /// How our final maps are built. The height filter and baked normal format are replaced by the
-    /// project's own (see [`PainterNormals`]) when its `document.bin` was kept.
-    pub output: OutputOptions,
+    /// Multiplier on the height → normal scale (1 = Painter); the filter is the document's own.
+    pub height_normal_strength: f32,
 }
 
 impl CompareOptions {
@@ -41,7 +38,7 @@ impl CompareOptions {
         CompareOptions {
             project_time: std::fs::metadata(project).and_then(|m| m.modified()).ok(),
             diff_dir,
-            output: OutputOptions::default(),
+            height_normal_strength: 1.0,
         }
     }
 }
@@ -58,17 +55,9 @@ pub fn compare_document(
     let finder = ExportFinder::scan(export_dir);
     let names: Vec<String> = doc.texture_sets.iter().map(|s| s.name.clone()).collect();
     let mut table = CompareTable::default();
-    let output = match PainterNormals::of(doc) {
-        Some(n) => n.apply(&options.output),
-        None => {
-            table.notes.push("no document.bin kept: default normal settings".into());
-            options.output
-        }
-    };
-    let options = &CompareOptions {
-        output,
-        project_time: options.project_time,
-        diff_dir: options.diff_dir.clone(),
+    let output = OutputOptions {
+        height_normal_strength: options.height_normal_strength,
+        ..OutputOptions::for_document(doc)
     };
     for set in &doc.texture_sets {
         let exports = finder.for_set(&set.name, &names);
@@ -77,7 +66,7 @@ pub fn compare_document(
             continue;
         }
         progress(&format!("comparing {}", set.name));
-        compare_set(doc, set, &exports, options, &mut table)?;
+        compare_set(doc, set, &exports, options, &output, &mut table)?;
     }
     Ok(table)
 }
@@ -87,10 +76,11 @@ fn compare_set(
     set: &TextureSet,
     exports: &[ExportMap],
     options: &CompareOptions,
+    output: &OutputOptions,
     table: &mut CompareTable,
 ) -> std::io::Result<()> {
     let (w, h) = (set.resolution.0 as usize, set.resolution.1 as usize);
-    let maps = MaterialMaps::build(set, &options.output);
+    let maps = MaterialMaps::build(set, output);
     let mut mask = UvMask::rasterise(&doc.mesh, set.material_slot, set.uv_set, w, h);
     mask.shrink(BORDER);
     let mut errors = Vec::new();
@@ -138,7 +128,7 @@ fn compare_set(
     Ok(())
 }
 
-fn is_newer(path: &Path, project: Option<SystemTime>) -> bool {
+fn is_newer(path: &Path, project: Option<SystemTime>) -> Option<bool> {
     let export = std::fs::metadata(path).and_then(|m| m.modified()).ok();
-    matches!((export, project), (Some(e), Some(p)) if e >= p)
+    Some(export? >= project?)
 }

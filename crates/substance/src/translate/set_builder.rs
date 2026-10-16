@@ -3,6 +3,7 @@
 use super::baked_maps::BakedMaps;
 use super::cache_channels::{CacheChannels, CacheImage};
 use super::channel_table::{channel_for_bit, channel_spec, painter_channel_name, painter_default};
+use super::normal_conventions::NormalConventions;
 use super::report::Reporter;
 use super::texture_sets::SetSource;
 use materialcraft::paint::{BlendMode, Channel, Fidelity, Fill, Layer, LayerKind, PaintContent, TextureSet};
@@ -20,6 +21,7 @@ pub const DEFAULTS_LAYER_NAME: &str = "Painter defaults";
 pub struct SetBuilder<'a> {
     pub cache: &'a CacheChannels<'a>,
     pub baked: &'a BakedMaps<'a>,
+    pub normals: &'a NormalConventions,
 }
 
 impl SetBuilder<'_> {
@@ -92,9 +94,10 @@ impl SetBuilder<'_> {
         let name = &source.record.name;
         for baked in self.baked.sources(name, &source.record.baked) {
             match self.baked.read(&baked) {
-                Ok(image) => {
+                Ok(mut image) => {
                     report.baked_map(name, &baked.name, image.missing_bytes);
                     translated.insert(image.dataset);
+                    self.normals.to_opengl(&mut image.map);
                     set.baked.push(image.map);
                 }
                 Err(e) => report.baked_failed(name, &baked.name, e.to_string()),

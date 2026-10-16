@@ -38,7 +38,8 @@ fn entries_and_methods() {
     );
 
     let text = String::from_utf8(zip.read("document.json").unwrap()).unwrap();
-    assert!(text.starts_with("{\n  \"format\": \"mcpaint\",\n  \"format_version\": \"0.1\",\n"));
+    assert!(text.starts_with("{\n  \"format\": \"mcpaint\",\n  \"format_version\": \"0.2\",\n"));
+    assert!(text.contains("\n  \"mesh\": \"mesh/model.glb\",\n  \"height_filter\": \"sobel\",\n"));
     assert!(text.ends_with("}\n"));
     let root = json::parse(&text).unwrap();
     assert_eq!(

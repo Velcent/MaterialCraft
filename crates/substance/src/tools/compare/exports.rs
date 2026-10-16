@@ -40,6 +40,10 @@ const SUFFIXES: &[(&str, Channel, Option<usize>, bool)] = &[
     ("opacity", Channel::Opacity, None, false),
 ];
 const PACKED: &[&str] = &["occlusionroughnessmetallic", "orm"];
+/// Colour-space tags some presets append (`Normal_OpenGL_Raw`, `Base_color_sRGB`); stripped before matching.
+const QUALIFIERS: &[&str] = &["_raw", "_srgb"];
+/// Tagged names that are not the final map: `Normal_Raw` is the normal channel alone (Verified on AS).
+const NOT_FINAL: &[&str] = &["normal_raw"];
 const PACKED_CHANNELS: [Channel; 3] = [Channel::AmbientOcclusion, Channel::Roughness, Channel::Metallic];
 
 pub struct ExportFinder {
@@ -102,9 +106,13 @@ fn maps_for(path: &Path, suffix: &str) -> Vec<ExportMap> {
             .map(|(i, c)| map(*c, Some(i), false))
             .collect();
     }
+    let untagged = QUALIFIERS
+        .iter()
+        .find_map(|q| suffix.strip_suffix(q))
+        .filter(|_| !NOT_FINAL.contains(&suffix));
     SUFFIXES
         .iter()
-        .find(|(s, ..)| *s == suffix)
+        .find(|(s, ..)| *s == suffix || Some(*s) == untagged)
         .map(|(_, c, comp, dx)| vec![map(*c, *comp, *dx)])
         .unwrap_or_default()
 }
@@ -155,5 +163,12 @@ mod tests {
         assert_eq!((packed[1].channel, packed[1].component), (Channel::Roughness, Some(1)));
         assert!(maps_for(Path::new("x.png"), "normal_directx")[0].directx);
         assert!(maps_for(Path::new("x.png"), "unknown").is_empty());
+        let raw = maps_for(Path::new("x.png"), "normal_opengl_raw");
+        assert!(raw[0].channel == Channel::Normal && !raw[0].directx);
+        assert_eq!(
+            maps_for(Path::new("x.png"), "base_color_srgb")[0].channel,
+            Channel::BaseColor
+        );
+        assert!(maps_for(Path::new("x.png"), "normal_raw").is_empty());
     }
 }

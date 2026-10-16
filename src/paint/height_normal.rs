@@ -16,7 +16,8 @@ use crate::tex::Tex;
 /// Normal tilt per unit of height per UV unit at strength 1 (Painter's scale).
 pub const UV_SLOPE: f32 = 0.01;
 
-/// How the height gradient is estimated. Painter changed it between releases.
+/// How the height gradient is estimated. A document records its filter, since Painter changed it
+/// between releases ([`crate::paint::Document::height_filter`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HeightFilter {
     /// 3×3 Sobel (`[1 2 1] ⊗ [-1 0 1] / 8`): Painter up to document format 61 (2021).
@@ -28,14 +29,19 @@ pub enum HeightFilter {
 }
 
 impl HeightFilter {
-    /// The filter Painter used for a document of this format version (`document.bin` header).
-    /// Versions 62 and 63 are unverified and treated as the newer filter.
-    pub fn for_painter_format(format_version: u32) -> HeightFilter {
-        if format_version <= 61 {
-            HeightFilter::Sobel
-        } else {
-            HeightFilter::Backward
+    /// Stable id used in files: `sobel` or `backward`.
+    pub fn id(self) -> &'static str {
+        match self {
+            HeightFilter::Sobel => "sobel",
+            HeightFilter::Backward => "backward",
         }
+    }
+
+    /// Parses an id; `None` for unknown ids.
+    pub fn from_id(id: &str) -> Option<HeightFilter> {
+        [HeightFilter::Sobel, HeightFilter::Backward]
+            .into_iter()
+            .find(|f| f.id() == id)
     }
 
     /// Height change per texel along image x and image y (rows top first, y down) at `(x, y)`;
@@ -166,11 +172,11 @@ mod tests {
     }
 
     #[test]
-    fn filter_follows_document_format() {
-        assert_eq!(HeightFilter::for_painter_format(59), HeightFilter::Sobel);
-        assert_eq!(HeightFilter::for_painter_format(61), HeightFilter::Sobel);
-        assert_eq!(HeightFilter::for_painter_format(64), HeightFilter::Backward);
-        assert_eq!(HeightFilter::for_painter_format(78), HeightFilter::Backward);
+    fn ids_round_trip() {
+        for f in FILTERS {
+            assert_eq!(HeightFilter::from_id(f.id()), Some(f));
+        }
+        assert_eq!(HeightFilter::from_id("Sobel"), None);
     }
 
     #[test]

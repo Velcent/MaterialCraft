@@ -1,5 +1,6 @@
 //! [`Document`]: a mesh with its texture sets, plus what an importer could not translate.
 
+use super::height_normal::HeightFilter;
 use super::report::ImportReport;
 use super::texture_set::TextureSet;
 use super::validate::{self, DocError};
@@ -19,6 +20,9 @@ pub struct Document {
     pub mesh: Mesh,
     /// One per painted material slot, in display order.
     pub texture_sets: Vec<TextureSet>,
+    /// How height becomes normal detail in the final normal map, for every texture set (see
+    /// [`crate::paint::MaterialMaps`]). Importers set the filter of the program the work came from.
+    pub height_filter: HeightFilter,
     pub foreign: Vec<ForeignFile>,
     /// Present if the document came from an import.
     pub import_report: Option<ImportReport>,

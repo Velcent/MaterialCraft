@@ -5,6 +5,7 @@ use super::fixtures::full_document;
 use super::round_trip::{from_bytes, to_bytes};
 use crate::json::{self, Value};
 use crate::paint::format::FormatError;
+use crate::paint::height_normal::HeightFilter;
 
 /// Loads the full document after editing its manifest.
 fn load_edited(edit: impl Fn(&mut Value)) -> Result<crate::paint::Document, FormatError> {
@@ -89,6 +90,21 @@ fn bad_fields_name_their_path() {
             .insert("resolution", vec![0, 5]);
     }));
     assert_eq!(at, "texture_sets[0].resolution");
+    let at = manifest_error_at(load_edited(|v| {
+        v.insert("height_filter", "gauss");
+    }));
+    assert_eq!(at, "height_filter");
+}
+
+#[test]
+fn version_0_1_files_load_with_the_default_height_filter() {
+    let doc = load_edited(|v| {
+        v.insert("format_version", "0.1");
+        v.remove("height_filter");
+    })
+    .unwrap();
+    assert_eq!(doc.height_filter, HeightFilter::Backward);
+    assert_eq!(full_document().height_filter, HeightFilter::Sobel);
 }
 
 #[test]

@@ -17,6 +17,7 @@ use super::slot::ImageSlot;
 use super::version::Version;
 use super::{FormatError, FORMAT_VERSION};
 use crate::json::Value;
+use crate::paint::height_normal::HeightFilter;
 use crate::paint::{Document, PixelFormat};
 use extras::Extras;
 use fields::Obj;
@@ -75,6 +76,7 @@ pub fn write(doc: &Document, ctx: &WriteCtx, thumbnail: bool) -> Value {
         .with("format_version", FORMAT_VERSION)
         .with("generator", GENERATOR)
         .with("mesh", paths::MESH)
+        .with("height_filter", doc.height_filter.id())
         .with("texture_sets", sets)
         .with("foreign", foreign);
     if doc.import_report.is_some() {
@@ -97,7 +99,10 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
     o.opt("generator");
     o.opt("thumbnail");
     let mut ctx = ReadCtx::default();
-    let mut doc = Document::default();
+    let mut doc = Document {
+        height_filter: height_filter(&mut o)?,
+        ..Document::default()
+    };
     for (i, s) in o.array("texture_sets")?.iter().enumerate() {
         doc.texture_sets.push(texture_set::read(i, s, &mut ctx)?);
     }
@@ -122,4 +127,13 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
         extras: ctx.extras,
         ..manifest
     })
+}
+
+/// `height_filter`, optional since 0.2 (default `backward`).
+fn height_filter(o: &mut Obj) -> Result<HeightFilter, FormatError> {
+    match o.opt_str("height_filter")? {
+        None => Ok(HeightFilter::default()),
+        Some(id) => HeightFilter::from_id(id)
+            .ok_or_else(|| o.error("height_filter", format!("unknown height filter {id:?}"))),
+    }
 }

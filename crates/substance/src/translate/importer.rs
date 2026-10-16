@@ -5,6 +5,7 @@ use super::baked_maps::BakedMaps;
 use super::cache_channels::CacheChannels;
 use super::error::ImportError;
 use super::foreign::ForeignFiles;
+use super::normal_conventions::NormalConventions;
 use super::report::Reporter;
 use super::set_builder::SetBuilder;
 use super::texture_sets::SetBinding;
@@ -46,12 +47,15 @@ impl Importer {
         report.mesh(mesh.parts.len(), mesh.parts.iter().map(|p| p.triangles.len()).sum());
         progress(0.05, "reading layer document");
         let records = self.project.document_materials()?;
+        let normals = NormalConventions::from_settings(self.project.document_settings().ok().as_ref());
+        report.normals(&normals);
         let cache = CacheChannels::new(&self.project);
         let baked = BakedMaps::new(&self.project);
         let binding = SetBinding::bind(&materials, &records, &cache.sets());
         let builder = SetBuilder {
             cache: &cache,
             baked: &baked,
+            normals: &normals,
         };
         let mut translated = BTreeSet::new();
         let mut sets = Vec::with_capacity(binding.sets.len());
@@ -75,6 +79,7 @@ impl Importer {
         report.foreign(&kept);
         let mut doc = Document::new(mesh);
         doc.texture_sets = sets;
+        doc.height_filter = normals.height_filter;
         doc.foreign = kept.files;
         for problem in doc.problems() {
             report.add("document check", Fidelity::Approximated, problem.to_string());

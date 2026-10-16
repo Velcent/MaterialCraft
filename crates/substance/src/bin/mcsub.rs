@@ -6,13 +6,16 @@
 //!     mcsub corpus <folder> [--verify]             one table row per .spp below the folder
 //!     mcsub convert <in.spp> <out.mcpaint>         import and save as .mcpaint
 //!     mcsub convert --all <folder> <out dir> [--discard]   convert every .spp below the folder
-//!     mcsub report <in.spp>                        import and print the import report
-//!     mcsub maps <in.spp> <out dir>                final maps per texture set as PNGs
-//!     mcsub compare <in.spp> <export dir> [--diff <dir>] [--height-normal <strength>]
+//!     mcsub report <in>                            import and print the import report
+//!     mcsub maps <in> <out dir>                    final maps per texture set as PNGs
+//!     mcsub compare <in> <export dir> [--diff <dir>] [--height-normal <factor>]
 //!                                                  compare with Painter's exported textures
 //!
+//! `<in>` is a `.spp` (imported on the fly) or an already converted `.mcpaint`. `--height-normal` multiplies
+//! the height → normal scale (default 1 = Painter's; 0 leaves height out of the normal map).
 //! `convert`, `maps` and `compare` print progress on stderr as `progress <0..1> <message>`.
 
+use materialcraft::paint::{format, Document};
 use materialcraft_substance::container::hdf5::EntryKind;
 use materialcraft_substance::inspect::document_dump::LIST_PREVIEW;
 use materialcraft_substance::inspect::{Corpus, CorpusTable, DocumentDump, InspectOptions, ProjectReport, TextReport};
@@ -63,6 +66,19 @@ fn progress_line(fraction: f32, message: &str) {
     eprintln!("progress {fraction:.3} {message}");
 }
 
+fn is_mcpaint(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("mcpaint"))
+}
+
+/// Loads a `.mcpaint`; imports anything else as a `.spp`.
+fn open_document(path: &Path) -> Result<Document, String> {
+    if is_mcpaint(path) {
+        format::load_path(path).map_err(|e| e.to_string())
+    } else {
+        import_spp(path, &mut progress_line).map_err(|e| e.to_string())
+    }
+}
+
 fn run(args: Args) -> Result<(), String> {
     let options = InspectOptions {
         verify_pixels: args.has("--verify"),
@@ -109,13 +125,13 @@ fn run(args: Args) -> Result<(), String> {
             println!("{summary}");
         }
         ["report", input] => {
-            let doc = import_spp(Path::new(input), &mut progress_line).map_err(|e| err(&e))?;
+            let doc = open_document(Path::new(input))?;
             if let Some(report) = &doc.import_report {
                 print!("{}", ReportText(report));
             }
         }
         ["maps", input, dir] => {
-            let doc = import_spp(Path::new(input), &mut progress_line).map_err(|e| err(&e))?;
+            let doc = open_document(Path::new(input))?;
             let written = maps::write_maps(&doc, Path::new(dir), &mut |set| {
                 progress_line(1.0, &format!("maps of {set}"))
             })
@@ -123,10 +139,14 @@ fn run(args: Args) -> Result<(), String> {
             println!("{} maps written to {dir}", written.len());
         }
         ["compare", input, exports] => {
-            let doc = import_spp(Path::new(input), &mut progress_line).map_err(|e| err(&e))?;
-            let mut options = compare::CompareOptions::for_project(Path::new(input), args.diff.clone());
-            if let Some(strength) = args.height_normal {
-                options.output.height_normal_strength = strength;
+            let input = Path::new(input);
+            let doc = open_document(input)?;
+            let mut options = compare::CompareOptions::for_project(input, args.diff.clone());
+            if is_mcpaint(input) {
+                options.project_time = None;
+            }
+            if let Some(factor) = args.height_normal {
+                options.height_normal_strength = factor;
             }
             let table = compare::compare_document(&doc, Path::new(exports), &options, &mut |m| progress_line(1.0, m))
                 .map_err(|e| err(&e))?;

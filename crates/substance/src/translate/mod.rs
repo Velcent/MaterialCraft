@@ -1,6 +1,6 @@
 //! Stage 4 of the import pipeline: an opened `.spp` → [`materialcraft::paint::Document`] with an import report.
 //! The only part of the crate that knows both Painter's names and ours; the mapping tables live in
-//! [`channel_table`] and [`source_format`].
+//! [`channel_table`], [`source_format`] and [`normal_conventions`].
 //!
 //! Milestone M3 ("flattened import"): each texture set gets one paint layer holding the flattened channels
 //! from the texture cache, plus its baked mesh maps; everything not translated is kept under
@@ -12,6 +12,7 @@ pub mod channel_table;
 mod error;
 mod foreign;
 mod importer;
+pub mod normal_conventions;
 mod pixel_convert;
 mod report;
 mod set_builder;

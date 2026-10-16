@@ -8,7 +8,7 @@ use super::paths;
 use super::resources::ResourceRef;
 use crate::container::hdf5::Hdf5File;
 use crate::decode::assbin::AssbinScene;
-use crate::decode::document::{ClassCensus, DocumentMaterials, MaterialRecord};
+use crate::decode::document::{ClassCensus, DocumentMaterials, DocumentSettings, MaterialRecord};
 use crate::decode::resource_toc::ResourceToc;
 use crate::decode::settings::ProjectSettings;
 use std::path::{Path, PathBuf};
@@ -84,6 +84,12 @@ impl SppProject {
     pub fn document_materials(&self) -> Result<Vec<MaterialRecord>, ProjectError> {
         let data = self.read(paths::DOCUMENT)?;
         DocumentMaterials::scan(&data).map_err(ProjectError::decode(paths::DOCUMENT))
+    }
+
+    /// Format version and project-wide settings of `document.bin`.
+    pub fn document_settings(&self) -> Result<DocumentSettings, ProjectError> {
+        let data = self.read(paths::DOCUMENT)?;
+        DocumentSettings::scan(&data).map_err(ProjectError::decode(paths::DOCUMENT))
     }
 
     fn decode_optional<T>(

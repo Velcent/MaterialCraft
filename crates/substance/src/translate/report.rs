@@ -1,6 +1,7 @@
 //! [`Reporter`]: the wording of the import report, one method per kind of element.
 
 use super::foreign::KeptFiles;
+use super::normal_conventions::{BakedNormals, NormalConventions};
 use materialcraft::paint::{Fidelity, ImportReport};
 
 const MB: f64 = 1024.0 * 1024.0;
@@ -81,6 +82,36 @@ impl Reporter {
             Fidelity::KeptRaw,
             reason,
         );
+    }
+
+    /// The height → normal filter and the convention baked normal maps were converted from.
+    pub fn normals(&mut self, n: &NormalConventions) {
+        let filter = n.height_filter.id();
+        match n.format_version {
+            Some(v) => self.add(
+                "height to normal",
+                Fidelity::Exact,
+                format!("{filter} filter, as Painter for document format {v}"),
+            ),
+            None => self.add(
+                "height to normal",
+                Fidelity::Approximated,
+                format!("document format unreadable; using the {filter} filter"),
+            ),
+        }
+        let (fidelity, note) = match n.baked {
+            BakedNormals::OpenGl => (Fidelity::Exact, "stored OpenGL; kept as is".to_string()),
+            BakedNormals::DirectX => (Fidelity::Exact, "stored DirectX; green flipped to OpenGL".to_string()),
+            BakedNormals::Unknown(Some(v)) => (
+                Fidelity::Approximated,
+                format!("unknown normal map format {v}; kept as stored (OpenGL assumed)"),
+            ),
+            BakedNormals::Unknown(None) => (
+                Fidelity::Approximated,
+                "normal map format not recorded; kept as stored (OpenGL assumed)".to_string(),
+            ),
+        };
+        self.add("baked normal maps", fidelity, note);
     }
 
     pub fn layers(&mut self, set: &str, layers: usize, actions: usize) {

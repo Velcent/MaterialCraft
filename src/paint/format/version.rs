@@ -14,7 +14,7 @@ pub struct Version {
 
 impl Version {
     /// The version this code writes ([`super::FORMAT_VERSION`]).
-    pub const CURRENT: Version = Version { major: 0, minor: 1 };
+    pub const CURRENT: Version = Version { major: 0, minor: 2 };
 
     /// Parses `major.minor` (decimal, no sign, no leading zeros except `0` itself).
     pub fn parse(text: &str) -> Option<Version> {

@@ -1,6 +1,7 @@
 //! Documents used by the format tests.
 
 use crate::mesh::{Mesh, MeshPart};
+use crate::paint::height_normal::HeightFilter;
 use crate::paint::{
     BakedKind, BakedMap, BlendMode, Channel, ChannelSpec, ColorSpace, Document, Fidelity, Fill,
     FillSource, ForeignFile, ImportReport, Layer, LayerKind, PaintContent, PixelFormat,
@@ -208,6 +209,7 @@ pub fn full_document() -> Document {
         ],
     };
     let mut doc = Document::new(mesh);
+    doc.height_filter = HeightFilter::Sobel;
     doc.texture_sets.push(body_set());
     let mut trim = TextureSet::new("trim", "Trim", (32, 32));
     trim.material_slot = 1;

@@ -9,8 +9,9 @@ pub struct CompareRow {
     /// The export's map name, e.g. `basecolor` or `orm[1]`.
     pub map: String,
     pub file: String,
-    /// The export is newer than the project file (so it shows the saved state).
-    pub newer: bool,
+    /// The export is newer than the project file (so it shows the saved state); `None` if the project's
+    /// time is unknown.
+    pub newer: Option<bool>,
     pub diff: Diff,
     /// Mean absolute error against the vertically flipped export (row-order check).
     pub flipped_mae: f64,
@@ -49,7 +50,11 @@ impl fmt::Display for CompareTable {
                 r.fit.gain,
                 r.fit.offset,
                 r.file,
-                if r.newer { "" } else { " (older than project)" }
+                if r.newer == Some(false) {
+                    " (older than project)"
+                } else {
+                    ""
+                }
             )?;
         }
         writeln!(f, "{LEGEND}")?;

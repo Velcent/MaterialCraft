@@ -30,7 +30,7 @@ impl MapsWorker {
                     return;
                 }
                 let ts = &doc.texture_sets[set];
-                let maps = MaterialMaps::build(ts, &OutputOptions::default());
+                let maps = MaterialMaps::build(ts, &OutputOptions::for_document(&doc));
                 if cancel.is_cancelled() {
                     return;
                 }

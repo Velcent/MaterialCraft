@@ -6,30 +6,9 @@
 //! with RNM = reoriented normal mapping ([`super::normal::reoriented`]): the height detail is first
 //! laid onto the baked mesh normal, then the normal channel onto the result. Flat inputs drop out.
 //!
-//! Baked normal maps come in the convention they were baked in ([`NormalFormat`]); everything else
-//! in Paint mode is OpenGL.
+//! All inputs are OpenGL (+Y up), the convention of every normal map in a document.
 
 use super::normal::{self, Vec3};
-
-/// Which way green points in a tangent-space normal map.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum NormalFormat {
-    /// +Y = +v (up in the image). Paint mode's own convention.
-    #[default]
-    OpenGl,
-    /// Green flipped (+Y = down in the image).
-    DirectX,
-}
-
-impl NormalFormat {
-    /// A decoded normal in this format, turned into OpenGL.
-    pub fn to_opengl(self, n: Vec3) -> Vec3 {
-        match self {
-            NormalFormat::OpenGl => n,
-            NormalFormat::DirectX => [n[0], -n[1], n[2]],
-        }
-    }
-}
 
 /// Painter's combination of the baked mesh normal, the height-derived normal and the normal channel
 /// (all decoded, OpenGL).
@@ -69,15 +48,5 @@ mod tests {
             painter,
             normal::reoriented(normal::reoriented(b, h), c)
         ));
-    }
-
-    #[test]
-    fn directx_flips_green_only() {
-        let n = normalize([0.3, 0.4, 0.8]);
-        assert!(close(
-            NormalFormat::DirectX.to_opengl(n),
-            [n[0], -n[1], n[2]]
-        ));
-        assert!(close(NormalFormat::OpenGl.to_opengl(n), n));
     }
 }

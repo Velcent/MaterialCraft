@@ -5,6 +5,7 @@ use super::fixtures::full_document;
 use super::round_trip::{from_bytes, to_bytes};
 use crate::json::{self, Value};
 use crate::paint::format::manifest::extras::Extras;
+use crate::paint::format::FORMAT_VERSION;
 use crate::zip::ZipReader;
 use std::io::Cursor;
 
@@ -21,7 +22,7 @@ fn unknown_fields_are_kept() {
             return Some(data);
         }
         let mut v = json::parse(std::str::from_utf8(&data).unwrap()).unwrap();
-        v.insert("format_version", "0.2");
+        v.insert("format_version", "0.9");
         v.insert("udims", vec![1001, 1002]);
         let set = &mut v.get_mut("texture_sets").unwrap().as_array_mut().unwrap()[0];
         set.insert("color_profile", "ACEScg");
@@ -34,7 +35,7 @@ fn unknown_fields_are_kept() {
     assert!(doc.foreign_file(Extras::PATH).is_some());
     let saved = to_bytes(&doc);
     let v = manifest(&saved);
-    assert_eq!(v["format_version"].as_str(), Some("0.1"));
+    assert_eq!(v["format_version"].as_str(), Some(FORMAT_VERSION));
     assert_eq!(v["udims"].to_string(), "[1001,1002]");
     let set = &v["texture_sets"][0];
     assert_eq!(set["color_profile"].as_str(), Some("ACEScg"));

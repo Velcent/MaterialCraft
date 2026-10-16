@@ -3,9 +3,9 @@
 //! Each map is the composited channel (see [`crate::paint::Compositor`]) with alpha 1; channels the
 //! set does not declare are filled with their default. Two maps combine several inputs:
 //! - **normal** = `RNM(RNM(baked, height_normal), normal_channel)` as in Substance Painter
-//!   ([`super::normal_combine`]): `baked` is the baked mesh normal map (flat if absent, turned into
-//!   OpenGL from [`OutputOptions::baked_normal_format`]) and `height_normal` the normal derived from
-//!   the composited height with [`super::height_normal::normal_from_height`] (edges clamped, flat if
+//!   ([`super::normal_combine`]): `baked` is the baked mesh normal map (flat if absent) and
+//!   `height_normal` the normal derived from the composited height with
+//!   [`super::height_normal::normal_from_height`] and the document's filter (edges clamped, flat if
 //!   the set has no height channel). Flat inputs drop out.
 //! - **ambient_occlusion** = baked AO × AO channel.
 //!
@@ -13,24 +13,33 @@
 //! colour space (base colour and emissive are usually sRGB-encoded).
 
 use super::channel::Channel;
+use super::doc::Document;
 use super::height_normal::{self, HeightFilter};
 use super::normal;
-use super::normal_combine::{self, NormalFormat};
+use super::normal_combine;
 use super::par::for_each_mut;
 use super::stack::{CompositeWarning, Compositor};
 use super::texture_set::{BakedKind, TextureSet};
 use crate::tex::Tex;
 
-/// Settings for [`MaterialMaps::build`]. The default reproduces current Substance Painter.
+/// Settings for [`MaterialMaps::build`]. [`OutputOptions::for_document`] gives a document's own.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OutputOptions {
     /// Multiplier on Painter's height → normal scale (1 = Painter, see
     /// [`super::height_normal::UV_SLOPE`]); 0 ignores the height channel for the normal.
     pub height_normal_strength: f32,
-    /// Gradient estimate of the height → normal conversion (depends on the Painter release).
+    /// Gradient estimate of the height → normal conversion ([`Document::height_filter`]).
     pub height_filter: HeightFilter,
-    /// Convention the baked normal maps are stored in (Painter: the project's normal map format).
-    pub baked_normal_format: NormalFormat,
+}
+
+impl OutputOptions {
+    /// The settings `doc` asks for, at strength 1.
+    pub fn for_document(doc: &Document) -> OutputOptions {
+        OutputOptions {
+            height_filter: doc.height_filter,
+            ..OutputOptions::default()
+        }
+    }
 }
 
 impl Default for OutputOptions {
@@ -38,7 +47,6 @@ impl Default for OutputOptions {
         OutputOptions {
             height_normal_strength: 1.0,
             height_filter: HeightFilter::default(),
-            baked_normal_format: NormalFormat::default(),
         }
     }
 }
@@ -100,15 +108,17 @@ impl MaterialMaps {
             .baked(&BakedKind::Normal)
             .map(|i| resample(&i.to_tex(), w, h));
         if height_normal.is_some() || baked_normal.is_some() {
-            let baked_format = options.baked_normal_format;
             par_pixels(&mut normal.px, |i, p| {
                 let at = |t: &Option<Tex>| {
                     t.as_ref()
                         .and_then(|t| t.px.get(i))
                         .map_or(normal::FLAT, |&c| normal::decode(c))
                 };
-                let baked = baked_format.to_opengl(at(&baked_normal));
-                let n = normal_combine::combine(baked, at(&height_normal), normal::decode(*p));
+                let n = normal_combine::combine(
+                    at(&baked_normal),
+                    at(&height_normal),
+                    normal::decode(*p),
+                );
                 *p = normal::encode(n);
             });
         } else {
@@ -247,15 +257,13 @@ mod tests {
     }
 
     #[test]
-    fn directx_baked_normal_is_flipped_to_opengl() {
-        let mut s = flat_set();
-        let tilted = normal::encode(normal::normalize([0.0, 0.3, 1.0]));
-        s.baked.push(baked(BakedKind::Normal, 8, tilted));
-        let options = OutputOptions {
-            baked_normal_format: NormalFormat::DirectX,
-            ..OutputOptions::default()
+    fn options_follow_the_document() {
+        let doc = Document {
+            height_filter: HeightFilter::Sobel,
+            ..Document::default()
         };
-        let maps = MaterialMaps::build(&s, &options);
-        assert!((maps.normal.px[9][1] - (1.0 - tilted[1])).abs() < 1e-3);
+        let o = OutputOptions::for_document(&doc);
+        assert_eq!(o.height_filter, HeightFilter::Sobel);
+        assert_eq!(o.height_normal_strength, 1.0);
     }
 }
