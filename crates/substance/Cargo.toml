@@ -9,3 +9,7 @@ publish = false
 [dependencies]
 materialcraft = { path = "../.." }
 lz4_flex = { version = "0.11", default-features = false, features = ["std", "safe-decode"] }
+
+[[bin]]
+name = "mcsub"
+path = "src/bin/mcsub.rs"

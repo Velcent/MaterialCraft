@@ -10,3 +10,5 @@
 
 pub mod container;
 pub mod decode;
+pub mod inspect;
+pub mod project;
