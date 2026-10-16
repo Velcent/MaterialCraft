@@ -40,7 +40,7 @@ pub fn show(
     events: &mut Vec<PanelEvent>,
 ) {
     let frame = egui::Frame::none()
-        .fill(Color32::from_rgb(30, 30, 30))
+        .fill(crate::gui_theme::HEADER_BG)
         .inner_margin(egui::Margin::symmetric(8.0, 2.0));
     egui::TopBottomPanel::bottom("paint_status")
         .frame(frame)

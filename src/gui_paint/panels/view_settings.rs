@@ -13,7 +13,7 @@ const RELIEF: [(u32, &str); 4] = [
 ];
 
 pub fn show(ui: &mut egui::Ui, view: &mut View, gpu: &Shared) {
-    crate::panel_header(ui, "VIEW SETTINGS", false);
+    crate::gui_theme::panel_header(ui, "VIEW SETTINGS", false);
     ui.add_space(4.0);
     ui.strong("Height");
     egui::ComboBox::from_id_salt("paint_relief")

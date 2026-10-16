@@ -45,7 +45,7 @@ pub fn show(ctx: &egui::Context, title: &str, has_document: bool, events: &mut V
                     ui.label(
                         egui::RichText::new("PAINT")
                             .strong()
-                            .color(Color32::from_rgb(235, 130, 20)),
+                            .color(crate::gui_theme::ACCENT),
                     );
                 });
             });

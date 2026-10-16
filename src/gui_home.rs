@@ -339,23 +339,6 @@ fn icon_btn(ui: &mut egui::Ui, ic: Ic, tip: &str, enabled: bool) -> egui::Respon
 }
 
 /// Dockable-panel style header. Returns true when the close button was clicked.
-fn panel_header(ui: &mut egui::Ui, title: &str, closable: bool) -> bool {
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
-    ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(30, 30, 30));
-    ui.painter().text(rect.left_center() + vec2(8.0, 0.0), Align2::LEFT_CENTER, title, FontId::proportional(12.0), Color32::from_gray(225));
-    let mut clicked = false;
-    if closable {
-        let cr = Rect::from_center_size(rect.right_center() - vec2(12.0, 0.0), vec2(16.0, 16.0));
-        let resp = ui.interact(cr, Id::new(("hdr_close", title)), Sense::click());
-        let col = if resp.hovered() { Color32::WHITE } else { Color32::from_gray(150) };
-        let c = cr.center();
-        ui.painter().line_segment([c + vec2(-4.0, -4.0), c + vec2(4.0, 4.0)], Stroke::new(1.3_f32, col));
-        ui.painter().line_segment([c + vec2(-4.0, 4.0), c + vec2(4.0, -4.0)], Stroke::new(1.3_f32, col));
-        clicked = resp.clicked();
-    }
-    clicked
-}
-
 /// Draggable panel edge. edge: 0 = right edge of a left panel, 1 = left edge of a right panel, 2 = top edge of a bottom panel.
 /// Returns the size change requested this frame.
 fn size_handle(ui: &mut egui::Ui, id: &str, panel: Rect, edge: u8) -> f32 {

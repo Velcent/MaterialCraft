@@ -8,7 +8,7 @@ use materialcraft::gpu3d::{self, Shared};
 use materialcraft::render3d::{View, RELIEF_NONE};
 use std::sync::Arc;
 
-const BACKGROUND: Color32 = Color32::from_rgb(30, 30, 30);
+const BACKGROUND: Color32 = crate::gui_theme::HEADER_BG;
 const HINT: &str = "drag: orbit   Alt+drag / middle: move   Shift+drag: light   wheel: zoom";
 
 pub struct Viewport {

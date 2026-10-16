@@ -24,7 +24,7 @@ impl ReportPanel {
         report: Option<&ImportReport>,
         summary: Option<&str>,
     ) {
-        crate::panel_header(ui, "IMPORT REPORT", false);
+        crate::gui_theme::panel_header(ui, "IMPORT REPORT", false);
         let Some(report) = report else {
             ui.weak("This document was not imported.");
             return;

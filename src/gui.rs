@@ -20,6 +20,8 @@ mod logo_data {
 }
 #[path = "gui_paint/mod.rs"]
 mod gui_paint;
+mod gui_theme;
+use gui_theme::panel_header;
 
 // ---------------------------------------------------------------- layout constants
 const CARD: f32 = 92.0;

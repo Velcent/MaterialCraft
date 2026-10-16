@@ -5,7 +5,7 @@ use super::PanelEvent;
 use eframe::egui::{self, Color32};
 
 pub fn show(ui: &mut egui::Ui, doc: &OpenDocument, events: &mut Vec<PanelEvent>) {
-    crate::panel_header(ui, &format!("TEXTURE SETS ({})", doc.sets.len()), false);
+    crate::gui_theme::panel_header(ui, &format!("TEXTURE SETS ({})", doc.sets.len()), false);
     if doc.doc().texture_sets.is_empty() {
         ui.weak("This document has no texture sets.");
         return;
