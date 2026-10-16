@@ -1,0 +1,11 @@
+[package]
+name = "materialcraft-substance"
+version = "0.1.0"
+edition = "2021"
+description = "Reads Substance 3D Painter projects (.spp) so MaterialCraft can import them"
+license = "MIT"
+publish = false
+
+[dependencies]
+materialcraft = { path = "../.." }
+lz4_flex = { version = "0.11", default-features = false, features = ["std", "safe-decode"] }

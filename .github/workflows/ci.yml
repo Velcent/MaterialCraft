@@ -25,6 +25,6 @@ jobs:
       - name: Build (core + editor)
         run: cargo build --release --features gui
       - name: Tests
-        run: cargo test --release
+        run: cargo test --release --workspace
       - name: CLI smoke test
         run: cargo run --release --bin materialcraft -- example
