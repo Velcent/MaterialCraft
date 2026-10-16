@@ -9,3 +9,4 @@
 //! Format notes live in the internal docs (`interop/substance-painter.md`), not here.
 
 pub mod container;
+pub mod decode;

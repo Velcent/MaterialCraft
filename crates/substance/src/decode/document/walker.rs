@@ -1,0 +1,175 @@
+//! Structural walk over Painter's object tree, reporting each object's class to a [`Visitor`].
+//!
+//! An object is `flag u8` (`0xff` = absent, `0x00` = present), `u32` end offset, class name
+//! (`u32` length + ASCII), `u16` field count, then fields: name (`u32` length + bytes),
+//! tag byte, payload. End offsets are absolute positions in the file. Because objects and lists
+//! carry their end, a value with an unknown tag only costs the rest of its enclosing container.
+
+use super::header::ROOT_OFFSET;
+use super::tag::{Payload, ValueTag};
+use super::RECORD;
+use crate::container::bytes::ByteReader;
+use crate::decode::DecodeError;
+
+/// Nesting limit (objects and lists); real files reach about 50.
+const MAX_DEPTH: usize = 256;
+const MAX_CLASS_NAME: usize = 256;
+const PRESENT: u8 = 0x00;
+const ABSENT: u8 = 0xff;
+/// Smallest field: empty name length and a tag with a 1-byte payload.
+const MIN_FIELD_LEN: usize = 6;
+
+/// Receives what the walk finds.
+pub trait Visitor {
+    fn object(&mut self, class: &str);
+    /// A tag we cannot size; the rest of the enclosing object or list was skipped.
+    fn unknown_tag(&mut self, tag: u8, offset: usize);
+}
+
+/// Whether a value was read completely or its container has to be skipped.
+enum Flow {
+    Done,
+    Unknown,
+}
+
+/// Walks the whole tree of a file whose header was already checked.
+pub fn walk(data: &[u8], visitor: &mut impl Visitor) -> Result<(), DecodeError> {
+    let mut walker = Walker { visitor };
+    let mut r = ByteReader::new(data);
+    r.seek(ROOT_OFFSET).map_err(DecodeError::truncated(RECORD))?;
+    match walker.tagged(&mut r, 0)? {
+        Flow::Done => Ok(()),
+        Flow::Unknown => Err(DecodeError::invalid(RECORD, "root value has an unknown tag")),
+    }
+}
+
+struct Walker<'v, V> {
+    visitor: &'v mut V,
+}
+
+impl<V: Visitor> Walker<'_, V> {
+    fn tagged(&mut self, r: &mut ByteReader, depth: usize) -> Result<Flow, DecodeError> {
+        let at = r.pos();
+        let byte = read_u8(r)?;
+        let Some(tag) = ValueTag::from_byte(byte) else {
+            self.visitor.unknown_tag(byte, at);
+            return Ok(Flow::Unknown);
+        };
+        match tag.payload() {
+            Payload::Fixed(n) => r.skip(n).map_err(DecodeError::truncated(RECORD))?,
+            Payload::String => {
+                let len = read_u32(r)? as usize;
+                r.skip(len).map_err(DecodeError::truncated(RECORD))?;
+            }
+            Payload::List => self.list(r, enter(depth)?)?,
+            Payload::Object => self.object(r, enter(depth)?)?,
+        }
+        Ok(Flow::Done)
+    }
+
+    fn object(&mut self, r: &mut ByteReader, depth: usize) -> Result<(), DecodeError> {
+        match read_u8(r)? {
+            ABSENT => return Ok(()),
+            PRESENT => {}
+            flag => {
+                return Err(DecodeError::invalid(
+                    RECORD,
+                    format!("object flag {flag:#04x} at {}", r.pos() - 1),
+                ))
+            }
+        }
+        let end = read_end(r)?;
+        self.visitor.object(&read_class(r)?);
+        let fields = read_u16(r)? as usize;
+        check_count(r, fields, end, MIN_FIELD_LEN)?;
+        for _ in 0..fields {
+            let name_len = read_u32(r)? as usize;
+            r.skip(name_len).map_err(DecodeError::truncated(RECORD))?;
+            if let Flow::Unknown = self.tagged(r, depth)? {
+                break;
+            }
+        }
+        finish(r, end)
+    }
+
+    fn list(&mut self, r: &mut ByteReader, depth: usize) -> Result<(), DecodeError> {
+        let end = read_end(r)?;
+        let count = read_u32(r)? as usize;
+        check_count(r, count, end, 1)?;
+        for _ in 0..count {
+            if let Flow::Unknown = self.tagged(r, depth)? {
+                break;
+            }
+        }
+        finish(r, end)
+    }
+}
+
+fn enter(depth: usize) -> Result<usize, DecodeError> {
+    if depth >= MAX_DEPTH {
+        return Err(DecodeError::invalid(RECORD, "objects nested too deeply"));
+    }
+    Ok(depth + 1)
+}
+
+/// Reads an end offset; it must lie between the current position and the end of the data.
+fn read_end(r: &mut ByteReader) -> Result<usize, DecodeError> {
+    let end = read_u32(r)? as usize;
+    if end < r.pos() || end > r.len() {
+        return Err(DecodeError::invalid(
+            RECORD,
+            format!("end offset {end} at {} is out of range", r.pos() - 4),
+        ));
+    }
+    Ok(end)
+}
+
+/// Moves to a container's end; having read past it means the data is inconsistent.
+fn finish(r: &mut ByteReader, end: usize) -> Result<(), DecodeError> {
+    if r.pos() > end {
+        return Err(DecodeError::invalid(
+            RECORD,
+            format!("content overruns its end offset {end}"),
+        ));
+    }
+    r.seek(end).map_err(DecodeError::truncated(RECORD))
+}
+
+fn check_count(r: &ByteReader, count: usize, end: usize, min_item_len: usize) -> Result<(), DecodeError> {
+    if count.saturating_mul(min_item_len) > end.saturating_sub(r.pos()) {
+        return Err(DecodeError::invalid(
+            RECORD,
+            format!("count {count} does not fit before offset {end}"),
+        ));
+    }
+    Ok(())
+}
+
+/// Class names are ASCII identifiers such as `DataDocument` or `Data2DTransformation`.
+fn read_class(r: &mut ByteReader) -> Result<String, DecodeError> {
+    let at = r.pos();
+    let len = read_u32(r)? as usize;
+    if len == 0 || len > MAX_CLASS_NAME {
+        return Err(DecodeError::invalid(RECORD, format!("class name length {len} at {at}")));
+    }
+    let bytes = r.bytes(len).map_err(DecodeError::truncated(RECORD))?;
+    if !bytes.iter().all(|b| b.is_ascii_alphanumeric() || *b == b'_') {
+        return Err(DecodeError::invalid(
+            RECORD,
+            format!("class name at {at} is not an identifier"),
+        ));
+    }
+    Ok(bytes.iter().map(|&b| b as char).collect())
+}
+
+fn read_u8(r: &mut ByteReader) -> Result<u8, DecodeError> {
+    r.u8().map_err(DecodeError::truncated(RECORD))
+}
+
+fn read_u16(r: &mut ByteReader) -> Result<u16, DecodeError> {
+    r.u16_le().map_err(DecodeError::truncated(RECORD))
+}
+
+fn read_u32(r: &mut ByteReader) -> Result<u32, DecodeError> {
+    r.u32_le().map_err(DecodeError::truncated(RECORD))
+}
