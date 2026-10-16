@@ -6,7 +6,7 @@ use crate::model::effect::{
     ColorSelectionEffect, EffectGroup, EffectHeader, FilterEffect, Levels, LevelsEffect, PainterEffect,
     PolygonFillEffect,
 };
-use crate::model::fill::FillEffect;
+use crate::model::fill::{FillEffect, UvTransform};
 use crate::model::paint::{PaintEffect, PaintTool};
 use crate::model::raw::RawObject;
 
@@ -82,6 +82,23 @@ impl ModelBuilder {
             sources,
             projection: e.u64("projection").unwrap_or(0),
             filtering: e.u64("filtering").unwrap_or(0),
+            uv_transform: e
+                .object("uvTransformation0")
+                .or_else(|| e.object("uvTransformation"))
+                .map(|t| self.uv_transform(t)),
+        }
+    }
+
+    fn uv_transform(&mut self, t: &RawObject) -> UvTransform {
+        self.seen(t);
+        let vec2 = |name: &str, default: f32| match t.floats(name) {
+            Some([x, y, ..]) => [*x, *y],
+            _ => [default; 2],
+        };
+        UvTransform {
+            scale: vec2("scale", 1.0),
+            translation: vec2("translation", 0.0),
+            rotation: t.f32("rotation").unwrap_or(0.0),
         }
     }
 

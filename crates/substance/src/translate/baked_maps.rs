@@ -7,12 +7,10 @@
 
 use super::channel_table::baked_kind;
 use super::error::PartError;
-use super::pixel_convert::{Conversion, RowOrder};
-use super::source_format::SourceFormat;
+use super::resources::{read_image, split_resource_url};
 use crate::decode::document::BitmapRef;
-use crate::decode::image::ImageResource;
 use crate::decode::resource_toc::ResourceToc;
-use crate::project::{paths, SppProject};
+use crate::project::SppProject;
 use materialcraft::paint::{BakedKind, BakedMap};
 
 /// Resource-name prefixes of baked maps, for sets the document does not describe.
@@ -80,45 +78,21 @@ impl<'a> BakedMaps<'a> {
     }
 
     pub fn read(&self, source: &BakedSource) -> Result<BakedImage, PartError> {
-        let dataset = self.dataset(&source.resource)?;
-        let data = self.project.read(&dataset)?;
-        let image = ImageResource::parse(&data)?;
-        let format = SourceFormat::from_image(&image.format)
-            .ok_or_else(|| PartError::UnknownFormat(image.format.name().to_string()))?;
-        let pixels = image.decompress_padded()?;
-        let conversion = Conversion {
-            source: format,
-            rows: RowOrder::TopFirst,
-        };
+        let read = read_image(self.project, &source.resource)?;
         Ok(BakedImage {
             map: BakedMap {
                 kind: source.kind.clone(),
-                image: conversion.convert(image.width, image.height, &pixels.bytes)?.image,
+                image: read.image,
             },
-            missing_bytes: pixels.missing,
-            dataset,
+            missing_bytes: read.missing_bytes,
+            dataset: read.dataset,
         })
-    }
-
-    /// `/resources/<id>`, possibly with an extension Painter appended.
-    fn dataset(&self, resource: &str) -> Result<String, PartError> {
-        let exact = format!("{}/{resource}", paths::RESOURCES);
-        let layout = self.project.layout();
-        if layout.dataset(&exact).is_some() {
-            return Ok(exact);
-        }
-        let prefix = format!("{exact}.");
-        layout
-            .datasets_under(paths::RESOURCES)
-            .find(|d| d.path.starts_with(&prefix))
-            .map(|d| d.path.to_string())
-            .ok_or_else(|| PartError::Missing(format!("resource {resource}")))
     }
 }
 
-/// Splits `/<name>?version=<id>`.
+/// A baked-map reference to an embedded resource (`/<name>?version=<id>`).
 fn from_ref(r: &BitmapRef) -> Option<BakedSource> {
-    let (name, resource) = r.url.strip_prefix('/').unwrap_or(&r.url).rsplit_once("?version=")?;
+    let (name, resource) = split_resource_url(&r.url)?;
     Some(BakedSource {
         kind: baked_kind(r.usage),
         name: name.to_string(),

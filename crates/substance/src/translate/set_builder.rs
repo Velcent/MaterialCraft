@@ -1,27 +1,26 @@
-//! [`SetBuilder`]: one [`TextureSet`] from a [`SetSource`]: channels, the flattened paint layer, baked maps.
+//! [`SetBuilder`]: one [`TextureSet`] from a [`SetSource`]: channels, the flattened paint layer, the layer
+//! stack (through [`SetLayers`]), baked maps.
 
 use super::baked_maps::BakedMaps;
 use super::cache_channels::{CacheChannels, CacheImage};
-use super::channel_table::{channel_for_bit, channel_spec, painter_channel_name, painter_default};
+use super::channel_table::{channel_for_bit, channel_spec, painter_channel_name};
 use super::normal_conventions::NormalConventions;
 use super::report::Reporter;
+use super::set_layers::{painter_result_layer, Flattened, SetLayers};
 use super::texture_sets::SetSource;
-use materialcraft::paint::{BlendMode, Channel, Fidelity, Fill, Layer, LayerKind, PaintContent, TextureSet};
+use materialcraft::paint::{BlendMode, Channel, Fidelity, Layer, LayerKind, PaintContent, TextureSet};
 use std::collections::BTreeSet;
 
 /// Resolution for sets with neither cache entries nor a recorded resolution (Painter's default).
 const FALLBACK_RESOLUTION: u32 = 2048;
 /// Largest `resolutionLog2` accepted (Painter's maximum is 8K = 2^13).
 const MAX_LOG2: i32 = 14;
-pub const IMPORTED_LAYER_ID: &str = "imported";
-pub const IMPORTED_LAYER_NAME: &str = "Imported (flattened)";
-pub const DEFAULTS_LAYER_ID: &str = "painter-defaults";
-pub const DEFAULTS_LAYER_NAME: &str = "Painter defaults";
 
 pub struct SetBuilder<'a> {
     pub cache: &'a CacheChannels<'a>,
     pub baked: &'a BakedMaps<'a>,
     pub normals: &'a NormalConventions,
+    pub layers: &'a SetLayers<'a>,
 }
 
 impl SetBuilder<'_> {
@@ -34,19 +33,14 @@ impl SetBuilder<'_> {
         set.material_slot = source.slot;
         declare_channels(&mut set, source, &images, report);
         let fully_covered = !images.is_empty() && images.iter().all(|(_, i)| i.fully_covered);
-        if !fully_covered {
-            set.layers.push(defaults_layer(&set));
-            report.add(
-                format!("texture set \"{name}\" / {DEFAULTS_LAYER_NAME}"),
-                Fidelity::Approximated,
-                "uncovered texels show Painter's channel defaults (bottom fill layer)",
-            );
-        }
-        if let Some(layer) = imported_layer(&set, images, report) {
-            set.layers.push(layer);
-        }
+        let complete = fully_covered && set.channels.iter().all(|s| images.iter().any(|(c, _)| *c == s.channel));
+        let flattened = Flattened {
+            layer: imported_layer(&set, images, report),
+            fully_covered,
+            complete,
+        };
+        self.layers.build(&mut set, source, flattened, report);
         self.add_baked(source, &mut set, report, translated);
-        report.layers(name, source.record.layer_count, source.record.action_count);
         set
     }
 
@@ -128,11 +122,7 @@ fn declare_channels(set: &mut TextureSet, source: &SetSource, images: &[(Channel
 
 /// The paint layer holding the flattened channels in the set's layer formats; `None` without usable images.
 fn imported_layer(set: &TextureSet, images: Vec<(Channel, CacheImage)>, report: &mut Reporter) -> Option<Layer> {
-    let mut layer = Layer::new(
-        IMPORTED_LAYER_ID,
-        IMPORTED_LAYER_NAME,
-        LayerKind::Paint(PaintContent::default()),
-    );
+    let mut layer = painter_result_layer(LayerKind::Paint(PaintContent::default()));
     let mut content = PaintContent::default();
     for (channel, image) in images {
         let label = painter_channel_name(image.bit);
@@ -155,24 +145,6 @@ fn imported_layer(set: &TextureSet, images: Vec<(Channel, CacheImage)>, report: 
     }
     layer.kind = LayerKind::Paint(content);
     (!layer.blend.is_empty()).then_some(layer)
-}
-
-/// A uniform fill with Painter's default value for every declared channel.
-fn defaults_layer(set: &TextureSet) -> Layer {
-    let values = set
-        .channels
-        .iter()
-        .map(|s| (s.channel, painter_default(s.channel)))
-        .collect();
-    let mut layer = Layer::new(
-        DEFAULTS_LAYER_ID,
-        DEFAULTS_LAYER_NAME,
-        LayerKind::Fill(Fill::uniform(values)),
-    );
-    for spec in &set.channels {
-        layer.set_blend(spec.channel, BlendMode::Normal, 1.0);
-    }
-    layer
 }
 
 /// The cache images' size; else the document's `resolutionLog2`; else the fallback. Both sources are reported.

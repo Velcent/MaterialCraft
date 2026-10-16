@@ -12,6 +12,8 @@
 //!     mcsub maps <in> <out dir>                    final maps per texture set as PNGs
 //!     mcsub compare <in> <export dir> [--diff <dir>] [--height-normal <factor>]
 //!                                                  compare with Painter's exported textures
+//!     mcsub verify-layers <file.spp> [--fit]       imported layer stacks against Painter's texture cache
+//!     mcsub verify-layers --all <folder> [--fit]   the same for every .spp below the folder
 //!
 //! `<in>` is a `.spp` (imported on the fly) or an already converted `.mcpaint`. `--height-normal` multiplies
 //! the height → normal scale (default 1 = Painter's; 0 leaves height out of the normal map).
@@ -24,13 +26,14 @@ use materialcraft_substance::inspect::{Corpus, CorpusTable, DocumentDump, Inspec
 use materialcraft_substance::project::{paths, SppProject};
 use materialcraft_substance::tools::model_text::ModelText;
 use materialcraft_substance::tools::report_text::ReportText;
+use materialcraft_substance::tools::verify_layers::{verify_path, VerifyOptions};
 use materialcraft_substance::tools::{compare, convert, maps, model_corpus};
 use materialcraft_substance::translate::import_spp;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const USAGE: &str =
-    "usage: mcsub inspect|tree|doc|model|corpus|convert|report|maps|compare … (see the source header for details)";
+    "usage: mcsub inspect|tree|doc|model|corpus|convert|report|maps|compare|verify-layers … (see the source header for details)";
 
 /// Parsed command line: positional words, `--flag`s and `--diff <dir>`.
 struct Args {
@@ -171,6 +174,11 @@ fn run(args: Args) -> Result<(), String> {
             let table = compare::compare_document(&doc, Path::new(exports), &options, &mut |m| progress_line(1.0, m))
                 .map_err(|e| err(&e))?;
             print!("{table}");
+        }
+        ["verify-layers", path] => {
+            let options = VerifyOptions { fit: args.has("--fit") };
+            let result = verify_path(Path::new(path), options, &mut |p| eprintln!("{}", p.display()));
+            print!("{result}");
         }
         _ => return Err(USAGE.into()),
     }

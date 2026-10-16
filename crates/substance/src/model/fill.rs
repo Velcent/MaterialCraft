@@ -14,6 +14,23 @@ pub struct FillEffect {
     pub projection: u64,
     /// `filtering` enum (2 ×6422, 0 ×1271).
     pub filtering: u64,
+    /// `uvTransformation0` (`uvTransformation` in a few newer files): placement of a UV-projected fill.
+    pub uv_transform: Option<UvTransform>,
+}
+
+/// `Data2DTransformation`: scale (tiling), translation (offset) and rotation (radians) in UV space.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UvTransform {
+    pub scale: [f32; 2],
+    pub translation: [f32; 2],
+    pub rotation: f32,
+}
+
+impl UvTransform {
+    /// No tiling, offset or rotation: UV maps 1:1 onto the texture.
+    pub fn is_identity(&self) -> bool {
+        self.scale == [1.0, 1.0] && self.translation == [0.0, 0.0] && self.rotation == 0.0
+    }
 }
 
 impl FillEffect {

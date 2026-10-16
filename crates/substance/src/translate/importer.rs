@@ -5,9 +5,11 @@ use super::baked_maps::BakedMaps;
 use super::cache_channels::CacheChannels;
 use super::error::ImportError;
 use super::foreign::ForeignFiles;
+use super::layers::{BlendTable, LayerImport, ProjectImages};
 use super::normal_conventions::NormalConventions;
 use super::report::Reporter;
 use super::set_builder::SetBuilder;
+use super::set_layers::SetLayers;
 use super::texture_sets::SetBinding;
 use crate::decode::assbin::{AssbinGeometry, AssbinScene};
 use crate::project::{paths, SppProject};
@@ -49,6 +51,24 @@ impl Importer {
         let records = self.project.document_materials()?;
         let normals = NormalConventions::from_settings(self.project.document_settings().ok().as_ref());
         report.normals(&normals);
+        let model = match self.project.model() {
+            Ok((document, _)) => Some(document),
+            Err(e) => {
+                let note = format!("layer document could not be read ({e}); layer stacks stay flattened");
+                report.add("layer document", Fidelity::Approximated, note);
+                None
+            }
+        };
+        let table = BlendTable::painter();
+        let images = ProjectImages::new(&self.project);
+        let import = LayerImport {
+            table: &table,
+            images: &images,
+        };
+        let layers = SetLayers {
+            import: &import,
+            document: model.as_ref(),
+        };
         let cache = CacheChannels::new(&self.project);
         let baked = BakedMaps::new(&self.project);
         let binding = SetBinding::bind(&materials, &records, &cache.sets());
@@ -56,6 +76,7 @@ impl Importer {
             cache: &cache,
             baked: &baked,
             normals: &normals,
+            layers: &layers,
         };
         let mut translated = BTreeSet::new();
         let mut sets = Vec::with_capacity(binding.sets.len());

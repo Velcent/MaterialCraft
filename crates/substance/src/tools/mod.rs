@@ -9,3 +9,4 @@ pub mod model_corpus;
 pub mod model_text;
 pub mod png_out;
 pub mod report_text;
+pub mod verify_layers;

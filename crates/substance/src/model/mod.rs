@@ -35,7 +35,7 @@ pub use effect::{
     ColorSelectionEffect, EffectGroup, EffectHeader, FilterEffect, Levels, LevelsEffect, PainterEffect,
     PolygonFillEffect,
 };
-pub use fill::FillEffect;
+pub use fill::{FillEffect, UvTransform};
 pub use layer::{LayerKind, PainterLayer};
 pub use mask::{MaskInitial, PainterMask};
 pub use paint::{PaintEffect, PaintTool};
