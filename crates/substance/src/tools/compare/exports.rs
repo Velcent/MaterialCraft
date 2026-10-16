@@ -27,7 +27,9 @@ const SUFFIXES: &[(&str, Channel, Option<usize>, bool)] = &[
     ("roughness", Channel::Roughness, None, false),
     ("metallic", Channel::Metallic, None, false),
     ("metalness", Channel::Metallic, None, false),
-    ("normal", Channel::Normal, None, false),
+    // Painter's presets name the DirectX map plain "Normal" (Verified: PBR Metallic Roughness and the Unreal
+    // preset; green matches only flipped) and the OpenGL one "Normal_OpenGL".
+    ("normal", Channel::Normal, None, true),
     ("normal_opengl", Channel::Normal, None, false),
     ("normal_directx", Channel::Normal, None, true),
     ("height", Channel::Height, None, false),

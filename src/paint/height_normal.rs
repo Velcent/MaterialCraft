@@ -1,17 +1,60 @@
-//! Tangent-space normals from a height map, for mesh textures.
+//! Tangent-space normals from a height map, for mesh textures, the way Substance Painter derives them.
 //!
 //! Unlike [`crate::ops::normal_from_height`] (made for tiling material textures), this version
 //! clamps at the image edges instead of wrapping, since the opposite edge of a mesh texture
 //! belongs to an unrelated UV island, and it never depends on editor job state: the result is
-//! always complete.
+//! always complete. It reads across UV island borders: the texels around an island hold Painter's
+//! padding, which Painter reads too.
+//!
+//! Scale (Verified against Painter exports at 1K, 2K and 4K): the slope is [`UV_SLOPE`] × ∂h/∂u in
+//! UV units, i.e. `width / 100` per height step between neighbouring texels. It does not depend on
+//! the mesh size.
 
 use super::par::for_each_mut;
 use crate::tex::Tex;
 
+/// Normal tilt per unit of height per UV unit at strength 1 (Painter's scale).
+pub const UV_SLOPE: f32 = 0.01;
+
+/// How the height gradient is estimated. Painter changed it between releases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HeightFilter {
+    /// 3×3 Sobel (`[1 2 1] ⊗ [-1 0 1] / 8`): Painter up to document format 61 (2021).
+    Sobel,
+    /// One-texel differences, `h(x) - h(x-1)` across and `h(row) - h(row above)` down the image:
+    /// Painter from document format 64 (late 2021 on). Sharper than Sobel.
+    #[default]
+    Backward,
+}
+
+impl HeightFilter {
+    /// The filter Painter used for a document of this format version (`document.bin` header).
+    /// Versions 62 and 63 are unverified and treated as the newer filter.
+    pub fn for_painter_format(format_version: u32) -> HeightFilter {
+        if format_version <= 61 {
+            HeightFilter::Sobel
+        } else {
+            HeightFilter::Backward
+        }
+    }
+
+    /// Height change per texel along image x and image y (rows top first, y down) at `(x, y)`;
+    /// `g(dx, dy)` reads the height at an offset, clamped to the image.
+    fn gradient(self, g: impl Fn(isize, isize) -> f32) -> (f32, f32) {
+        match self {
+            HeightFilter::Sobel => {
+                let gx = g(1, -1) - g(-1, -1) + 2.0 * (g(1, 0) - g(-1, 0)) + g(1, 1) - g(-1, 1);
+                let gy = g(-1, 1) - g(-1, -1) + 2.0 * (g(0, 1) - g(0, -1)) + g(1, 1) - g(1, -1);
+                (gx / 8.0, gy / 8.0)
+            }
+            HeightFilter::Backward => (g(0, 0) - g(-1, 0), g(0, 0) - g(0, -1)),
+        }
+    }
+}
+
 /// The encoded (`n * 0.5 + 0.5`), OpenGL (+Y up) normal map of the height in `height`'s red
-/// component. The slope is scaled by `strength * width * 0.05`, as in
-/// [`crate::ops::normal_from_height`], and estimated with a 3×3 Scharr kernel. Alpha is 1.
-pub fn normal_from_height(height: &Tex, strength: f32) -> Tex {
+/// component, with Painter's scale times `strength`. Alpha is 1.
+pub fn normal_from_height(height: &Tex, filter: HeightFilter, strength: f32) -> Tex {
     let (w, h) = (height.w, height.h);
     let mut out = Tex {
         w,
@@ -21,7 +64,10 @@ pub fn normal_from_height(height: &Tex, strength: f32) -> Tex {
     if w == 0 || h == 0 || height.px.len() < w * h {
         return out;
     }
-    let k = strength * w as f32 * 0.05;
+    let (kx, ky) = (
+        strength * UV_SLOPE * w as f32,
+        strength * UV_SLOPE * h as f32,
+    );
     let at = |x: usize, y: usize, dx: isize, dy: isize| {
         let xx = x.saturating_add_signed(dx).min(w - 1);
         let yy = y.saturating_add_signed(dy).min(h - 1);
@@ -30,14 +76,9 @@ pub fn normal_from_height(height: &Tex, strength: f32) -> Tex {
     let mut rows: Vec<&mut [[f32; 4]]> = out.px.chunks_mut(w).collect();
     for_each_mut(&mut rows, |y, row| {
         for (x, p) in row.iter_mut().enumerate() {
-            let g = |dx, dy| at(x, y, dx, dy);
-            let sx = 3.0 * (g(1, -1) - g(-1, -1))
-                + 10.0 * (g(1, 0) - g(-1, 0))
-                + 3.0 * (g(1, 1) - g(-1, 1));
-            let sy = 3.0 * (g(-1, 1) - g(-1, -1))
-                + 10.0 * (g(0, 1) - g(0, -1))
-                + 3.0 * (g(1, 1) - g(1, -1));
-            let (nx, ny, nz) = (-sx / 32.0 * k, sy / 32.0 * k, 1.0f32);
+            let (gx, gy) = filter.gradient(|dx, dy| at(x, y, dx, dy));
+            // Image y runs against +v, so a height rising down the image tilts the normal up (+Y).
+            let (nx, ny, nz) = (-gx * kx, gy * ky, 1.0f32);
             let l = (nx * nx + ny * ny + nz * nz).sqrt();
             let n = if l.is_finite() && l > 0.0 {
                 [nx / l, ny / l, nz / l]
@@ -54,6 +95,8 @@ pub fn normal_from_height(height: &Tex, strength: f32) -> Tex {
 mod tests {
     use super::*;
 
+    const FILTERS: [HeightFilter; 2] = [HeightFilter::Sobel, HeightFilter::Backward];
+
     fn tex(w: usize, h: usize, f: impl Fn(usize, usize) -> f32) -> Tex {
         Tex {
             w,
@@ -69,17 +112,29 @@ mod tests {
 
     #[test]
     fn flat_height_gives_flat_normal() {
-        let n = normal_from_height(&tex(5, 3, |_, _| 0.7), 1.0);
-        assert!(n.px.iter().all(|p| *p == [0.5, 0.5, 1.0, 1.0]));
+        for f in FILTERS {
+            let n = normal_from_height(&tex(5, 3, |_, _| 0.7), f, 1.0);
+            assert!(n.px.iter().all(|p| *p == [0.5, 0.5, 1.0, 1.0]));
+        }
+    }
+
+    #[test]
+    fn ramp_slope_follows_painters_scale() {
+        // A ramp of 0.01 per texel on a 200-wide map: slope 0.01 × 200 × 0.01 = 0.02.
+        for f in FILTERS {
+            let n = normal_from_height(&tex(200, 4, |x, _| x as f32 * 0.01), f, 1.0);
+            let p = n.px[200 + 100];
+            let (nx, nz) = (p[0] * 2.0 - 1.0, p[2] * 2.0 - 1.0);
+            assert!((nx / nz + 0.02).abs() < 1e-4, "{f:?}: {}", nx / nz);
+            assert!((p[1] - 0.5).abs() < 1e-6);
+        }
     }
 
     #[test]
     fn edges_clamp_instead_of_wrapping() {
         // A ramp in x: wrapping would see a huge jump at the left and right edges.
-        let n = normal_from_height(&tex(8, 4, |x, _| x as f32 / 8.0), 1.0);
-        let interior = n.px[8 + 3];
-        let left = n.px[8];
-        let right = n.px[8 + 7];
+        let n = normal_from_height(&tex(8, 4, |x, _| x as f32 / 8.0), HeightFilter::Sobel, 50.0);
+        let (interior, left, right) = (n.px[8 + 3], n.px[8], n.px[8 + 7]);
         assert!(interior[0] < 0.5, "slope tilts the normal towards -x");
         // Clamped edges see half the slope, never the opposite sign.
         assert!(left[0] < 0.5 && right[0] < 0.5);
@@ -90,21 +145,32 @@ mod tests {
     #[test]
     fn rising_downwards_tilts_up() {
         // Height grows with image y (towards -v); with +Y up the normal leans towards +Y.
-        let n = normal_from_height(&tex(4, 8, |_, y| y as f32 / 8.0), 1.0);
-        assert!(n.px[4 * 4 + 1][1] > 0.5);
+        for f in FILTERS {
+            let n = normal_from_height(&tex(4, 8, |_, y| y as f32 / 8.0), f, 1.0);
+            assert!(n.px[4 * 4 + 1][1] > 0.5, "{f:?}");
+        }
     }
 
     #[test]
-    fn matches_ops_in_the_interior() {
-        let t = tex(16, 16, |x, y| ((x * 7 + y * 3) % 11) as f32 / 11.0);
-        let a = normal_from_height(&t, 0.5);
-        let b = crate::ops::normal_from_height(&t, 0.5, false);
-        for y in 1..15 {
-            for x in 1..15 {
-                let (p, q) = (a.px[y * 16 + x], b.px[y * 16 + x]);
-                assert!((0..3).all(|c| (p[c] - q[c]).abs() < 1e-5), "{x},{y}");
-            }
-        }
+    fn backward_reads_left_and_up_only() {
+        // A single raised texel tilts its own normal (−x, +y) and its right/lower neighbours the other way.
+        let n = normal_from_height(
+            &tex(5, 5, |x, y| f32::from(x == 2 && y == 2)),
+            HeightFilter::Backward,
+            1.0,
+        );
+        assert!(n.px[2 * 5 + 2][0] < 0.5 && n.px[2 * 5 + 2][1] > 0.5);
+        assert!(n.px[2 * 5 + 3][0] > 0.5 && n.px[3 * 5 + 2][1] < 0.5);
+        assert_eq!(n.px[2 * 5 + 1], [0.5, 0.5, 1.0, 1.0]);
+        assert_eq!(n.px[5 + 2], [0.5, 0.5, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn filter_follows_document_format() {
+        assert_eq!(HeightFilter::for_painter_format(59), HeightFilter::Sobel);
+        assert_eq!(HeightFilter::for_painter_format(61), HeightFilter::Sobel);
+        assert_eq!(HeightFilter::for_painter_format(64), HeightFilter::Backward);
+        assert_eq!(HeightFilter::for_painter_format(78), HeightFilter::Backward);
     }
 
     #[test]
@@ -114,12 +180,19 @@ mod tests {
             h: 0,
             px: vec![],
         };
-        assert!(normal_from_height(&empty, 1.0).px.is_empty());
+        assert!(normal_from_height(&empty, HeightFilter::Sobel, 1.0)
+            .px
+            .is_empty());
         let short = Tex {
             w: 4,
             h: 4,
             px: vec![[1.0; 4]; 3],
         };
-        assert_eq!(normal_from_height(&short, 1.0).px.len(), 16);
+        assert_eq!(
+            normal_from_height(&short, HeightFilter::Backward, 1.0)
+                .px
+                .len(),
+            16
+        );
     }
 }

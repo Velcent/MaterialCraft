@@ -18,6 +18,7 @@ pub mod height_normal;
 pub mod image;
 pub mod layer;
 pub mod normal;
+pub mod normal_combine;
 pub mod output;
 mod par;
 pub mod pixel;

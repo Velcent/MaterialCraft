@@ -2,35 +2,43 @@
 //!
 //! Each map is the composited channel (see [`crate::paint::Compositor`]) with alpha 1; channels the
 //! set does not declare are filled with their default. Two maps combine several inputs:
-//! - **normal** = `RNM(baked, RNM(height_normal, normal_channel))`, where RNM is reoriented normal
-//!   mapping ([`crate::paint::normal::reoriented`]), `baked` the baked mesh normal map (flat if
-//!   absent) and `height_normal` the normal derived from the composited height with
-//!   [`super::height_normal::normal_from_height`] (edges clamped, flat if the set has no height
-//!   channel). Flat inputs drop out.
+//! - **normal** = `RNM(RNM(baked, height_normal), normal_channel)` as in Substance Painter
+//!   ([`super::normal_combine`]): `baked` is the baked mesh normal map (flat if absent, turned into
+//!   OpenGL from [`OutputOptions::baked_normal_format`]) and `height_normal` the normal derived from
+//!   the composited height with [`super::height_normal::normal_from_height`] (edges clamped, flat if
+//!   the set has no height channel). Flat inputs drop out.
 //! - **ambient_occlusion** = baked AO × AO channel.
 //!
 //! Baked maps of another resolution are resampled bilinearly. Values stay in each channel's stored
 //! colour space (base colour and emissive are usually sRGB-encoded).
 
 use super::channel::Channel;
-use super::height_normal;
+use super::height_normal::{self, HeightFilter};
 use super::normal;
+use super::normal_combine::{self, NormalFormat};
 use super::par::for_each_mut;
 use super::stack::{CompositeWarning, Compositor};
 use super::texture_set::{BakedKind, TextureSet};
 use crate::tex::Tex;
 
-/// Settings for [`MaterialMaps::build`].
+/// Settings for [`MaterialMaps::build`]. The default reproduces current Substance Painter.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OutputOptions {
-    /// Strength passed to [`super::height_normal::normal_from_height`]; 0 ignores the height channel for the normal.
+    /// Multiplier on Painter's height → normal scale (1 = Painter, see
+    /// [`super::height_normal::UV_SLOPE`]); 0 ignores the height channel for the normal.
     pub height_normal_strength: f32,
+    /// Gradient estimate of the height → normal conversion (depends on the Painter release).
+    pub height_filter: HeightFilter,
+    /// Convention the baked normal maps are stored in (Painter: the project's normal map format).
+    pub baked_normal_format: NormalFormat,
 }
 
 impl Default for OutputOptions {
     fn default() -> OutputOptions {
         OutputOptions {
             height_normal_strength: 1.0,
+            height_filter: HeightFilter::default(),
+            baked_normal_format: NormalFormat::default(),
         }
     }
 }
@@ -81,19 +89,27 @@ impl MaterialMaps {
         let height_normal = (set.has_channel(Channel::Height)
             && options.height_normal_strength != 0.0
             && w * h > 0)
-            .then(|| height_normal::normal_from_height(&height, options.height_normal_strength));
+            .then(|| {
+                height_normal::normal_from_height(
+                    &height,
+                    options.height_filter,
+                    options.height_normal_strength,
+                )
+            });
         let baked_normal = set
             .baked(&BakedKind::Normal)
             .map(|i| resample(&i.to_tex(), w, h));
         if height_normal.is_some() || baked_normal.is_some() {
+            let baked_format = options.baked_normal_format;
             par_pixels(&mut normal.px, |i, p| {
                 let at = |t: &Option<Tex>| {
                     t.as_ref()
                         .and_then(|t| t.px.get(i))
                         .map_or(normal::FLAT, |&c| normal::decode(c))
                 };
-                let detail = normal::reoriented(at(&height_normal), normal::decode(*p));
-                *p = normal::encode(normal::reoriented(at(&baked_normal), detail));
+                let baked = baked_format.to_opengl(at(&baked_normal));
+                let n = normal_combine::combine(baked, at(&height_normal), normal::decode(*p));
+                *p = normal::encode(n);
             });
         } else {
             par_pixels(&mut normal.px, |_, p| {
@@ -228,5 +244,18 @@ mod tests {
         assert!((maps.normal.px[9][0] - tilted[0]).abs() < 1e-3);
         assert!((maps.ambient_occlusion.px[9][0] - 0.4).abs() < 1e-3);
         assert!(maps.map(Channel::User(0)).is_none());
+    }
+
+    #[test]
+    fn directx_baked_normal_is_flipped_to_opengl() {
+        let mut s = flat_set();
+        let tilted = normal::encode(normal::normalize([0.0, 0.3, 1.0]));
+        s.baked.push(baked(BakedKind::Normal, 8, tilted));
+        let options = OutputOptions {
+            baked_normal_format: NormalFormat::DirectX,
+            ..OutputOptions::default()
+        };
+        let maps = MaterialMaps::build(&s, &options);
+        assert!((maps.normal.px[9][1] - (1.0 - tilted[1])).abs() < 1e-3);
     }
 }

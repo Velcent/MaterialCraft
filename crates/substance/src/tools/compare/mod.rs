@@ -6,11 +6,13 @@ mod export_image;
 mod exports;
 mod heatmap;
 mod metrics;
+mod painter_normals;
 mod table;
 mod uv_mask;
 
 pub use exports::{ExportFinder, ExportMap};
 pub use metrics::{Diff, Fit, TOLERANCE};
+pub use painter_normals::PainterNormals;
 pub use table::{CompareRow, CompareTable};
 pub use uv_mask::UvMask;
 
@@ -29,7 +31,8 @@ pub struct CompareOptions {
     pub project_time: Option<SystemTime>,
     /// Where to write diff heatmaps, if wanted.
     pub diff_dir: Option<PathBuf>,
-    /// How our final maps are built (height → normal strength).
+    /// How our final maps are built. The height filter and baked normal format are replaced by the
+    /// project's own (see [`PainterNormals`]) when its `document.bin` was kept.
     pub output: OutputOptions,
 }
 
@@ -55,6 +58,18 @@ pub fn compare_document(
     let finder = ExportFinder::scan(export_dir);
     let names: Vec<String> = doc.texture_sets.iter().map(|s| s.name.clone()).collect();
     let mut table = CompareTable::default();
+    let output = match PainterNormals::of(doc) {
+        Some(n) => n.apply(&options.output),
+        None => {
+            table.notes.push("no document.bin kept: default normal settings".into());
+            options.output
+        }
+    };
+    let options = &CompareOptions {
+        output,
+        project_time: options.project_time,
+        diff_dir: options.diff_dir.clone(),
+    };
     for set in &doc.texture_sets {
         let exports = finder.for_set(&set.name, &names);
         if exports.is_empty() {
