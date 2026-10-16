@@ -11,6 +11,7 @@ use crate::decode::assbin::AssbinScene;
 use crate::decode::document::{ClassCensus, DocumentMaterials, DocumentSettings, MaterialRecord};
 use crate::decode::resource_toc::ResourceToc;
 use crate::decode::settings::ProjectSettings;
+use crate::model::{ModelReport, PainterDocument};
 use std::path::{Path, PathBuf};
 
 pub struct SppProject {
@@ -90,6 +91,12 @@ impl SppProject {
     pub fn document_settings(&self) -> Result<DocumentSettings, ProjectError> {
         let data = self.read(paths::DOCUMENT)?;
         DocumentSettings::scan(&data).map_err(ProjectError::decode(paths::DOCUMENT))
+    }
+
+    /// `document.bin` as Painter's own model (texture sets, layer stacks), with what was recognised.
+    pub fn model(&self) -> Result<(PainterDocument, ModelReport), ProjectError> {
+        let data = self.read(paths::DOCUMENT)?;
+        PainterDocument::from_bytes(&data).map_err(ProjectError::decode(paths::DOCUMENT))
     }
 
     fn decode_optional<T>(

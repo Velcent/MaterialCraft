@@ -1,0 +1,140 @@
+//! `DataSource*` → [`PainterSource`], `DataProcedural` → [`Procedural`] with tweaks, outputs and inputs.
+
+use super::{ModelBuilder, MAX_NESTING};
+use crate::decode::document::Scalar;
+use crate::model::channel::{ChannelMask, PainterChannel};
+use crate::model::procedural::{Procedural, ProceduralInput, ProceduralOutput, Tweak, TweakValue};
+use crate::model::raw::RawObject;
+use crate::model::source::{BitmapSource, PainterSource, ProceduralSource, ReferenceSource, UniformSource};
+
+impl ModelBuilder {
+    pub(super) fn source(&mut self, s: &RawObject, depth: usize) -> PainterSource {
+        let uid = s.uid();
+        let channels = ChannelMask(s.u64("channelTypes").unwrap_or(0));
+        match s.class.as_str() {
+            "DataSourceUniform" => {
+                self.seen(s);
+                PainterSource::Uniform(UniformSource {
+                    uid,
+                    channels,
+                    color: s.vec3("color").unwrap_or([0.0; 3]),
+                    opacity: s.f32("opacity").unwrap_or(1.0),
+                })
+            }
+            "DataSourceBitmap" => {
+                self.seen(s);
+                let url = self.bitmap_url(s.object("bitmap"));
+                PainterSource::Bitmap(BitmapSource { uid, channels, url })
+            }
+            "DataSourceProcedural" if depth < MAX_NESTING => {
+                self.seen(s);
+                let procedural = s.object("procedural").map(|p| self.procedural(p, depth + 1));
+                PainterSource::Procedural(ProceduralSource {
+                    uid,
+                    channels,
+                    mode: s.u64("mode").unwrap_or(0),
+                    procedural,
+                })
+            }
+            "DataSourceProcedural" => PainterSource::Other(self.too_deep(s)),
+            "DataSourceReference" => PainterSource::Reference(self.reference(s, uid, channels)),
+            _ => PainterSource::Other(self.raw(s)),
+        }
+    }
+
+    fn reference(&mut self, s: &RawObject, uid: Option<u64>, channels: ChannelMask) -> ReferenceSource {
+        self.seen(s);
+        if let Some(levels) = s.object("levels") {
+            self.levels(levels);
+        }
+        let reference = s.object("reference");
+        if let Some(r) = reference {
+            self.seen(r);
+            for binding in r.objects("bindings") {
+                self.seen(binding);
+            }
+        }
+        ReferenceSource {
+            uid,
+            channels,
+            anchor_uid: reference.and_then(|r| r.u64("source")),
+            anchor_label: reference
+                .and_then(|r| r.string("sourceLabel"))
+                .unwrap_or_default()
+                .to_string(),
+        }
+    }
+
+    /// `DataBitmap.urlToBitmapRes`, empty if there is no bitmap.
+    pub(super) fn bitmap_url(&mut self, bitmap: Option<&RawObject>) -> String {
+        let Some(b) = bitmap else { return String::new() };
+        self.seen(b);
+        b.string("urlToBitmapRes").unwrap_or_default().to_string()
+    }
+
+    pub(super) fn procedural(&mut self, p: &RawObject, depth: usize) -> Procedural {
+        self.seen(p);
+        let tweaks = p.objects("tweaks").map(|t| self.tweak(t)).collect();
+        let mut outputs = Vec::new();
+        for o in p.objects("outputs") {
+            self.seen(o);
+            outputs.push(ProceduralOutput {
+                identifier: o.string("identifier").unwrap_or_default().to_string(),
+                channels: ChannelMask(o.u64("channelTypes").unwrap_or(0)),
+            });
+        }
+        let inputs = p.objects("sourcesInputs").map(|i| self.input(i, depth)).collect();
+        Procedural {
+            uid: p.uid(),
+            url: p.string("urlToSbsRes").unwrap_or_default().to_string(),
+            tweaks,
+            outputs,
+            inputs,
+        }
+    }
+
+    fn input(&mut self, i: &RawObject, depth: usize) -> ProceduralInput {
+        self.seen(i);
+        let mut identifiers = Vec::new();
+        // Older files hold one inline `input`, newer ones a list `inputs`.
+        for input in i.object("input").into_iter().chain(i.objects("inputs")) {
+            identifiers.push(self.input_identifier(input));
+        }
+        let source = i.object("source").map(|s| Box::new(self.source(s, depth + 1)));
+        ProceduralInput { identifiers, source }
+    }
+
+    /// A `DataProceduralInput`: input identifier and the channel it reads.
+    pub(super) fn input_identifier(&mut self, input: &RawObject) -> (String, PainterChannel) {
+        self.seen(input);
+        let channel = PainterChannel::from_bit(input.u64("channelType").unwrap_or(0));
+        (input.string("identifier").unwrap_or_default().to_string(), channel)
+    }
+
+    fn tweak(&mut self, t: &RawObject) -> Tweak {
+        let value = match t.class.as_str() {
+            "DataTweakInt" => match t.scalar("value") {
+                Some(Scalar::Int(v)) => Some(TweakValue::Int(*v)),
+                _ => None,
+            },
+            "DataTweakInt2" => t.ivec2("value").map(TweakValue::Int2),
+            "DataTweakFloat" => t.f32("value").map(|v| TweakValue::Floats(vec![v])),
+            "DataTweakFloat2" | "DataTweakFloat3" | "DataTweakFloat4" => {
+                t.floats("value").map(|v| TweakValue::Floats(v.to_vec()))
+            }
+            "DataTweakByteArray" => t.string("value").map(|v| TweakValue::Text(v.to_string())),
+            _ => None,
+        };
+        let value = match value {
+            Some(v) => {
+                self.seen(t);
+                v
+            }
+            None => TweakValue::Other(self.raw(t).class),
+        };
+        Tweak {
+            identifier: t.string("identifier").unwrap_or_default().to_string(),
+            value,
+        }
+    }
+}

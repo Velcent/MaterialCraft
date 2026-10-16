@@ -13,7 +13,7 @@ mod materials_tests;
 mod settings;
 mod tag;
 #[cfg(test)]
-mod test_writer;
+pub(crate) mod test_writer;
 #[cfg(test)]
 mod tests;
 mod value;

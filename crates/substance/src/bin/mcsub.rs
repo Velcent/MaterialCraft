@@ -3,6 +3,8 @@
 //!     mcsub inspect <file.spp> [--verify]          one project, all sections
 //!     mcsub tree <file.spp>                        every group and dataset in the file
 //!     mcsub doc <file.spp> [dataset] [--full]      document.bin (or another object file) as indented text
+//!     mcsub model <file.spp>                       Painter's layer stacks as a tree, with the model report
+//!     mcsub model --all <folder>                   build the model of every .spp below the folder
 //!     mcsub corpus <folder> [--verify]             one table row per .spp below the folder
 //!     mcsub convert <in.spp> <out.mcpaint>         import and save as .mcpaint
 //!     mcsub convert --all <folder> <out dir> [--discard]   convert every .spp below the folder
@@ -20,14 +22,15 @@ use materialcraft_substance::container::hdf5::EntryKind;
 use materialcraft_substance::inspect::document_dump::LIST_PREVIEW;
 use materialcraft_substance::inspect::{Corpus, CorpusTable, DocumentDump, InspectOptions, ProjectReport, TextReport};
 use materialcraft_substance::project::{paths, SppProject};
+use materialcraft_substance::tools::model_text::ModelText;
 use materialcraft_substance::tools::report_text::ReportText;
-use materialcraft_substance::tools::{compare, convert, maps};
+use materialcraft_substance::tools::{compare, convert, maps, model_corpus};
 use materialcraft_substance::translate::import_spp;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const USAGE: &str =
-    "usage: mcsub inspect|tree|doc|corpus|convert|report|maps|compare … (see the source header for details)";
+    "usage: mcsub inspect|tree|doc|model|corpus|convert|report|maps|compare … (see the source header for details)";
 
 /// Parsed command line: positional words, `--flag`s and `--diff <dir>`.
 struct Args {
@@ -106,6 +109,23 @@ fn run(args: Args) -> Result<(), String> {
                 .map_err(|e| err(&e))?;
             let preview = if args.has("--full") { usize::MAX } else { LIST_PREVIEW };
             print!("{}", DocumentDump::render_with(&data, preview).map_err(|e| err(&e))?);
+        }
+        ["model", root] if args.has("--all") => {
+            print!(
+                "{}",
+                model_corpus::model_all(Path::new(root), &mut |p| eprintln!("{}", p.display()))
+            );
+        }
+        ["model", path] => {
+            let project = SppProject::open(Path::new(path)).map_err(|e| err(&e))?;
+            let (document, report) = project.model().map_err(|e| err(&e))?;
+            print!(
+                "{}",
+                ModelText {
+                    document: &document,
+                    report: &report
+                }
+            );
         }
         ["corpus", root] => {
             let corpus = Corpus::discover(Path::new(root));

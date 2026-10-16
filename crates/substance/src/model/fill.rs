@@ -1,0 +1,32 @@
+//! [`FillEffect`]: `DataActionFill`, the content of fill layers and the generators/fills in masks.
+
+use super::channel::PainterChannel;
+use super::effect::EffectHeader;
+use super::source::PainterSource;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FillEffect {
+    pub header: EffectHeader,
+    /// `sources`: one uniform/bitmap source per channel, or one procedural source for a set of
+    /// channels, or several of these mixed.
+    pub sources: Vec<PainterSource>,
+    /// `projection` enum: 0 ×4644 (UV, Inferred), 6 ×1645, 2 ×1298, 1, 3, 7, 4 rarely.
+    pub projection: u64,
+    /// `filtering` enum (2 ×6422, 0 ×1271).
+    pub filtering: u64,
+}
+
+impl FillEffect {
+    /// The uniform values per channel, as stored (linear colours).
+    pub fn uniform_values(&self) -> impl Iterator<Item = (PainterChannel, [f32; 3])> + '_ {
+        self.sources.iter().filter_map(|s| match s {
+            PainterSource::Uniform(u) => u.channels.channels().next().map(|c| (c, u.color)),
+            _ => None,
+        })
+    }
+
+    /// True if every source is a uniform value (the fill is computable without any resource).
+    pub fn is_uniform(&self) -> bool {
+        !self.sources.is_empty() && self.sources.iter().all(|s| matches!(s, PainterSource::Uniform(_)))
+    }
+}
