@@ -1,6 +1,6 @@
 //! Bulk conversion of [`TiledImage`]s: raw bytes, float textures and other pixel formats.
 
-use super::{ImageError, MAX_DIMENSION, Rect, T, TiledImage, decode_tile, encode_tile, tile_rect};
+use super::{ImageError, MAX_DIMENSION, Rect, T, Tile, TiledImage, decode_tile, encode_tile, tile_rect};
 use crate::paint::par::for_each_mut;
 use crate::paint::pixel::PixelFormat;
 use crate::tex::Tex;
@@ -26,7 +26,7 @@ impl TiledImage {
                 buf[row * T * bpp..row * T * bpp + row_bytes].copy_from_slice(&raw[src..src + row_bytes]);
             }
             if buf.iter().any(|&b| b != 0) {
-                *tile = Some(buf.into_boxed_slice());
+                *tile = Some(Tile::from_vec(buf));
             }
         });
         Ok(img)
@@ -49,7 +49,7 @@ impl TiledImage {
                 let row_bytes = r.w as usize * bpp;
                 for row in 0..r.h as usize {
                     let dst = (row * self.width as usize + r.x as usize) * bpp;
-                    band[dst..dst + row_bytes].copy_from_slice(&t[row * T * bpp..row * T * bpp + row_bytes]);
+                    band[dst..dst + row_bytes].copy_from_slice(&t.bytes()[row * T * bpp..row * T * bpp + row_bytes]);
                 }
             }
         });
@@ -79,7 +79,7 @@ impl TiledImage {
             }
             encode_tile(format, r, &px, &mut buf);
             if buf.iter().any(|&b| b != 0) {
-                *tile = Some(buf.into_boxed_slice());
+                *tile = Some(Tile::from_vec(buf));
             }
         });
         Ok(img)
@@ -109,10 +109,10 @@ impl TiledImage {
                 return;
             };
             let mut px = vec![[0.0f32; 4]; r.area()];
-            decode_tile(self.format, r, src, &mut px);
+            decode_tile(self.format, r, src.bytes(), &mut px);
             let mut buf = vec![0u8; T * T * format.bytes_per_pixel()];
             encode_tile(format, r, &px, &mut buf);
-            *tile = Some(buf.into_boxed_slice());
+            *tile = Some(Tile::from_vec(buf));
         });
         out
     }

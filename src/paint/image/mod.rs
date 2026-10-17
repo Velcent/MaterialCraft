@@ -10,8 +10,11 @@ use std::fmt;
 
 mod convert;
 mod region;
+mod swap;
+mod tile;
 
 use region::{decode_tile, encode_tile};
+pub use tile::Tile;
 
 /// Edge length of a tile in pixels.
 pub const TILE_SIZE: u32 = 128;
@@ -41,6 +44,8 @@ pub enum ImageError {
     TooLarge { width: u64, height: u64 },
     /// Raw data or texture does not match the size and format.
     WrongDataSize { expected: usize, found: usize },
+    /// Tile (tx, ty) is outside the tile grid.
+    NoSuchTile { tx: u32, ty: u32 },
 }
 
 impl fmt::Display for ImageError {
@@ -52,15 +57,17 @@ impl fmt::Display for ImageError {
             ImageError::WrongDataSize { expected, found } => {
                 write!(f, "expected {expected} bytes of pixel data, found {found}")
             }
+            ImageError::NoSuchTile { tx, ty } => write!(f, "tile ({tx}, {ty}) is outside the image"),
         }
     }
 }
 
 impl std::error::Error for ImageError {}
 
-type TileBuf = Option<Box<[u8]>>;
+type TileBuf = Option<Tile>;
 
-/// A width × height image stored in tiles. See the module docs.
+/// A width × height image stored in tiles. See the module docs. Tiles are shared copy-on-write ([`Tile`]):
+/// a clone costs one pointer per tile until either copy is written.
 #[derive(Clone)]
 pub struct TiledImage {
     width: u32,
@@ -135,7 +142,7 @@ impl TiledImage {
             Some(t) => {
                 let bpp = self.format.bytes_per_pixel();
                 let o = ((y as usize % T) * T + x as usize % T) * bpp;
-                self.format.decode(&t[o..o + bpp])
+                self.format.decode(&t.bytes()[o..o + bpp])
             }
         }
     }
@@ -147,7 +154,7 @@ impl TiledImage {
         }
         let bpp = self.format.bytes_per_pixel();
         let i = ((y / TILE_SIZE) * self.tiles_x() + x / TILE_SIZE) as usize;
-        let t = self.tiles[i].get_or_insert_with(|| vec![0u8; T * T * bpp].into_boxed_slice());
+        let t = self.tiles[i].get_or_insert_with(|| Tile::zeroed(T * T * bpp)).make_mut();
         let o = ((y as usize % T) * T + x as usize % T) * bpp;
         self.format.encode(p, &mut t[o..o + bpp]);
         self.dirty[i] = true;

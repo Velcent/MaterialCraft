@@ -133,3 +133,42 @@ fn large_image_round_trip_is_fast_enough() {
     assert_eq!(back.px.len(), tex.px.len());
     assert!(start.elapsed().as_secs_f32() < 10.0);
 }
+
+#[test]
+fn clones_share_tiles_until_written() {
+    let mut img = TiledImage::new(300, 200, fmt(PixelLayout::Rgba, SampleType::U8)).unwrap();
+    img.set(1, 1, [1.0; 4]);
+    img.set(200, 150, [0.5; 4]);
+    let before = img.clone();
+    assert!(img.tile(0, 0).unwrap().same(before.tile(0, 0).unwrap()));
+    assert!(img.changed_tiles(&before).is_empty());
+    img.set(2, 2, [0.0, 1.0, 0.0, 1.0]);
+    img.set(290, 10, [1.0; 4]);
+    assert_eq!(before.get(2, 2), [0.0; 4], "the clone keeps its pixels");
+    assert!(!img.tile(0, 0).unwrap().same(before.tile(0, 0).unwrap()));
+    assert!(img.tile(1, 1).unwrap().same(before.tile(1, 1).unwrap()));
+    assert_eq!(img.changed_tiles(&before), vec![(0, 0), (2, 0)]);
+    assert_eq!(img.tiles().map(|(c, _)| c).collect::<Vec<_>>(), vec![(0, 0), (2, 0), (1, 1)]);
+    let other = TiledImage::new(10, 10, fmt(PixelLayout::Rgba, SampleType::U8)).unwrap();
+    assert_eq!(img.changed_tiles(&other).len(), img.tile_count());
+}
+
+#[test]
+fn replacing_tiles_restores_bytes() {
+    let mut img = TiledImage::new(300, 200, fmt(PixelLayout::Gray, SampleType::U16)).unwrap();
+    img.set(5, 5, [0.25; 4]);
+    let before = img.clone();
+    img.set(5, 5, [0.75; 4]);
+    img.set(140, 5, [0.75; 4]);
+    img.clear_dirty();
+    for (tx, ty) in img.changed_tiles(&before) {
+        img.replace_tile(tx, ty, before.tile(tx, ty).cloned()).unwrap();
+    }
+    assert_eq!(img, before);
+    assert_eq!(img.to_raw(), before.to_raw());
+    assert_eq!(img.dirty_tiles(), vec![(0, 0), (1, 0)]);
+    assert_eq!(img.replace_tile(9, 0, None), Err(ImageError::NoSuchTile { tx: 9, ty: 0 }));
+    let mut wide = TiledImage::new(4, 4, fmt(PixelLayout::Rgba, SampleType::F32)).unwrap();
+    wide.set(0, 0, [1.0; 4]);
+    assert!(matches!(img.replace_tile(0, 0, wide.tile(0, 0).cloned()), Err(ImageError::WrongDataSize { .. })));
+}

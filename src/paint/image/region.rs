@@ -1,6 +1,6 @@
 //! Bulk pixel access to a [`TiledImage`] by region and by tile, including the parallel tile update.
 
-use super::{Rect, T, TileBuf, TiledImage, tile_rect};
+use super::{Rect, T, Tile, TileBuf, TiledImage, tile_rect};
 use crate::paint::par::for_each_mut;
 use crate::paint::pixel::PixelFormat;
 
@@ -25,7 +25,7 @@ impl TiledImage {
                         None => zero,
                         Some(t) => {
                             let o = ((y % T) * T + x % T) * bpp;
-                            self.format.decode(&t[o..o + bpp])
+                            self.format.decode(&t.bytes()[o..o + bpp])
                         }
                     }
                 };
@@ -47,7 +47,7 @@ impl TiledImage {
             return false;
         };
         let fmt = self.format;
-        let t = self.tiles[i].get_or_insert_with(|| vec![0u8; T * T * fmt.bytes_per_pixel()].into_boxed_slice());
+        let t = self.tiles[i].get_or_insert_with(|| Tile::zeroed(T * T * fmt.bytes_per_pixel())).make_mut();
         encode_tile(fmt, r, pixels, t);
         self.dirty[i] = true;
         true
@@ -70,7 +70,7 @@ impl TiledImage {
                 return;
             };
             let mut px = vec![[0.0f32; 4]; r.area()];
-            let buf = tile.get_or_insert_with(|| vec![0u8; T * T * fmt.bytes_per_pixel()].into_boxed_slice());
+            let buf = tile.get_or_insert_with(|| Tile::zeroed(T * T * fmt.bytes_per_pixel())).make_mut();
             decode_tile(fmt, r, buf, &mut px);
             f(r, &mut px);
             encode_tile(fmt, r, &px, buf);
