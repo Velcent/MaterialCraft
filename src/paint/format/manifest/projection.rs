@@ -1,4 +1,4 @@
-//! A fill's `"projection"` object (since 0.3): `{"mode", "filter", "repeat", "image": {…}}` plus the members of
+//! A fill's `"projection"` object (since 0.4): `{"mode", "filter", "repeat", "image": {…}}` plus the members of
 //! the mode (`volume`, `clip_to_volume`, `blend_hardness`, `depth_falloff`, `facing_falloff`, `coverage_angle`,
 //! `hide_caps`, `warp`). Written only when not the default (texture space).
 //!
