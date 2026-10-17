@@ -1,0 +1,5 @@
+# Cargo build output
+/target/
+
+# Claude Code agent worktrees and local settings
+/.claude/
