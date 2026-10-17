@@ -85,6 +85,7 @@ fn measure(
         notes: vec!["final look of the channel: our imported layers with replacements vs Painter's cache".into()],
         unmapped: Vec::new(),
         settings_hash: String::new(),
+        stale: None,
         seconds,
     };
     let result = CaseResult {

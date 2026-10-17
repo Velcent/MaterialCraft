@@ -14,7 +14,7 @@ pub fn table(results: &[CaseResult]) -> String {
         "subject", "project / set", "size", "MAE", "max", "PSNR", "≤2/255", "SSIM", "fit gain/off", "hist", "spec"
     );
     for r in results {
-        let Some(m) = r.measured() else { continue };
+        let Some(m) = r.counted() else { continue };
         let d = &m.metrics.overall;
         let fit = m.metrics.components.first().map(|c| c.fit);
         let _ = writeln!(
@@ -79,6 +79,9 @@ fn reasons(results: &[CaseResult]) -> Vec<((&'static str, &'static str, String),
     let mut counts: Vec<((&'static str, &'static str, String), usize)> = Vec::new();
     for r in results {
         let key = match &r.outcome {
+            Outcome::Measured(_) if r.stale().is_some() => {
+                (r.subject, "skipped", stale_kind(r.stale().unwrap_or_default()))
+            }
             Outcome::Skipped(why) => (r.subject, "skipped", generalise(why)),
             Outcome::Failed(why) => (r.subject, "failed", why.clone()),
             Outcome::Measured(_) => continue,
@@ -90,6 +93,11 @@ fn reasons(results: &[CaseResult]) -> Vec<((&'static str, &'static str, String),
     }
     counts.sort_by(|a, b| a.0.0.cmp(b.0.0).then(b.1.cmp(&a.1)));
     counts
+}
+
+/// A stale reason without its numbers (`stale reference: UV layout differs from the mesh`), for counting.
+fn stale_kind(why: &str) -> String {
+    why.split(" (").next().unwrap_or(why).to_string()
 }
 
 fn clip(s: &str, n: usize) -> String {

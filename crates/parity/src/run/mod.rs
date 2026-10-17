@@ -7,6 +7,7 @@ mod measure;
 mod parallel;
 mod set_run;
 mod stack_run;
+pub mod stale;
 pub mod survey;
 
 pub use case::{CaseImages, CaseResult, CaseSink, Measured, Outcome};

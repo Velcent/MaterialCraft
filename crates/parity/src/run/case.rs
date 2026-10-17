@@ -25,6 +25,9 @@ pub struct Measured {
     pub notes: Vec<String>,
     pub unmapped: Vec<String>,
     pub settings_hash: String,
+    /// Why the reference is stale (another UV layout or high-poly source than today's files), if it is: the case
+    /// is then reported as skipped and kept out of the summaries, numbers and images kept for looking at.
+    pub stale: Option<String>,
     /// Seconds spent on our side (the shared bake counts for the first subject of a set).
     pub seconds: f64,
 }
@@ -44,6 +47,16 @@ impl CaseResult {
             Outcome::Measured(m) => Some(m),
             _ => None,
         }
+    }
+
+    /// The numbers of a measured case whose reference is not stale: what tables and summaries count.
+    pub fn counted(&self) -> Option<&Measured> {
+        self.measured().filter(|m| m.stale.is_none())
+    }
+
+    /// Why a measured case's reference is stale, if it is.
+    pub fn stale(&self) -> Option<&str> {
+        self.measured().and_then(|m| m.stale.as_deref())
     }
 
     /// `Project / set`.

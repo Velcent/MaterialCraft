@@ -35,7 +35,9 @@ impl SubjectSummary {
     fn for_subject(subject: &'static str, results: &[CaseResult]) -> SubjectSummary {
         let mine: Vec<&CaseResult> = results.iter().filter(|r| r.subject == subject).collect();
         let count = |f: fn(&Outcome) -> bool| mine.iter().filter(|r| f(&r.outcome)).count();
-        let measured: Vec<_> = mine.iter().filter_map(|r| r.measured()).collect();
+        // stale references count as skipped (their numbers say nothing about the baker)
+        let measured: Vec<_> = mine.iter().filter_map(|r| r.counted()).collect();
+        let stale = mine.iter().filter(|r| r.stale().is_some()).count();
         let mut maes: Vec<f64> = measured.iter().map(|m| m.metrics.mae_steps()).collect();
         maes.sort_by(f64::total_cmp);
         let within: Vec<f64> = measured.iter().map(|m| m.metrics.overall.within).collect();
@@ -52,7 +54,7 @@ impl SubjectSummary {
             spectrum_median: median(&spectra),
             subject,
             measured: measured.len(),
-            skipped: count(|o| matches!(o, Outcome::Skipped(_))),
+            skipped: count(|o| matches!(o, Outcome::Skipped(_))) + stale,
             failed: count(|o| matches!(o, Outcome::Failed(_))),
             mae_mean: mean(&maes),
             mae_median: median(&maes),

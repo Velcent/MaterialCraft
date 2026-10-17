@@ -114,6 +114,7 @@ fn measure(
         notes,
         unmapped: Vec::new(),
         settings_hash: String::new(),
+        stale: None,
         seconds,
     };
     let r = result(Outcome::Measured(Box::new(measured)));

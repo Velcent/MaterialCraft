@@ -80,7 +80,11 @@ pub fn line(stamp: &RunStamp, r: &CaseResult) -> Value {
                 );
             }
             let d = &m.metrics.overall;
-            v.with("status", "measured")
+            let status = match &m.stale {
+                Some(why) => v.with("status", "skipped").with("reason", why.as_str()),
+                None => v.with("status", "measured"),
+            };
+            status
                 .with("size", Value::Array(vec![m.size.0.into(), m.size.1.into()]))
                 .with("mae", round(m.metrics.mae_steps()))
                 .with("max", round(d.max * 255.0))

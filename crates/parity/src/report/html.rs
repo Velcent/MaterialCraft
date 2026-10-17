@@ -115,6 +115,13 @@ fn case(h: &mut String, r: &CaseResult, m: &Measured, f: &CaseFiles) {
         );
     }
     h.push_str("</table>");
+    if let Some(why) = &m.stale {
+        let _ = write!(
+            h,
+            "<p class=stale>skipped: {} — not counted in the summary</p>",
+            esc(why)
+        );
+    }
     list(h, "notes", &m.notes);
     list(h, "Painter settings we do not reproduce", &m.unmapped);
     let _ = write!(
@@ -147,7 +154,13 @@ fn skipped<'a>(h: &mut String, results: impl Iterator<Item = &'a CaseResult>) {
         .filter_map(|r| match &r.outcome {
             Outcome::Skipped(why) => Some(format!("<tr><td>{}<td>skipped<td>{}</tr>", esc(&r.label()), esc(why))),
             Outcome::Failed(why) => Some(format!("<tr><td>{}<td>failed<td>{}</tr>", esc(&r.label()), esc(why))),
-            Outcome::Measured(_) => None,
+            Outcome::Measured(m) => m.stale.as_ref().map(|why| {
+                format!(
+                    "<tr><td>{}<td>skipped<td>{} (shown above)</tr>",
+                    esc(&r.label()),
+                    esc(why)
+                )
+            }),
         })
         .collect();
     if !rows.is_empty() {
@@ -171,7 +184,7 @@ const STYLE: &str = ":root{--bg:#fafafa;--fg:#1d1d1f;--muted:#666;--line:#ddd;--
 @media (prefers-color-scheme:dark){:root{--bg:#141416;--fg:#e8e8ea;--muted:#9a9aa0;--line:#333;--card:#1e1e21}}\
 body{margin:0 auto;padding:16px;max-width:1500px;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,sans-serif}\
 h1{font-size:22px}h2{margin-top:32px;border-bottom:1px solid var(--line)}h3{margin:0 0 4px;font-size:15px}\
-.meta{color:var(--muted);margin:0 0 8px}table{border-collapse:collapse;margin:8px 0;font-variant-numeric:tabular-nums}\
+.meta{color:var(--muted);margin:0 0 8px}.stale{color:#b35c00;font-weight:600;margin:4px 0}table{border-collapse:collapse;margin:8px 0;font-variant-numeric:tabular-nums}\
 td,th{padding:2px 10px;border-bottom:1px solid var(--line);text-align:right}td:first-child,th:first-child{text-align:left}\
 .case{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin:12px 0}\
 .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}figure{margin:0}\

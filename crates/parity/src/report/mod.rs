@@ -72,11 +72,14 @@ impl CaseSink for HtmlReport {
         });
         if let Some(m) = result.measured() {
             eprintln!(
-                "  {:<20} {:<40} MAE {:>6.2}  ≤2/255 {:>5.1} %",
+                "  {:<20} {:<40} MAE {:>6.2}  ≤2/255 {:>5.1} %{}",
                 result.subject,
                 result.label(),
                 m.metrics.mae_steps(),
-                m.metrics.overall.within
+                m.metrics.overall.within,
+                m.stale
+                    .as_deref()
+                    .map_or(String::new(), |why| format!("  [skipped: {why}]"))
             );
         }
         self.entries.push(Entry {
