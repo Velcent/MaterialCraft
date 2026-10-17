@@ -1,6 +1,7 @@
-//! [`MeshFinder`]: finds a high-poly mesh file by name near a project. Painter records the path on the machine
-//! it ran on (`file:///D:/…/Sload HP.OBJ`), so only the file name is used, searched below the project's own
-//! folder (never above it). Only `.obj` and `.fbx` names are ever matched; nothing else is opened.
+//! [`MeshFinder`]: finds a high-poly mesh file by name near a document or project. Imported projects record the
+//! path on the machine they were made on (`file:///D:/…/Sload HP.OBJ`), so only the file name is used, searched
+//! below the document's own folder (never above it). Only `.obj` and `.fbx` names are ever matched; nothing else is
+//! opened. Shared by the Paint screen's bake queue and `mcparity`.
 
 use std::path::{Path, PathBuf};
 
@@ -31,10 +32,7 @@ impl<'a> MeshFinder<'a> {
 }
 
 pub fn is_mesh_name(name: &str) -> bool {
-    Path::new(name)
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| MESH_EXTENSIONS.contains(&e.to_lowercase().as_str()))
+    Path::new(name).extension().and_then(|e| e.to_str()).is_some_and(|e| MESH_EXTENSIONS.contains(&e.to_lowercase().as_str()))
 }
 
 fn search(dir: &Path, wanted: &str, depth: usize, found: &mut Vec<PathBuf>) {
@@ -60,7 +58,7 @@ mod tests {
 
     #[test]
     fn finds_by_name_nearest_first_and_only_meshes() {
-        let root = std::env::temp_dir().join(format!("mcparity-finder-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("mc-bake-finder-{}", std::process::id()));
         let project = root.join("proj");
         std::fs::create_dir_all(project.join("sub/deeper")).unwrap();
         std::fs::create_dir_all(root.join("other")).unwrap();

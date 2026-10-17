@@ -3,11 +3,14 @@
 //!
 //! - [`fields`]: typed access to JSON objects; exact `f32` numbers.
 //! - [`extras`]: unknown fields kept across load → save.
+//! - [`bake_config`] (with [`bake_enums`]): per-set bake configuration and the document's bake links.
 //! - [`texture_set`], [`layer`], [`image_ref`], [`report`]: one file per model type; [`strokes`]: stroke record
 //!   references of paint pixels.
 //! - [`effect`] (with [`effect_content`], [`effect_mask`], [`effect_kinds`]), [`blend`], [`geometry_mask`]:
 //!   effect stacks, blend entries and geometry masks of layers.
 
+pub mod bake_config;
+pub mod bake_enums;
 pub mod blend;
 pub mod effect;
 pub mod effect_content;
@@ -82,12 +85,15 @@ pub struct Manifest {
 pub fn write(doc: &Document, ctx: &WriteCtx, thumbnail: bool) -> Value {
     let sets: Value = doc.texture_sets.iter().enumerate().map(|(i, s)| texture_set::write(i, s, ctx)).collect();
     let foreign: Value = doc.foreign.iter().map(|f| f.path.as_str()).collect();
+    let mut links = bake_config::write_links(&doc.bake_links);
+    ctx.extras.inject("bake_links", &mut links);
     let mut v = Value::object()
         .with("format", FORMAT_NAME)
         .with("format_version", FORMAT_VERSION)
         .with("generator", GENERATOR)
         .with("mesh", paths::MESH)
         .with("height_filter", doc.height_filter.id())
+        .with("bake_links", links)
         .with("texture_sets", sets)
         .with("foreign", foreign);
     if doc.import_report.is_some() {
@@ -111,6 +117,7 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
     o.opt("thumbnail");
     let mut ctx = ReadCtx::default();
     let mut doc = Document { height_filter: height_filter(&mut o)?, ..Document::default() };
+    doc.bake_links = bake_config::read_links(o.opt("bake_links"), o.path("bake_links"), &mut ctx)?;
     for (i, s) in o.array("texture_sets")?.iter().enumerate() {
         doc.texture_sets.push(texture_set::read(i, s, &mut ctx)?);
     }

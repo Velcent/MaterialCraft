@@ -24,6 +24,7 @@ mod cancel;
 mod context;
 mod curvature;
 mod error;
+mod finder;
 mod high;
 mod id;
 mod low;
@@ -41,6 +42,7 @@ mod world_normal;
 
 pub use cancel::CancelToken;
 pub use error::BakeError;
+pub use finder::{MeshFinder, is_mesh_name};
 pub use high::{HighScene, HighTriangle};
 pub use low::TextureSetRef;
 pub use maps::{BakedMaps, MapKind, MapSelection};

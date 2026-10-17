@@ -103,6 +103,14 @@ pub fn parse_obj(text: &str) -> Result<Mesh, String> {
 }
 
 impl Mesh {
+    /// Adds `more`'s triangles and groups (its group ids moved past ours): several high-poly files as one mesh.
+    pub fn append(&mut self, mut more: Mesh) {
+        let offset = self.groups.len() as u32;
+        more.tris.iter_mut().for_each(|t| t.group += offset);
+        self.groups.append(&mut more.groups);
+        self.tris.append(&mut more.tris);
+    }
+
     /// An indexed [`mesh::Mesh`]: one part per group, all on material slot 0 (one texture set), corners with equal
     /// position, normal and UV shared, v flipped to the top-left origin.
     pub fn to_mesh(&self) -> mesh::Mesh {

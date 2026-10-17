@@ -1,6 +1,7 @@
 //! Texture sets: `{"id", "name", "mesh_material", "uv_set", "resolution", "channels", "layers",
-//! "baked"}`.
+//! "baked", "bake"}` (`"bake"` since 0.5, see [`super::bake_config`]).
 
+use super::bake_config;
 use super::extras::loc;
 use super::fields::Obj;
 use super::layer::{self, SetScope};
@@ -43,7 +44,8 @@ pub fn write(index: usize, set: &TextureSet, ctx: &WriteCtx) -> Value {
         .with("resolution", vec![set.resolution.0, set.resolution.1])
         .with("channels", channels)
         .with("layers", layer::write_all(&set.layers, &scope, ctx))
-        .with("baked", baked);
+        .with("baked", baked)
+        .with("bake", bake_config::write(&set.bake, &format!("{here}/bake"), ctx));
     ctx.extras.inject(&here, &mut v);
     v
 }
@@ -78,6 +80,7 @@ pub fn read(index: usize, v: &Value, ctx: &mut ReadCtx) -> Result<TextureSet, Fo
         ctx.extras.record(&bloc, &bo);
         set.baked.push(BakedMap { kind, image });
     }
+    set.bake = bake_config::read(o.opt("bake"), o.path("bake"), &format!("{here}/bake"), set.bake.clone(), ctx)?;
     ctx.extras.record(&here, &o);
     Ok(set)
 }

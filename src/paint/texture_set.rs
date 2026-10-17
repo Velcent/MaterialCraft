@@ -1,5 +1,6 @@
 //! [`TextureSet`]: the channels, layer stack and baked mesh maps painted onto one material slot.
 
+use super::bake_config::SetBakeConfig;
 use super::channel::{Channel, ChannelSpec};
 use super::image::TiledImage;
 use super::layer::{Layer, LayerKind, LayerWalk};
@@ -75,12 +76,25 @@ pub struct TextureSet {
     /// Layer stack, bottom to top.
     pub layers: Vec<Layer>,
     pub baked: Vec<BakedMap>,
+    /// How the set's maps are baked (bakers panel).
+    pub bake: SetBakeConfig,
 }
 
 impl TextureSet {
-    /// An empty texture set on material slot 0 and UV set 0, without channels or layers.
+    /// An empty texture set on material slot 0 and UV set 0, without channels or layers, baked at its resolution.
     pub fn new(id: impl Into<String>, name: impl Into<String>, resolution: (u32, u32)) -> TextureSet {
-        TextureSet { id: id.into(), name: name.into(), material_slot: 0, uv_set: 0, resolution, channels: Vec::new(), layers: Vec::new(), baked: Vec::new() }
+        let bake = SetBakeConfig::with_size(resolution.0.max(resolution.1).max(1));
+        TextureSet {
+            id: id.into(),
+            name: name.into(),
+            material_slot: 0,
+            uv_set: 0,
+            resolution,
+            channels: Vec::new(),
+            layers: Vec::new(),
+            baked: Vec::new(),
+            bake,
+        }
     }
 
     /// Declares `channel` with its default spec unless it is already declared.

@@ -1,10 +1,8 @@
 //! [`Inputs`]: what one case (one texture set of one project) gives the subjects: the project mesh with the set's
 //! slots, the high mesh, and a bake computed once on first use and shared by every baked-map subject.
 
-mod finder;
 mod high;
 
-pub use finder::MeshFinder;
 pub use high::{BoundsCheck, HighCache, HighMesh, HighSource, MAX_HIGH_POLY_BYTES, bounds};
 
 use crate::settings::Params;

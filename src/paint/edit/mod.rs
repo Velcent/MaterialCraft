@@ -13,6 +13,7 @@
 //! - [`effects`]: content and mask effect stacks;
 //! - [`pixels`]: tile swaps, region writes and [`TileCapture`];
 //! - [`document`]: texture sets, the mesh and the height filter;
+//! - [`bake`]: bake configurations, link flags and baked maps;
 //! - [`tiles`]: the tiles an edit or a document holds (for memory accounting);
 //! - [`ids`]: fresh layer and anchor ids, and re-iding a copied layer tree;
 //! - [`Transaction`]: several edits applied one after another, each planned on the result of the one
@@ -22,6 +23,7 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod bake;
 mod document;
 mod effects;
 mod error;
@@ -40,6 +42,7 @@ pub use pixels::{TileCapture, TileSwap};
 pub use tiles::document_tiles;
 pub use transaction::Transaction;
 
+use super::bake_config::{BakeLinks, SetBakeConfig};
 use super::doc::Document;
 use super::effect::{ContentEffect, MaskEffect};
 use super::geometry_mask::GeometryMask;
@@ -47,7 +50,7 @@ use super::height_normal::HeightFilter;
 use super::image::Rect;
 use super::layer::{ChannelBlend, Fill, Layer, LayerImage};
 use super::mask::Mask;
-use super::texture_set::TextureSet;
+use super::texture_set::{BakedMap, TextureSet};
 use crate::mesh::Mesh;
 
 /// A layer by texture set id and layer id.
@@ -208,6 +211,18 @@ pub enum Edit {
     /// Replaces the mesh (a re-import).
     SetMesh(Box<Mesh>),
     SetHeightFilter(HeightFilter),
+    /// Replaces the bake configuration of a texture set.
+    SetBakeConfig {
+        set: String,
+        config: Box<SetBakeConfig>,
+    },
+    /// Replaces the document's bake link flags.
+    SetBakeLinks(BakeLinks),
+    /// Replaces the baked maps of a texture set (a bake's results).
+    SetBaked {
+        set: String,
+        maps: Vec<BakedMap>,
+    },
 }
 
 impl Edit {
@@ -229,6 +244,9 @@ impl Edit {
             Edit::ReplaceTextureSet(set) => document::replace_set(doc, *set),
             Edit::SetMesh(mesh) => Ok(Edit::SetMesh(Box::new(std::mem::replace(&mut doc.mesh, *mesh)))),
             Edit::SetHeightFilter(f) => Ok(Edit::SetHeightFilter(std::mem::replace(&mut doc.height_filter, f))),
+            Edit::SetBakeConfig { set, config } => bake::set_config(doc, set, *config),
+            Edit::SetBakeLinks(links) => Ok(Edit::SetBakeLinks(std::mem::replace(&mut doc.bake_links, links))),
+            Edit::SetBaked { set, maps } => bake::set_baked(doc, set, maps),
         }
     }
 
@@ -243,7 +261,14 @@ impl Edit {
             {
                 None
             }
-            (Edit::SetHeightFilter(_), Edit::SetHeightFilter(_)) => None,
+            (Edit::SetHeightFilter(_), Edit::SetHeightFilter(_)) | (Edit::SetBakeLinks(_), Edit::SetBakeLinks(_)) => None,
+            (Edit::SetBakeConfig { set, .. }, Edit::SetBakeConfig { set: s2, config }) => {
+                if *set == s2 {
+                    None
+                } else {
+                    Some(Edit::SetBakeConfig { set: s2, config })
+                }
+            }
             (Edit::SwapTiles { image, tiles }, Edit::SwapTiles { image: i2, tiles: t2 }) if *image == i2 => {
                 pixels::merge_older(tiles, t2);
                 None

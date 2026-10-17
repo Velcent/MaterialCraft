@@ -1,5 +1,6 @@
 //! [`Document`]: a mesh with its texture sets, plus what an importer could not translate.
 
+use super::bake_config::BakeLinks;
 use super::height_normal::HeightFilter;
 use super::report::ImportReport;
 use super::texture_set::TextureSet;
@@ -23,6 +24,8 @@ pub struct Document {
     /// How height becomes normal detail in the final normal map, for every texture set (see
     /// [`crate::paint::MaterialMaps`]). Importers set the filter of the program the work came from.
     pub height_filter: HeightFilter,
+    /// Which parts of the texture sets' bake configurations are linked across sets.
+    pub bake_links: BakeLinks,
     pub foreign: Vec<ForeignFile>,
     /// Present if the document came from an import.
     pub import_report: Option<ImportReport>,

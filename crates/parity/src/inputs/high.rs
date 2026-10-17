@@ -2,10 +2,9 @@
 //! [`HighMesh::load`] reads it, moves it into Painter's normalised space, like the project's low mesh, and builds
 //! the baker's [`HighScene`] (with its BVH) once for every set that bakes from it.
 
-use super::finder::{MeshFinder, is_mesh_name};
 use crate::settings::HighPolyRequest;
 use crate::subject::CaseError;
-use materialcraft::bake::{self, HighScene};
+use materialcraft::bake::{self, HighScene, MeshFinder, is_mesh_name};
 use materialcraft::mesh::Mesh;
 use materialcraft_substance::decode::assbin::Normalization;
 use std::cell::RefCell;
@@ -86,7 +85,7 @@ impl HighMesh {
         };
         let mut mesh = bake::Mesh::default();
         for path in files {
-            append(&mut mesh, read_obj(path)?);
+            mesh.append(read_obj(path)?);
         }
         let mut notes = Vec::new();
         match normalization {
@@ -160,13 +159,6 @@ fn read_obj(path: &Path) -> Result<bake::Mesh, CaseError> {
     }
     let bytes = std::fs::read(path).map_err(|e| fail(e.to_string()))?;
     bake::parse_obj(&String::from_utf8_lossy(&bytes)).map_err(fail)
-}
-
-fn append(into: &mut bake::Mesh, mut more: bake::Mesh) {
-    let offset = into.groups.len() as u32;
-    more.tris.iter_mut().for_each(|t| t.group += offset);
-    into.groups.append(&mut more.groups);
-    into.tris.append(&mut more.tris);
 }
 
 /// How well two bounding boxes agree: centre offset over the low diagonal, and the diagonal ratio.

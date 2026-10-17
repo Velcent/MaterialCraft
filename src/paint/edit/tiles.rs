@@ -55,6 +55,7 @@ impl Edit {
             Edit::SwapTiles { tiles, .. } => tiles.iter().filter_map(|s| s.tile.as_ref()).for_each(f),
             Edit::InsertTextureSet { set, .. } => set_tiles(set, f),
             Edit::ReplaceTextureSet(set) => set_tiles(set, f),
+            Edit::SetBaked { maps, .. } => maps.iter().for_each(|b| image_tiles(&b.image, f)),
             _ => {}
         }
     }

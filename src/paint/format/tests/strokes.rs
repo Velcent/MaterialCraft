@@ -63,7 +63,7 @@ fn records_round_trip_and_files_stay_byte_identical() {
 fn records_are_binary_entries_next_to_the_pixels() {
     let bytes = to_bytes(&with_strokes());
     let v = manifest(&bytes);
-    assert_eq!(v["format_version"].as_str(), Some("0.4"));
+    assert_eq!(v["format_version"].as_str(), Some(super::super::FORMAT_VERSION));
     let paths = [
         layer_json(&v, 0, "p1")["strokes"].as_str(),
         layer_json(&v, 0, "p0")["mask"]["effects"][0]["strokes"].as_str(),
@@ -101,7 +101,7 @@ fn files_without_records_load_as_before() {
         if name != "document.json" {
             return Some(data);
         }
-        Some(String::from_utf8(data).unwrap().replace("\"format_version\": \"0.4\"", "\"format_version\": \"0.3\"").into_bytes())
+        Some(String::from_utf8(data).unwrap().replace("\"format_version\": \"0.5\"", "\"format_version\": \"0.3\"").into_bytes())
     });
     assert_eq!(manifest(&old)["format_version"].as_str(), Some("0.3"));
     let back = from_bytes(&old).unwrap();
