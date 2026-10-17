@@ -1,16 +1,18 @@
 //! [`StackBuilder`]: a Painter layer tree (bottom → top) → our layers with the same order, nesting, names,
-//! visibility, per-channel blending and masks, plus the [`StackVerdict`] on how exact the result is.
-//! Layers whose content cannot be computed are imported anyway with what can be. Blend entries go on every
-//! declared channel for folders, and on the channels their content writes for layers, with the content's
-//! coverage folded into the opacity.
+//! visibility, per-channel blending, content effects and masks, plus the [`StackVerdict`] on how exact the
+//! result is. Every Painter effect becomes one of ours ([`ContentMapper`], [`MaskEvaluator`]); the verdict
+//! decides which channels they reproduce. Blend entries go on every declared channel for folders, and on the
+//! channels their content writes for layers.
 
 use super::blend_table::{BlendTable, Holder};
 use super::blending::ResolvedBlend;
 use super::channels::SetChannels;
 use super::computability::Computability;
 use super::content::{ChannelContent, ContentEvaluator};
+use super::effect_data::AnchorIds;
+use super::effect_map::ContentMapper;
 use super::images::ImageSource;
-use super::layer_content::{content_coverage, core_content, is_flat_normal};
+use super::layer_content::is_flat_normal;
 use super::mask::MaskEvaluator;
 use super::verdict::{LayerNote, MaskFailure, StackVerdict};
 use crate::model::{LayerKind as PainterKind, PainterLayer};
@@ -57,22 +59,16 @@ impl StackBuilder<'_> {
             path: String::new(),
             channels: self.channels.all().map(|c| (c, Some(Computability::Exact))).collect(),
         };
-        let mut ids = BTreeSet::new();
+        let mut ids = Ids::default();
         let layers = self.stack(layers, &top, &mut verdict, &mut ids);
         ImportedStack { layers, verdict }
     }
 
-    fn stack(
-        &self,
-        layers: &[PainterLayer],
-        ctx: &Context,
-        v: &mut StackVerdict,
-        ids: &mut BTreeSet<String>,
-    ) -> Vec<Layer> {
+    fn stack(&self, layers: &[PainterLayer], ctx: &Context, v: &mut StackVerdict, ids: &mut Ids) -> Vec<Layer> {
         layers.iter().map(|l| self.layer(l, ctx, v, ids)).collect()
     }
 
-    fn layer(&self, l: &PainterLayer, ctx: &Context, v: &mut StackVerdict, ids: &mut BTreeSet<String>) -> Layer {
+    fn layer(&self, l: &PainterLayer, ctx: &Context, v: &mut StackVerdict, ids: &mut Ids) -> Layer {
         v.layer_count += 1;
         let path = match ctx.path.is_empty() {
             true => l.name.clone(),
@@ -83,10 +79,12 @@ impl StackBuilder<'_> {
             images: self.images,
             resolution: self.resolution,
         };
-        let mask = masks.evaluate(l.mask.as_ref());
+        let mask = masks.evaluate(l.mask.as_ref(), &mut ids.anchors);
         let visible = ctx.visible && l.visible;
         let mut note = mask.status.clone();
-        let (kind, written) = match &l.kind {
+        let evaluator = self.evaluator();
+        let mapper = ContentMapper { evaluator: &evaluator };
+        let (kind, effects, written) = match &l.kind {
             PainterKind::Group(children) => {
                 let mut inner = Context {
                     visible,
@@ -103,8 +101,9 @@ impl StackBuilder<'_> {
                     inner.channels.push((channel, status.filter(|_| blend.contributes())));
                 }
                 self.folder_content(l, &inner, v, &mut note);
-                let all: Vec<(Channel, f32)> = self.channels.all().map(|c| (c, 1.0)).collect();
-                (LayerKind::Group(self.stack(children, &inner, v, ids)), all)
+                let effects = mapper.folder_effects(l, &mut ids.anchors);
+                let all: Vec<Channel> = self.channels.all().collect();
+                (LayerKind::Group(self.stack(children, &inner, v, ids)), effects, all)
             }
             painter => {
                 let content = self.content(l);
@@ -130,11 +129,9 @@ impl StackBuilder<'_> {
                     }
                 }
                 note.and(&unknown);
-                let written = content
-                    .iter()
-                    .map(|c| (c.channel, content_coverage(&c.value)))
-                    .collect();
-                (core_content(&content, painter, self.channels, self.resolution), written)
+                let written = content.iter().map(|c| c.channel).collect();
+                let mapped = mapper.map(l, &mut ids.anchors);
+                (mapped.base, mapped.effects, written)
             }
         };
         if !note.is_exact() {
@@ -144,7 +141,8 @@ impl StackBuilder<'_> {
                 status: note,
             });
         }
-        let mut layer = Layer::new(unique_id(l.uid, ids), l.name.clone(), kind);
+        let mut layer = Layer::new(unique_id(l.uid, &mut ids.layers), l.name.clone(), kind);
+        layer.effects = effects;
         layer.visible = l.visible;
         if l.visible && !mask.status.is_computable() {
             v.mask_failures.push(MaskFailure {
@@ -154,21 +152,24 @@ impl StackBuilder<'_> {
             });
         }
         layer.mask = mask.mask;
-        for (channel, coverage) in written {
+        for channel in written {
             let blend = self.blend(l, channel);
-            layer.set_blend(channel, blend.mode(), blend.opacity * coverage);
+            layer.set_blend(channel, blend.mode(), blend.opacity);
         }
         layer
     }
 
-    fn content(&self, l: &PainterLayer) -> Vec<ChannelContent> {
+    fn evaluator(&self) -> ContentEvaluator<'_> {
         ContentEvaluator {
             channels: self.channels,
             table: self.table,
             images: self.images,
             resolution: self.resolution,
         }
-        .evaluate(&l.content)
+    }
+
+    fn content(&self, l: &PainterLayer) -> Vec<ChannelContent> {
+        self.evaluator().evaluate(&l.content)
     }
 
     /// Effects on a folder itself (rare) are not computable; they count against every channel they write.
@@ -205,6 +206,13 @@ impl StackBuilder<'_> {
         }
         status
     }
+}
+
+/// Ids handed out so far in one set: layers and anchors.
+#[derive(Default)]
+struct Ids {
+    layers: BTreeSet<String>,
+    anchors: AnchorIds,
 }
 
 /// `layer-<uid>`, made unique; `layer-n<k>` without a uid.

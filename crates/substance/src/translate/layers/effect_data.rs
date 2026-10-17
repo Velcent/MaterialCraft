@@ -1,0 +1,175 @@
+//! The data of Painter's effects that maps the same way in content and mask stacks: procedurals (generators
+//! and filters, by `substance:<resource name>` with their parameter values as strings), levels, colour
+//! selection, anchors and references (by `anchor-<uid>` ids), and classes we do not know (kept by name as
+//! unknown effects, which load as not computable).
+
+use crate::model::{
+    ColorSelectionEffect, EffectHeader, Levels as PainterLevels, Procedural as PainterProcedural, RawEntry,
+    ReferenceSource, TweakValue,
+};
+use materialcraft::json::Value;
+use materialcraft::paint::BakedKind;
+use materialcraft::paint::effect::{Anchor, ColorSelection, Levels, Procedural, Reference, UnknownEffect};
+use std::collections::BTreeSet;
+
+/// Prefix of the generator and filter ids of Substance procedurals (no implementation is registered for them;
+/// a replacement table may map them to ours later).
+pub const SUBSTANCE_PREFIX: &str = "substance:";
+
+/// A generator or filter id plus parameters for a Painter procedural; `?` when the effect names none.
+pub fn procedural(p: Option<&PainterProcedural>) -> Procedural {
+    let Some(p) = p else {
+        return Procedural::new(format!("{SUBSTANCE_PREFIX}?"));
+    };
+    let params = p
+        .tweaks
+        .iter()
+        .filter_map(|t| tweak_text(&t.value).map(|v| (t.identifier.clone(), v)))
+        .collect();
+    Procedural {
+        id: format!("{SUBSTANCE_PREFIX}{}", p.name()),
+        params,
+    }
+}
+
+/// A tweak value as text: numbers comma-separated, text as is; classes we do not know are left out.
+fn tweak_text(v: &TweakValue) -> Option<String> {
+    let join = |n: Vec<String>| n.join(",");
+    Some(match v {
+        TweakValue::Int(i) => i.to_string(),
+        TweakValue::Int2(a) => join(a.iter().map(i32::to_string).collect()),
+        TweakValue::Floats(f) => join(f.iter().map(f32::to_string).collect()),
+        TweakValue::Text(t) => t.clone(),
+        TweakValue::Other(_) => return None,
+    })
+}
+
+pub fn levels(l: Option<&PainterLevels>) -> Levels {
+    match l {
+        Some(l) => Levels {
+            input_min: l.input_minimum,
+            input_max: l.input_maximum,
+            gamma: l.gamma,
+            output_min: l.output_minimum,
+            output_max: l.output_maximum,
+            clamp: l.clamp != 0,
+        },
+        None => Levels::default(),
+    }
+}
+
+/// Painter picks colours from a bitmap, usually the baked ID map.
+pub fn color_selection(c: &ColorSelectionEffect) -> ColorSelection {
+    ColorSelection {
+        map: BakedKind::Id,
+        colors: c.colors.clone(),
+        tolerance: c.tolerance,
+        hardness: c.hardness,
+    }
+}
+
+pub fn reference(r: &ReferenceSource) -> Reference {
+    Reference {
+        anchor: r.anchor_uid.map(anchor_id).unwrap_or_default(),
+    }
+}
+
+fn anchor_id(uid: u64) -> String {
+    format!("anchor-{uid}")
+}
+
+/// An effect or source class the model does not know, by name.
+pub fn unknown(raw: &RawEntry) -> UnknownEffect {
+    unknown_named(&format!("substance:{}", raw.class), Value::object())
+}
+
+/// An unknown effect of `kind` holding `fields`.
+pub fn unknown_named(kind: &str, fields: Value) -> UnknownEffect {
+    let mut data = Value::object().with("kind", kind);
+    for (k, v) in fields.as_object().into_iter().flatten() {
+        data.insert(k.clone(), v.clone());
+    }
+    UnknownEffect {
+        kind: kind.to_string(),
+        data,
+    }
+}
+
+/// Anchor ids unique within a texture set: `anchor-<uid>`, `-2`, `-3` … on repeats, `anchor-n<k>` without uid.
+#[derive(Default)]
+pub struct AnchorIds(BTreeSet<String>);
+
+impl AnchorIds {
+    pub fn anchor(&mut self, header: &EffectHeader) -> Anchor {
+        let base = header
+            .uid
+            .map_or_else(|| format!("anchor-n{}", self.0.len()), anchor_id);
+        let id = (1..)
+            .map(|n| if n == 1 { base.clone() } else { format!("{base}-{n}") })
+            .find(|id| !self.0.contains(id))
+            .unwrap_or(base);
+        self.0.insert(id.clone());
+        Anchor { id }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Tweak;
+
+    #[test]
+    fn procedurals_tweaks_and_anchor_ids() {
+        let p = PainterProcedural {
+            uid: None,
+            url: "resource://shelf/mg_dirt/mg_dirt?version=1.sbsar".into(),
+            tweaks: vec![
+                Tweak {
+                    identifier: "$outputsize".into(),
+                    value: TweakValue::Int2([11, 11]),
+                },
+                Tweak {
+                    identifier: "amount".into(),
+                    value: TweakValue::Floats(vec![0.5]),
+                },
+                Tweak {
+                    identifier: "odd".into(),
+                    value: TweakValue::Other("DataTweakX".into()),
+                },
+            ],
+            outputs: vec![],
+            inputs: vec![],
+        };
+        let ours = procedural(Some(&p));
+        assert_eq!(ours.id, "substance:mg_dirt");
+        assert_eq!(
+            ours.params,
+            [
+                ("$outputsize".to_string(), "11,11".to_string()),
+                ("amount".into(), "0.5".into())
+            ]
+        );
+        assert_eq!(procedural(None).id, "substance:?");
+        let mut ids = AnchorIds::default();
+        let h = EffectHeader {
+            uid: Some(7),
+            ..EffectHeader::default()
+        };
+        assert_eq!(ids.anchor(&h).id, "anchor-7");
+        assert_eq!(ids.anchor(&h).id, "anchor-7-2");
+        assert_eq!(ids.anchor(&EffectHeader::default()).id, "anchor-n2");
+        let r = ReferenceSource {
+            uid: None,
+            channels: Default::default(),
+            anchor_uid: Some(7),
+            anchor_label: String::new(),
+        };
+        assert_eq!(reference(&r).anchor, "anchor-7");
+        assert_eq!(
+            unknown_named("substance:bitmap_fill", Value::object().with("url", "/a"))
+                .data
+                .to_string(),
+            r#"{"kind":"substance:bitmap_fill","url":"/a"}"#
+        );
+    }
+}

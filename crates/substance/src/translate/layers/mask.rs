@@ -1,27 +1,33 @@
-//! [`MaskEvaluator`]: a Painter mask (`maskActions` from `maskInitial`) as a painted [`Mask`], where it is
-//! made only of uniform and bitmap fills (and empty paint groups). Generators, filters, strokes, levels and
-//! references are not computable yet; the layer then gets no mask and the reason is reported.
+//! [`MaskEvaluator`]: a Painter mask (`maskActions` with `maskEnabled` and `maskInitial`) as our [`Mask`],
+//! effect for effect, and how exactly it reproduces Painter.
+//!
+//! Every Painter mask effect becomes one of ours: an effect group becomes a paint effect (its brush work)
+//! followed by its other entries, uniform fills grey fills, bitmap fills painted images, procedural fills
+//! generators, reference fills references; filters, levels, colour selection, polygon fill and anchors keep
+//! their kind. Only uniform and bitmap fills (and empty paint) are computable; the first effect that is not
+//! gives the reason (generators, filters, strokes, levels, references …).
 
 use super::blend_table::BlendTable;
 use super::blending::ResolvedBlend;
 use super::computability::Computability;
+use super::effect_data::{self as data, AnchorIds};
 use super::images::{ImageSource, fit, grey_values};
-use crate::model::{MaskInitial, PainterEffect, PainterMask, PainterSource};
-use materialcraft::paint::{Mask, PixelFormat, PixelLayout, SampleType, TiledImage};
+use crate::model::{EffectHeader, MaskInitial, PainterEffect, PainterMask, PainterSource, PolygonFillEffect};
+use materialcraft::json::Value;
+use materialcraft::paint::effect::{Grey, PolygonFill, Selection};
+use materialcraft::paint::{
+    EffectKind, GreyBlend, Mask, MaskEffect, MaskPixels, PixelFormat, PixelLayout, SampleType, TiledImage,
+};
 
-/// Stored format of imported masks (16 bits: constant masks stay exact to well below 8-bit rounding).
+/// Stored format of imported bitmap masks (16 bits: constant masks stay exact to well below 8-bit rounding).
 const MASK_FORMAT: PixelFormat = PixelFormat::new(PixelLayout::Gray, SampleType::U16);
+/// Format of mask paint effects whose strokes are not replayed (nothing painted: alpha 0 everywhere).
+const PAINT_FORMAT: PixelFormat = PixelFormat::new(PixelLayout::GrayAlpha, SampleType::U8);
 
-/// The mask for a layer (`None` = no mask, the layer applies everywhere) and how exact it is.
+/// The mask for a layer (`None` = no mask) and how exact it is.
 pub struct MaskOutcome {
     pub mask: Option<Mask>,
     pub status: Computability,
-}
-
-/// Grey mask values while evaluating.
-enum Grey {
-    Constant(f32),
-    Pixels(Vec<f32>),
 }
 
 pub struct MaskEvaluator<'a> {
@@ -31,117 +37,213 @@ pub struct MaskEvaluator<'a> {
 }
 
 impl MaskEvaluator<'_> {
-    pub fn evaluate(&self, mask: Option<&PainterMask>) -> MaskOutcome {
-        let Some(mask) = mask.filter(|m| m.enabled) else {
+    pub fn evaluate(&self, mask: Option<&PainterMask>, anchors: &mut AnchorIds) -> MaskOutcome {
+        let Some(painter) = mask else {
             return MaskOutcome {
                 mask: None,
                 status: Computability::Exact,
             };
         };
-        let mut grey = match mask.initial {
-            MaskInitial::Black => Grey::Constant(0.0),
-            MaskInitial::White => Grey::Constant(1.0),
-            MaskInitial::Other(n) => return not_computable(format!("mask initial value {n}")),
+        let initial = match painter.initial {
+            MaskInitial::Black => 0.0,
+            MaskInitial::White => 1.0,
+            // An initial value we cannot read: the layer gets no mask (a switched-off one does not matter).
+            MaskInitial::Other(n) => {
+                let status = match painter.enabled {
+                    true => Computability::not_computable(format!("mask initial value {n}")),
+                    false => Computability::Exact,
+                };
+                return MaskOutcome { mask: None, status };
+            }
         };
-        let mut status = Computability::Exact;
-        self.walk(&mask.effects, &mut grey, &mut status);
-        if !status.is_computable() {
-            return MaskOutcome { mask: None, status };
-        }
+        let mut walk = Walk {
+            evaluator: self,
+            anchors,
+            effects: Vec::new(),
+            status: Computability::Exact,
+            counts: painter.enabled,
+        };
+        walk.effects(&painter.effects, true);
+        let mask = Mask {
+            enabled: painter.enabled,
+            initial,
+            effects: walk.effects,
+        };
         MaskOutcome {
-            mask: self.image(grey),
-            status,
+            mask: Some(mask),
+            status: walk.status,
+        }
+    }
+}
+
+/// One pass over a mask's effects, collecting ours and the status.
+struct Walk<'e, 'a> {
+    evaluator: &'e MaskEvaluator<'a>,
+    anchors: &'e mut AnchorIds,
+    effects: Vec<MaskEffect>,
+    status: Computability,
+    /// False for a switched-off mask: its effects are kept but do not count.
+    counts: bool,
+}
+
+impl Walk<'_, '_> {
+    fn effects(&mut self, effects: &[PainterEffect], enabled: bool) {
+        for effect in effects {
+            self.effect(effect, enabled && effect.is_enabled());
         }
     }
 
-    fn walk(&self, effects: &[PainterEffect], grey: &mut Grey, status: &mut Computability) {
-        for effect in effects.iter().filter(|e| e.is_enabled()) {
-            let stop = |status: &mut Computability, why: String| status.and(&Computability::not_computable(why));
-            match effect {
-                PainterEffect::Group(g) => self.walk(&g.effects, grey, status),
-                PainterEffect::Paint(p) if p.strokes > 0 => stop(status, "painted mask (strokes)".into()),
-                PainterEffect::Paint(_) | PainterEffect::Anchor(_) => {}
-                PainterEffect::Fill(fill) => {
-                    let blend = ResolvedBlend::of_mask(&fill.header.blending, self.table);
-                    if !blend.contributes() {
-                        continue;
+    /// Adds the status of a part that counts; nothing is added once the mask is not computable (the first
+    /// reason is the one reported).
+    fn note(&mut self, counts: bool, status: Computability) {
+        if counts && self.counts && self.status.is_computable() {
+            self.status.and(&status);
+        }
+    }
+
+    fn stop(&mut self, counts: bool, why: String) {
+        self.note(counts, Computability::not_computable(why));
+    }
+
+    fn push(&mut self, header: Option<&EffectHeader>, blend: GreyBlend, kind: EffectKind<Grey>, enabled: bool) {
+        let label = header.map(|h| h.label.clone()).unwrap_or_default();
+        self.effects.push(MaskEffect {
+            enabled,
+            label,
+            blend,
+            kind,
+        });
+    }
+
+    fn blend(&self, header: &EffectHeader) -> ResolvedBlend {
+        ResolvedBlend::of_mask(&header.blending, self.evaluator.table)
+    }
+
+    fn effect(&mut self, effect: &PainterEffect, on: bool) {
+        let header = effect.header();
+        let grey = |b: ResolvedBlend| GreyBlend {
+            mode: b.mode(),
+            opacity: b.opacity,
+        };
+        let blend = header.map_or(GreyBlend::default(), |h| grey(self.blend(h)));
+        match effect {
+            PainterEffect::Group(g) => {
+                self.push(header, blend, self.empty_paint(), on);
+                self.effects(&g.effects, on);
+            }
+            PainterEffect::Paint(p) => {
+                self.push(header, blend, self.empty_paint(), on);
+                if p.strokes > 0 {
+                    self.stop(on, "painted mask (strokes)".into());
+                }
+            }
+            PainterEffect::Anchor(h) => {
+                let anchor = self.anchors.anchor(h);
+                self.push(header, blend, EffectKind::Anchor(anchor), on);
+            }
+            PainterEffect::Fill(fill) => {
+                let resolved = self.blend(&fill.header);
+                let counts = on && resolved.contributes();
+                let Some(source) = fill.sources.first() else {
+                    return; // a fill without a source does nothing
+                };
+                let kind = match source {
+                    PainterSource::Uniform(u) => {
+                        self.note(counts, resolved.status());
+                        EffectKind::Fill(u.color[0])
                     }
-                    let top = match fill.sources.first() {
-                        None => continue,
-                        Some(PainterSource::Uniform(u)) => Grey::Constant(u.color[0]),
-                        Some(PainterSource::Bitmap(b)) => match self.images.load(&b.url) {
-                            Ok(loaded) => {
-                                let (image, note) = fit(loaded.image, self.resolution);
-                                status.and(&note);
-                                Grey::Pixels(grey_values(&image))
-                            }
-                            Err(e) => return stop(status, format!("mask {e}")),
-                        },
-                        Some(PainterSource::Procedural(p)) => {
-                            let name = p.procedural.as_ref().map_or("?", |p| p.name());
-                            return stop(status, format!("mask generator \"{name}\""));
+                    PainterSource::Bitmap(b) => match self.evaluator.images.load(&b.url) {
+                        Ok(loaded) => {
+                            let (image, note) = fit(loaded.image, self.evaluator.resolution);
+                            self.note(counts, note);
+                            self.note(counts, resolved.status());
+                            EffectKind::Paint(MaskPixels {
+                                image: grey_image(&image, self.evaluator.resolution),
+                            })
                         }
-                        Some(PainterSource::Reference(_)) => return stop(status, "mask reads an anchor".into()),
-                        Some(PainterSource::Other(raw)) => return stop(status, format!("mask source {}", raw.class)),
-                    };
-                    status.and(&blend.status());
-                    blend_into(grey, &top, &blend);
-                }
-                PainterEffect::Filter(f) => {
-                    let name = f.procedural.as_ref().map_or("?", |p| p.name());
-                    stop(status, format!("mask filter \"{name}\""));
-                }
-                PainterEffect::Levels(_) => stop(status, "mask levels".into()),
-                PainterEffect::ColorSelection(_) => stop(status, "mask colour selection".into()),
-                PainterEffect::PolygonFill(_) => stop(status, "mask polygon fill".into()),
-                PainterEffect::Other(raw) => stop(status, format!("mask effect {}", raw.class)),
-            }
-            if !status.is_computable() {
-                return;
-            }
-        }
-    }
-
-    /// `None` for an all-white mask; an unwritten image (reads as zero) for an all-black one.
-    fn image(&self, grey: Grey) -> Option<Mask> {
-        let (w, h) = self.resolution;
-        let mut image = TiledImage::new(w, h, MASK_FORMAT).ok()?;
-        match grey {
-            Grey::Constant(c) if c >= 1.0 => return None,
-            Grey::Constant(c) if c <= 0.0 => {}
-            Grey::Constant(c) => image.fill([c, c, c, 1.0]),
-            Grey::Pixels(values) => {
-                let all = image.all_tiles();
-                image.update_tiles(&all, |r, px| {
-                    for (i, p) in px.iter_mut().enumerate() {
-                        let (x, y) = (r.x as usize + i % r.w as usize, r.y as usize + i / r.w as usize);
-                        let v = values.get(y * w as usize + x).copied().unwrap_or(0.0);
-                        *p = [v, v, v, 1.0];
+                        Err(e) => {
+                            self.stop(counts, format!("mask {e}"));
+                            let url = Value::object().with("url", b.url.as_str());
+                            EffectKind::Unknown(data::unknown_named("substance:bitmap_fill", url))
+                        }
+                    },
+                    PainterSource::Procedural(p) => {
+                        let name = p.procedural.as_ref().map_or("?", |p| p.name());
+                        self.stop(counts, format!("mask generator \"{name}\""));
+                        EffectKind::Generator(data::procedural(p.procedural.as_ref()))
                     }
-                });
+                    PainterSource::Reference(r) => {
+                        self.stop(counts, "mask reads an anchor".into());
+                        EffectKind::Reference(data::reference(r))
+                    }
+                    PainterSource::Other(raw) => {
+                        self.stop(counts, format!("mask source {}", raw.class));
+                        EffectKind::Unknown(data::unknown(raw))
+                    }
+                };
+                self.push(header, blend, kind, on);
+            }
+            PainterEffect::Filter(f) => {
+                let name = f.procedural.as_ref().map_or("?", |p| p.name());
+                self.stop(on, format!("mask filter \"{name}\""));
+                self.push(
+                    header,
+                    blend,
+                    EffectKind::Filter(data::procedural(f.procedural.as_ref())),
+                    on,
+                );
+            }
+            PainterEffect::Levels(l) => {
+                self.stop(on, "mask levels".into());
+                self.push(header, blend, EffectKind::Levels(data::levels(l.levels.as_ref())), on);
+            }
+            PainterEffect::ColorSelection(c) => {
+                self.stop(on, "mask colour selection".into());
+                self.push(header, blend, EffectKind::ColorSelection(data::color_selection(c)), on);
+            }
+            PainterEffect::PolygonFill(p) => {
+                self.stop(on, "mask polygon fill".into());
+                self.push(header, blend, polygon_fill(p), on);
+            }
+            PainterEffect::Other(raw) => {
+                self.stop(on, format!("mask effect {}", raw.class));
+                self.push(None, blend, EffectKind::Unknown(data::unknown(raw)), on);
             }
         }
-        Some(Mask::from_image(image))
+    }
+
+    /// A paint effect without pixels (strokes are not replayed yet).
+    fn empty_paint(&self) -> EffectKind<Grey> {
+        let (w, h) = self.evaluator.resolution;
+        match TiledImage::new(w, h, PAINT_FORMAT) {
+            Ok(image) => EffectKind::Paint(MaskPixels { image }),
+            Err(_) => EffectKind::Unknown(data::unknown_named("substance:paint", Value::object())),
+        }
     }
 }
 
-fn not_computable(why: String) -> MaskOutcome {
-    MaskOutcome {
-        mask: None,
-        status: Computability::not_computable(why),
-    }
+/// Painter's picks are not read yet: the selection is empty, the fill white.
+fn polygon_fill(_: &PolygonFillEffect) -> EffectKind<Grey> {
+    EffectKind::PolygonFill(PolygonFill {
+        selection: Selection::default(),
+        values: 1.0,
+    })
 }
 
-/// Blends `top` onto `grey` with the effect's mode and opacity, clamped to 0..1.
-fn blend_into(grey: &mut Grey, top: &Grey, blend: &ResolvedBlend) {
-    let mix = |b: f32, t: f32| {
-        let v = blend.mode().mix([b, b, b, 1.0], [t, t, t, 1.0], blend.opacity)[0];
-        if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
+/// The grey values (red × alpha) of `image` as a 16-bit grey image of `size`.
+fn grey_image(image: &TiledImage, size: (u32, u32)) -> TiledImage {
+    let values = grey_values(image);
+    let (w, h) = size;
+    let Ok(mut out) = TiledImage::new(w, h, MASK_FORMAT) else {
+        return image.clone();
     };
-    *grey = match (&*grey, top) {
-        (Grey::Constant(b), Grey::Constant(t)) => Grey::Constant(mix(*b, *t)),
-        (Grey::Constant(b), Grey::Pixels(t)) => Grey::Pixels(t.iter().map(|t| mix(*b, *t)).collect()),
-        (Grey::Pixels(b), Grey::Constant(t)) => Grey::Pixels(b.iter().map(|b| mix(*b, *t)).collect()),
-        (Grey::Pixels(b), Grey::Pixels(t)) => Grey::Pixels(b.iter().zip(t).map(|(b, t)| mix(*b, *t)).collect()),
-    };
+    let all = out.all_tiles();
+    out.update_tiles(&all, |r, px| {
+        for (i, p) in px.iter_mut().enumerate() {
+            let (x, y) = (r.x as usize + i % r.w as usize, r.y as usize + i / r.w as usize);
+            let v = values.get(y * w as usize + x).copied().unwrap_or(0.0);
+            *p = [v, v, v, 1.0];
+        }
+    });
+    out
 }

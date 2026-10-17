@@ -4,8 +4,9 @@
 //! - [`blend_table`]: the one mapping of Painter's blend values to ours, and Painter's defaults.
 //! - [`blending`]: the blend mode and opacity a channel gets from a stored list.
 //! - [`channels`]: declared channels on both sides; Painter's linear values in our encoding.
-//! - [`content`] and [`layer_content`]: a layer's effect stack → per-channel values → our layer kind.
-//! - [`mask`]: masks made of uniform/bitmap fills → mask images; [`images`]: bitmap resources.
+//! - [`content`] and [`layer_content`]: a layer's effect stack → per-channel values (what is computable).
+//! - [`effect_map`] and [`effect_data`]: Painter's effects → our base content and content effects, one to one.
+//! - [`mask`]: Painter masks → our mask stacks and their computability; [`images`]: bitmap resources.
 //! - [`stack_builder`]: the tree walk; [`verdict`] and [`computability`]: what is exact, per channel/layer.
 //! - [`cache_score`] and [`cache_agreement`]: a fully computable stack measured against Painter's cache.
 //! - [`strategy`]: the per-set decision between the real stack and Painter's flattened result.
@@ -18,6 +19,8 @@ pub mod cache_score;
 pub mod channels;
 pub mod computability;
 pub mod content;
+pub mod effect_data;
+pub mod effect_map;
 pub mod images;
 pub mod layer_content;
 pub mod mask;

@@ -3,7 +3,7 @@
 use super::fixtures::*;
 use crate::model::*;
 use crate::translate::layers::images::{ImageSource, LoadedImage};
-use materialcraft::paint::{Channel, LayerKind, PixelFormat, PixelLayout, SampleType, TiledImage};
+use materialcraft::paint::{Channel, EffectKind, LayerKind, PixelFormat, PixelLayout, SampleType, TiledImage};
 
 fn mask(initial: MaskInitial, effects: Vec<PainterEffect>) -> Option<PainterMask> {
     Some(PainterMask {
@@ -37,11 +37,14 @@ fn top(m: Option<PainterMask>) -> PainterLayer {
 }
 
 #[test]
-fn plain_masks_become_constant_images_or_nothing() {
+fn plain_masks_keep_their_state() {
     let white = import(base_and(top(mask(MaskInitial::White, vec![]))));
-    assert!(white.layers[1].mask.is_none(), "an all-white mask is no mask");
+    assert!(
+        white.layers[1].mask.as_ref().unwrap().is_identity(),
+        "an all-white mask changes nothing"
+    );
     let black = import(base_and(top(mask(MaskInitial::Black, vec![]))));
-    assert!(black.layers[1].mask.is_some());
+    assert_eq!(black.layers[1].mask.as_ref().unwrap().constant_value(), Some(0.0));
     assert!(composite(&black, Channel::Roughness, 2, 2)[0] < 1e-3);
     let quarter = mask_fill(uniform(0, [0.25; 3]), 2, 1.0);
     let grey = import(base_and(top(mask(MaskInitial::Black, vec![quarter]))));
@@ -51,14 +54,21 @@ fn plain_masks_become_constant_images_or_nothing() {
         enabled: false,
         ..mask(MaskInitial::Black, vec![]).unwrap()
     };
-    assert!(import(base_and(top(Some(off)))).layers[1].mask.is_none());
+    let off = import(base_and(top(Some(off))));
+    let m = off.layers[1].mask.as_ref().unwrap();
+    assert!(!m.enabled && m.is_identity(), "a switched-off mask is kept");
+    assert!((composite(&off, Channel::Roughness, 2, 2)[0] - 1.0).abs() < 0.01);
 }
 
 #[test]
 fn generator_masks_are_not_computable() {
     let generator = mask_fill(procedural(0, "mg_dirt"), 2, 1.0);
     let stack = import(base_and(top(mask(MaskInitial::Black, vec![generator]))));
-    assert!(stack.layers[1].mask.is_none());
+    let m = stack.layers[1].mask.as_ref().unwrap();
+    assert!(
+        matches!(&m.effects[0].kind, EffectKind::Generator(p) if p.id == "substance:mg_dirt"),
+        "{m:?}"
+    );
     let status = stack.verdict.channel(Channel::Roughness);
     assert_eq!(status.reasons(), ["mask generator \"mg_dirt\""]);
 }

@@ -146,7 +146,8 @@ pub fn provides_base(layers: &[Layer], channels: &SetChannels) -> bool {
                 .blend_for(channel)
                 .is_some_and(|b| matches!(b.mode, BlendMode::Normal | BlendMode::Replace) && b.opacity >= 1.0);
             let value = matches!(&l.kind, LayerKind::Fill(f) if f.uniform_value(channel).is_some());
-            l.visible && l.mask.is_none() && l.opacity >= 1.0 && full && value
+            let unmasked = l.mask.as_ref().is_none_or(|m| m.is_identity());
+            l.visible && unmasked && l.opacity >= 1.0 && full && value
         })
     })
 }

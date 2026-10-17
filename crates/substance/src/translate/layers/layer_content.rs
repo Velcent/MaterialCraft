@@ -46,14 +46,6 @@ pub fn core_content(
     }
 }
 
-/// The coverage the content adds on top of the layer's blending opacity (1 when not computable).
-pub fn content_coverage(value: &ChannelValue) -> f32 {
-    match value {
-        ChannelValue::Uniform { coverage, .. } | ChannelValue::Image { coverage, .. } => *coverage,
-        ChannelValue::Nothing => 1.0,
-    }
-}
-
 /// False for a normal value that is not the flat normal (images count as not flat).
 pub fn is_flat_normal(value: &ChannelValue) -> bool {
     match value {
@@ -116,6 +108,5 @@ mod tests {
         assert_eq!(p.images.len(), 2);
         assert!((p.image(Channel::Roughness).unwrap().get(3, 3)[0] - 0.25).abs() < 0.01);
         assert!(!is_flat_normal(&uniform(Channel::Normal, 0.5).value));
-        assert_eq!(content_coverage(&ChannelValue::Nothing), 1.0);
     }
 }
