@@ -1,8 +1,10 @@
 //! Opening, replacing and closing the document of the Paint screen.
 
 use super::document_state::OpenDocument;
+use super::import_review::{ImportReview, ReviewOutcome};
 use super::loader::{Loaded, Loader};
 use super::{PaintMode, Pick};
+use eframe::egui;
 use materialcraft::diag::{Area, SinkExt};
 use materialcraft::paint::diag_entries;
 use std::path::PathBuf;
@@ -18,7 +20,7 @@ impl PaintMode {
         };
         match dialog.pick_file() {
             Some(p) => {
-                self.open(p);
+                self.open_reviewed(p);
                 true
             }
             None => false,
@@ -29,6 +31,34 @@ impl PaintMode {
     pub fn open(&mut self, path: PathBuf) {
         self.diag.info(Area::Project, format!("Opening {}", path.display()));
         self.loader = Some(Loader::start(path));
+    }
+
+    /// Like [`PaintMode::open`], but a `.spp` first goes through the import review (which Substance
+    /// procedurals become MaterialCraft generators).
+    pub fn open_reviewed(&mut self, path: PathBuf) {
+        if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("spp")) {
+            return self.open(path);
+        }
+        self.diag.info(Area::Import, format!("Analysing {}", path.display()));
+        self.review = Some(ImportReview::start(path));
+    }
+
+    /// Advances the import review and starts the import once the user decided.
+    pub(super) fn poll_review(&mut self, ctx: &egui::Context) {
+        let Some(review) = self.review.as_mut() else { return };
+        match review.ui(ctx) {
+            ReviewOutcome::Pending => {}
+            ReviewOutcome::Cancelled => {
+                self.diag.info(Area::Import, format!("Import of {} cancelled.", review.source().display()));
+                self.review = None;
+            }
+            ReviewOutcome::Import(plan) => {
+                let path = review.source().to_path_buf();
+                self.review = None;
+                self.diag.info(Area::Project, format!("Opening {}", path.display()));
+                self.loader = Some(Loader::start_with(path, plan));
+            }
+        }
     }
 
     pub(super) fn poll_loader(&mut self) {

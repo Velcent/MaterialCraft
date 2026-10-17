@@ -3,6 +3,7 @@
 
 use super::events::LayerEvent;
 use eframe::egui::Ui;
+use materialcraft::generators;
 use materialcraft::paint::Layer;
 use materialcraft::paint::edit::ops::{MaskStart, NewEffect};
 use materialcraft::paint::edit::{LayerRef, StackId};
@@ -83,6 +84,12 @@ fn add_mask_items(ui: &mut Ui, title: &str, r: &LayerRef, events: &mut Vec<Layer
         for start in MaskStart::ALL {
             if ui.button(start.label()).clicked() {
                 events.push(LayerEvent::AddMask(r.clone(), start));
+                ui.close();
+            }
+        }
+        for (id, label) in generators::MASK_STARTS {
+            if ui.button(*label).clicked() {
+                events.push(LayerEvent::AddMask(r.clone(), MaskStart::Generator(id)));
                 ui.close();
             }
         }

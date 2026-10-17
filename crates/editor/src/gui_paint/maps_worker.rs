@@ -5,6 +5,7 @@
 use super::channel_view::ChannelView;
 use super::job::Job;
 use materialcraft::diag::Entry;
+use materialcraft::generators;
 use materialcraft::gpu3d::GpuMaps;
 use materialcraft::material_fill::MaterialFills;
 use materialcraft::paint::edit::LayerRef;
@@ -48,7 +49,7 @@ impl MapsWorker {
                     }
                     continue;
                 }
-                let maps = MaterialMaps::build_with_fills(ts, &OutputOptions::for_document(&doc), &fills);
+                let maps = MaterialMaps::build_with(ts, &OutputOptions::for_document(&doc), generators::builtin(), &fills);
                 if cancel.is_cancelled() {
                     return;
                 }

@@ -5,6 +5,7 @@ pub mod bakers;
 pub mod channel_bar;
 mod dock_content;
 pub mod import_report;
+pub mod import_review;
 mod interface_settings;
 pub mod layers;
 pub mod layout;

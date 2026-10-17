@@ -8,7 +8,8 @@ use super::cache;
 use super::job::CancelToken;
 use materialcraft::paint::Document;
 use materialcraft::paint::format::save_path;
-use materialcraft_substance::translate::{Cancel, ImportError, import_spp_cancellable};
+use materialcraft_substance::translate::replacements::ProceduralPlan;
+use materialcraft_substance::translate::{Cancel, ImportError, import_spp_with};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -29,6 +30,8 @@ pub struct SppImport {
     build: PathBuf,
     /// Where conversions are cached.
     cache_dir: PathBuf,
+    /// Which Substance procedurals become MaterialCraft generators (part of the cache key).
+    plan: ProceduralPlan,
 }
 
 impl SppImport {
@@ -38,13 +41,19 @@ impl SppImport {
 
     /// An importer caching its conversions in `cache_dir`.
     pub fn with_cache(cache_dir: PathBuf) -> SppImport {
-        SppImport { build: std::env::current_exe().unwrap_or_default(), cache_dir }
+        SppImport { build: std::env::current_exe().unwrap_or_default(), cache_dir, plan: ProceduralPlan::default() }
+    }
+
+    /// Builder: import with the procedural replacements of `plan`.
+    pub fn with_plan(mut self, plan: ProceduralPlan) -> SppImport {
+        self.plan = plan;
+        self
     }
 
     /// Opens the cached conversion of `spp`, or imports it and caches the result. Fails with [`CANCELLED`]
     /// soon after `cancel` is set.
     pub fn open(&self, spp: &Path, cancel: &CancelToken, progress: &mut dyn FnMut(f32, &str)) -> Result<Imported, String> {
-        let cached = cache::converted_path(&self.cache_dir, spp, &self.build);
+        let cached = with_plan_key(cache::converted_path(&self.cache_dir, spp, &self.build), &self.plan);
         if cached.is_file() {
             progress(IMPORT_SHARE, "Reading the cached conversion");
             let document = materialcraft::paint::format::load_path(&cached).map_err(|e| format!("Cannot read {}: {e}", cached.display()))?;
@@ -52,7 +61,7 @@ impl SppImport {
         }
         let start = Instant::now();
         let asked = || cancel.is_cancelled();
-        let document = match import_spp_cancellable(spp, &mut |f, m| progress(f * IMPORT_SHARE, m), Cancel::new(&asked)) {
+        let document = match import_spp_with(spp, &self.plan, &mut |f, m| progress(f * IMPORT_SHARE, m), Cancel::new(&asked)) {
             Ok(d) => d,
             Err(ImportError::Cancelled) => return Err(CANCELLED.into()),
             Err(e) => return Err(format!("Import failed: {e}")),
@@ -65,6 +74,19 @@ impl SppImport {
         let summary = summary(&document, imported, stored.err());
         Ok(Imported { document, summary })
     }
+}
+
+/// The cache file of a conversion with replacements: the plan's choices hashed into the name (the default
+/// plan keeps the plain name, so earlier conversions stay valid).
+fn with_plan_key(path: PathBuf, plan: &ProceduralPlan) -> PathBuf {
+    if *plan == ProceduralPlan::default() {
+        return path;
+    }
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    plan.key().hash(&mut h);
+    let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    path.with_file_name(format!("{stem}-plan{:08x}.mcpaint", h.finish() as u32))
 }
 
 fn summary(doc: &Document, seconds: f64, cache_error: Option<String>) -> String {

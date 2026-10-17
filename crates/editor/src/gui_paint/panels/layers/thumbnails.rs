@@ -5,7 +5,7 @@
 
 use crate::gui_paint::job::Job;
 use eframe::egui::{self, ColorImage, TextureHandle, TextureOptions};
-use materialcraft::paint::effect::EffectRegistry;
+use materialcraft::generators;
 use materialcraft::paint::layer_preview::PreviewGrid;
 use materialcraft::paint::{Channel, Layer, TextureSet};
 use materialcraft::tex::Tex;
@@ -96,14 +96,14 @@ impl Thumbnails {
         let repaint = ctx.clone();
         self.job = Some(Job::spawn(move |cancel, tx| {
             let grid = PreviewGrid::new(&shell, THUMB);
-            let effects = EffectRegistry::new();
+            let effects = generators::builtin();
             for layer in layers {
                 if cancel.is_cancelled() {
                     return;
                 }
                 let reduced = grid.reduce(&layer);
-                let content = grid.content(&reduced, channel, &effects);
-                let mask = grid.mask(&reduced, &effects);
+                let content = grid.content(&reduced, channel, effects);
+                let mask = grid.mask(&reduced, effects);
                 if tx.send(Computed { id: layer.id.clone(), snapshot: layer, content, mask }).is_err() {
                     return;
                 }

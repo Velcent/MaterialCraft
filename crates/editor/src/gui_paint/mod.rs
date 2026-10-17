@@ -20,6 +20,7 @@ mod documents;
 mod editing;
 mod eyedrop;
 mod geometry;
+mod import_review;
 mod isolate;
 mod job;
 mod launch;
@@ -90,6 +91,8 @@ pub enum Pick {
 pub struct PaintMode {
     document: Option<OpenDocument>,
     loader: Option<Loader>,
+    /// A `.spp` waiting for the import review.
+    review: Option<import_review::ImportReview>,
     scene: SceneSync,
     viewport: Viewport,
     display: ChannelView,
@@ -130,6 +133,7 @@ impl PaintMode {
         let mut pm = PaintMode {
             document: None,
             loader: None,
+            review: None,
             scene: SceneSync::default(),
             viewport: Viewport::new(diag.clone()),
             display: launch.channel.unwrap_or(ChannelView::Material),
@@ -168,8 +172,9 @@ impl PaintMode {
         let ctx = &ui.ctx().clone();
         self.shell.frame(ctx);
         if let Some(p) = window::dropped_document(ctx) {
-            self.open(p);
+            self.open_reviewed(p);
         }
+        self.poll_review(ctx);
         self.poll_loader();
         self.poll_bake();
         self.picking.poll(self.document.as_ref());
