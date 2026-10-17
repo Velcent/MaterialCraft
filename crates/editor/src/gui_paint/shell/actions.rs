@@ -53,6 +53,8 @@ pub const ACTIONS: &[ActionSpec] = &[
     press("paint.window.display_settings", "Show or hide Display settings", WINDOW, &[]),
     press("paint.window.shortcuts", "Show or hide Shortcuts", WINDOW, &["Mod+Alt+K"]),
     press("paint.window.interface_settings", "Show or hide Interface settings", WINDOW, &[]),
+    // Session log panel (roadmap step 29).
+    press("paint.window.log", "Show or hide Log", WINDOW, &[]),
     press("paint.layout.painting", "Painting layout", WINDOW, &[]),
     press("paint.layout.baking", "Baking layout", WINDOW, &["F8"]),
     press("paint.layout.reset", "Reset the current layout", WINDOW, &[]),
@@ -115,6 +117,7 @@ pub fn toggle_action(panel: PaintPanel) -> &'static str {
         PaintPanel::Display => "paint.window.display_settings",
         PaintPanel::Shortcuts => "paint.window.shortcuts",
         PaintPanel::Interface => "paint.window.interface_settings",
+        PaintPanel::Log => "paint.window.log",
     }
 }
 

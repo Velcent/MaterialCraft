@@ -73,4 +73,9 @@ impl OpenDocument {
         s.maps_ready = true;
         !std::mem::replace(&mut s.reported, true)
     }
+
+    /// The index of the texture set with `id`.
+    pub fn set_index(&self, id: &str) -> Option<usize> {
+        self.doc.texture_sets.iter().position(|s| s.id == id)
+    }
 }

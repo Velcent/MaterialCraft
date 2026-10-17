@@ -4,14 +4,15 @@ use super::super::document_state::OpenDocument;
 use super::PanelEvent;
 use eframe::egui::{self, Color32};
 
-pub fn show(ui: &mut egui::Ui, doc: &OpenDocument, events: &mut Vec<PanelEvent>) {
+/// `focus` is a set to highlight this frame (a log entry led to it), and whether to scroll to it.
+pub fn show(ui: &mut egui::Ui, doc: &OpenDocument, focus: Option<(usize, bool)>, events: &mut Vec<PanelEvent>) {
     if doc.doc().texture_sets.is_empty() {
         ui.weak("This document has no texture sets.");
         return;
     }
     egui::ScrollArea::vertical().id_salt("paint_sets").show(ui, |ui| {
         for (i, (set, state)) in doc.doc().texture_sets.iter().zip(&doc.sets).enumerate() {
-            ui.horizontal(|ui| {
+            let row = ui.horizontal(|ui| {
                 let mut visible = state.visible;
                 if ui.checkbox(&mut visible, "").on_hover_text("Show this texture set").changed() {
                     events.push(PanelEvent::SetVisible(i, visible));
@@ -24,9 +25,16 @@ pub fn show(ui: &mut egui::Ui, doc: &OpenDocument, events: &mut Vec<PanelEvent>)
                     }
                     ui.small(format!("{}x{}", set.resolution.0, set.resolution.1));
                 });
-            })
-            .response
-            .on_hover_text(details(set));
+            });
+            if let Some((set, scroll)) = focus
+                && set == i
+            {
+                ui.painter().rect_stroke(row.response.rect.expand(1.0), 2.0, egui::Stroke::new(1.5, crate::gui_theme::ACCENT), egui::StrokeKind::Outside);
+                if scroll {
+                    row.response.scroll_to_me(Some(egui::Align::Center));
+                }
+            }
+            row.response.on_hover_text(details(set));
         }
     });
 }

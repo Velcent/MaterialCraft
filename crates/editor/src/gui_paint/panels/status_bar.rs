@@ -41,7 +41,8 @@ pub fn show(ui: &mut egui::Ui, status: Option<&Entry>, activity: &Activity, even
     });
 }
 
-fn color(level: Level) -> Color32 {
+/// The look of each level (LG-02), shared with the log panel.
+pub fn color(level: Level) -> Color32 {
     match level {
         Level::Debug | Level::Info => Color32::from_gray(170),
         Level::Warning => Color32::from_rgb(230, 180, 90),

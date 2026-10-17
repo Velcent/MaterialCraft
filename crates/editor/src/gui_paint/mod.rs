@@ -17,6 +17,7 @@ mod loader;
 mod maps_worker;
 mod navigation;
 mod panels;
+mod reveal;
 mod scene_sync;
 pub mod shell;
 mod shot;
@@ -31,14 +32,17 @@ use document_state::OpenDocument;
 use eframe::egui;
 use launch::{Launch, StartDocument};
 use loader::{Loaded, Loader};
-use materialcraft::diag::{Area, RingBuffer, Sink, SinkExt};
+use materialcraft::diag::{Area, RingBuffer, Sink, SinkExt, Target};
 use materialcraft::paint::diag_entries;
 use panels::PanelEvent;
 use panels::import_report::ReportPanel;
 use panels::layout::Screen;
+use panels::log::LogPanel;
 use panels::status_bar::Activity;
+use reveal::{Destination, Focus};
 use scene_sync::SceneSync;
 use shell::Shell;
+use shell::panels::PaintPanel;
 use shot::ShotJob;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -70,6 +74,9 @@ pub struct PaintMode {
     viewport: Viewport,
     display: ChannelView,
     report: ReportPanel,
+    log: LogPanel,
+    /// The texture set a log entry led to, highlighted for a moment.
+    focus: Option<Focus>,
     /// Where status messages and errors go (the log file and the session history).
     diag: Arc<dyn Sink>,
     /// Docking, shortcuts, tools and the user settings they live in.
@@ -90,6 +97,8 @@ impl PaintMode {
             viewport: Viewport::new(diag.clone()),
             display: launch.channel.unwrap_or(ChannelView::Material),
             report: ReportPanel::default(),
+            log: LogPanel::default(),
+            focus: None,
             shell: Shell::new(settings, diag.clone()),
             diag,
             shot: launch.shot.map(ShotJob::new),
@@ -167,12 +176,20 @@ impl PaintMode {
     }
 
     fn draw(&mut self, ui: &mut egui::Ui, history: &RingBuffer) -> Vec<PanelEvent> {
+        let focus_set = self.focus.as_mut().and_then(Focus::frame);
+        if focus_set.is_some() {
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+        } else {
+            self.focus = None;
+        }
         let screen = Screen {
             document: self.document.as_ref(),
             report: &mut self.report,
             viewport: &mut self.viewport,
             display: self.display,
-            status: history.last().map(|(_, e)| e),
+            history,
+            log: &mut self.log,
+            focus_set,
             activity: Activity { loading: self.loader.as_ref().map(|l| l.progress()), maps: self.scene.progress() },
             shell: &mut self.shell,
         };
@@ -215,10 +232,35 @@ impl PaintMode {
                 self.loader = None;
                 self.diag.info(Area::Project, "Cancelled.");
             }
+            PanelEvent::Reveal(target) => self.reveal(&target),
             // Workspace events were handled by the shell.
             _ => {}
         }
         PaintAction::Stay
+    }
+
+    /// Goes to what a log entry concerns (LG-10).
+    fn reveal(&mut self, target: &Target) {
+        let set = match reveal::resolve(target, self.document.as_ref()) {
+            Destination::TextureSet(set) => set,
+            // Hook: the layer panel selects `layer` once it exists; until then its texture set is shown.
+            Destination::Layer { set, layer: _ } => set,
+            // Hook: the bake panel opens at `key` once it exists.
+            Destination::BakeSetting(key) => {
+                self.diag.info(Area::Bake, format!("The bake setting {key} has no panel to show it yet."));
+                return;
+            }
+            Destination::Nowhere(why) => {
+                self.diag.info(Area::General, why);
+                return;
+            }
+        };
+        if !self.shell.workspace.is_open(PaintPanel::TextureSets)
+            && let Err(e) = self.shell.workspace.open(PaintPanel::TextureSets)
+        {
+            self.diag.warn(Area::General, format!("The texture set list can't be shown: {e}."));
+        }
+        self.focus = Some(Focus::new(set));
     }
 
     fn show_channel(&mut self, view: ChannelView) {

@@ -1,5 +1,5 @@
 //! Arranges the Paint screen: menu and status bars, the tools and panel strips on the window
-//! edges, and the docking workspace (viewport, texture sets, import report, settings) between them.
+//! edges, and the docking workspace (viewport, texture sets, import report, log, settings) between them.
 
 use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
@@ -7,6 +7,7 @@ use super::super::shell::Shell;
 use super::super::viewport::Viewport;
 use super::dock_content::Bodies;
 use super::import_report::ReportPanel;
+use super::log::LogPanel;
 use super::status_bar::Activity;
 use super::{PanelEvent, Strip, menu_bar, panel_strip, status_bar, tools_strip};
 use crate::gui_settings::Side;
@@ -14,7 +15,7 @@ use crate::gui_theme;
 use crate::gui_widgets::strip::STRIP_WIDTH;
 use crate::gui_workspace::dock_style;
 use eframe::egui;
-use materialcraft::diag::Entry;
+use materialcraft::diag::RingBuffer;
 
 /// Everything one frame of the screen shows.
 pub struct Screen<'a> {
@@ -22,8 +23,11 @@ pub struct Screen<'a> {
     pub report: &'a mut ReportPanel,
     pub viewport: &'a mut Viewport,
     pub display: ChannelView,
-    /// The newest diagnostics entry, for the status bar.
-    pub status: Option<&'a Entry>,
+    /// The session's diagnostics: the newest entry for the status bar, all for the log panel.
+    pub history: &'a RingBuffer,
+    pub log: &'a mut LogPanel,
+    /// A texture set to highlight this frame.
+    pub focus_set: Option<(usize, bool)>,
     pub activity: Activity<'a>,
     pub shell: &'a mut Shell,
 }
@@ -34,7 +38,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
     let title = s.document.map(|d| d.name()).unwrap_or_default();
     let has_document = s.document.is_some();
     menu_bar::show(ui, &title, has_document, s.shell, &mut events);
-    status_bar::show(ui, s.status, &s.activity, &mut events);
+    status_bar::show(ui, s.history.last().map(|(_, e)| e), &s.activity, &mut events);
     let strip_frame = egui::Frame::NONE.fill(gui_theme::STRIP_BG);
     for strip in [Strip::Tools, Strip::Panels] {
         let id = match strip {
@@ -62,6 +66,9 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
             page: &mut shell.page,
             tools: &shell.tools,
             scale_draft: &mut shell.scale_draft,
+            log: s.log,
+            history: s.history,
+            focus_set: s.focus_set,
             events: &mut events,
         };
         if let Some(e) = shell.workspace.show(ui, &style, &mut bodies) {

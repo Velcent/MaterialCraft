@@ -10,8 +10,10 @@ use super::super::shell::panels::PaintPanel;
 use super::super::shell::tools::ToolState;
 use super::super::viewport::Viewport;
 use super::import_report::ReportPanel;
+use super::log::LogPanel;
 use super::{PanelEvent, interface_settings, texture_sets, view_settings, viewport_toolbar};
 use crate::gui_workspace::shortcuts::{ShortcutTable, ShortcutsPage};
+use materialcraft::diag::RingBuffer;
 
 /// Everything the panel bodies need for one frame.
 pub struct Bodies<'a> {
@@ -23,6 +25,11 @@ pub struct Bodies<'a> {
     pub page: &'a mut ShortcutsPage,
     pub tools: &'a ToolState,
     pub scale_draft: &'a mut f32,
+    pub log: &'a mut LogPanel,
+    /// The session's diagnostics, for the log panel.
+    pub history: &'a RingBuffer,
+    /// A texture set to highlight this frame (going to a log entry's target).
+    pub focus_set: Option<(usize, bool)>,
     pub events: &'a mut Vec<PanelEvent>,
 }
 
@@ -33,7 +40,7 @@ impl DockContent<PaintPanel> for Bodies<'_> {
             PaintPanel::Viewport => self.viewport_body(ui),
             PaintPanel::TextureSets => {
                 margin.show(ui, |ui| match self.document {
-                    Some(doc) => texture_sets::show(ui, doc, self.events),
+                    Some(doc) => texture_sets::show(ui, doc, self.focus_set, self.events),
                     None => no_document(ui),
                 });
             }
@@ -60,6 +67,9 @@ impl DockContent<PaintPanel> for Bodies<'_> {
             }
             PaintPanel::Interface => {
                 margin.show(ui, |ui| interface_settings::show(ui, self.scale_draft, self.events));
+            }
+            PaintPanel::Log => {
+                margin.show(ui, |ui| self.log.show(ui, self.history, self.events));
             }
         }
     }

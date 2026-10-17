@@ -18,6 +18,8 @@ pub enum Icon {
     Display,
     Keyboard,
     Interface,
+    /// The session log.
+    Log,
     Viewport,
     More,
 }
@@ -91,6 +93,12 @@ impl Icon {
                     painter.circle_filled(p(x, y), s * 0.07, color);
                 }
                 poly(&[p(-0.35, 0.2), p(0.35, 0.2)]);
+            }
+            Icon::Log => {
+                for (dy, w) in [(-0.45, 0.5), (-0.15, 0.3), (0.15, 0.55), (0.45, 0.2)] {
+                    painter.circle_filled(p(-0.55, dy), s * 0.08, color);
+                    poly(&[p(-0.3, dy), p(-0.3 + w + 0.3, dy)]);
+                }
             }
             Icon::Interface => {
                 for (dy, x) in [(-0.4, 0.2), (0.0, -0.3), (0.4, 0.4)] {

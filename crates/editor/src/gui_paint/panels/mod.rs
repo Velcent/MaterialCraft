@@ -6,6 +6,7 @@ mod dock_content;
 pub mod import_report;
 mod interface_settings;
 pub mod layout;
+pub mod log;
 pub mod menu_bar;
 mod panel_strip;
 pub mod status_bar;
@@ -19,6 +20,7 @@ use super::shell::panels::PaintPanel;
 use super::shell::tools::Tool;
 use crate::gui_settings::Side;
 use crate::gui_workspace::shortcuts::PageEdit;
+use materialcraft::diag::Target;
 
 /// One of the two vertical strips.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -60,4 +62,6 @@ pub enum PanelEvent {
     SetUiScale(f32),
     /// The workspace refused a docking change (shown in the status bar).
     DockRefused(String),
+    /// Go to what a log entry concerns (LG-10).
+    Reveal(Target),
 }
