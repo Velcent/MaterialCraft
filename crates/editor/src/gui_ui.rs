@@ -636,7 +636,7 @@ impl App {
             Act::SaveAs => self.save_as(),
             Act::Publish => self.publish(),
             Act::ImportBitmap => self.import_bitmap(),
-            Act::Export => self.export.open = true,
+            Act::Export => self.open_export(),
             Act::Bake => self.bake.open = true,
             Act::Undo => self.undo(),
             Act::Redo => self.redo(),

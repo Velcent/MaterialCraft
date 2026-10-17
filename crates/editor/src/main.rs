@@ -1129,6 +1129,17 @@ impl App {
         }
     }
 
+    /// Opens the export dialog with the 16-bit box preselected from the root graph's output format
+    /// (q-export-depth-default); the box decides the export from then on.
+    fn open_export(&mut self) {
+        if self.export.open {
+            return;
+        }
+        let root = self.parents.first().map_or(&self.g, |(g, _)| g);
+        self.export.depth16 = root.meta.get("output_format").is_some_and(|f| f == "16");
+        self.export.open = true;
+    }
+
     fn run_export(&mut self) {
         self.goto_root();
         let Some(dir) = self.export.dir.clone() else {
