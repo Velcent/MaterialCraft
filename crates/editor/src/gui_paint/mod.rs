@@ -2,8 +2,9 @@
 //!
 //! [`PaintMode`] is the only type the rest of the editor sees. It wires small components together:
 //! [`loader::Loader`] reads documents (and imports `.spp` in-process), [`scene_sync::SceneSync`]
-//! keeps the GPU scene in step with the document, [`viewport::Viewport`] draws it and the
-//! [`panels`] turn clicks into [`panels::PanelEvent`]s that are applied here.
+//! keeps the GPU scene in step with the document, [`viewport::Viewport`] draws it, the
+//! [`shell::Shell`] holds the docking workspace, shortcuts and settings, and the [`panels`] turn
+//! clicks and key presses into [`panels::PanelEvent`]s that are applied here.
 
 mod cache;
 mod channel_view;
@@ -14,14 +15,17 @@ mod job;
 mod launch;
 mod loader;
 mod maps_worker;
+mod navigation;
 mod panels;
 mod scene_sync;
+pub mod shell;
 mod shot;
 mod spp_import;
 mod unlit;
 mod viewport;
 mod window;
 
+use crate::gui_settings::UserSettings;
 use channel_view::ChannelView;
 use document_state::OpenDocument;
 use eframe::egui;
@@ -33,6 +37,7 @@ use panels::import_report::ReportPanel;
 use panels::layout::Screen;
 use panels::status_bar::Activity;
 use scene_sync::SceneSync;
+use shell::Shell;
 use shot::ShotJob;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -66,14 +71,16 @@ pub struct PaintMode {
     report: ReportPanel,
     /// Where status messages and errors go (the log file and the session history).
     diag: Arc<dyn Sink>,
+    /// Docking, shortcuts, tools and the user settings they live in.
+    shell: Shell,
     shot: Option<ShotJob>,
     title: WindowTitle,
 }
 
 impl PaintMode {
     /// Paint mode configured from the command line (`--paint`, `--paint-demo`, `--shot`, `--channel`);
-    /// its messages go to `diag`.
-    pub fn from_args(diag: Arc<dyn Sink>) -> PaintMode {
+    /// its messages go to `diag`, its workspace is kept in `settings`.
+    pub fn from_args(diag: Arc<dyn Sink>, settings: UserSettings) -> PaintMode {
         let launch = Launch::from_args(std::env::args().skip(1));
         let mut pm = PaintMode {
             document: None,
@@ -82,6 +89,7 @@ impl PaintMode {
             viewport: Viewport::new(),
             display: launch.channel.unwrap_or(ChannelView::Material),
             report: ReportPanel::default(),
+            shell: Shell::new(settings, diag.clone()),
             diag,
             shot: launch.shot.map(ShotJob::new),
             title: WindowTitle::default(),
@@ -126,6 +134,7 @@ impl PaintMode {
     /// bar shows the newest entry).
     pub fn ui(&mut self, ui: &mut egui::Ui, history: &RingBuffer) -> PaintAction {
         let ctx = &ui.ctx().clone();
+        self.shell.frame(ctx);
         if let Some(p) = window::dropped_document(ctx) {
             self.open(p);
         }
@@ -136,7 +145,8 @@ impl PaintMode {
                 self.diag.error(Area::Gpu, e);
             }
         }
-        let events = self.draw(ui, history);
+        let mut events = self.shell.take_shortcuts(ctx);
+        events.extend(self.draw(ui, history));
         let mut action = PaintAction::Stay;
         for ev in events {
             if self.apply(ev) == PaintAction::Home {
@@ -163,11 +173,15 @@ impl PaintMode {
             display: self.display,
             status: history.last().map(|(_, e)| e),
             activity: Activity { loading: self.loader.as_ref().map(|l| l.progress()), maps: self.scene.progress() },
+            shell: &mut self.shell,
         };
         panels::layout::show(ui, screen)
     }
 
     fn apply(&mut self, ev: PanelEvent) -> PaintAction {
+        let Some(ev) = self.shell.apply(ev, self.document.is_some()) else {
+            return PaintAction::Stay;
+        };
         match ev {
             PanelEvent::Open => {
                 self.pick(Pick::Any);
@@ -181,10 +195,13 @@ impl PaintMode {
                 return PaintAction::Home;
             }
             PanelEvent::ResetCamera => self.viewport.reset_camera(),
-            PanelEvent::ShowChannel(view) => {
-                self.display = view;
-                if let Some(doc) = &mut self.document {
-                    self.scene.remap(doc, view);
+            PanelEvent::ShowChannel(view) => self.show_channel(view),
+            PanelEvent::CycleChannel(step) => {
+                let all = ChannelView::ALL;
+                let at = all.iter().position(|(v, _)| *v == self.display).unwrap_or(0) as i64;
+                let next = (at + i64::from(step)).rem_euclid(all.len() as i64) as usize;
+                if let Some((view, _)) = all.get(next) {
+                    self.show_channel(*view);
                 }
             }
             PanelEvent::SetVisible(set, visible) => {
@@ -197,8 +214,27 @@ impl PaintMode {
                 self.loader = None;
                 self.diag.info(Area::Project, "Cancelled.");
             }
+            // Workspace events were handled by the shell.
+            _ => {}
         }
         PaintAction::Stay
+    }
+
+    fn show_channel(&mut self, view: ChannelView) {
+        self.display = view;
+        if let Some(doc) = &mut self.document {
+            self.scene.remap(doc, view);
+        }
+    }
+
+    /// The interface scale the user chose (applied to the whole editor at start-up).
+    pub fn ui_scale(&self) -> f32 {
+        self.shell.ui_scale()
+    }
+
+    /// Saves the workspace and settings (on exit).
+    pub fn flush(&mut self) {
+        self.shell.flush();
     }
 
     fn poll_loader(&mut self) {

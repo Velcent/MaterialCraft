@@ -1,36 +1,91 @@
-//! The Paint screen's menu bar.
+//! The Paint screen's menu bar. Entries show their current shortcut from the table.
 
+use super::super::channel_view::ChannelView;
+use super::super::shell::Shell;
+use super::super::shell::actions;
+use super::super::shell::panels::PaintPanel;
 use super::PanelEvent;
-use eframe::egui::{self, Color32};
+use crate::gui_workspace::PanelKind;
+use eframe::egui::{self, Color32, Id, Ui};
 
 /// Draws the menu bar; `has_document` enables the document entries.
-pub fn show(ui: &mut egui::Ui, title: &str, has_document: bool, events: &mut Vec<PanelEvent>) {
+pub fn show(ui: &mut Ui, title: &str, has_document: bool, shell: &Shell, events: &mut Vec<PanelEvent>) {
     let frame = egui::Frame::NONE.fill(Color32::from_rgb(34, 34, 34)).inner_margin(egui::Margin::symmetric(6, 2));
     egui::Panel::top("paint_menu").frame(frame).show(ui, |ui| {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
-                let mut item = |ui: &mut egui::Ui, label: &str, enabled: bool, ev: PanelEvent| {
-                    if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
-                        events.push(ev);
-                        ui.close();
-                    }
-                };
-                item(ui, "Open in Paint mode...", true, PanelEvent::Open);
-                item(ui, "Import Substance Painter project...", true, PanelEvent::Import);
-                item(ui, "Close document", has_document, PanelEvent::Close);
+                item(ui, shell, events, "Open in Paint mode...", "paint.open", true, PanelEvent::Open);
+                item(ui, shell, events, "Import Substance Painter project...", "paint.import", true, PanelEvent::Import);
+                item(ui, shell, events, "Close document", "paint.close", has_document, PanelEvent::Close);
                 ui.separator();
-                item(ui, "Home screen", true, PanelEvent::Home);
+                item(ui, shell, events, "Home screen", "paint.home", true, PanelEvent::Home);
             });
             ui.menu_button("View", |ui| {
-                if ui.add_enabled(has_document, egui::Button::new("Reset camera")).clicked() {
-                    events.push(PanelEvent::ResetCamera);
-                    ui.close();
+                item(ui, shell, events, "Reset camera", "paint.view.reset_camera", has_document, PanelEvent::ResetCamera);
+                item(ui, shell, events, "Show the material", "paint.view.material", has_document, PanelEvent::ShowChannel(ChannelView::Material));
+                item(ui, shell, events, "Next channel", "paint.view.next_channel", has_document, PanelEvent::CycleChannel(1));
+                item(ui, shell, events, "Previous channel", "paint.view.previous_channel", has_document, PanelEvent::CycleChannel(-1));
+            });
+            ui.menu_button("Window", |ui| {
+                for p in PaintPanel::ALL.iter().copied().filter(|p| !p.is_canvas()) {
+                    let label = format!("{} {}", if shell.workspace.is_open(p) { "✔" } else { "    " }, p.title());
+                    item(ui, shell, events, &label, actions::toggle_action(p), true, PanelEvent::TogglePanel(p));
                 }
+                ui.separator();
+                layouts_menu(ui, shell, events);
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(egui::RichText::new(title).color(Color32::from_gray(170)));
                 ui.label(egui::RichText::new("PAINT").strong().color(crate::gui_theme::ACCENT));
             });
         });
+    });
+}
+
+/// A menu entry with its shortcut.
+fn item(ui: &mut Ui, shell: &Shell, events: &mut Vec<PanelEvent>, label: &str, action: &str, enabled: bool, ev: PanelEvent) {
+    if ui.add_enabled(enabled, egui::Button::new(label).shortcut_text(shell.shortcuts.label(action))).clicked() {
+        events.push(ev);
+        ui.close();
+    }
+}
+
+/// Choosing, saving, resetting and deleting named layouts (WS-05).
+fn layouts_menu(ui: &mut Ui, shell: &Shell, events: &mut Vec<PanelEvent>) {
+    ui.menu_button("Layouts", |ui| {
+        for (name, _) in shell.layout_names() {
+            let action = format!("paint.layout.{}", name.to_lowercase());
+            let key = shell.shortcuts.label(&action);
+            if ui.add(egui::Button::selectable(name == shell.layout_name, name.as_str()).shortcut_text(key)).clicked() {
+                events.push(PanelEvent::SwitchLayout(name.clone()));
+                ui.close();
+            }
+        }
+        ui.separator();
+        if ui
+            .add(egui::Button::new("Reset layout").shortcut_text(shell.shortcuts.label("paint.layout.reset")))
+            .on_hover_text("Back to the layout as it was saved")
+            .clicked()
+        {
+            events.push(PanelEvent::ResetLayout);
+            ui.close();
+        }
+        let is_saved = shell.layout_names().iter().any(|(n, saved)| *saved && *n == shell.layout_name);
+        if is_saved && ui.button(format!("Delete \"{}\"", shell.layout_name)).on_hover_text("Built-in layouts come back as they were").clicked() {
+            events.push(PanelEvent::DeleteLayout(shell.layout_name.clone()));
+            ui.close();
+        }
+        ui.separator();
+        let id = Id::new("paint_layout_name");
+        let mut name: String = ui.data(|d| d.get_temp(id)).unwrap_or_default();
+        ui.horizontal(|ui| {
+            let edit = ui.add(egui::TextEdit::singleline(&mut name).hint_text("New layout name").desired_width(140.0));
+            let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            if (ui.add_enabled(!name.trim().is_empty(), egui::Button::new("Save")).clicked() || enter) && !name.trim().is_empty() {
+                events.push(PanelEvent::SaveLayout(std::mem::take(&mut name)));
+                ui.close();
+            }
+        });
+        ui.data_mut(|d| d.insert_temp(id, name));
     });
 }

@@ -5,12 +5,11 @@ use super::PanelEvent;
 use eframe::egui::{self, Color32};
 
 pub fn show(ui: &mut egui::Ui, doc: &OpenDocument, events: &mut Vec<PanelEvent>) {
-    crate::gui_theme::panel_header(ui, &format!("TEXTURE SETS ({})", doc.sets.len()), false);
     if doc.doc().texture_sets.is_empty() {
         ui.weak("This document has no texture sets.");
         return;
     }
-    egui::ScrollArea::vertical().id_salt("paint_sets").max_height(ui.available_height() * 0.45).show(ui, |ui| {
+    egui::ScrollArea::vertical().id_salt("paint_sets").show(ui, |ui| {
         for (i, (set, state)) in doc.doc().texture_sets.iter().zip(&doc.sets).enumerate() {
             ui.horizontal(|ui| {
                 let mut visible = state.visible;

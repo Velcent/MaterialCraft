@@ -1,12 +1,18 @@
-//! Arranges the panels of the Paint screen: menu and status bars, texture sets and import report on
-//! the left, view settings on the right, display modes and the viewport in the middle.
+//! Arranges the Paint screen: menu and status bars, the tools and panel strips on the window
+//! edges, and the docking workspace (viewport, texture sets, import report, settings) between them.
 
 use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
+use super::super::shell::Shell;
 use super::super::viewport::Viewport;
+use super::dock_content::Bodies;
 use super::import_report::ReportPanel;
 use super::status_bar::Activity;
-use super::{PANEL_FILL, PanelEvent, channel_bar, menu_bar, status_bar, texture_sets, view_settings};
+use super::{PanelEvent, Strip, menu_bar, panel_strip, status_bar, tools_strip};
+use crate::gui_settings::Side;
+use crate::gui_theme;
+use crate::gui_widgets::strip::STRIP_WIDTH;
+use crate::gui_workspace::dock_style;
 use eframe::egui;
 use materialcraft::diag::Entry;
 
@@ -19,39 +25,54 @@ pub struct Screen<'a> {
     /// The newest diagnostics entry, for the status bar.
     pub status: Option<&'a Entry>,
     pub activity: Activity<'a>,
+    pub shell: &'a mut Shell,
 }
 
 /// Draws the screen and returns what the user asked for.
 pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
     let mut events = Vec::new();
     let title = s.document.map(|d| d.name()).unwrap_or_default();
-    menu_bar::show(ui, &title, s.document.is_some(), &mut events);
+    let has_document = s.document.is_some();
+    menu_bar::show(ui, &title, has_document, s.shell, &mut events);
     status_bar::show(ui, s.status, &s.activity, &mut events);
-    let side = egui::Frame::NONE.fill(PANEL_FILL).inner_margin(egui::Margin::same(4));
-    if let Some(doc) = s.document {
-        egui::Panel::left("paint_left").frame(side).default_size(300.0).show(ui, |ui| {
-            texture_sets::show(ui, doc, &mut events);
-            ui.add_space(8.0);
-            s.report.show(ui, doc.doc().import_report.as_ref(), doc.summary.as_deref());
-        });
-        egui::Panel::right("paint_right").frame(side).default_size(250.0).show(ui, |ui| {
-            let (view, gpu) = s.viewport.settings_mut();
-            view_settings::show(ui, view, gpu);
+    let strip_frame = egui::Frame::NONE.fill(gui_theme::STRIP_BG);
+    for strip in [Strip::Tools, Strip::Panels] {
+        let id = match strip {
+            Strip::Tools => "paint_tools_strip",
+            Strip::Panels => "paint_panel_strip",
+        };
+        let panel = match s.shell.strip_side(strip) {
+            Side::Left => egui::Panel::left(id),
+            Side::Right => egui::Panel::right(id),
+        };
+        panel.frame(strip_frame).exact_size(STRIP_WIDTH).resizable(false).show(ui, |ui| match strip {
+            Strip::Tools => tools_strip::show(ui, s.shell, has_document, &mut events),
+            Strip::Panels => panel_strip::show(ui, s.shell, &mut events),
         });
     }
-    egui::CentralPanel::default().frame(egui::Frame::NONE.fill(PANEL_FILL)).show(ui, |ui| {
-        if s.document.is_some() {
-            channel_bar::show(ui, s.display, &mut events);
-            s.viewport.ui(ui, s.display);
-        } else {
-            empty_state(ui, &mut events);
+    egui::CentralPanel::default().frame(egui::Frame::NONE.fill(gui_theme::BORDER)).show(ui, |ui| {
+        let style = dock_style(ui);
+        let shell = &mut *s.shell;
+        let mut bodies = Bodies {
+            document: s.document,
+            report: s.report,
+            viewport: s.viewport,
+            display: s.display,
+            shortcuts: &shell.shortcuts,
+            page: &mut shell.page,
+            tools: &shell.tools,
+            scale_draft: &mut shell.scale_draft,
+            events: &mut events,
+        };
+        if let Some(e) = shell.workspace.show(ui, &style, &mut bodies) {
+            events.push(PanelEvent::DockRefused(e));
         }
     });
     events
 }
 
-/// Shown when no document is open.
-fn empty_state(ui: &mut egui::Ui, events: &mut Vec<PanelEvent>) {
+/// Shown in the viewport when no document is open.
+pub fn empty_state(ui: &mut egui::Ui, events: &mut Vec<PanelEvent>) {
     ui.vertical_centered(|ui| {
         ui.add_space(ui.available_height() * 0.35);
         ui.label(egui::RichText::new("Paint mode").size(19.0).strong().color(egui::Color32::from_gray(235)));

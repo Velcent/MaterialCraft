@@ -1,26 +1,31 @@
-//! [`Viewport`]: the 3D view of the Paint screen. Camera input works like the node editor's 3D view
-//! (drag: orbit, Alt+drag or middle: pan, Shift+drag: light, wheel: zoom); drawing goes through the
-//! shared GPU renderer in an egui paint callback.
+//! [`Viewport`]: the 3D view of the Paint screen. Navigation follows the shortcut table (by
+//! default Alt+left orbit, Alt+Shift+left orbit snapping to axis views, Alt+middle pan,
+//! Alt+right or the wheel zoom, Shift+right turns the light; ADR 0008 mc2-vq12); drawing goes
+//! through the shared GPU renderer in an egui paint callback.
 
 use super::channel_view::ChannelView;
+use super::navigation;
+use super::shell::actions;
+use crate::gui_workspace::shortcuts::ShortcutTable;
 use eframe::egui::{self, Align2, Color32, FontId, PointerButton, Sense};
 use materialcraft::gpu3d::{self, Shared};
 use materialcraft::render3d::{RELIEF_NONE, View};
 use std::sync::Arc;
 
 const BACKGROUND: Color32 = crate::gui_theme::HEADER_BG;
-const HINT: &str = "drag: orbit   Alt+drag / middle: move   Shift+drag: light   wheel: zoom";
 
 pub struct Viewport {
     gpu: Shared,
     /// Camera, light and relief settings.
     view: View,
+    /// The unsnapped yaw and pitch during a snapping orbit.
+    snap: Option<(f32, f32)>,
 }
 
 impl Viewport {
     pub fn new() -> Viewport {
         // Painter shows height through the normal map; displacement stays opt-in.
-        Viewport { gpu: gpu3d::new_shared(), view: View { relief: RELIEF_NONE, ..View::default() } }
+        Viewport { gpu: gpu3d::new_shared(), view: View { relief: RELIEF_NONE, ..View::default() }, snap: None }
     }
 
     pub fn gpu(&self) -> &Shared {
@@ -44,11 +49,11 @@ impl Viewport {
         (self.view.light_yaw, self.view.light_pitch) = (d.light_yaw, d.light_pitch);
     }
 
-    /// Fills the remaining space of `ui` with the view.
-    pub fn ui(&mut self, ui: &mut egui::Ui, display: ChannelView) {
+    /// Fills the remaining space of `ui` with the view; `keys` decides the navigation gestures.
+    pub fn ui(&mut self, ui: &mut egui::Ui, display: ChannelView, keys: &ShortcutTable) {
         let (rect, resp) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
         ui.painter().rect_filled(rect, 0.0, BACKGROUND);
-        self.camera_input(ui, &resp);
+        self.camera_input(ui, &resp, keys);
         let error = self.gpu.lock().ok().and_then(|g| g.error.clone());
         match error {
             None => {
@@ -62,31 +67,52 @@ impl Viewport {
             }
         }
         let corner = rect.left_bottom() + egui::vec2(6.0, -5.0);
-        ui.painter().text(corner, Align2::LEFT_BOTTOM, HINT, FontId::proportional(10.0), Color32::from_gray(110));
+        ui.painter().text(corner, Align2::LEFT_BOTTOM, hint(keys), FontId::proportional(10.0), Color32::from_gray(110));
     }
 
-    fn camera_input(&mut self, ui: &egui::Ui, resp: &egui::Response) {
+    fn camera_input(&mut self, ui: &egui::Ui, resp: &egui::Response, keys: &ShortcutTable) {
+        let mods = ui.input(|i| i.modifiers);
+        let gesture = if resp.dragged() {
+            [PointerButton::Primary, PointerButton::Secondary, PointerButton::Middle, PointerButton::Extra1, PointerButton::Extra2]
+                .into_iter()
+                .find(|b| resp.dragged_by(*b))
+                .and_then(|b| keys.drag(mods, b))
+        } else {
+            None
+        };
         let v = &mut self.view;
-        if resp.dragged() {
-            let d = resp.drag_delta();
-            let (alt, shift) = ui.input(|i| (i.modifiers.alt, i.modifiers.shift));
-            if alt || resp.dragged_by(PointerButton::Middle) {
-                let k = 0.004 * v.dist / 3.4;
-                v.pan_x = (v.pan_x - d.x * k).clamp(-3.0, 3.0);
-                v.pan_y = (v.pan_y + d.y * k).clamp(-3.0, 3.0);
-            } else if shift {
-                v.light_yaw -= d.x * 0.01;
-                v.light_pitch = (v.light_pitch + d.y * 0.01).clamp(-1.4, 1.4);
-            } else {
-                v.yaw -= d.x * 0.01;
-                v.pitch = (v.pitch + d.y * 0.01).clamp(-1.4, 1.4);
+        let d = resp.drag_delta();
+        match gesture {
+            Some(actions::ORBIT) => navigation::orbit(v, d.x, d.y),
+            Some(actions::ORBIT_SNAP) => {
+                let raw = self.snap.get_or_insert((v.yaw, v.pitch));
+                navigation::orbit_snapped(v, raw, d.x, d.y);
             }
+            Some(actions::PAN) => navigation::pan(v, d.x, d.y),
+            Some(actions::ZOOM) => navigation::zoom(v, -d.y * 5.0),
+            Some(actions::LIGHT) => navigation::light(v, d.x, d.y),
+            _ => {}
         }
-        if resp.hovered() {
+        if gesture != Some(actions::ORBIT_SNAP) {
+            self.snap = None;
+        }
+        if resp.hovered() && keys.wheel(mods) == Some(actions::ZOOM) {
             let scroll = ui.input(|i| crate::gui_input::raw_scroll_delta(i).y);
             if scroll != 0.0 {
-                v.dist = (v.dist * (1.0 - scroll * 0.001)).clamp(1.6, 9.0);
+                navigation::zoom(&mut self.view, scroll);
             }
         }
     }
+}
+
+/// The navigation hint in the view's corner, from the current bindings.
+fn hint(keys: &ShortcutTable) -> String {
+    [(actions::ORBIT, "orbit"), (actions::PAN, "pan"), (actions::ZOOM, "zoom"), (actions::LIGHT, "light")]
+        .iter()
+        .filter_map(|(id, what)| {
+            let k = keys.label(id);
+            (!k.is_empty()).then(|| format!("{k}: {what}"))
+        })
+        .collect::<Vec<_>>()
+        .join("   ")
 }

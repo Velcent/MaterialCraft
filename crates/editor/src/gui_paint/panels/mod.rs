@@ -2,21 +2,33 @@
 //! for as [`PanelEvent`]s; `PaintMode` applies them.
 
 pub mod channel_bar;
+mod dock_content;
 pub mod import_report;
+mod interface_settings;
 pub mod layout;
 pub mod menu_bar;
+mod panel_strip;
 pub mod status_bar;
 pub mod texture_sets;
+mod tools_strip;
 pub mod view_settings;
+mod viewport_toolbar;
 
 use super::channel_view::ChannelView;
-use eframe::egui::Color32;
+use super::shell::panels::PaintPanel;
+use super::shell::tools::Tool;
+use crate::gui_settings::Side;
+use crate::gui_workspace::shortcuts::PageEdit;
 
-/// Fill of the side panels (as in the node editor).
-pub const PANEL_FILL: Color32 = Color32::from_rgb(40, 40, 40);
+/// One of the two vertical strips.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Strip {
+    Tools,
+    Panels,
+}
 
 /// A request from a panel.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum PanelEvent {
     /// Pick a `.mcpaint` or `.spp` file.
     Open,
@@ -29,4 +41,23 @@ pub enum PanelEvent {
     SetVisible(usize, bool),
     /// Cancel the running load or import.
     CancelLoad,
+    /// Step through the view modes (+1 next, -1 previous).
+    CycleChannel(i32),
+    /// Show or hide a panel where it was.
+    TogglePanel(PaintPanel),
+    /// The panel strip's button: show or hide the panel as a popover at `[x, y, w, h]`.
+    Popover(PaintPanel, [f32; 4]),
+    SwitchLayout(String),
+    /// Save the current layout under a name.
+    SaveLayout(String),
+    DeleteLayout(String),
+    /// Go back to the current layout as it was saved.
+    ResetLayout,
+    MoveStrip(Strip, Side),
+    SelectTool(Tool),
+    PreviousTool,
+    Shortcut(PageEdit),
+    SetUiScale(f32),
+    /// The workspace refused a docking change (shown in the status bar).
+    DockRefused(String),
 }

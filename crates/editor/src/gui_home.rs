@@ -1960,6 +1960,10 @@ impl App {
 }
 
 impl eframe::App for App {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.paint.flush();
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = &ui.ctx().clone();
         self.diag.drain();
@@ -2254,6 +2258,23 @@ fn window_icon() -> egui::IconData {
     egui::IconData { rgba, width: n as u32, height: n as u32 }
 }
 
+/// Diagnostics and user settings, set up before the window opens. The log file lives next to
+/// the settings (`<settings dir>/logs`); with settings in memory only, there is no log file.
+fn boot() -> (logging::Diagnostics, gui_settings::UserSettings) {
+    use materialcraft::diag::{Area, SinkExt};
+    let diag = logging::Diagnostics::start();
+    let (settings, problems) = gui_settings::UserSettings::open(craft_settings::Location::Auto);
+    if let Some(dir) = settings.dir()
+        && let Err(e) = diag.attach_dir(&dir.join("logs"))
+    {
+        log::warn!("no log file: {e}");
+    }
+    for p in problems {
+        diag.sink().warn(Area::General, p);
+    }
+    (diag, settings)
+}
+
 fn main() -> eframe::Result<()> {
     // 4x MSAA + depth buffer for the GPU viewport; fall back to no MSAA on drivers that cannot provide it.
     let make = |msaa: u16| eframe::NativeOptions {
@@ -2263,13 +2284,9 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
     // Logging starts before the window, so start-up messages (GL context, portal) are kept.
-    let diag = logging::Diagnostics::start();
-    if let Err(e) = diag.attach_dir(&config_dir().join("logs")) {
-        log::warn!("no log file: {e}");
-    }
-    // The fallback run gets the same diagnostics if the first one never created the app.
-    let diag = std::cell::RefCell::new(Some(diag));
-    let take = || diag.borrow_mut().take().unwrap_or_else(logging::Diagnostics::start);
+    let state = std::cell::RefCell::new(Some(boot()));
+    // The fallback run gets the same state if the first one never created the app.
+    let take = || state.borrow_mut().take().unwrap_or_else(boot);
     match eframe::run_native("MaterialCraft", make(4), Box::new(|cc| Ok(Box::new(App::new(cc, take()))))) {
         Err(eframe::Error::NoGlutinConfigs(..)) => eframe::run_native("MaterialCraft", make(0), Box::new(|cc| Ok(Box::new(App::new(cc, take()))))),
         other => other,

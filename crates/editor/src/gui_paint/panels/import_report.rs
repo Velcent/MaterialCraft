@@ -14,7 +14,6 @@ pub struct ReportPanel {
 
 impl ReportPanel {
     pub fn show(&mut self, ui: &mut egui::Ui, report: Option<&ImportReport>, summary: Option<&str>) {
-        crate::gui_theme::panel_header(ui, "IMPORT REPORT", false);
         let Some(report) = report else {
             ui.weak("This document was not imported.");
             return;
