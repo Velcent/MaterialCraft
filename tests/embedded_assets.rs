@@ -2,11 +2,13 @@
 //! after the library folder is gone; a smart material saved into a library and dropped back is one undo step with
 //! ids unique in the texture set.
 
+use materialcraft::history::PaintHistory;
 use materialcraft::material_fill::{ChainResolver, FolderResolver, MaterialCache, MaterialFills, MaterialResolver, MemoryResolver};
 use materialcraft::paint::edit::ops::{DropOutcome, DropPayload, DropTarget, drop_onto};
 use materialcraft::paint::edit::{LayerSlot, Transaction};
 use materialcraft::paint::{
-    BlendMode, Channel, Compositor, Document, Fill, FillContext, FillSource, Fragment, FragmentContent, Layer, LayerKind, TextureSet, embedded, format,
+    BlendMode, Channel, Compositor, Document, EmbeddedAsset, Fill, FillContext, FillSource, Fragment, FragmentContent, Layer, LayerKind, TextureSet, embedded,
+    format,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -80,11 +82,12 @@ fn a_saved_smart_material_drops_back_as_one_step_with_unique_ids() {
     let path = library.join("blue-paint.mcfrag");
     format::fragment::save_path(&fragment, &path).unwrap();
     let loaded = format::fragment::load_path(&path).unwrap();
-    let _ = std::fs::remove_dir_all(&library);
     assert_eq!(loaded, fragment);
 
     let FragmentContent::Layers(layers) = loaded.content else { panic!("a smart material holds layers") };
-    let payload = DropPayload::Folder { name: loaded.name, layers, asset: Some("smart-materials/blue-paint.mcfrag".into()) };
+    let file = std::fs::read(&path).unwrap_or_default();
+    let embed = vec![EmbeddedAsset::new("smart-materials/blue-paint.mcfrag", file)];
+    let payload = DropPayload::Folder { name: loaded.name, layers, asset: Some("smart-materials/blue-paint.mcfrag".into()), embed };
     let before = doc.clone();
     let mut tx = Transaction::new(&mut doc);
     let out = drop_onto(&mut tx, &DropTarget::Between { set: "s".into(), at: LayerSlot::top(1) }, &payload, false).unwrap();
@@ -94,9 +97,13 @@ fn a_saved_smart_material_drops_back_as_one_step_with_unique_ids() {
     let folder = doc.texture_sets[0].layer(&id).unwrap();
     assert_eq!(folder.asset.as_deref(), Some("smart-materials/blue-paint.mcfrag"));
     assert_ne!(folder.children()[0].id, "m", "ids are unique in the set");
-    assert_eq!(undo.len(), 1, "one undo step");
-    for e in undo.into_iter().rev() {
-        e.apply(&mut doc).unwrap();
-    }
-    assert_eq!(doc, before);
+    let _ = std::fs::remove_dir_all(&library);
+    assert_eq!(doc.assets.len(), 1, "the document embeds the smart material");
+    let after = doc.clone();
+    let mut history = PaintHistory::default();
+    history.record_all(&doc, "Drop asset", None, undo);
+    assert!(history.undo(&mut doc).unwrap());
+    assert_eq!(doc, before, "one undo step takes the folder and the embedded copy back");
+    assert!(history.redo(&mut doc).unwrap());
+    assert_eq!(doc, after);
 }

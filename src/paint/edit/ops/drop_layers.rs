@@ -160,12 +160,14 @@ mod tests {
     fn a_smart_material_becomes_a_folder_with_fresh_ids() {
         let mut d = doc();
         let inner = vec![Layer::new("a", "Dirt", LayerKind::Paint(PaintContent::default())), Layer::new("f", "Base", LayerKind::Fill(Fill::uniform(vec![])))];
-        let payload = DropPayload::Folder { name: "Worn paint".into(), layers: inner, asset: Some("smart-materials/worn.mcfrag".into()) };
+        let embed = vec![crate::paint::EmbeddedAsset::new("smart-materials/worn.mcfrag", vec![1, 2])];
+        let payload = DropPayload::Folder { name: "Worn paint".into(), layers: inner, asset: Some("smart-materials/worn.mcfrag".into()), embed };
         let out = drop(&mut d, DropTarget::Between { set: "s".into(), at: LayerSlot::top(3) }, &payload);
         let DropOutcome::NewLayer(id) = out else { panic!("{out:?}") };
         let folder = d.texture_sets[0].layer(&id).unwrap();
         assert_eq!(folder.name, "Worn paint");
         assert_eq!(folder.asset.as_deref(), Some("smart-materials/worn.mcfrag"));
+        assert_eq!(d.assets.len(), 1, "the smart material is embedded with its folder");
         let kids: Vec<&str> = folder.children().iter().map(|l| l.id.as_str()).collect();
         assert_eq!(kids.len(), 2);
         assert!(!kids.contains(&"a") && !kids.contains(&"f"), "ids are unique in the set: {kids:?}");

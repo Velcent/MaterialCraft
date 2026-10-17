@@ -13,7 +13,7 @@
 //! - [`effects`]: content and mask effect stacks;
 //! - [`pixels`]: tile swaps, region writes and [`TileCapture`];
 //! - [`strokes`]: appending painted strokes to the stroke record of the pixels they painted;
-//! - [`document`]: texture sets, the mesh and the height filter;
+//! - [`document`]: texture sets, the mesh, the height filter and the embedded assets;
 //! - [`bake`]: bake configurations, link flags and baked maps;
 //! - [`tiles`]: the tiles an edit or a document holds (for memory accounting);
 //! - [`ids`]: fresh layer and anchor ids, and re-iding a copied layer tree;
@@ -47,6 +47,7 @@ pub use transaction::Transaction;
 use super::bake_config::{BakeLinks, SetBakeConfig};
 use super::doc::Document;
 use super::effect::{ContentEffect, MaskEffect};
+use super::embedded::EmbeddedAsset;
 use super::geometry_mask::GeometryMask;
 use super::height_normal::HeightFilter;
 use super::image::Rect;
@@ -213,6 +214,8 @@ pub enum Edit {
     ReplaceTextureSet(Box<TextureSet>),
     /// Replaces the mesh (a re-import).
     SetMesh(Box<Mesh>),
+    /// Replaces the document's embedded assets (AS-21; a dropped smart material embeds itself and what it uses).
+    SetAssets(Vec<EmbeddedAsset>),
     SetHeightFilter(HeightFilter),
     /// Replaces the bake configuration of a texture set.
     SetBakeConfig {
@@ -259,6 +262,7 @@ impl Edit {
             Edit::RemoveTextureSet { set } => document::remove_set(doc, &set),
             Edit::ReplaceTextureSet(set) => document::replace_set(doc, *set),
             Edit::SetMesh(mesh) => Ok(Edit::SetMesh(Box::new(std::mem::replace(&mut doc.mesh, *mesh)))),
+            Edit::SetAssets(assets) => Ok(Edit::SetAssets(std::mem::replace(&mut doc.assets, assets))),
             Edit::SetHeightFilter(f) => Ok(Edit::SetHeightFilter(std::mem::replace(&mut doc.height_filter, f))),
             Edit::SetBakeConfig { set, config } => bake::set_config(doc, set, *config),
             Edit::SetBakeLinks(links) => Ok(Edit::SetBakeLinks(std::mem::replace(&mut doc.bake_links, links))),

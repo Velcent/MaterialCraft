@@ -23,6 +23,7 @@ use super::{channels, layer, set};
 use crate::paint::blend::BlendMode;
 use crate::paint::doc::Document;
 use crate::paint::effect::{ColorSelection, ContentEffect, EffectDomain, EffectKind, GreyBlend, Levels, MaskEffect, Procedural};
+use crate::paint::embedded::EmbeddedAsset;
 use crate::paint::fragment::adapt;
 use crate::paint::layer::{Layer, LayerKind, PaintContent};
 use crate::paint::mask::Mask;
@@ -107,6 +108,10 @@ pub enum DropPayload {
         name: String,
         layers: Vec<Layer>,
         asset: Option<String>,
+        /// Library assets to embed in the document with the folder (the smart material's own file under `asset`
+        /// and the assets it embeds), so the document stays self-contained (AS-21). Already embedded references are
+        /// kept as they are.
+        embed: Vec<EmbeddedAsset>,
     },
 }
 
@@ -171,8 +176,28 @@ pub fn drop_onto(tx: &mut Transaction, target: &DropTarget, payload: &DropPayloa
             into_stack(tx, r, effects.into_iter().map(StackEffect::Mask).collect(), replace)
         }
         (_, DropPayload::Material(material)) => drop_layers::material(tx, target, material),
-        (_, DropPayload::Folder { name, layers, asset }) => drop_layers::folder(tx, target, name, layers, asset.as_deref()),
+        (_, DropPayload::Folder { name, layers, asset, embed }) => {
+            let out = drop_layers::folder(tx, target, name, layers, asset.as_deref())?;
+            embed_missing(tx, embed)?;
+            Ok(out)
+        }
     }
+}
+
+/// Adds the assets of `embed` the document does not embed yet.
+fn embed_missing(tx: &mut Transaction, embed: &[EmbeddedAsset]) -> Result<(), EditError> {
+    let mut assets = tx.doc().assets.clone();
+    let before = assets.len();
+    for a in embed {
+        if !assets.iter().any(|b| b.reference == a.reference) {
+            assets.push(a.clone());
+        }
+    }
+    if assets.len() == before {
+        return Ok(());
+    }
+    assets.sort_by(|a, b| a.reference.cmp(&b.reference));
+    tx.apply(Edit::SetAssets(assets))
 }
 
 /// An effect layer: an empty layer whose channels are all set to pass through, with the effect on its

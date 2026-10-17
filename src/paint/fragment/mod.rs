@@ -5,9 +5,11 @@
 //!
 //! - [`Fragment`]: the model, and the texture set it travels in ([`Fragment::carrier`]);
 //! - [`needs`]: which baked maps a fragment's effects read, and which of them a texture set lacks;
+//! - [`make`]: fragments from a selection or a mask, completed with their needs and assets;
 //! - [`adapt`]: fitting a fragment's layers or mask to the texture set it is dropped into (resolution, channels).
 
 pub mod adapt;
+pub mod make;
 pub mod needs;
 
 #[cfg(test)]
