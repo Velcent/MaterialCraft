@@ -1792,37 +1792,14 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             }))
         }
         "bnw_spots" => {
-            let (var, p) = (f("variant", 0.0) as u32, per("scale", 8.0));
-            fin(Tex::gray_fn(s, s, move |u, v| {
-                let (a, b) = warp(u, v);
-                let grain = if var >= 2 { (noise::fbm(u, v, p * 4, p * 4, 3, 0.5, seed.wrapping_add(5), 0) - 0.5) * 0.25 } else { 0.0 };
-                noise::spots(
-                    a,
-                    b,
-                    p,
-                    p,
-                    seed,
-                    |id| {
-                        let rad = match var {
-                            0 => 0.18 + 0.5 * id * id,
-                            1 => 0.3 + 0.55 * id,
-                            _ => 0.08 + 0.3 * id,
-                        };
-                        (rad * 0.8, rad)
-                    },
-                    grain,
-                )
-            }))
+            let spots = noise::BnwSpots { style: f("variant", 0.0) as u32, scale: per("scale", 8.0), seed };
+            fin(Tex::gray_fn(s, s, move |u, v| spots.value_warped(u, v, warp(u, v))))
         }
         "crystal" => {
-            let (var, p) = (f("variant", 0.0) as u32, per("scale", 6.0));
+            let crystal = noise::Crystal { style: f("variant", 0.0) as u32, scale: per("scale", 6.0), seed };
             fin(Tex::gray_fn(s, s, move |u, v| {
                 let (a, b) = warp(u, v);
-                let vr = noise::voronoi_ext(a, b, p, p, seed, 1.0);
-                let l = (vr.dx * vr.dx + vr.dy * vr.dy).sqrt().max(1e-4);
-                let facet = if var == 0 { 1.0 - vr.f1 } else { 0.5 + 0.5 * ((vr.dx / l) * 0.6 + (vr.dy / l) * 0.8) };
-                let edge = smooth(0.0, 0.08, vr.f2 - vr.f1).max(0.2);
-                (vr.id1 * 0.55 + facet * 0.45) * edge
+                crystal.value(a, b)
             }))
         }
         "directional_noise" => {
@@ -1856,52 +1833,22 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             }))
         }
         "grunge" => {
-            let var = f("variant", 0.0) as u32;
-            let balance = f("balance", 0.5).clamp(0.0, 1.0);
+            let mut g = grunge::GrungeVariant::new(grunge::Variant::from_index(f("variant", 0.0) as u32), seed);
+            g.balance = f("balance", 0.5).clamp(0.0, 1.0);
             // concrete
-            let (large, noisy) = (f("large_variation", 0.55), f("base_noisiness", 0.45));
-            let (specks, scr_op, sharpen) =
+            (g.large_variation, g.base_noisiness) = (f("large_variation", 0.55), f("base_noisiness", 0.45));
+            (g.dirt_specks, g.scratches, g.sharpen) =
                 (f("dirt_specks_opacity", 0.0).clamp(0.0, 1.0), f("scratches_opacity", 0.0).clamp(0.0, 1.0), f("sharpen", 0.0).clamp(0.0, 1.0));
-            let invert_dirt = f("invert_dirt", 0.0) > 0.5;
+            g.invert_dirt = f("invert_dirt", 0.0) > 0.5;
             // scratches
-            let (quant, width, length) = (per("quantity", 3.0).min(32), f("scratch_width", 0.4).clamp(0.05, 0.95), f("scratch_length", 0.45).clamp(0.0, 0.9));
+            (g.quantity, g.scratch_width, g.scratch_length) =
+                (per("quantity", 3.0).min(32), f("scratch_width", 0.4).clamp(0.05, 0.95), f("scratch_length", 0.45).clamp(0.0, 0.9));
             // spots
-            let (details, cover, cover_c) = (per("details", 22.0).min(128), f("coverage", 0.35).clamp(0.0, 0.9), f("coverage_contrast", 0.25).clamp(0.02, 1.0));
+            (g.details, g.coverage, g.coverage_contrast) =
+                (per("details", 22.0).min(128), f("coverage", 0.35).clamp(0.0, 0.9), f("coverage_contrast", 0.25).clamp(0.02, 1.0));
             fin(Tex::gray_fn(s, s, move |u, v| {
                 let (a, b) = warp(u, v);
-                let val = match var {
-                    0 => {
-                        let n = noise::fbm(a, b, 8, 8, 6, 0.55, seed, 0) * large + noise::fbm(a, b, 40, 40, 3, 0.5, seed.wrapping_add(1), 0) * noisy;
-                        let mut c = ((n - 0.35) * 2.2).clamp(0.0, 1.0);
-                        if specks > 0.0 {
-                            let sp = noise::spots(a, b, 64, 64, seed.wrapping_add(11), |id| (0.1, 0.18 + id * 0.2), 0.0);
-                            c = if invert_dirt { c + (1.0 - c) * sp * specks } else { c * (1.0 - sp * specks) };
-                        }
-                        if scr_op > 0.0 {
-                            let line = noise::perlin(a * 3.0 % 1.0, b, 3, 160, seed.wrapping_add(13));
-                            c = (c + smooth(0.62, 0.7, line) * scr_op).clamp(0.0, 1.0);
-                        }
-                        if sharpen > 0.0 {
-                            c += (smooth(0.0, 1.0, c) - c) * sharpen;
-                        }
-                        c
-                    }
-                    1 => {
-                        let q = quant as f32;
-                        let line = noise::perlin(a * q % 1.0, b, quant, 90, seed);
-                        let m = noise::fbm(a, b, 5, 5, 4, 0.5, seed.wrapping_add(3), 0);
-                        smooth(1.0 - width, 1.1 - width, line) * smooth(length, length + 0.15, m)
-                    }
-                    2 => {
-                        let m = noise::fbm(a, b, 6, 6, 4, 0.5, seed.wrapping_add(4), 0);
-                        noise::spots(a, b, details, details, seed, |id| (0.12, 0.2 + id * 0.3), 0.0) * smooth(cover, cover + cover_c, m)
-                    }
-                    _ => {
-                        let n = noise::fbm(a, b, 3, 3, 5, 0.6, seed, 2);
-                        smooth(0.2, 0.8, n)
-                    }
-                };
-                (val + (balance - 0.5)).clamp(0.0, 1.0)
+                g.value(a, b)
             }))
         }
         "grunge_map" => {
@@ -1949,15 +1896,9 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             })
         }
         "weave" => {
-            let (cnt, wd) = ((f("count", 6.0) / 2.0).round().max(1.0) * 2.0, f("width", 0.8).clamp(0.1, 1.0)); // even count: the over/under pattern wraps
-            Tex::gray_fn(s, s, move |u, v| {
-                let (x, y) = (u * cnt, v * cnt);
-                let (i, j) = (x.floor() as i32, y.floor() as i32);
-                let (fx, fy) = (x - i as f32, y - j as f32);
-                let hv = (1.0 - ((2.0 * fx - 1.0).abs() / wd).clamp(0.0, 1.0)).sqrt();
-                let hh = (1.0 - ((2.0 * fy - 1.0).abs() / wd).clamp(0.0, 1.0)).sqrt();
-                if (i + j) & 1 == 0 { hv.max(0.5 * hh) } else { hh.max(0.5 * hv) }
-            })
+            // even count: the over/under pattern wraps
+            let weave = noise::Weave { count: (f("count", 6.0) / 2.0).round().max(1.0) * 2.0, width: f("width", 0.8).clamp(0.1, 1.0) };
+            Tex::gray_fn(s, s, move |u, v| weave.value(u, v))
         }
         "shape" => {
             let (k, sx, sy, rot, px, py, til, so) = (
@@ -2002,53 +1943,19 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             })
         }
         "voronoi" | "voronoi_fractal" => {
-            let fractal = n.kind == "voronoi_fractal";
-            let (p, j, style) = (per("scale", 6.0), f("jitter", 1.0).clamp(0.0, 1.0), f("mode", 0.0) as u32);
-            let aspect = f("aspect", 1.0).clamp(0.25, 4.0);
-            let (ox, oy) = (f("offset_x", 0.0), f("offset_y", 0.0));
-            let (dist, dscale) = (f("distortion", 0.0).clamp(0.0, 2.0), per("distortion_scale", 3.0));
-            let metric = noise::Metric::from_index(f("distance_mode", 0.0) as u32, f("minkowski", 2.0));
-            let (thick, round, dsc) = (f("edge_thickness", 0.25), f("rounded", 0.0), f("distance_scale", 1.0).clamp(0.0, 8.0));
-            let id_seed = if f("color_seed_mode", 0.0) > 0.5 { f("color_seed", 0.0) as u32 } else { seed };
-            let (lo, hi) = (f("min_level", 0.0).clamp(0.0, 8.0) as u32, f("max_level", 3.0).clamp(0.0, 8.0) as u32);
-            let (rough, lac, opac, blend) =
+            let mut vs = noise::VoronoiSettings::new(per("scale", 6.0), seed);
+            (vs.jitter, vs.style) = (f("jitter", 1.0).clamp(0.0, 1.0), f("mode", 0.0) as u32);
+            vs.aspect = f("aspect", 1.0).clamp(0.25, 4.0);
+            vs.offset = (f("offset_x", 0.0), f("offset_y", 0.0));
+            (vs.distortion, vs.distortion_scale) = (f("distortion", 0.0).clamp(0.0, 2.0), per("distortion_scale", 3.0));
+            vs.metric = noise::Metric::from_index(f("distance_mode", 0.0) as u32, f("minkowski", 2.0));
+            (vs.thickness, vs.rounded, vs.distance_scale) = (f("edge_thickness", 0.25), f("rounded", 0.0), f("distance_scale", 1.0).clamp(0.0, 8.0));
+            vs.id_seed = if f("color_seed_mode", 0.0) > 0.5 { f("color_seed", 0.0) as u32 } else { seed };
+            (vs.min_level, vs.max_level) = (f("min_level", 0.0).clamp(0.0, 8.0) as u32, f("max_level", 3.0).clamp(0.0, 8.0) as u32);
+            (vs.roughness, vs.lacunarity, vs.opacity, vs.blend) =
                 (f("roughness", 0.5).clamp(0.0, 1.5), f("lacunarity", 2.0).clamp(1.0, 4.0), f("opacity", 1.0).clamp(0.0, 1.0), f("blend", 0.0) as u32);
-            let hi = hi.max(lo);
-            let one = move |u: f32, v: f32, px: i32, sd: u32| -> f32 {
-                let py = ((px as f32 * aspect).round().max(1.0)) as i32;
-                let (u, v) = (u + ox, v + oy);
-                let (u, v) = if dist > 0.0 {
-                    (
-                        u + (noise::perlin(u, v, dscale, dscale, seed.wrapping_add(5)) - 0.5) * dist * 0.3,
-                        v + (noise::perlin(u, v, dscale, dscale, seed.wrapping_add(6)) - 0.5) * dist * 0.3,
-                    )
-                } else {
-                    (u, v)
-                };
-                let r = noise::voronoi_gen(u, v, px, py, sd, id_seed.wrapping_add(sd.wrapping_sub(seed)), j, metric);
-                (noise::voronoi_style(&r, style, thick, round) * dsc).clamp(0.0, 1.0)
-            };
-            let levels: Vec<(i32, f32)> = if fractal {
-                (lo..=hi).map(|l| (((p as f32) * lac.powi(l as i32)).round().clamp(1.0, 512.0) as i32, rough.powi((l - lo) as i32))).collect()
-            } else {
-                vec![(p, 1.0)]
-            };
-            let norm: f32 = levels.iter().map(|l| l.1).sum::<f32>().max(1e-6);
-            fin(Tex::gray_fn(s, s, move |u, v| {
-                if !fractal {
-                    return one(u, v, p, seed);
-                }
-                let mut acc: f32 = if blend == 2 { 1.0 } else { 0.0 };
-                for (i, (px, amp)) in levels.iter().enumerate() {
-                    let val = one(u, v, *px, seed.wrapping_add(i as u32 * 131));
-                    match blend {
-                        1 => acc = acc.max(val * if i == 0 { 1.0 } else { opac }),
-                        2 => acc = acc.min(1.0 - (1.0 - val) * if i == 0 { 1.0 } else { opac }),
-                        _ => acc += amp * val * if i == 0 { 1.0 } else { opac },
-                    }
-                }
-                if blend == 0 { acc / norm } else { acc }.clamp(0.0, 1.0)
-            }))
+            let vf = noise::VoronoiFractal::new(&vs, n.kind == "voronoi_fractal");
+            fin(Tex::gray_fn(s, s, move |u, v| vf.value(u, v)))
         }
         "gradient" => {
             let (mode, (sa, ca)) = (f("mode", 0.0) as u32, (f("angle", 0.0) * std::f32::consts::TAU).sin_cos());
