@@ -39,7 +39,8 @@ pub const GRAY: &[Component] = &[(0, "v")];
 pub const RGB: &[Component] = &[(0, "r"), (1, "g"), (2, "b")];
 pub const XYZ: &[Component] = &[(0, "x"), (1, "y"), (2, "z")];
 
-pub trait Subject {
+/// `Send + Sync`: one set of subjects is shared by the workers that measure projects side by side.
+pub trait Subject: Send + Sync {
     /// Stable id used on the command line and in the history (`baked.ao`).
     fn id(&self) -> &'static str;
     fn description(&self) -> &'static str;

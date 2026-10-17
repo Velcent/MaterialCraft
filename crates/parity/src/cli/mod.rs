@@ -5,7 +5,7 @@
 //! mcparity cases <subject> [--projects …] [--corpus …]
 //!                                                 which projects/sets can run, and why others cannot
 //! mcparity run <subject|all> [--projects <file|glob|list>]… [--corpus <dir>]… [--limit N]
-//!              [--max-size N] [--out <dir>] [--history <file> | --no-history] [--open]
+//!              [--max-size N] [--jobs N] [--out <dir>] [--history <file> | --no-history] [--open]
 //! ```
 //!
 //! `--projects`/`--corpus` may repeat; without them `$MC_SUBSTANCE_CORPUS` is used. `run` prints a table,
@@ -47,7 +47,7 @@ pub fn run(raw: Vec<String>) -> Result<(), String> {
 const HELP: &str = "mcparity list
 mcparity cases <subject> [--projects <file|glob|list>]... [--corpus <dir>]...
 mcparity run <subject|all> [--projects ...]... [--corpus <dir>]... [--limit N] [--max-size N]
-             [--out <dir>] [--history <file> | --no-history] [--open]";
+             [--jobs N (projects at once; default a quarter of the cores)] [--out <dir>] [--history <file> | --no-history] [--open]";
 
 fn list() {
     for s in subjects::all() {
@@ -104,9 +104,11 @@ fn run_cases(args: &Args) -> Result<(), String> {
         options: RunOptions {
             limit: args.limit,
             max_size: args.max_size,
+            jobs: args.jobs,
         },
     };
     let results = runner.run(&projects, &mut report);
+    report.order_like(&results);
     println!("{}", text::table(&results));
     report.problems.iter().for_each(|p| eprintln!("{p}"));
     let (time, commit) = (iso_time(started), provenance::commit());

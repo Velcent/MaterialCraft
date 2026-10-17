@@ -14,6 +14,8 @@ pub struct Args {
     pub projects: ProjectList,
     pub limit: Option<usize>,
     pub max_size: usize,
+    /// Projects measured at the same time (`--jobs`).
+    pub jobs: usize,
     pub out: Option<PathBuf>,
     pub history: Option<PathBuf>,
     pub no_history: bool,
@@ -30,6 +32,7 @@ impl Args {
             projects: ProjectList::default(),
             limit: None,
             max_size: DEFAULT_MAX_SIZE,
+            jobs: crate::run::default_jobs(),
             out: None,
             history: None,
             no_history: false,
@@ -42,6 +45,7 @@ impl Args {
                 "--corpus" => args.projects.corpora.push(PathBuf::from(value()?)),
                 "--limit" => args.limit = Some(number(&a, &value()?)?),
                 "--max-size" => args.max_size = number(&a, &value()?)?.clamp(16, 8192),
+                "--jobs" => args.jobs = number(&a, &value()?)?.clamp(1, 64),
                 "--out" => args.out = Some(PathBuf::from(value()?)),
                 "--history" => args.history = Some(PathBuf::from(value()?)),
                 "--no-history" => args.no_history = true,
@@ -68,14 +72,14 @@ mod tests {
 
     #[test]
     fn parses_run_options() {
-        let a = parse("run baked.ao --corpus /c --projects x.spp --limit 3 --max-size 99999 --open").unwrap();
+        let a = parse("run baked.ao --corpus /c --projects x.spp --limit 3 --max-size 99999 --jobs 6 --open").unwrap();
         assert_eq!(
             (a.command.as_str(), a.words.as_slice()),
             ("run", ["baked.ao".to_string()].as_slice())
         );
         assert_eq!(a.projects.corpora, [PathBuf::from("/c")]);
         assert_eq!(a.projects.projects, ["x.spp"]);
-        assert_eq!((a.limit, a.max_size, a.open), (Some(3), 8192, true));
+        assert_eq!((a.limit, a.max_size, a.jobs, a.open), (Some(3), 8192, 6, true));
         assert!(parse("run all --bogus").is_err());
         assert!(parse("run all --limit").is_err());
         assert!(parse("run all --limit x").is_err());

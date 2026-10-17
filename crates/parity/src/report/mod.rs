@@ -35,6 +35,16 @@ impl HtmlReport {
         &self.dir
     }
 
+    /// Puts the cases in the order of `results` (project order). With several jobs they arrive in the order
+    /// they finish; the page should read the same however many jobs ran.
+    pub fn order_like(&mut self, results: &[CaseResult]) {
+        let key = |r: &CaseResult| (r.subject, r.project.clone(), r.set.clone());
+        let position: std::collections::HashMap<_, usize> =
+            results.iter().enumerate().map(|(i, r)| (key(r), i)).collect();
+        self.entries
+            .sort_by_key(|e| position.get(&key(&e.result)).copied().unwrap_or(usize::MAX));
+    }
+
     /// Writes `index.html`; returns its path.
     pub fn finish(&self, time: &str, commit: &str, projects: usize) -> std::io::Result<PathBuf> {
         let info = RunInfo {
