@@ -2,8 +2,10 @@
 
 use super::bake_config::SetBakeConfig;
 use super::channel::{Channel, ChannelSpec};
+use super::effect::{Content, EffectKind, Grey, Procedural};
 use super::image::TiledImage;
 use super::layer::{Layer, LayerKind, LayerWalk};
+use crate::projection::ProjectionMode;
 
 /// Kind of a map baked from the mesh.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -135,10 +137,32 @@ impl TextureSet {
             .any(|(_, l)| l.effects.iter().any(|e| picks(e.kind.id())) || l.mask.as_ref().is_some_and(|m| m.effects.iter().any(|e| picks(e.kind.id()))))
     }
 
+    /// True if compositing reads the set's surface map: a polygon fill, or a fill, fill effect or procedural texture
+    /// projected from a volume (tri-planar, planar, spherical, cylindrical). Without the surface map those are left out
+    /// and reported ([`super::stack::CompositeWarning::FillNeedsMesh`]).
+    pub fn needs_surface(&self) -> bool {
+        self.uses_polygon_fill() || self.walk_layers().any(|(_, l)| projects_from_volume(l))
+    }
+
     /// The first baked map of `kind`.
     pub fn baked(&self, kind: &BakedKind) -> Option<&TiledImage> {
         self.baked.iter().find(|b| &b.kind == kind).map(|b| &b.image)
     }
+}
+
+/// True if `layer`'s own fill, a fill effect or a procedural in its content or mask stack projects from a volume.
+fn projects_from_volume(layer: &Layer) -> bool {
+    // procedural textures carry their placement among their parameters (`proc_textures::placement`)
+    let procedural = |p: &Procedural| p.params.iter().any(|(k, v)| k == "projection" && ProjectionMode::default_of(v.trim()).is_some_and(|m| m.needs_mesh()));
+    let content = |k: &EffectKind<Content>| match k {
+        EffectKind::Fill(f) => f.projection.mode.needs_mesh(),
+        EffectKind::Generator(p) | EffectKind::Filter(p) => procedural(p),
+        _ => false,
+    };
+    let mask = |k: &EffectKind<Grey>| matches!(k, EffectKind::Generator(p) | EffectKind::Filter(p) if procedural(p));
+    matches!(&layer.kind, LayerKind::Fill(f) if f.projection.mode.needs_mesh())
+        || layer.effects.iter().any(|e| content(&e.kind))
+        || layer.mask.as_ref().is_some_and(|m| m.effects.iter().any(|e| mask(&e.kind)))
 }
 
 fn find_mut<'a>(layers: &'a mut [Layer], id: &str) -> Option<&'a mut Layer> {

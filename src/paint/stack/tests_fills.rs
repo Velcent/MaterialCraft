@@ -157,3 +157,19 @@ fn volume_projections_read_the_surface_map() {
     let c = Compositor::new(&s).with_fills(&context);
     assert!(close(&row(&s, c), &[0.1, 0.3, 0.9, 0.9]), "{:?}", row(&s, c));
 }
+
+#[test]
+fn sets_say_when_they_need_the_surface() {
+    let image = |id: &str| image_fill(ramp(4, 4), Projection { mode: ProjectionMode::default_of(id).unwrap(), ..Projection::default() });
+    assert!(!set_with(image("uv")).needs_surface());
+    assert!(set_with(image("tri_planar")).needs_surface());
+    // a procedural texture in a mask, placed in a volume through its parameters
+    let mut s = set_with(image("uv"));
+    let placed = |mode: &str| crate::paint::effect::Procedural::new("tex").with_params(vec![("projection".into(), mode.into())]);
+    let mask =
+        |p| crate::paint::Mask::new(0.0).with_effect(crate::paint::MaskEffect::new(crate::paint::effect::GreyBlend::default(), EffectKind::Generator(p)));
+    s.layers[0].mask = Some(mask(placed("uv")));
+    assert!(!s.needs_surface());
+    s.layers[0].mask = Some(mask(placed("planar")));
+    assert!(s.needs_surface());
+}

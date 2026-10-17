@@ -7,6 +7,7 @@
 
 use super::channel_view::ChannelView;
 use super::document_state::OpenDocument;
+use super::fill_surfaces::FillSurfaces;
 use super::geometry::{self, PartGeometry};
 use super::job::Job;
 use super::maps_worker::{MapsWorker, SetMaps};
@@ -39,6 +40,8 @@ pub struct SceneSync {
     library_folders: Vec<PathBuf>,
     /// The quick mask shown over the view (PT-42).
     tint: Option<Arc<QuickMaskTint>>,
+    /// Surface maps of the sets whose fills need them, kept across maps runs (dropped with the document).
+    surfaces: Option<Arc<FillSurfaces>>,
     pub error: Option<String>,
 }
 
@@ -77,10 +80,30 @@ impl SceneSync {
         }
     }
 
-    fn start_maps(&mut self, doc: &OpenDocument, view: ChannelView, sets: Vec<usize>) {
+    fn start_maps(&mut self, doc: &mut OpenDocument, view: ChannelView, sets: Vec<usize>) {
         self.waiting.retain(|m| !sets.contains(&m.set));
         let materials = self.material_fills(doc);
-        self.maps = Some(MapsWorker::start(doc.maps_view(&sets), sets, view, self.isolate.clone(), materials, self.tint.clone()));
+        let surfaces = self.fill_surfaces_for(doc, &sets);
+        self.maps = Some(MapsWorker::start(doc.maps_view(&sets), sets, view, self.isolate.clone(), materials, self.tint.clone(), surfaces));
+    }
+
+    /// The surface maps the sets' fills composite with, when one of them needs its surface: the kept ones while the
+    /// mesh is the same, else new (empty) ones for the current mesh.
+    fn fill_surfaces_for(&mut self, doc: &mut OpenDocument, sets: &[usize]) -> Option<Arc<FillSurfaces>> {
+        let needed = sets.iter().any(|&i| doc.doc().texture_sets.get(i).is_some_and(|s| s.needs_surface()));
+        if !needed {
+            return self.surfaces.clone();
+        }
+        let mesh = doc.shared_mesh();
+        if self.surfaces.as_ref().is_none_or(|s| s.revision() != mesh.revision) {
+            self.surfaces = Some(Arc::new(FillSurfaces::new(mesh)));
+        }
+        self.surfaces.clone()
+    }
+
+    /// The surface maps of the view's fills (the eyedropper and the layer thumbnails composite with them too).
+    pub fn fill_surfaces(&self) -> Option<Arc<FillSurfaces>> {
+        self.surfaces.clone()
     }
 
     /// How material fills of `doc` are evaluated, as the maps the view shows evaluate them (the eyedropper's

@@ -61,9 +61,12 @@ impl PaintMode {
         let view = self.view_projector().ok_or("The view is still being prepared; try again in a moment.")?;
         let hit = view.pick(local).ok_or("There is no surface under the eyedropper.")?;
         let materials = self.scene.material_fills(doc);
-        let fills = FillContext::with_sources(&materials);
+        let at = TexelProbe::new(doc.doc()).locate(&hit).ok_or("No texture set paints the surface under the eyedropper.")?;
+        // the set's surface map as the view's maps worker built it (fills that need one are left out until it is)
+        let set = doc.doc().texture_sets.get(at.set).filter(|s| s.needs_surface());
+        let surface = set.and_then(|s| self.scene.fill_surfaces()?.cached(s, s.resolution));
+        let fills = surface.as_ref().map_or_else(|| FillContext::with_sources(&materials), |s| s.context(&materials));
         let probe = TexelProbe::new(doc.doc()).with_fills(&fills);
-        let at = probe.locate(&hit).ok_or("No texture set paints the surface under the eyedropper.")?;
         let value = probe.stored(at, channel).ok_or_else(|| format!("This texture set has no {} channel.", channel.id()))?;
         let [r, g, b, _] = value.value;
         Ok(Sample { rgb: [r, g, b], space: value.color_space })

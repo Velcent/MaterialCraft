@@ -3,13 +3,15 @@
 //! thumbnails; a thumbnail is recomputed when its layer changed (compared with the copy it was made from),
 //! and the old one is shown meanwhile. One job runs at a time; requests made meanwhile wait for the next.
 
+use crate::gui_paint::fill_surfaces::FillSurfaces;
 use crate::gui_paint::job::Job;
 use eframe::egui::{self, ColorImage, TextureHandle, TextureOptions};
 use materialcraft::generators;
 use materialcraft::paint::layer_preview::PreviewGrid;
-use materialcraft::paint::{Channel, Layer, TextureSet};
+use materialcraft::paint::{Channel, FillContext, Layer, NoFillSources, TextureSet};
 use materialcraft::tex::Tex;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// Longer edge of a thumbnail in texels.
 pub const THUMB: u32 = 48;
@@ -36,18 +38,25 @@ pub struct Pair<'a> {
 
 #[derive(Default)]
 pub struct Thumbnails {
-    /// The set and channel the cache is for; another one starts over.
-    key: Option<(String, Channel)>,
+    /// The set, channel and surface maps' mesh revision the cache is for; another one starts over.
+    key: Option<(String, Channel, Option<u64>)>,
     cache: HashMap<String, Entry>,
     job: Option<Job<Computed>>,
     in_flight: HashSet<String>,
     wanted: Vec<Layer>,
+    /// Surface maps for fills projected from a volume and polygon fills (built at the thumbnail grid's size).
+    surfaces: Option<Arc<FillSurfaces>>,
 }
 
 impl Thumbnails {
+    /// The surface maps the next jobs composite fills with.
+    pub fn set_fill_surfaces(&mut self, surfaces: Option<Arc<FillSurfaces>>) {
+        self.surfaces = surfaces;
+    }
+
     /// Takes finished thumbnails; call once per frame before drawing rows.
     pub fn begin(&mut self, ctx: &egui::Context, set: &str, channel: Channel) {
-        let key = (set.to_string(), channel);
+        let key = (set.to_string(), channel, self.surfaces.as_ref().map(|s| s.revision()));
         if self.key.as_ref() != Some(&key) {
             self.cache.clear();
             self.in_flight.clear();
@@ -93,17 +102,20 @@ impl Thumbnails {
         let layers = std::mem::take(&mut self.wanted);
         self.in_flight.extend(layers.iter().map(|l| l.id.clone()));
         let shell = shell_of(set);
+        let surfaces = self.surfaces.clone().filter(|_| set.needs_surface());
         let repaint = ctx.clone();
         self.job = Some(Job::spawn(move |cancel, tx| {
             let grid = PreviewGrid::new(&shell, THUMB);
             let effects = generators::builtin();
+            let surface = surfaces.and_then(|s| s.build(&shell, grid.size()));
+            let fills = surface.as_ref().map_or_else(|| FillContext::with_sources(&NoFillSources), |s| s.context(&NoFillSources));
             for layer in layers {
                 if cancel.is_cancelled() {
                     return;
                 }
                 let reduced = grid.reduce(&layer);
-                let content = grid.content(&reduced, channel, effects);
-                let mask = grid.mask(&reduced, effects);
+                let content = grid.content(&reduced, channel, effects, &fills);
+                let mask = grid.mask(&reduced, effects, &fills);
                 if tx.send(Computed { id: layer.id.clone(), snapshot: layer, content, mask }).is_err() {
                     return;
                 }

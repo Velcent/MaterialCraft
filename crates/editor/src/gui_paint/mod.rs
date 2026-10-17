@@ -20,6 +20,7 @@ mod document_state;
 mod documents;
 mod editing;
 mod eyedrop;
+mod fill_surfaces;
 mod geometry;
 mod import_review;
 mod input;
@@ -37,6 +38,7 @@ mod reveal;
 mod save_point;
 mod saving;
 mod scene_sync;
+mod shared_mesh;
 pub mod shell;
 mod shot;
 mod smart_assets;
@@ -263,6 +265,7 @@ impl PaintMode {
         } else {
             self.focus = None;
         }
+        self.layers.set_fill_surfaces(self.scene.fill_surfaces());
         let screen = Screen {
             document: self.document.as_ref(),
             report: &mut self.report,

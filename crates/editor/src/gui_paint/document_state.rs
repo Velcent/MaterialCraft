@@ -3,6 +3,7 @@
 //! history; undo, redo and jumps go through the history too (HI-01, HI-07).
 
 use super::save_point::SavePoint;
+use super::shared_mesh::{MeshShare, SharedMesh};
 use materialcraft::history::{CoalesceKey, PaintHistory};
 use materialcraft::paint::edit::{EditError, Transaction};
 use materialcraft::paint::embedded::{EmbedReport, embed_used};
@@ -36,6 +37,8 @@ pub struct OpenDocument {
     /// Importer summary, if the document was imported.
     pub summary: Option<String>,
     pub sets: Vec<SetState>,
+    /// The mesh copy workers share (see [`Self::shared_mesh`]).
+    mesh_share: MeshShare,
 }
 
 impl OpenDocument {
@@ -44,7 +47,7 @@ impl OpenDocument {
         let history = PaintHistory::default();
         let file = source.extension().is_some_and(|e| e.eq_ignore_ascii_case("mcpaint")).then(|| source.clone());
         let saved = SavePoint::of(&history);
-        OpenDocument { doc, history, source, file, saved, saving: None, summary, sets }
+        OpenDocument { doc, history, source, file, saved, saving: None, summary, sets, mesh_share: MeshShare::default() }
     }
 
     pub fn doc(&self) -> &Document {
@@ -52,16 +55,20 @@ impl OpenDocument {
     }
 
     /// What a maps worker compositing `sets` reads: those texture sets and the output settings. Other sets keep
-    /// only their placement; the mesh, the kept files and the import report are left out. Cheap (layer images
-    /// share their tiles), and the document itself stays unshared, so edits while the worker runs change it in
-    /// place instead of copying it.
+    /// only their placement; the mesh, the kept files and the import report are left out (fills that need the
+    /// mesh's surface get it from [`Self::shared_mesh`]). Cheap (layer images share their tiles), and the document
+    /// itself stays unshared, so edits while the worker runs change it in place instead of copying it.
     pub fn maps_view(&self, sets: &[usize]) -> Arc<Document> {
         let doc = &self.doc;
         let texture_sets: Vec<TextureSet> =
             doc.texture_sets.iter().enumerate().map(|(i, s)| if sets.contains(&i) { s.clone() } else { placement(s) }).collect();
-        // polygon fills composite through the set's surface map, which needs the mesh
-        let mesh = if texture_sets.iter().any(TextureSet::uses_polygon_fill) { doc.mesh.clone() } else { Default::default() };
-        Arc::new(Document { texture_sets, mesh, height_filter: doc.height_filter, ..Document::default() })
+        Arc::new(Document { texture_sets, height_filter: doc.height_filter, ..Document::default() })
+    }
+
+    /// A shared copy of the mesh with its revision, for data derived from it that workers keep (surface maps of
+    /// fills). Copied the first time and again only after the mesh was replaced.
+    pub fn shared_mesh(&mut self) -> SharedMesh {
+        self.mesh_share.get(&self.doc.mesh)
     }
 
     /// What a geometry worker reads: the mesh and each set's slot and UV set (no layers, baked maps or kept

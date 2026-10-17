@@ -24,6 +24,7 @@ pub use events::{LayerEvent, SaveAsset};
 
 use super::PanelEvent;
 use crate::gui_paint::document_state::OpenDocument;
+use crate::gui_paint::fill_surfaces::FillSurfaces;
 use eframe::egui::{Pos2, Ui};
 use materialcraft::history::CoalesceKey;
 use materialcraft::paint::edit::LayerRef;
@@ -31,6 +32,7 @@ use materialcraft::paint::edit::ops::{DropPayload, DropTarget, NewLayer};
 use materialcraft::paint::{Channel, Document, LayerKind, TextureSet};
 use rows::{Folding, Rows};
 use selection::{Part, Selection};
+use std::sync::Arc;
 use thumbnails::Thumbnails;
 
 /// Keyboard actions on the selection (from the shortcut table).
@@ -127,6 +129,11 @@ impl LayerPanel {
             slot = materialcraft::paint::edit::ops::slot_of(set, &parent);
         }
         self.selection.set(vec![layer.to_string()]);
+    }
+
+    /// The surface maps the thumbnails composite fills with (those the view's maps use). Call before drawing.
+    pub fn set_fill_surfaces(&mut self, surfaces: Option<Arc<FillSurfaces>>) {
+        self.thumbs.set_fill_surfaces(surfaces);
     }
 
     /// Forgets everything about the previous document.

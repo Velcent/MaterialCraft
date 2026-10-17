@@ -8,7 +8,7 @@ use super::channel::Channel;
 use super::effect::{EffectKind, EffectRegistry};
 use super::image::{Rect, TILE_SIZE, TiledImage};
 use super::layer::{Layer, LayerKind};
-use super::stack::Compositor;
+use super::stack::{Compositor, FillContext};
 use super::texture_set::{BakedMap, TextureSet};
 use crate::tex::Tex;
 
@@ -69,19 +69,22 @@ impl PreviewGrid {
         out
     }
 
-    /// The content of `layer` (already [`Self::reduce`]d) for `channel`: stored encoding, alpha = coverage.
-    pub fn content(&self, layer: &Layer, channel: Channel, effects: &EffectRegistry) -> Tex {
+    /// The content of `layer` (already [`Self::reduce`]d) for `channel`: stored encoding, alpha = coverage. Fills are
+    /// evaluated with `fills`, whose surface map must be at [`Self::size`] (else volume projections and polygon fills
+    /// are left out).
+    pub fn content(&self, layer: &Layer, channel: Channel, effects: &EffectRegistry, fills: &FillContext) -> Tex {
         let (w, h) = self.size();
         let mut px = vec![[0.0f32; 4]; w as usize * h as usize];
-        Compositor::with_effects(&self.shell, effects).layer_content_rect(layer, channel, Rect { x: 0, y: 0, w, h }, &mut px);
+        Compositor::with_effects(&self.shell, effects).with_fills(fills).layer_content_rect(layer, channel, Rect { x: 0, y: 0, w, h }, &mut px);
         Tex { w: w as usize, h: h as usize, px }
     }
 
-    /// The grey values of `layer`'s mask (already reduced) as an opaque grey texture, or `None` without a mask.
-    pub fn mask(&self, layer: &Layer, effects: &EffectRegistry) -> Option<Tex> {
+    /// The grey values of `layer`'s mask (already reduced) as an opaque grey texture, or `None` without a mask; `fills`
+    /// as for [`Self::content`].
+    pub fn mask(&self, layer: &Layer, effects: &EffectRegistry, fills: &FillContext) -> Option<Tex> {
         let (w, h) = self.size();
         let mut grey = vec![0.0f32; w as usize * h as usize];
-        Compositor::with_effects(&self.shell, effects).mask_rect(layer, Rect { x: 0, y: 0, w, h }, &mut grey)?;
+        Compositor::with_effects(&self.shell, effects).with_fills(fills).mask_rect(layer, Rect { x: 0, y: 0, w, h }, &mut grey)?;
         Some(Tex { w: w as usize, h: h as usize, px: grey.into_iter().map(|g| [g, g, g, 1.0]).collect() })
     }
 
@@ -116,7 +119,7 @@ mod tests {
     use crate::paint::effect::{GreyBlend, MaskEffect, MaskPixels};
     use crate::paint::layer::{Fill, PaintContent};
     use crate::paint::mask::Mask;
-    use crate::paint::{ChannelSpec, PixelFormat};
+    use crate::paint::{ChannelSpec, NO_FILL_CONTEXT, PixelFormat};
 
     #[test]
     fn thumbnails_show_content_and_mask_at_grid_size() {
@@ -144,17 +147,17 @@ mod tests {
         l.mask = Some(Mask::new(0.0).with_effect(MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels::new(mask_image)))));
         let reduced = grid.reduce(&l);
         let none = EffectRegistry::new();
-        let c = grid.content(&reduced, Channel::Roughness, &none);
+        let c = grid.content(&reduced, Channel::Roughness, &none, &NO_FILL_CONTEXT);
         let at = |t: &Tex, x: usize, y: usize| t.px[y * t.w + x];
         assert!((at(&c, 10, 10)[0] - 0.8).abs() < 0.01 && at(&c, 10, 10)[3] == 1.0, "content ignores blend and opacity");
         assert_eq!(at(&c, 50, 10)[3], 0.0, "unpainted half is empty");
-        let m = grid.mask(&reduced, &none).unwrap();
+        let m = grid.mask(&reduced, &none, &NO_FILL_CONTEXT).unwrap();
         assert_eq!((at(&m, 5, 5)[0], at(&m, 5, 25)[0]), (0.0, 1.0));
         let fill = Layer::new("f", "F", LayerKind::Fill(Fill::uniform(vec![(Channel::Roughness, [0.25; 4])])));
-        assert_eq!(at(&grid.content(&fill, Channel::Roughness, &none), 0, 0), [0.25, 0.25, 0.25, 1.0]);
-        assert!(grid.mask(&fill, &none).is_none());
+        assert_eq!(at(&grid.content(&fill, Channel::Roughness, &none, &NO_FILL_CONTEXT), 0, 0), [0.25, 0.25, 0.25, 1.0]);
+        assert!(grid.mask(&fill, &none, &NO_FILL_CONTEXT).is_none());
         let group = Layer::new("g", "G", LayerKind::Group(vec![reduced.clone()]));
-        assert!(at(&grid.content(&group, Channel::Roughness, &none), 10, 30)[3] > 0.0, "a group shows its children, masked");
+        assert!(at(&grid.content(&group, Channel::Roughness, &none, &NO_FILL_CONTEXT), 10, 30)[3] > 0.0, "a group shows its children, masked");
         assert_eq!(PreviewGrid::new(&TextureSet::new("t", "T", (16, 4096)), 64).size(), (1, 64));
     }
 }
