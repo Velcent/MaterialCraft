@@ -19,7 +19,7 @@ impl Triangles for [[Vec3; 3]] {
     }
 
     fn corners(&self, i: usize) -> [Vec3; 3] {
-        self[i]
+        self.get(i).copied().unwrap_or_default()
     }
 }
 
@@ -158,5 +158,37 @@ impl Bvh {
             }
         }
         best
+    }
+}
+
+/// A part's triangles for picking and occlusion. A triangle with a bad index reads as a point at the origin, which
+/// no ray hits (zero area).
+impl Triangles for super::MeshPart {
+    fn triangle_count(&self) -> usize {
+        self.triangles.len()
+    }
+
+    fn corners(&self, i: usize) -> [Vec3; 3] {
+        let tri = self.triangles.get(i).copied().unwrap_or_default();
+        tri.map(|v| self.positions.get(v as usize).copied().unwrap_or_default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mesh::test_util::seamed_cube;
+
+    #[test]
+    fn picks_the_nearest_face_of_a_part() {
+        let mut cube = seamed_cube();
+        cube.triangles.push([0, 1, 999]);
+        let bvh = Bvh::build(&cube);
+        // from +Z towards the cube: the z = 1 face (side face 0, triangles 0 and 1) at distance 4
+        let hit = bvh.intersect(&cube, [0.2, 0.3, 5.0], [0.0, 0.0, -1.0], 100.0).unwrap();
+        assert!((hit.t - 4.0).abs() < 1e-5);
+        assert!(hit.tri < 2);
+        assert!(bvh.intersect(&cube, [0.2, 0.3, 5.0], [0.0, 0.0, 1.0], 100.0).is_none());
+        assert!(bvh.intersect(&cube, [0.2, 0.3, 5.0], [0.0, 0.0, -1.0], 3.0).is_none(), "beyond tmax");
     }
 }
