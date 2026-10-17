@@ -20,6 +20,7 @@ mod launch;
 mod loader;
 mod maps_worker;
 mod navigation;
+mod occlusion_check;
 mod panels;
 mod reveal;
 mod scene_sync;
@@ -28,6 +29,7 @@ mod shot;
 mod spp_import;
 mod stack_editor;
 mod unlit;
+mod view_pick;
 mod viewport;
 mod window;
 
@@ -38,6 +40,8 @@ use eframe::egui;
 use launch::{Launch, StartDocument};
 use loader::{Loaded, Loader};
 use materialcraft::diag::{Area, RingBuffer, Sink, SinkExt, Target};
+use materialcraft::projection::CpuViewProjector;
+use occlusion_check::OcclusionCheck;
 use panels::PanelEvent;
 use panels::import_report::ReportPanel;
 use panels::layers::LayerPanel;
@@ -50,6 +54,7 @@ use shell::Shell;
 use shell::panels::PaintPanel;
 use shot::ShotJob;
 use std::sync::Arc;
+use view_pick::ViewPicking;
 use viewport::Viewport;
 use window::WindowTitle;
 
@@ -87,6 +92,9 @@ pub struct PaintMode {
     /// Docking, shortcuts, tools and the user settings they live in.
     shell: Shell,
     shot: Option<ShotJob>,
+    /// Screen ↔ mesh for the tools: the view projector's per-mesh scene, kept in step with the document.
+    picking: ViewPicking,
+    check: Option<OcclusionCheck>,
     title: WindowTitle,
 }
 
@@ -108,6 +116,8 @@ impl PaintMode {
             shell: Shell::new(settings, diag.clone()),
             diag,
             shot: launch.shot.map(ShotJob::new),
+            picking: ViewPicking::default(),
+            check: launch.occlusion_check.map(OcclusionCheck::new),
             title: WindowTitle::default(),
         };
         match launch.open {
@@ -132,6 +142,7 @@ impl PaintMode {
             self.open(p);
         }
         self.poll_loader();
+        self.picking.poll(self.document.as_ref());
         if let Some(doc) = &mut self.document {
             self.scene.poll(doc, self.viewport.gpu(), &*self.diag);
             if let Some(e) = self.scene.error.take() {
@@ -155,7 +166,23 @@ impl PaintMode {
             let settled = self.loader.is_none() && self.document.is_some() && !self.scene.is_busy();
             shot.update(ctx, settled, self.viewport.frames());
         }
+        if let Some(check) = &mut self.check {
+            let settled = self.loader.is_none() && !self.scene.is_busy() && self.picking.is_ready();
+            let frames = self.viewport.frames();
+            let (doc, picking) = (self.document.as_ref().map(|d| d.doc()), &self.picking);
+            let (view, gpu) = self.viewport.settings_mut();
+            check.update(ctx, settled, frames, gpu, view, doc, |camera| doc.and_then(|d| picking.projector(d, camera)));
+        }
         action
+    }
+
+    /// Screen ↔ mesh through this frame's 3D view, for the tools: screen positions in UI points from the view's
+    /// top-left corner (`Viewport::rect`). `None` without a document, before the view was laid out, or while the
+    /// scene is being built.
+    #[allow(dead_code)] // first used by the brush tools (roadmap step 20)
+    fn view_projector(&self) -> Option<CpuViewProjector<'_>> {
+        let doc = self.document.as_ref()?;
+        self.picking.projector(doc.doc(), self.viewport.camera()?)
     }
 
     fn draw(&mut self, ui: &mut egui::Ui, history: &RingBuffer) -> Vec<PanelEvent> {

@@ -8,6 +8,7 @@ use super::navigation;
 use super::shell::actions;
 use crate::gui_workspace::shortcuts::ShortcutTable;
 use eframe::egui::{self, Align2, Color32, FontId, PointerButton, Sense};
+use materialcraft::camera::Camera;
 use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, Shared};
 use materialcraft::render3d::{RELIEF_NONE, View};
@@ -23,12 +24,14 @@ pub struct Viewport {
     snap: Option<(f32, f32)>,
     /// Where the renderer reports shader and GL errors.
     diag: Arc<dyn Sink>,
+    /// Where the view was laid out last frame (UI points).
+    rect: Option<egui::Rect>,
 }
 
 impl Viewport {
     pub fn new(diag: Arc<dyn Sink>) -> Viewport {
         // Painter shows height through the normal map; displacement stays opt-in.
-        Viewport { gpu: gpu3d::new_shared(), view: View { relief: RELIEF_NONE, ..View::default() }, snap: None, diag }
+        Viewport { gpu: gpu3d::new_shared(), view: View { relief: RELIEF_NONE, ..View::default() }, snap: None, diag, rect: None }
     }
 
     pub fn gpu(&self) -> &Shared {
@@ -45,6 +48,19 @@ impl Viewport {
         self.gpu.lock().map_or(0, |g| g.frames)
     }
 
+    /// The camera of the last drawn frame on a viewport in UI points (screen positions relative to
+    /// [`Viewport::rect`]'s top-left corner), or `None` before the view was laid out.
+    pub fn camera(&self) -> Option<Camera> {
+        let r = self.rect?;
+        Some(gpu3d::view_camera(&self.view, [r.width(), r.height()]))
+    }
+
+    /// Where the view was laid out last frame, in UI points.
+    #[allow(dead_code)] // first used by the brush tools (roadmap step 20), to place pointer positions on the camera
+    pub fn rect(&self) -> Option<egui::Rect> {
+        self.rect
+    }
+
     pub fn reset_camera(&mut self) {
         let d = View::default();
         (self.view.yaw, self.view.pitch, self.view.dist) = (d.yaw, d.pitch, d.dist);
@@ -55,6 +71,7 @@ impl Viewport {
     /// Fills the remaining space of `ui` with the view; `keys` decides the navigation gestures.
     pub fn ui(&mut self, ui: &mut egui::Ui, display: ChannelView, keys: &ShortcutTable) {
         let (rect, resp) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
+        self.rect = (rect.width() > 0.0 && rect.height() > 0.0).then_some(rect);
         ui.painter().rect_filled(rect, 0.0, BACKGROUND);
         self.camera_input(ui, &resp, keys);
         let error = self.gpu.lock().ok().and_then(|g| g.error.clone());
