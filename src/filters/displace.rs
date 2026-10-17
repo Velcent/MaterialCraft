@@ -14,9 +14,10 @@ use crate::noise::Fbm;
 use crate::paint::effect::Params;
 
 /// The noise both filters move texels along.
-fn noise(p: &Params, seed_offset: u32) -> Fbm {
+/// `octaves`: warps take some detail; slope directions stay smooth with few.
+fn noise(p: &Params, seed_offset: u32, octaves: u32) -> Fbm {
     let cells = (4.0 * p.range("scale", 1.0, 0.1, 64.0)).round().max(1.0) as i32;
-    Fbm::new(cells, cells, 5, 0.5, p.seed("seed").wrapping_add(seed_offset), 0)
+    Fbm::new(cells, cells, octaves, 0.5, p.seed("seed").wrapping_add(seed_offset), 0)
 }
 
 /// Runs `f(x, y)` for every texel at least `margin` texels inside the plane; the others keep the input.
@@ -51,8 +52,8 @@ impl AreaFilter for Warp {
         let turns = p.f("angle", 0.0) * std::f32::consts::TAU;
         WarpSettings {
             intensity: p.range("intensity", 0.01, 0.0, 0.25),
-            x: noise(p, 0),
-            y: noise(p, 7919),
+            x: noise(p, 0, 4),
+            y: noise(p, 7919, 4),
             direction: p.on("directional", false).then(|| (turns.cos(), turns.sin())),
         }
     }
@@ -91,7 +92,7 @@ impl AreaFilter for SlopeBlur {
     fn settings(&self, p: &Params, _: &Ctx) -> SlopeSettings {
         SlopeSettings {
             intensity: p.range("intensity", 0.01, 0.0, 0.25),
-            slope: noise(p, 0),
+            slope: noise(p, 0, 2),
             mode: p.int("mode", 0).clamp(0, 2),
             samples: p.int("samples", 16).clamp(2, 64) as u32,
         }
