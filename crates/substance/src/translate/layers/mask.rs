@@ -207,13 +207,27 @@ impl Walk<'_, '_> {
             }
             PainterEffect::Filter(f) => {
                 let name = f.procedural.as_ref().map_or("?", |p| p.name());
-                self.stop(on, format!("mask filter \"{name}\""));
-                self.push(
-                    header,
-                    blend,
-                    EffectKind::Filter(data::procedural(f.procedural.as_ref())),
-                    on,
-                );
+                let imported = data::procedural(f.procedural.as_ref());
+                let kind = match replacements::replace(&imported, self.evaluator.plan)
+                    .filter(|(r, _)| replacements::is_filter(r))
+                {
+                    Some((r, ours)) => {
+                        self.note(
+                            on,
+                            Computability::replaced(format!("mask filter \"{name}\" replaced by {}", r.generator)),
+                        );
+                        if let Some(h) = header {
+                            let status = self.blend(h).status();
+                            self.note(on, status);
+                        }
+                        EffectKind::Filter(ours)
+                    }
+                    None => {
+                        self.stop(on, format!("mask filter \"{name}\""));
+                        EffectKind::Filter(imported)
+                    }
+                };
+                self.push(header, blend, kind, on);
             }
             PainterEffect::Levels(l) => {
                 self.stop(on, "mask levels".into());
