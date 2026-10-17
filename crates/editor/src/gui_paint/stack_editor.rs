@@ -16,7 +16,7 @@ pub struct Applied {
     pub select: Option<Vec<String>>,
 }
 
-/// Applies `ev` to `doc` as one history step. `Isolate` is view state and is not handled here.
+/// Applies `ev` to `doc` as one history step. `Isolate` (view state) and `SaveAsset` (a file) are not handled here.
 pub fn apply(doc: &mut OpenDocument, ev: LayerEvent) -> Result<Applied, EditError> {
     let set_id = match set_of(&ev) {
         Some(s) => s.to_string(),
@@ -41,7 +41,7 @@ fn set_of(ev: &LayerEvent) -> Option<&str> {
             &layer.set
         }
         Drop { target, .. } => target.set(),
-        EndGesture | Isolate(_) => return None,
+        EndGesture | Isolate(_) | SaveAsset(_) => return None,
     })
 }
 
@@ -81,7 +81,7 @@ fn run(doc: &mut OpenDocument, ev: LayerEvent) -> Result<Option<Vec<String>>, Ed
                 DropOutcome::Effects { .. } => None,
             })
         }),
-        EndGesture | Isolate(_) => Ok(None),
+        EndGesture | Isolate(_) | SaveAsset(_) => Ok(None),
     }
 }
 

@@ -11,7 +11,7 @@ use crate::gui_theme;
 
 pub struct Drag {
     pub item: Item,
-    pub payload: Result<DropPayload, &'static str>,
+    pub payload: Result<DropPayload, String>,
 }
 
 impl Drag {

@@ -1,6 +1,6 @@
 //! Hosting the asset tray on the Paint screen: while an asset is dragged the layer panel previews where it
 //! would land (LS-19); when it is let go over the stack the drop becomes one layer-stack edit through the
-//! history (LS-18); the tray's library settings go to the settings file (AS-16…AS-18).
+//! history (LS-18), followed by a bake of the maps a smart material or mask needs that the set lacks (AS-05); the tray's library settings go to the settings file (AS-16…AS-18).
 
 use super::PaintMode;
 use super::panels::layers::{LayerEvent, StackDropTarget};
@@ -21,11 +21,19 @@ impl PaintMode {
     /// Applies a tray request.
     pub(super) fn apply_tray(&mut self, ev: TrayEvent) {
         match ev {
-            TrayEvent::Dropped { payload, pos, replace, .. } => {
+            TrayEvent::Dropped { item, payload, pos, replace } => {
                 self.layers.hover(None);
                 let Some(doc) = &self.document else { return };
                 if let Some(ev) = drop_event(&self.layers, doc.doc(), pos, payload, replace) {
+                    let set = match &ev {
+                        LayerEvent::Drop { target, .. } => Some(target.set().to_string()),
+                        _ => None,
+                    };
                     self.edit_layers(ev);
+                    // A smart material or mask that needs maps the set has not baked gets them baked (AS-05).
+                    if let Some(set) = set {
+                        self.bake_missing_maps(&set, &item.name, &item.needs);
+                    }
                 }
             }
             TrayEvent::SetRoots(roots) => {

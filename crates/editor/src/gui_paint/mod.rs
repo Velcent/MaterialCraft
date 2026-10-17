@@ -34,6 +34,7 @@ mod reveal;
 mod scene_sync;
 pub mod shell;
 mod shot;
+mod smart_assets;
 mod spp_import;
 mod stack_editor;
 mod stroke_test;

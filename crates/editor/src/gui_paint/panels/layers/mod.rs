@@ -20,7 +20,7 @@ pub mod thumbnails;
 #[cfg(test)]
 mod tests;
 
-pub use events::LayerEvent;
+pub use events::{LayerEvent, SaveAsset};
 
 use super::PanelEvent;
 use crate::gui_paint::document_state::OpenDocument;

@@ -43,6 +43,8 @@ pub struct Item {
     pub stamp: (Option<SystemTime>, u64),
     /// The built-in generator or filter and its preset values, if the asset was made by one (its provenance).
     pub procedural: Option<(String, Vec<(String, String)>)>,
+    /// Baked maps a smart material or smart mask needs (AS-05), by map id.
+    pub needs: Vec<String>,
 }
 
 impl Item {
@@ -61,6 +63,7 @@ impl Item {
             thumb: thumb_source(root.path.as_deref(), asset),
             stamp: (asset.modified, asset.size),
             procedural: procedural(&asset.provenance),
+            needs: asset.needs.clone(),
         }
     }
 

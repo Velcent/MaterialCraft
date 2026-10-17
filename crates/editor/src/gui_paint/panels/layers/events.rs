@@ -71,6 +71,8 @@ pub enum LayerEvent {
     InvertMask(LayerRef),
     /// Show only this layer's mask in the viewport (`None`: show the material again). View state only.
     Isolate(Option<LayerRef>),
+    /// Save layers or a mask into the user's asset library (MK-15). Not a document change.
+    SaveAsset(SaveAsset),
     /// An asset dropped onto the stack; `replace` is Ctrl. Sent by the asset tray (step 15).
     #[allow(dead_code)]
     Drop {
@@ -78,4 +80,13 @@ pub enum LayerEvent {
         payload: DropPayload,
         replace: bool,
     },
+}
+
+/// What "Save as smart material" and "Save as smart mask" save.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SaveAsset {
+    /// The selected layers (a single selected folder: its contents under its name).
+    SmartMaterial { set: String, ids: Vec<String> },
+    /// The layer's mask with its effects.
+    SmartMask(LayerRef),
 }
