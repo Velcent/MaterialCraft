@@ -37,7 +37,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
     let mut events = Vec::new();
     let title = s.document.map(|d| d.name()).unwrap_or_default();
     let has_document = s.document.is_some();
-    menu_bar::show(ui, &title, has_document, s.shell, &mut events);
+    menu_bar::show(ui, &title, has_document, s.document.map(|d| d.history()), s.shell, &mut events);
     status_bar::show(ui, s.history.last().map(|(_, e)| e), &s.activity, &mut events);
     let strip_frame = egui::Frame::NONE.fill(gui_theme::STRIP_BG);
     for strip in [Strip::Tools, Strip::Panels] {

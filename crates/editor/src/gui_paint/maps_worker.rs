@@ -20,6 +20,7 @@ pub struct SetMaps {
 /// One run over a list of texture sets.
 pub struct MapsWorker {
     job: Job<SetMaps>,
+    sets: Vec<usize>,
     total: usize,
     done: usize,
 }
@@ -27,6 +28,7 @@ pub struct MapsWorker {
 impl MapsWorker {
     pub fn start(doc: Arc<Document>, sets: Vec<usize>, view: ChannelView) -> MapsWorker {
         let total = sets.len();
+        let listed = sets.clone();
         let job = Job::spawn(move |cancel, tx| {
             for set in sets {
                 if cancel.is_cancelled() {
@@ -44,7 +46,7 @@ impl MapsWorker {
                 }
             }
         });
-        MapsWorker { job, total, done: 0 }
+        MapsWorker { job, sets: listed, total, done: 0 }
     }
 
     /// Sets finished since the last call.
@@ -52,6 +54,16 @@ impl MapsWorker {
         let out = self.job.poll();
         self.done += out.len();
         out
+    }
+
+    /// Stops after the set being composited now (its result and later ones are not sent).
+    pub fn cancel(&self) {
+        self.job.cancel();
+    }
+
+    /// The sets this run was started for.
+    pub fn sets(&self) -> &[usize] {
+        &self.sets
     }
 
     pub fn is_finished(&self) -> bool {

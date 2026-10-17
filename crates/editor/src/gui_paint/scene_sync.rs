@@ -1,6 +1,9 @@
 //! [`SceneSync`]: keeps the GPU scene in step with the open document. Geometry and maps are built
 //! on background threads; the scene is set once per geometry build (with neutral placeholder maps)
 //! and each texture set's maps replace the placeholders of its parts as they arrive.
+//!
+//! Edits ask for new maps often (every frame of a slider drag). Only one maps worker runs at a time: a
+//! request while one runs cancels it and is started once it has stopped, with every set either asked for.
 
 use super::channel_view::ChannelView;
 use super::document_state::OpenDocument;
@@ -9,6 +12,7 @@ use super::job::Job;
 use super::maps_worker::{MapsWorker, SetMaps};
 use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
+use std::collections::BTreeSet;
 
 type GeometryResult = Result<Vec<PartGeometry>, String>;
 
@@ -20,6 +24,8 @@ pub struct SceneSync {
     part_sets: Option<Vec<Option<usize>>>,
     /// Maps that arrived before the geometry.
     waiting: Vec<SetMaps>,
+    /// Maps asked for while a worker was still running: started when it has stopped.
+    pending: Option<(ChannelView, BTreeSet<usize>)>,
     pub error: Option<String>,
 }
 
@@ -38,8 +44,29 @@ impl SceneSync {
     /// Recomputes the maps only (changed display mode).
     pub fn remap(&mut self, doc: &mut OpenDocument, view: ChannelView) {
         doc.invalidate_maps();
-        self.waiting.clear();
-        self.maps = Some(MapsWorker::start(doc.shared(), doc.visible_sets(), view));
+        let sets = doc.visible_sets();
+        self.refresh(doc, view, sets);
+    }
+
+    /// Recomputes the maps of the listed sets (their layers changed); hidden sets are skipped.
+    pub fn refresh(&mut self, doc: &mut OpenDocument, view: ChannelView, sets: Vec<usize>) {
+        let visible = doc.visible_sets();
+        let sets: Vec<usize> = sets.into_iter().filter(|s| visible.contains(s)).collect();
+        doc.invalidate_sets(&sets);
+        match &self.maps {
+            Some(worker) if !worker.is_finished() => {
+                worker.cancel();
+                let pending = self.pending.get_or_insert_with(|| (view, BTreeSet::new()));
+                pending.0 = view;
+                pending.1.extend(worker.sets().iter().copied().chain(sets));
+            }
+            _ => self.start_maps(doc, view, sets),
+        }
+    }
+
+    fn start_maps(&mut self, doc: &OpenDocument, view: ChannelView, sets: Vec<usize>) {
+        self.waiting.retain(|m| !sets.contains(&m.set));
+        self.maps = Some(MapsWorker::start(doc.shared(), sets, view));
     }
 
     /// Drops all work and the GPU scene.
@@ -67,9 +94,16 @@ impl SceneSync {
             }
         }
         if let Some(worker) = &mut self.maps {
-            self.waiting.extend(worker.poll());
+            let arrived = worker.poll();
+            // A cancelled run's results are outdated.
+            if self.pending.is_none() {
+                self.waiting.extend(arrived);
+            }
             if worker.is_finished() {
                 self.maps = None;
+                if let Some((view, sets)) = self.pending.take() {
+                    self.start_maps(doc, view, sets.into_iter().collect());
+                }
             }
         }
         if let Some(part_sets) = &self.part_sets {
@@ -84,7 +118,7 @@ impl SceneSync {
 
     /// True while geometry or maps are still being built.
     pub fn is_busy(&self) -> bool {
-        self.geometry.is_some() || self.maps.is_some() || !self.waiting.is_empty()
+        self.geometry.is_some() || self.maps.is_some() || self.pending.is_some() || !self.waiting.is_empty()
     }
 
     /// (texture sets done, total) of the running maps job.

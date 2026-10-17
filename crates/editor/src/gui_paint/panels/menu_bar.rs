@@ -7,9 +7,10 @@ use super::super::shell::panels::PaintPanel;
 use super::PanelEvent;
 use crate::gui_workspace::PanelKind;
 use eframe::egui::{self, Color32, Id, Ui};
+use materialcraft::history::PaintHistory;
 
-/// Draws the menu bar; `has_document` enables the document entries.
-pub fn show(ui: &mut Ui, title: &str, has_document: bool, shell: &Shell, events: &mut Vec<PanelEvent>) {
+/// Draws the menu bar; `has_document` enables the document entries, `history` is the open document's.
+pub fn show(ui: &mut Ui, title: &str, has_document: bool, history: Option<&PaintHistory>, shell: &Shell, events: &mut Vec<PanelEvent>) {
     let frame = egui::Frame::NONE.fill(Color32::from_rgb(34, 34, 34)).inner_margin(egui::Margin::symmetric(6, 2));
     egui::Panel::top("paint_menu").frame(frame).show(ui, |ui| {
         egui::MenuBar::new().ui(ui, |ui| {
@@ -19,6 +20,12 @@ pub fn show(ui: &mut Ui, title: &str, has_document: bool, shell: &Shell, events:
                 item(ui, shell, events, "Close document", "paint.close", has_document, PanelEvent::Close);
                 ui.separator();
                 item(ui, shell, events, "Home screen", "paint.home", true, PanelEvent::Home);
+            });
+            ui.menu_button("Edit", |ui| {
+                let undo = history.and_then(|h| h.undo_label()).map_or("Undo".to_owned(), |l| format!("Undo {l}"));
+                let redo = history.and_then(|h| h.redo_label()).map_or("Redo".to_owned(), |l| format!("Redo {l}"));
+                item(ui, shell, events, &undo, "paint.edit.undo", history.is_some_and(|h| h.can_undo()), PanelEvent::Undo);
+                item(ui, shell, events, &redo, "paint.edit.redo", history.is_some_and(|h| h.can_redo()), PanelEvent::Redo);
             });
             ui.menu_button("View", |ui| {
                 item(ui, shell, events, "Reset camera", "paint.view.reset_camera", has_document, PanelEvent::ResetCamera);

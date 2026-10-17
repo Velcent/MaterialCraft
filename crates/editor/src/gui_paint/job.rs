@@ -52,6 +52,11 @@ impl<T: Send + 'static> Job<T> {
         out
     }
 
+    /// Asks the thread to stop; it ends at its next check of the token.
+    pub fn cancel(&self) {
+        self.cancel.cancel();
+    }
+
     /// True once the thread has ended and every result was polled.
     pub fn is_finished(&self) -> bool {
         self.finished

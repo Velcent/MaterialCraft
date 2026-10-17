@@ -11,7 +11,7 @@ use super::super::shell::tools::ToolState;
 use super::super::viewport::Viewport;
 use super::import_report::ReportPanel;
 use super::log::LogPanel;
-use super::{PanelEvent, interface_settings, texture_sets, view_settings, viewport_toolbar};
+use super::{PanelEvent, interface_settings, texture_sets, timeline, view_settings, viewport_toolbar};
 use crate::gui_workspace::shortcuts::{ShortcutTable, ShortcutsPage};
 use materialcraft::diag::RingBuffer;
 
@@ -79,6 +79,9 @@ impl Bodies<'_> {
     fn viewport_body(&mut self, ui: &mut Ui) {
         let has_document = self.document.is_some();
         viewport_toolbar::show(ui, self.tools, self.shortcuts, self.display, has_document, self.events);
+        if let Some(doc) = self.document {
+            timeline::show(ui, doc.history(), self.events);
+        }
         if has_document {
             self.viewport.ui(ui, self.display, self.shortcuts);
         } else {

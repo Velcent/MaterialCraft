@@ -34,6 +34,7 @@ use launch::{Launch, StartDocument};
 use loader::{Loaded, Loader};
 use materialcraft::diag::{Area, RingBuffer, Sink, SinkExt, Target};
 use materialcraft::paint::diag_entries;
+use materialcraft::paint::edit::EditError;
 use panels::PanelEvent;
 use panels::import_report::ReportPanel;
 use panels::layout::Screen;
@@ -228,6 +229,9 @@ impl PaintMode {
                     self.scene.rebuild(doc, self.display);
                 }
             }
+            PanelEvent::Undo => self.move_in_history("Undo", |d| d.undo().map(|_| ())),
+            PanelEvent::Redo => self.move_in_history("Redo", |d| d.redo().map(|_| ())),
+            PanelEvent::JumpHistory(done) => self.move_in_history("Going back in the history", |d| d.jump_to(done)),
             PanelEvent::CancelLoad => {
                 self.loader = None;
                 self.diag.info(Area::Project, "Cancelled.");
@@ -261,6 +265,20 @@ impl PaintMode {
             self.diag.warn(Area::General, format!("The texture set list can't be shown: {e}."));
         }
         self.focus = Some(Focus::new(set));
+    }
+
+    /// Undo, redo or a timeline jump, then recompositing: the history does not say which sets changed.
+    fn move_in_history(&mut self, what: &str, step: impl FnOnce(&mut OpenDocument) -> Result<(), EditError>) {
+        let Some(doc) = &mut self.document else { return };
+        if let Err(e) = step(doc) {
+            self.diag.warn(Area::Project, format!("{what} failed: {e}. The history before that point was dropped."));
+        }
+        if doc.sync_sets() {
+            self.scene.rebuild(doc, self.display);
+        } else {
+            let all = (0..doc.doc().texture_sets.len()).collect();
+            self.scene.refresh(doc, self.display, all);
+        }
     }
 
     fn show_channel(&mut self, view: ChannelView) {

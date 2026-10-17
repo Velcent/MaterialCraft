@@ -11,6 +11,7 @@ pub mod menu_bar;
 mod panel_strip;
 pub mod status_bar;
 pub mod texture_sets;
+mod timeline;
 mod tools_strip;
 pub mod view_settings;
 mod viewport_toolbar;
@@ -64,4 +65,8 @@ pub enum PanelEvent {
     DockRefused(String),
     /// Go to what a log entry concerns (LG-10).
     Reveal(Target),
+    Undo,
+    Redo,
+    /// Return the document to the state after this many steps (a timeline block).
+    JumpHistory(usize),
 }

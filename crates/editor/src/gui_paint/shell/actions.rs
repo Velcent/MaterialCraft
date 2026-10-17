@@ -27,6 +27,7 @@ pub const ZOOM: &str = "paint.nav.zoom";
 pub const LIGHT: &str = "paint.nav.light";
 
 const FILE: &str = "File";
+const EDIT: &str = "Edit";
 const VIEW: &str = "View";
 const NAV: &str = "Navigation";
 const WINDOW: &str = "Window";
@@ -39,6 +40,8 @@ pub const ACTIONS: &[ActionSpec] = &[
     press("paint.import", "Import Substance Painter project", FILE, &["Mod+I"]),
     press("paint.close", "Close document", FILE, &["Mod+W"]),
     press("paint.home", "Home screen", FILE, &[]),
+    press("paint.edit.undo", "Undo", EDIT, &["Mod+Z"]),
+    press("paint.edit.redo", "Redo", EDIT, &["Mod+Shift+Z", "Mod+Y"]),
     press("paint.view.reset_camera", "Reset camera", VIEW, &["F"]),
     press("paint.view.material", "Show the material", VIEW, &["M"]),
     press("paint.view.next_channel", "Next channel", VIEW, &["C"]),
@@ -91,6 +94,8 @@ pub fn event_for(id: &str) -> Option<PanelEvent> {
         "paint.import" => PanelEvent::Import,
         "paint.close" => PanelEvent::Close,
         "paint.home" => PanelEvent::Home,
+        "paint.edit.undo" => PanelEvent::Undo,
+        "paint.edit.redo" => PanelEvent::Redo,
         "paint.view.reset_camera" => PanelEvent::ResetCamera,
         "paint.view.material" => PanelEvent::ShowChannel(ChannelView::Material),
         "paint.view.next_channel" => PanelEvent::CycleChannel(1),
