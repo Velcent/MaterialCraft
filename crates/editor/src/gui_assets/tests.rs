@@ -158,7 +158,7 @@ fn the_service_sees_files_added_to_a_library_folder() {
     let user = dir.join(roots::USER_FOLDER);
     assert!(roots::first_run(&user).is_some());
     std::fs::write(user.join("materials").join("brick.mca"), materialcraft::graph::EXAMPLE).expect("write");
-    let service = LibraryService::spawn(roots::roots(Some(&user), &[]), Arc::new(NullSink));
+    let service = LibraryService::spawn(roots::roots(Some(&user), &[], None), Arc::new(NullSink));
     let mut seen = 0;
     for _ in 0..100 {
         std::thread::sleep(Duration::from_millis(30));

@@ -7,6 +7,7 @@
 //! document (AS-18).
 //!
 //! - [`service`]: the library, scanned and polled off the UI thread; [`roots`]: which libraries, first run;
+//!   [`starter`]: the starter library, installed or built on first run;
 //! - [`view`]: the filter (types, folder, query) and saved searches; [`results`]: what the filter matches;
 //! - [`header`], [`folders`], [`grid`], [`settings_page`]: drawing; [`icons`]: usage icons;
 //! - [`thumbs`]: thumbnails made off the UI thread and cached; [`drag`], [`payload`]: dragging into the stack.
@@ -22,6 +23,7 @@ pub mod results;
 pub mod roots;
 pub mod service;
 mod settings_page;
+pub mod starter;
 pub mod thumbs;
 pub mod view;
 
@@ -39,6 +41,7 @@ use crate::gui_settings::{LibrarySettings, SavedSearch, TrayLayout, TraySettings
 use drag::Drag;
 use results::{Item, Results};
 use service::LibraryService;
+use starter::StarterLibrary;
 use thumbs::ThumbCache;
 use view::Filter;
 
@@ -67,6 +70,8 @@ pub struct AssetTray {
     /// The user's library folder (none when settings live in memory).
     user: Option<PathBuf>,
     extra: Vec<PathBuf>,
+    /// The read-only starter library (added once it is ready).
+    starter: StarterLibrary,
     saved: Vec<SavedSearch>,
     view: TraySettings,
     /// The saved search whose tab is active.
@@ -81,13 +86,17 @@ pub struct AssetTray {
 
 impl AssetTray {
     /// The tray over the libraries in `settings`; the user library lives in `settings_dir` (created with its
-    /// standard layout on first run). Also returns what to tell the user about the first run.
+    /// standard layout on first run), the starter library is found or built there ([`starter`]). Also returns what to
+    /// tell the user about the first run.
     pub fn new(settings: &LibrarySettings, settings_dir: Option<&Path>, sink: Arc<dyn Sink>) -> (AssetTray, Option<String>) {
         let user = roots::user_folder(settings_dir);
         let note = user.as_deref().and_then(roots::first_run);
-        let service = LibraryService::spawn(roots::roots(user.as_deref(), &settings.roots), sink);
+        let starter = StarterLibrary::locate(settings_dir, sink.clone());
+        let service = LibraryService::spawn(roots::roots(user.as_deref(), &settings.roots, starter.folder()), sink);
         let thumbs = ThumbCache::new(settings_dir.map(|d| d.join("cache").join("thumbnails")));
-        (AssetTray::with_service(service, thumbs, user, settings), note)
+        let mut tray = AssetTray::with_service(service, thumbs, user, settings);
+        tray.starter = starter;
+        (tray, note)
     }
 
     /// The tray over an existing library service (tests).
@@ -99,6 +108,7 @@ impl AssetTray {
             filter: Filter::default(),
             user,
             extra: settings.roots.clone(),
+            starter: StarterLibrary::none(),
             saved: settings.saved_searches.clone(),
             view: settings.tray.clone(),
             tab: None,
@@ -180,6 +190,9 @@ impl AssetTray {
     /// Ends a drag when the pointer is let go (anywhere on screen) and draws the dragged asset under the pointer.
     /// Call once per frame after every panel was drawn, whether the tray is visible or not.
     pub fn end_frame(&mut self, ctx: &egui::Context) -> Option<TrayEvent> {
+        if self.starter.poll() {
+            self.apply_roots();
+        }
         let drag = self.drag.as_ref()?;
         let (released, down, pos, ctrl, escape) =
             ctx.input(|i| (i.pointer.any_released(), i.pointer.primary_down(), i.pointer.latest_pos(), i.modifiers.command, i.key_pressed(egui::Key::Escape)));
@@ -212,7 +225,7 @@ impl AssetTray {
 
     /// Hands changed library folders to the service.
     fn apply_roots(&mut self) {
-        let wanted = roots::roots(self.user.as_deref(), &self.extra);
+        let wanted = roots::roots(self.user.as_deref(), &self.extra, self.starter.folder());
         self.service.set_roots(wanted);
     }
 }

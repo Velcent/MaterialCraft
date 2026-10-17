@@ -1,6 +1,7 @@
 //! Which libraries the tray shows (AS-01, AS-18): the user's own library in `library/` next to the settings
 //! file, created with the standard folder layout on first run (AS-02), and the further folders added in the
-//! library settings. The starter library joins here once it ships (roadmap step 25).
+//! library settings, and the read-only starter library (roadmap step 25, [`super::starter`]) last, so the user's
+//! own assets win where a material reference names a file both have.
 
 use std::path::{Path, PathBuf};
 
@@ -8,6 +9,9 @@ use materialcraft::assets::{LibraryRoot, RootKind, create_standard_layout};
 
 /// The id of the user's own library.
 pub const USER_ROOT: &str = "user";
+
+/// The id of the starter library.
+pub const STARTER_ROOT: &str = "starter";
 
 /// Folder of the user's library under the settings folder.
 pub const USER_FOLDER: &str = "library";
@@ -22,8 +26,9 @@ pub fn user_folder(settings_dir: Option<&Path>) -> Option<PathBuf> {
     settings_dir.map(|d| d.join(USER_FOLDER))
 }
 
-/// The roots for the user library at `user` and the further folders `extra`, in tray order.
-pub fn roots(user: Option<&Path>, extra: &[PathBuf]) -> Vec<LibraryRoot> {
+/// The roots for the user library at `user`, the further folders `extra` and the starter library at `starter`, in
+/// tray order.
+pub fn roots(user: Option<&Path>, extra: &[PathBuf], starter: Option<&Path>) -> Vec<LibraryRoot> {
     let mut out = Vec::new();
     if let Some(u) = user {
         out.push(LibraryRoot::folder(USER_ROOT, "My assets", RootKind::User, u));
@@ -34,6 +39,9 @@ pub fn roots(user: Option<&Path>, extra: &[PathBuf]) -> Vec<LibraryRoot> {
         if !out.iter().any(|r: &LibraryRoot| r.id.as_str() == id) {
             out.push(LibraryRoot::folder(id, name, RootKind::Extra, p.clone()));
         }
+    }
+    if let Some(s) = starter {
+        out.push(LibraryRoot::folder(STARTER_ROOT, "Starter", RootKind::Starter, s));
     }
     out
 }
@@ -56,12 +64,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_user_library_comes_first_and_extras_are_unique() {
-        let r = roots(Some(Path::new("/s/library")), &[PathBuf::from("/a/x"), PathBuf::from("/a/x"), PathBuf::from("/b")]);
+    fn the_user_library_comes_first_extras_are_unique_and_the_starter_comes_last() {
+        let r = roots(Some(Path::new("/s/library")), &[PathBuf::from("/a/x"), PathBuf::from("/a/x"), PathBuf::from("/b")], Some(Path::new("/s/starter")));
         let ids: Vec<&str> = r.iter().map(|r| r.id.as_str()).collect();
-        assert_eq!(ids, ["user", "extra:/a/x", "extra:/b"]);
+        assert_eq!(ids, ["user", "extra:/a/x", "extra:/b", "starter"]);
         assert_eq!(r[1].name, "x");
-        assert!(roots(None, &[]).is_empty());
+        assert!(r[3].is_read_only());
+        assert!(roots(None, &[], None).is_empty());
     }
 
     #[test]
