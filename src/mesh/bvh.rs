@@ -102,6 +102,12 @@ impl Bvh {
     /// The nearest hit with `1e-6 < t < tmax` of the ray `o + t * d`. `tris` must be the triangles the BVH was
     /// built from.
     pub fn intersect<T: Triangles + ?Sized>(&self, tris: &T, o: V, d: V, tmax: f32) -> Option<Hit> {
+        self.intersect_where(tris, o, d, tmax, |_| true)
+    }
+
+    /// The nearest hit with `1e-6 < t < tmax` that `accept` lets through (e.g. only triangles facing the ray, or only
+    /// hits beyond a minimum distance). Rejected hits do not hide what lies behind them.
+    pub fn intersect_where<T: Triangles + ?Sized>(&self, tris: &T, o: V, d: V, tmax: f32, accept: impl Fn(&Hit) -> bool) -> Option<Hit> {
         let inv = [
             1.0 / if d[0].abs() < 1e-12 { 1e-12 } else { d[0] },
             1.0 / if d[1].abs() < 1e-12 { 1e-12 } else { d[1] },
@@ -147,8 +153,11 @@ impl Bvh {
                     }
                     let tt = dot(e2, q) * id;
                     if tt > 1e-6 && tt < tm {
-                        tm = tt;
-                        best = Some(Hit { t: tt, tri: ti, u, v });
+                        let hit = Hit { t: tt, tri: ti, u, v };
+                        if accept(&hit) {
+                            tm = tt;
+                            best = Some(hit);
+                        }
                     }
                 }
             } else if sp + 2 <= 64 {
@@ -190,5 +199,8 @@ mod tests {
         assert!(hit.tri < 2);
         assert!(bvh.intersect(&cube, [0.2, 0.3, 5.0], [0.0, 0.0, 1.0], 100.0).is_none());
         assert!(bvh.intersect(&cube, [0.2, 0.3, 5.0], [0.0, 0.0, -1.0], 3.0).is_none(), "beyond tmax");
+        // rejecting the front face finds the back face (z = -1) behind it
+        let far = bvh.intersect_where(&cube, [0.2, 0.3, 5.0], [0.0, 0.0, -1.0], 100.0, |h| h.t > 4.5).unwrap();
+        assert!((far.t - 6.0).abs() < 1e-5);
     }
 }
