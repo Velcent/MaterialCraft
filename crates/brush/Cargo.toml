@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 materialcraft = { path = "../.." }
 # PhotoCraft's brush engine, pinned (ADR 0007: depend at a pinned revision; nothing goes upstream). Only
-# `engine::photocraft` may name it.
+# `engine::photocraft` (the dab engine) and `engine::photocraft_tips` (procedural tips) may name it.
 photocraft-paint = { git = "https://github.com/storytold/photocraft", rev = "5f65579ecb44047c2a619036c18ff273202e1389" }
 
 [lints]

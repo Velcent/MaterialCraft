@@ -1,7 +1,11 @@
 //! Input points → dabs. [`DabEngine`] is the only way the rest of MaterialCraft reaches a brush engine; today it is
-//! PhotoCraft's, behind the [`photocraft`] adapter (ADR 0007: one adapter file, pinned revision).
+//! PhotoCraft's, behind the [`photocraft`] adapter (ADR 0007: one adapter file, pinned revision). PhotoCraft's
+//! procedural tips, which the starter library ships as alphas, come through [`photocraft_tips`].
 
 mod photocraft;
+mod photocraft_tips;
+
+pub use photocraft_tips::{PROCEDURAL_TIPS, TipInfo, procedural_tip};
 
 use materialcraft::paint::brush::BrushPreset;
 use materialcraft::stamp::DabSample;

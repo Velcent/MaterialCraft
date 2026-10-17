@@ -2,7 +2,8 @@
 //! and one stroke record per stroke.
 //!
 //! - [`engine`]: [`DabEngine`] turns input points into dabs. It is PhotoCraft's brush engine (`photocraft-paint`
-//!   at a pinned revision) behind one adapter file, `engine::photocraft`, the only code naming it (ADR 0007).
+//!   at a pinned revision) behind one adapter file, `engine::photocraft`, the only code naming it (ADR 0007)
+//!   besides `engine::photocraft_tips`, which hands out PhotoCraft's procedural tips ([`procedural_tip`]).
 //!   Model-sized brushes get a per-point dab scale there (ADR 0006 Q-PT-12).
 //! - [`session`]: [`StrokeSession`] drives one stroke through the core's stamp stage and records its samples.
 //! - [`target`]: [`PaintTarget`], what a tool paints (a paint layer's channels or a mask, ADR 0008) and with which
@@ -25,7 +26,7 @@ pub mod symmetry;
 pub mod target;
 
 pub use document::{DocumentStroke, Ended, Prepared};
-pub use engine::{DabEngine, InputPoint};
+pub use engine::{DabEngine, InputPoint, PROCEDURAL_TIPS, TipInfo, procedural_tip};
 pub use replay::{ReplayScene, recorded_brush, recorded_values, replay};
 pub use session::{Finished, SessionScene, StrokeSession, StrokeSetup};
 pub use stroke::{LazyMouse, LineAnchor};
