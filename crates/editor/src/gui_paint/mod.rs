@@ -1,7 +1,7 @@
 //! Paint mode screen (milestone M4: view an imported Substance Painter project).
 //!
 //! [`PaintMode`] is the only type the rest of the editor sees. It wires small components together:
-//! [`loader::Loader`] reads documents (and imports `.spp` through `mcsub`), [`scene_sync::SceneSync`]
+//! [`loader::Loader`] reads documents (and imports `.spp` in-process), [`scene_sync::SceneSync`]
 //! keeps the GPU scene in step with the document, [`viewport::Viewport`] draws it and the
 //! [`panels`] turn clicks into [`panels::PanelEvent`]s that are applied here.
 
@@ -14,10 +14,10 @@ mod job;
 mod launch;
 mod loader;
 mod maps_worker;
-mod mcsub;
 mod panels;
 mod scene_sync;
 mod shot;
+mod spp_import;
 mod unlit;
 mod viewport;
 mod window;

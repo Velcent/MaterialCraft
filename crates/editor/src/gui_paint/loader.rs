@@ -1,9 +1,8 @@
-//! Background loading of a document: `.mcpaint` directly, `.spp` through `mcsub convert` into the
-//! conversion cache first.
+//! Background loading of a document: `.mcpaint` directly, `.spp` through the in-process importer
+//! ([`SppImport`], which keeps a conversion cache).
 
-use super::cache;
 use super::job::{CancelToken, Job};
-use super::mcsub::Mcsub;
+use super::spp_import::SppImport;
 use materialcraft::paint::{self, Document};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
@@ -22,7 +21,7 @@ enum Event {
     Done(Result<Loaded, String>),
 }
 
-/// One load in progress. Dropping it cancels the load (and kills `mcsub`).
+/// One load in progress. Dropping it cancels the load.
 pub struct Loader {
     job: Job<Event>,
     source: PathBuf,
@@ -66,41 +65,20 @@ impl Loader {
 
 fn load(path: &Path, cancel: &CancelToken, tx: &Sender<Event>) -> Result<Loaded, String> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-    let (file, summary) = match ext.as_str() {
-        "mcpaint" => (path.to_path_buf(), None),
+    match ext.as_str() {
+        "mcpaint" => {
+            let _ = tx.send(Event::Progress(0.95, "Reading document".into()));
+            Ok(Loaded { document: read_document(path)?, source: path.to_path_buf(), summary: None })
+        }
         "spp" => {
-            let (file, summary) = convert(path, cancel, tx)?;
-            (file, Some(summary))
+            let mut progress = |f: f32, m: &str| {
+                let _ = tx.send(Event::Progress(f, m.to_string()));
+            };
+            let imported = SppImport::new().open(path, cancel, &mut progress)?;
+            Ok(Loaded { document: imported.document, source: path.to_path_buf(), summary: Some(imported.summary) })
         }
-        _ => return Err(format!("{} is neither a .mcpaint document nor a .spp project.", path.display())),
-    };
-    let _ = tx.send(Event::Progress(0.95, "Reading document".into()));
-    let document = read_document(&file)?;
-    Ok(Loaded { document, source: path.to_path_buf(), summary })
-}
-
-/// Converts a `.spp` into the cache unless an up-to-date conversion is there already.
-fn convert(spp: &Path, cancel: &CancelToken, tx: &Sender<Event>) -> Result<(PathBuf, String), String> {
-    let mcsub = Mcsub::locate()?;
-    let out = cache::converted_path(spp, mcsub.path());
-    if out.is_file() {
-        return Ok((out, "Opened the cached conversion.".into()));
+        _ => Err(format!("{} is neither a .mcpaint document nor a .spp project.", path.display())),
     }
-    std::fs::create_dir_all(cache::dir()).map_err(|e| format!("Cannot create {}: {e}", cache::dir().display()))?;
-    let part = out.with_extension("mcpaint.part");
-    let progress = |f: f32, m: &str| {
-        let _ = tx.send(Event::Progress(f * 0.9, m.to_string()));
-    };
-    let result = mcsub.convert(spp, &part, cancel, progress);
-    let summary = match result {
-        Ok(s) => s,
-        Err(e) => {
-            let _ = std::fs::remove_file(&part);
-            return Err(e);
-        }
-    };
-    std::fs::rename(&part, &out).map_err(|e| format!("Cannot store the converted document: {e}"))?;
-    Ok((out, summary))
 }
 
 fn read_document(file: &Path) -> Result<Document, String> {
