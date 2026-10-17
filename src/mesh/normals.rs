@@ -51,7 +51,7 @@ pub(super) fn smooth_normals(positions: &[Vec3], triangles: &[[u32; 3]]) -> Vec<
 }
 
 /// Bit pattern of a position, with -0.0 folded into 0.0 so they weld.
-fn position_key(p: Vec3) -> [u32; 3] {
+pub(super) fn position_key(p: Vec3) -> [u32; 3] {
     p.map(|x| if x == 0.0 { 0 } else { x.to_bits() })
 }
 

@@ -15,12 +15,14 @@ mod obj;
 mod tangents;
 #[cfg(test)]
 mod test_util;
+mod topology;
 mod validate;
 mod viewer;
 
 pub use bounds::{Bounds, Fit, Sphere};
 pub use bvh::{Bvh, Hit, Triangles};
 pub use error::{Attribute, MeshError, MeshErrorKind};
+pub use topology::{Components, Edge, FaceGroups, Topology, UvEdge, UvEdgeKind, UvEdges};
 pub use viewer::ViewportPart;
 
 pub type Vec3 = [f32; 3];
