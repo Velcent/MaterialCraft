@@ -1,5 +1,5 @@
-//! [`ReplacementAccuracy`]: how close MaterialCraft's replacement generators came to Painter, as measured by
-//! `mcparity run generator…` on the user's own projects. The numbers are read at run time from mcparity's
+//! [`ReplacementAccuracy`]: how close MaterialCraft's replacement generators and filters came to Painter, as
+//! measured by `mcparity run generator…` and `mcparity run filter…` on the user's own projects. The numbers are read at run time from mcparity's
 //! history (`$MC_PARITY_HISTORY`, else `parity/history.jsonl` in the internal docs next to the checkout);
 //! nothing measured is built into the program.
 //!
@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 pub const HISTORY_ENV: &str = "MC_PARITY_HISTORY";
 /// History lines of a generator's subject are `generator.<generator id>`.
 pub const SUBJECT_PREFIX: &str = "generator.";
+/// History lines of a filter's subject are `filter.<filter id>`.
+pub const FILTER_PREFIX: &str = "filter.";
 
 /// One generator's measured accuracy.
 #[derive(Debug, Clone, PartialEq)]
@@ -53,7 +55,10 @@ impl ReplacementAccuracy {
         let mut runs: BTreeMap<String, (String, Vec<f64>)> = BTreeMap::new();
         for line in text.lines() {
             let Ok(v) = json::parse(line) else { continue };
-            let Some(id) = v["subject"].as_str().and_then(|s| s.strip_prefix(SUBJECT_PREFIX)) else {
+            let subject = v["subject"].as_str();
+            let Some(id) =
+                subject.and_then(|s| s.strip_prefix(SUBJECT_PREFIX).or_else(|| s.strip_prefix(FILTER_PREFIX)))
+            else {
                 continue;
             };
             let (Some(run), Some("measured"), Some(mae)) = (v["run"].as_str(), v["status"].as_str(), v["mae"].as_f64())
@@ -146,6 +151,7 @@ mod tests {
             r#"{"run":"20261002-1","subject":"generator.dirt","status":"measured","mae":5.0}"#,
             r#"{"run":"20261002-1","subject":"generator.dirt","status":"skipped"}"#,
             r#"{"run":"20261002-1","subject":"generator.dirt","status":"measured","mae":4.0}"#,
+            r#"{"run":"20261002-1","subject":"filter.blur","status":"measured","mae":2.0}"#,
             r#"{"run":"20261003-1","subject":"baked.ao","status":"measured","mae":1.0}"#,
             "not json",
         ]
@@ -154,6 +160,7 @@ mod tests {
         let dirt = a.of("dirt").unwrap();
         assert_eq!((dirt.median_mae, dirt.cases, dirt.run.as_str()), (4.0, 3, "20261002-1"));
         assert!(a.of("ao").is_none() && a.of("baked.ao").is_none());
+        assert_eq!(a.of("blur").map(|b| b.cases), Some(1));
         assert_eq!(median(vec![1.0, 3.0]), Some(2.0));
         assert_eq!(median(vec![]), None);
     }

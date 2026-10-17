@@ -1,6 +1,8 @@
 //! The replacement table: Substance procedurals MaterialCraft can stand in for with its own generators
-//! ([`materialcraft::generators`]) and procedural textures ([`materialcraft::proc_textures`], [`TEXTURES`]), one [`Replacement`] per entry, with the translation of Painter's parameter
-//! values into ours. This is the only place that knows Painter's procedural and parameter names.
+//! ([`materialcraft::generators`]), procedural textures ([`materialcraft::proc_textures`], [`TEXTURES`]) and
+//! filters ([`materialcraft::filters`], [`FILTERS`]), one [`Replacement`] per entry, with the translation of
+//! Painter's parameter values into ours. This is the only place that knows Painter's procedural and parameter
+//! names.
 //!
 //! A replaced effect becomes our generator with the Painter procedural kept as its
 //! [`Procedural::original`], so a later, better entry here can convert the document again
@@ -10,11 +12,13 @@
 //! and values, what they do on the user's projects) and calibrated only by black-box measurement against
 //! Painter's saved results (`mcparity run generator…`).
 
+mod filters;
 mod params;
 pub mod plan;
 mod table;
 mod textures;
 
+pub use filters::FILTERS;
 pub use plan::{Choice, ProceduralPlan};
 pub use table::TABLE;
 pub use textures::TEXTURES;
@@ -30,7 +34,8 @@ pub struct Replacement {
     pub painter: &'static [&'static str],
     /// What the import review shows.
     pub label: &'static str,
-    /// Our generator id ([`materialcraft::generators`]).
+    /// Our generator, texture or filter id ([`materialcraft::generators`], [`materialcraft::proc_textures`],
+    /// [`materialcraft::filters`]).
     pub generator: &'static str,
     /// What the replacement leaves out or approximates, for the review.
     pub note: &'static str,
@@ -47,9 +52,15 @@ impl Replacement {
     }
 }
 
-/// Every entry: the mask generators ([`TABLE`]), then the procedural textures ([`TEXTURES`]).
+/// Every entry: the mask generators ([`TABLE`]), the procedural textures ([`TEXTURES`]), then the filters
+/// ([`FILTERS`]).
 pub fn entries() -> impl Iterator<Item = &'static Replacement> {
-    TABLE.iter().chain(TEXTURES)
+    TABLE.iter().chain(TEXTURES).chain(FILTERS)
+}
+
+/// True if the entry stands in for a Painter filter (our id names a filter, not a generator).
+pub fn is_filter(r: &Replacement) -> bool {
+    FILTERS.iter().any(|f| std::ptr::eq(f, r))
 }
 
 /// The entry for Painter graph `name`, if MaterialCraft has a replacement.

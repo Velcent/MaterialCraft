@@ -118,12 +118,12 @@ mod tests {
 
     #[test]
     fn choices_start_as_painters_result_and_make_the_plan() {
-        let analysis = Analysis::of_uses("p.spp", vec![use_of("mg_dirt"), use_of("blur"), use_of("mg_dirt")], &ReplacementAccuracy::default());
+        let analysis = Analysis::of_uses("p.spp", vec![use_of("mg_dirt"), use_of("PBR_to_Skyrim"), use_of("mg_dirt")], &ReplacementAccuracy::default());
         let mut d = ReviewDialog::new(analysis);
         assert_eq!(d.choices, vec![("mg_dirt".to_string(), Choice::Keep)]);
         assert_eq!(d.plan().choice("mg_dirt"), Choice::Keep);
         d.set_all(Choice::Replace);
         let plan = d.plan();
-        assert_eq!((plan.choice("mg_dirt"), plan.choice("blur")), (Choice::Replace, Choice::Keep));
+        assert_eq!((plan.choice("mg_dirt"), plan.choice("PBR_to_Skyrim")), (Choice::Replace, Choice::Keep));
     }
 }

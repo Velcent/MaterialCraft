@@ -9,18 +9,21 @@ fn imported(name: &str, params: &[(&str, &str)]) -> Procedural {
 }
 
 #[test]
-fn every_entry_names_a_registered_generator_once() {
+fn every_entry_names_a_registered_generator_or_filter_once() {
     for r in entries() {
-        assert!(
-            generators::builtin().generator(r.generator).is_some(),
-            "{}",
-            r.generator
-        );
+        let registry = generators::builtin();
+        let found = if is_filter(r) {
+            registry.filter(r.generator).is_some()
+        } else {
+            registry.generator(r.generator).is_some()
+        };
+        assert!(found, "{}", r.generator);
         for name in r.painter {
             assert!(std::ptr::eq(find(name).unwrap(), r), "{name} listed twice");
         }
     }
-    assert!(find("blur").is_none());
+    assert!(find("PBR_to_Skyrim").is_none());
+    assert!(is_filter(find("blur").unwrap()) && !is_filter(find("mg_dirt").unwrap()));
 }
 
 #[test]
@@ -50,7 +53,7 @@ fn replacing_translates_parameters_and_keeps_the_original() {
         )
         .is_none()
     );
-    assert!(replace(&imported("blur", &[]), &plan).is_none());
+    assert!(replace(&imported("PBR_to_Skyrim", &[]), &plan).is_none());
     assert!(
         replace(&Procedural::new("dirt"), &plan).is_none(),
         "ours are not replaced again"
