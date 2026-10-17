@@ -20,6 +20,7 @@ fn quad(name: &str, x: f32, u0: f32, u1: f32) -> MeshPart {
         tangents: vec![[1.0, 0.0, 0.0, 1.0]; 4],
         uv_sets: vec![vec![[u0, 1.0], [u1, 1.0], [u1, 0.0], [u0, 0.0]]],
         triangles: vec![[0, 1, 2], [0, 2, 3]],
+        faces: Default::default(),
     }
 }
 

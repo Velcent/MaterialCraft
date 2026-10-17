@@ -97,3 +97,16 @@ fn save_path_replaces_atomically() {
     assert_eq!(names, ["doc.mcpaint"], "no temporary files left");
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn mesh_faces_round_trip_and_bad_entries_are_dropped() {
+    let doc = full_document();
+    assert!(doc.mesh.parts.iter().any(|p| !p.faces.is_per_triangle()), "the fixture has a quad");
+    let back = from_bytes(&to_bytes(&doc)).unwrap();
+    assert_eq!(back.mesh.parts.iter().map(|p| &p.faces).collect::<Vec<_>>(), doc.mesh.parts.iter().map(|p| &p.faces).collect::<Vec<_>>());
+    // groups that do not fit their part are dropped on reading
+    let mut mesh = doc.mesh.clone();
+    let groups = vec![(0, crate::mesh::FaceGroups::per_triangle(5)), (99, crate::mesh::FaceGroups::per_triangle(2))];
+    crate::paint::format::manifest::mesh_faces::apply(&mut mesh, groups);
+    assert_eq!(mesh, doc.mesh);
+}

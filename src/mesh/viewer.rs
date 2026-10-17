@@ -59,6 +59,7 @@ impl MeshPart {
             tangents: mesh.tan.iter().map(|t| [t[0], t[1], t[2], 1.0]).collect(),
             uv_sets: vec![mesh.uv.clone()],
             triangles: mesh.tris.clone(),
+            faces: Default::default(),
         }
     }
 }

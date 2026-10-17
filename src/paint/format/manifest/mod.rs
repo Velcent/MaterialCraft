@@ -21,6 +21,7 @@ pub mod fields;
 pub mod geometry_mask;
 pub mod image_ref;
 pub mod layer;
+pub mod mesh_faces;
 pub mod projection;
 pub mod report;
 pub mod strokes;
@@ -76,6 +77,8 @@ pub struct Manifest {
     /// Stroke records to load.
     pub strokes: Vec<StrokeRef>,
     pub mesh: String,
+    /// Source polygons of the mesh parts, to give the parts once the mesh is read (since 0.9).
+    pub mesh_faces: Vec<(usize, crate::mesh::FaceGroups)>,
     pub foreign: Vec<String>,
     /// References of the embedded assets (since 0.6).
     pub assets: Vec<String>,
@@ -98,6 +101,9 @@ pub fn write(doc: &Document, ctx: &WriteCtx, thumbnail: bool) -> Value {
         .with("bake_links", links)
         .with("texture_sets", sets)
         .with("foreign", foreign);
+    if let Some(faces) = mesh_faces::write(&doc.mesh) {
+        v.insert("mesh_faces", faces);
+    }
     if !doc.assets.is_empty() {
         v.insert("assets", super::embedded::manifest(&doc.assets));
     }
@@ -133,9 +139,11 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
         .collect::<Option<Vec<String>>>()
         .ok_or_else(|| o.error("foreign", "expected an array of paths"))?;
     let assets = super::embedded::references(o.array("assets")?, &o.path("assets"))?;
+    let mesh_faces = mesh_faces::read(&mut o)?;
     let manifest = Manifest {
         version,
         mesh: o.str("mesh")?.to_string(),
+        mesh_faces,
         import_report: o.opt_str("import_report")?.map(str::to_string),
         doc,
         images: Vec::new(),

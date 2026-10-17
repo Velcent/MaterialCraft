@@ -65,11 +65,12 @@ impl AssbinGeometry {
                 true => format!("{} [{}]", mesh.name, instance.node),
                 false => mesh.name.clone(),
             };
-            parts.push(build_part(mesh, &instance.world, name)?);
-            faces.push(FaceGroups::from_polygon_starts(polygon_starts(
-                mesh.faces,
-                mesh.face_count,
-            )?));
+            let mut part = build_part(mesh, &instance.world, name)?;
+            let groups = FaceGroups::from_polygon_starts(polygon_starts(mesh.faces, mesh.face_count)?);
+            // the document keeps them with the part (PT-47)
+            part.faces = groups.clone();
+            parts.push(part);
+            faces.push(groups);
         }
         Ok((Mesh { materials, parts }, faces))
     }

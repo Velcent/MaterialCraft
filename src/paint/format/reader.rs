@@ -44,6 +44,7 @@ impl<R: Read + Seek> DocumentReader<R> {
         check_budget(&m.images, &self.options)?;
         let mut doc = m.doc;
         doc.mesh = Mesh::from_glb(&self.zip.read(&m.mesh)?)?;
+        manifest::mesh_faces::apply(&mut doc.mesh, m.mesh_faces);
         // The skeleton already has every image's size and format: reject a broken document
         // before decoding any pixels.
         doc.validate()?;

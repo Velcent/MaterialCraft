@@ -13,6 +13,7 @@ pub fn quad() -> MeshPart {
         tangents: vec![[1.0, 0.0, 0.0, 1.0]; 4],
         uv_sets: vec![vec![[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]],
         triangles: vec![[0, 1, 2], [0, 2, 3]],
+        faces: Default::default(),
     }
 }
 

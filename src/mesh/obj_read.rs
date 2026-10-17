@@ -91,6 +91,7 @@ impl PartBuilder {
             self.part.uv_sets.clear();
         }
         let faces = FaceGroups::from_polygon_sizes(self.corner_counts, self.part.triangles.len());
+        self.part.faces = faces.clone();
         Some((self.part, faces))
     }
 }
@@ -245,6 +246,7 @@ f -8/1 -4/2 -1/3 -5/4
         assert_eq!(faces.triangles(2), 4..5);
         assert_eq!(faces.triangles(3), 5..6);
         assert_eq!(faces.face_of(7), Some(4));
+        assert_eq!(&obj.mesh.parts[1].faces, faces, "the part keeps its faces");
         assert!(obj.mesh.validate().is_ok());
         // OBJ (0, 0) is bottom-left, ours top-left
         assert_eq!(obj.mesh.parts[0].uv_sets[0][0], [0.0, 1.0]);

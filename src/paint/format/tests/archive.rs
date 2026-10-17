@@ -32,13 +32,17 @@ fn entries_and_methods() {
     assert_eq!(zip.find("document.json").unwrap().method(), Some(Method::Deflate));
 
     let text = String::from_utf8(zip.read("document.json").unwrap()).unwrap();
-    assert!(text.starts_with("{\n  \"format\": \"mcpaint\",\n  \"format_version\": \"0.8\",\n"));
+    assert!(text.starts_with("{\n  \"format\": \"mcpaint\",\n  \"format_version\": \"0.9\",\n"));
     assert!(text.contains("\n  \"mesh\": \"mesh/model.glb\",\n  \"height_filter\": \"sobel\",\n"));
     assert!(text.ends_with("}\n"));
     let root = json::parse(&text).unwrap();
     assert_eq!(root["texture_sets"][0]["resolution"].to_string(), "[150,130]");
     assert_eq!(root["texture_sets"][0]["layers"][0]["opacity"].as_f64(), Some(0.37));
-    assert_eq!(Mesh::from_glb(&zip.read("mesh/model.glb").unwrap()).unwrap(), doc.mesh);
+    // the glb holds the triangles; the source polygons are in the manifest (`mesh_faces`)
+    let mut triangles_only = doc.mesh.clone();
+    triangles_only.parts.iter_mut().for_each(|p| p.faces = Default::default());
+    assert_eq!(Mesh::from_glb(&zip.read("mesh/model.glb").unwrap()).unwrap(), triangles_only);
+    assert_eq!(root["mesh_faces"][0]["runs"].to_string(), "[[1,2]]");
     // 16-bit samples are big-endian in the PNG: an independent decoder sees the model's values.
     let png = crate::png::decode(&zip.read("textures/body/layers/p1/height.png").unwrap()).unwrap();
     let layer = doc.texture_sets[0].layer("p1").unwrap();

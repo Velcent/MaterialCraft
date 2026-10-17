@@ -64,6 +64,8 @@ fn quad(name: &str, material: usize, uv_sets: usize, z: f32) -> MeshPart {
         tangents: vec![[1.0, 0.0, 0.0, 1.0]; 4],
         uv_sets: (0..uv_sets).map(|s| uv.iter().map(|p| [p[0] * 0.5 + s as f32 * 0.5, p[1]]).collect()).collect(),
         triangles: vec![[0, 1, 2], [0, 2, 3]],
+        // one quad: the source polygons are kept (since 0.9)
+        faces: crate::mesh::FaceGroups::from_polygon_sizes([4], 2),
     }
 }
 

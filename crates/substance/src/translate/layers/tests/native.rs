@@ -193,6 +193,7 @@ fn quad() -> Mesh {
             tangents: vec![],
             uv_sets: vec![vec![[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]],
             triangles: vec![[0, 1, 2], [0, 2, 3]],
+            faces: Default::default(),
         }],
     }
 }

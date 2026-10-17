@@ -51,4 +51,7 @@ pub struct MeshPart {
     /// One list per UV set; set 0 is the one textures are painted on.
     pub uv_sets: Vec<Vec<[f32; 2]>>,
     pub triangles: Vec<[u32; 3]>,
+    /// The source polygons the triangles came from (PT-47; polygon fill picks whole faces). Empty, or covering a
+    /// different number of triangles than `triangles`, means unknown: every triangle is its own face.
+    pub faces: FaceGroups,
 }

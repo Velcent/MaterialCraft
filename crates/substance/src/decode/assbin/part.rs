@@ -36,6 +36,7 @@ pub fn build_part(mesh: &MeshBlock, world: &Transform, name: String) -> Result<M
         normals,
         uv_sets: mesh.uv_sets.iter().map(flipped_uvs).collect(),
         triangles,
+        faces: Default::default(),
     };
     repair_frames(&mut part);
     Ok(part)
