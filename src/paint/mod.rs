@@ -7,6 +7,7 @@
 //! - [`blend`] and [`normal`]: blend modes and normal-vector maths.
 //! - [`layer`], [`effect`], [`mask`], [`geometry_mask`], [`texture_set`], [`doc`], [`report`]: the document
 //!   model; [`validate`] its invariants.
+//! - [`edit`]: [`edit::Edit`], every document change with its inverse (for the GUI and the history).
 //! - [`stack`]: [`Compositor`], layer stack → channel.
 //! - [`working_space`]: the space layers blend in (linear light for sRGB channels).
 //! - [`output`]: [`MaterialMaps`], final PBR maps for the viewer and export.
@@ -14,6 +15,7 @@
 pub mod blend;
 pub mod channel;
 pub mod doc;
+pub mod edit;
 pub mod effect;
 pub mod format;
 pub mod geometry_mask;
@@ -37,7 +39,7 @@ pub use channel::{Channel, ChannelSpec, ColorSpace};
 pub use doc::{Document, ForeignFile};
 pub use effect::{ContentEffect, Effect, EffectKind, EffectRegistry, GreyBlend, MaskEffect, MaskPixels};
 pub use geometry_mask::GeometryMask;
-pub use image::{ImageError, Rect, TILE_SIZE, TiledImage};
+pub use image::{ImageError, Rect, TILE_SIZE, Tile, TiledImage};
 pub use layer::{ChannelBlend, Fill, FillSource, Layer, LayerImage, LayerKind, PaintContent};
 pub use mask::Mask;
 pub use output::{MaterialMaps, OutputOptions};
