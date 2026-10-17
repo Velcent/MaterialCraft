@@ -1,7 +1,8 @@
 //! MaterialCraft's own mask generators, driven by a texture set's baked mesh maps (ambient occlusion,
 //! curvature, world-space normal, position, thickness) and by the layer stack. They plug into the paint
 //! model behind [`crate::paint::effect::GeneratorSource`]; [`register`] adds them to an
-//! [`EffectRegistry`] under the ids in [`GENERATORS`], and [`builtin`] is a registry holding all of them.
+//! [`EffectRegistry`] under the ids in [`GENERATORS`], and [`builtin`] is a registry holding all of them plus the
+//! procedural textures. Texture inputs are [`crate::proc_textures`] looks.
 //!
 //! Everything here is written from scratch: the generators stand in for the smart-mask generators Substance
 //! Painter projects use (the importer's replacement table maps those onto these ids), shaped after what those
@@ -113,12 +114,13 @@ pub fn register(registry: &mut EffectRegistry) {
     }
 }
 
-/// A registry with every generator (built once).
+/// A registry with every generator and every procedural texture ([`crate::proc_textures`]), built once.
 pub fn builtin() -> &'static EffectRegistry {
     static REGISTRY: OnceLock<EffectRegistry> = OnceLock::new();
     REGISTRY.get_or_init(|| {
         let mut r = EffectRegistry::new();
         register(&mut r);
+        crate::proc_textures::register(&mut r);
         r
     })
 }

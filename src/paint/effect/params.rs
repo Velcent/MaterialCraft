@@ -14,6 +14,11 @@ impl<'a> Params<'a> {
         self.values.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
     }
 
+    /// The value as stored (for names and ids), if set.
+    pub fn text(&self, name: &str) -> Option<&'a str> {
+        self.raw(name)
+    }
+
     /// A number (the first component of a list), or `default`.
     pub fn f(&self, name: &str, default: f32) -> f32 {
         self.raw(name).and_then(|v| v.split(',').next()).and_then(|v| v.trim().parse::<f32>().ok()).filter(|v| v.is_finite()).unwrap_or(default)
