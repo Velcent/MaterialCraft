@@ -12,6 +12,7 @@ mod error;
 pub mod gltf;
 mod normals;
 mod obj;
+mod obj_read;
 mod tangents;
 #[cfg(test)]
 mod test_util;
@@ -22,6 +23,7 @@ mod viewer;
 pub use bounds::{Bounds, Fit, Sphere};
 pub use bvh::{Bvh, Hit, Triangles};
 pub use error::{Attribute, MeshError, MeshErrorKind};
+pub use obj_read::{ObjError, ObjImport};
 pub use topology::{Components, Edge, FaceGroups, Topology, UvEdge, UvEdgeKind, UvEdges};
 pub use viewer::ViewportPart;
 
