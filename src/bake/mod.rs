@@ -68,4 +68,6 @@ pub fn bake(low: &Mesh, high: &Mesh, s: &BakeSettings) -> Result<BTreeMap<String
 }
 
 #[cfg(test)]
+mod known_answers;
+#[cfg(test)]
 mod tests;
