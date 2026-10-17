@@ -7,7 +7,7 @@ description = "Procedural, node-based material authoring engine in pure Rust"
 license = "MIT"
 
 [workspace]
-members = ["crates/substance", "crates/parity", "crates/editor"]
+members = ["crates/substance", "crates/parity", "crates/editor", "crates/brush"]
 
 # Suite lints (same as PhotoCraft). Every member crate inherits them with `[lints] workspace = true`.
 [workspace.lints.rust]

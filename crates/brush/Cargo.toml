@@ -1,0 +1,17 @@
+[package]
+name = "materialcraft-brush"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "MaterialCraft's brush strokes: PhotoCraft's dab engine behind one adapter, stroke sessions and replay"
+license = "MIT"
+publish = false
+
+[dependencies]
+materialcraft = { path = "../.." }
+# PhotoCraft's brush engine, pinned (ADR 0007: depend at a pinned revision; nothing goes upstream). Only
+# `engine::photocraft` may name it.
+photocraft-paint = { git = "https://github.com/storytold/photocraft", rev = "5f65579ecb44047c2a619036c18ff273202e1389" }
+
+[lints]
+workspace = true
