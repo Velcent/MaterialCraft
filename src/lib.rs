@@ -28,6 +28,7 @@ pub mod png;
 pub mod projection;
 pub mod render3d;
 pub mod scatter;
+pub mod stamp;
 pub mod tex;
 pub mod tiff;
 pub mod v3;

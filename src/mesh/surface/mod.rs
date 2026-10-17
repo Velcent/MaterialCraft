@@ -156,6 +156,19 @@ impl SurfaceMap {
         })
     }
 
+    /// Position, interpolated vertex normal (unit length) and covered share of texel `i` (row-major), or `None`
+    /// outside the set and its gutter: the part of [`SurfaceMap::sample_index`] that per-texel loops over many
+    /// texels (brush stamps) need, without the tangent frame.
+    pub fn point_index(&self, i: usize) -> Option<(Vec3, Vec3, f32)> {
+        let texel = self.texels.get(i)?;
+        let tri = self.triangles.get(texel.tri as usize)?;
+        let [b1, b2] = texel.bary;
+        let b = [1.0 - b1 - b2, b1, b2];
+        let lerp = |v: [Vec3; 3]| add(add(mul(v[0], b[0]), mul(v[1], b[1])), mul(v[2], b[2]));
+        let normal = unit_or(lerp(tri.n), unit_or(face_normal(tri), [0.0, 0.0, 1.0]));
+        Some((lerp(tri.p), normal, texel.coverage))
+    }
+
     /// The covered share of every texel, row-major (0 in the gutter and outside).
     pub fn coverage(&self) -> Vec<f32> {
         self.texels.iter().map(|t| t.coverage).collect()

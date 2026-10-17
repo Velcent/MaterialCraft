@@ -9,7 +9,7 @@
 //!   model; [`validate`] its invariants.
 //! - [`edit`]: [`edit::Edit`], every document change with its inverse (for the GUI and the history).
 //! - [`bake_config`]: per texture set bake settings with link, copy and check commands.
-//! - [`stroke`]: stroke records, the strokes behind painted pixels.
+//! - [`stroke`]: stroke records, the strokes behind painted pixels; [`brush`]: brush presets (our format).
 //! - [`stack`]: [`Compositor`], layer stack → channel; [`layer_preview`]: layer thumbnails on a reduced grid.
 //! - [`probe`]: [`probe::TexelProbe`], the composited channel values under a point of the mesh (eyedropper, material picker).
 //! - [`diag_entries`]: import summaries and compositing warnings as session log entries.
@@ -18,6 +18,7 @@
 
 pub mod bake_config;
 pub mod blend;
+pub mod brush;
 pub mod channel;
 pub mod diag_entries;
 pub mod doc;
@@ -34,7 +35,7 @@ pub mod mask;
 pub mod normal;
 pub mod normal_combine;
 pub mod output;
-mod par;
+pub(crate) mod par;
 pub mod pixel;
 pub mod probe;
 pub mod report;

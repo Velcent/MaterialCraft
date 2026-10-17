@@ -12,6 +12,7 @@
 //! - [`tree`]: layer insert, remove, move and property changes;
 //! - [`effects`]: content and mask effect stacks;
 //! - [`pixels`]: tile swaps, region writes and [`TileCapture`];
+//! - [`strokes`]: appending painted strokes to the stroke record of the pixels they painted;
 //! - [`document`]: texture sets, the mesh and the height filter;
 //! - [`bake`]: bake configurations, link flags and baked maps;
 //! - [`tiles`]: the tiles an edit or a document holds (for memory accounting);
@@ -30,6 +31,7 @@ mod error;
 pub mod ids;
 pub mod ops;
 mod pixels;
+mod strokes;
 mod tiles;
 mod transaction;
 mod tree;
@@ -50,6 +52,7 @@ use super::height_normal::HeightFilter;
 use super::image::Rect;
 use super::layer::{ChannelBlend, Fill, Layer, LayerImage};
 use super::mask::Mask;
+use super::stroke::{Stroke, StrokeOwner};
 use super::texture_set::{BakedMap, TextureSet};
 use crate::mesh::Mesh;
 
@@ -223,6 +226,19 @@ pub enum Edit {
         set: String,
         maps: Vec<BakedMap>,
     },
+    /// Appends a stroke to the stroke record of a layer's paint pixels (creating the record if there is none).
+    AppendStroke {
+        layer: LayerRef,
+        owner: StrokeOwner,
+        stroke: Box<Stroke>,
+    },
+    /// Removes the last stroke of the record; with `drop_record`, a record left empty is removed too (it did not
+    /// exist before the stroke was appended).
+    RemoveLastStroke {
+        layer: LayerRef,
+        owner: StrokeOwner,
+        drop_record: bool,
+    },
 }
 
 impl Edit {
@@ -247,6 +263,8 @@ impl Edit {
             Edit::SetBakeConfig { set, config } => bake::set_config(doc, set, *config),
             Edit::SetBakeLinks(links) => Ok(Edit::SetBakeLinks(std::mem::replace(&mut doc.bake_links, links))),
             Edit::SetBaked { set, maps } => bake::set_baked(doc, set, maps),
+            Edit::AppendStroke { layer, owner, stroke } => strokes::append(doc, layer, owner, *stroke),
+            Edit::RemoveLastStroke { layer, owner, drop_record } => strokes::remove_last(doc, layer, owner, drop_record),
         }
     }
 
