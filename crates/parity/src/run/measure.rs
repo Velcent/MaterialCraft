@@ -90,6 +90,7 @@ impl Case<'_> {
     fn usage(&self) -> Option<u64> {
         match self.subject.reference() {
             ReferenceKind::Baked(kind) => baked_usage(&kind),
+            ReferenceKind::Cache => None,
         }
     }
 }

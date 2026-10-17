@@ -3,8 +3,10 @@
 //! layer stack on request.
 
 use super::project_mesh::ProjectMesh;
+use crate::decode::document::MaterialRecord;
 use crate::model::PainterTextureSet;
 use crate::project::CacheEntryRef;
+use crate::translate::BakedMaps;
 use crate::translate::cache_channels::CacheChannels;
 use crate::translate::channel_table::{channel_for_bit, channel_spec};
 use crate::translate::layers::cache_score::{Score, score};
@@ -13,7 +15,9 @@ use crate::translate::layers::{BlendTable, ImageSource, ImportedStack, LayerImpo
 use crate::translate::replacements::ProceduralPlan;
 use crate::translate::set_layers::defaults_layer;
 use materialcraft::generators;
-use materialcraft::paint::{BakedMap, Channel, Compositor, TextureSet, TiledImage};
+use materialcraft::mesh::SurfaceMap;
+use materialcraft::paint::{BakedMap, Channel, Compositor, FillContext, NoFillSources, TextureSet, TiledImage};
+use materialcraft::tex::Tex;
 use std::sync::OnceLock;
 
 pub struct PreparedSet<'a> {
@@ -25,6 +29,8 @@ pub struct PreparedSet<'a> {
     mesh: Option<&'a ProjectMesh>,
     /// The set's texels on the mesh at `resolution`, rasterised on the first score.
     islands: OnceLock<Option<IslandTexels>>,
+    /// The set's surface map at `resolution` (first slot), for generators that need UV islands.
+    surface: OnceLock<Option<SurfaceMap>>,
     /// Which Substance procedurals are replaced by MaterialCraft's generators (none by default).
     pub plan: ProceduralPlan,
     /// The set's baked mesh maps, which the generators read (empty unless loaded).
@@ -65,6 +71,7 @@ impl<'a> PreparedSet<'a> {
             cache: Vec::new(),
             mesh,
             islands: OnceLock::new(),
+            surface: OnceLock::new(),
             plan: ProceduralPlan::default(),
             baked: Vec::new(),
         })
@@ -96,6 +103,7 @@ impl<'a> PreparedSet<'a> {
                 if image.image.size() != self.resolution {
                     self.resolution = image.image.size();
                     self.islands = OnceLock::new();
+                    self.surface = OnceLock::new();
                 }
                 self.cache.push((channel, image.image));
                 true
@@ -106,18 +114,60 @@ impl<'a> PreparedSet<'a> {
 
     /// Our composite of `channel` (imported layers over Painter's defaults) against the loaded cache image.
     pub fn score(&self, stack: &ImportedStack, channel: Channel) -> Option<Score> {
-        let cache = self.cache.iter().find(|(c, _)| *c == channel).map(|(_, i)| i)?;
+        let cache = self.cache(channel)?;
         let spec = self.channels.spec(channel)?;
+        let ours = self.composite(stack, channel);
+        Some(score(&ours, cache, spec, self.islands()))
+    }
+
+    /// Reads the set's baked mesh maps (for generators); `records` are the document's material records.
+    pub fn load_baked(&mut self, baked: &BakedMaps, records: &[MaterialRecord]) {
+        let refs = records
+            .iter()
+            .find(|r| r.name == self.painter.name)
+            .map(|r| r.baked.clone())
+            .unwrap_or_default();
+        self.baked = baked
+            .sources(&self.painter.name, &refs)
+            .iter()
+            .filter_map(|s| baked.read(s).ok().map(|i| i.map))
+            .collect();
+    }
+
+    /// The loaded cache image of `channel`.
+    pub fn cache(&self, channel: Channel) -> Option<&TiledImage> {
+        self.cache.iter().find(|(c, _)| *c == channel).map(|(_, i)| i)
+    }
+
+    /// The set's texels on the mesh at the compared resolution, if the mesh could be read.
+    pub fn islands(&self) -> Option<&IslandTexels> {
+        self.islands
+            .get_or_init(|| {
+                let uid = self.painter.material_uid?;
+                self.mesh?.islands(uid, self.resolution)
+            })
+            .as_ref()
+    }
+
+    /// Our composite of `channel`: the imported layers over Painter's defaults, generators reading the baked
+    /// maps and the set's surface map.
+    pub fn composite(&self, stack: &ImportedStack, channel: Channel) -> Tex {
         let mut set = TextureSet::new("verify", self.painter.name.clone(), self.resolution);
         set.channels = self.channels.specs().to_vec();
         set.layers.push(defaults_layer(&set));
         set.layers.extend(stack.layers.iter().cloned());
         set.baked = self.baked.clone();
-        let (ours, _) = Compositor::with_effects(&set, generators::builtin()).composite_tex(channel);
-        let islands = self.islands.get_or_init(|| {
+        let surface = self.surface.get_or_init(|| {
             let uid = self.painter.material_uid?;
-            self.mesh?.islands(uid, self.resolution)
+            self.mesh?.surface(uid, self.resolution)
         });
-        Some(score(&ours, cache, spec, islands.as_ref()))
+        let fills = match surface {
+            Some(s) => FillContext::with_sources(&NoFillSources).with_surface(s, None),
+            None => FillContext::with_sources(&NoFillSources),
+        };
+        Compositor::with_effects(&set, generators::builtin())
+            .with_fills(&fills)
+            .composite_tex(channel)
+            .0
     }
 }

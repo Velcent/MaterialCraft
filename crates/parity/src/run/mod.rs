@@ -5,6 +5,7 @@ mod case;
 mod measure;
 mod parallel;
 mod set_run;
+mod stack_run;
 pub mod survey;
 
 pub use case::{CaseImages, CaseResult, CaseSink, Measured, Outcome};
@@ -56,6 +57,17 @@ impl Runner<'_> {
         if self.limit_reached(ran) {
             return results;
         }
+        let (stack, baked): (Vec<&dyn Subject>, Vec<&dyn Subject>) = self
+            .subjects
+            .iter()
+            .map(|s| s.as_ref())
+            .partition(|s| s.generator().is_some());
+        if !stack.is_empty() {
+            results.extend(stack_run::run(&stack, path, self.options.max_size, sink));
+        }
+        if baked.is_empty() {
+            return results;
+        }
         sink.note(&format!("opening {}", path.display()));
         let project = match OpenedProject::open(path) {
             Ok(p) => p,
@@ -73,11 +85,8 @@ impl Runner<'_> {
             if self.limit_reached(ran) {
                 break;
             }
-            let (with_ref, without): (Vec<&dyn Subject>, Vec<&dyn Subject>) = self
-                .subjects
-                .iter()
-                .map(|s| s.as_ref())
-                .partition(|s| references.has(set, &s.reference()));
+            let (with_ref, without): (Vec<&dyn Subject>, Vec<&dyn Subject>) =
+                baked.iter().copied().partition(|s| references.has(set, &s.reference()));
             let run = SetRun {
                 project: &project,
                 references: &references,

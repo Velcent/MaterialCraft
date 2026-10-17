@@ -13,12 +13,16 @@ use std::fmt;
 pub enum ReferenceKind {
     /// A map Painter baked from the mesh (an image resource `<Map> from Mesh <set>`).
     Baked(BakedKind),
+    /// A channel of Painter's texture cache (the flattened layer stack), where only replaced procedurals keep
+    /// our import from being exact.
+    Cache,
 }
 
 impl fmt::Display for ReferenceKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ReferenceKind::Baked(kind) => write!(f, "baked map '{}'", kind.id()),
+            ReferenceKind::Cache => write!(f, "texture cache"),
         }
     }
 }
@@ -56,6 +60,12 @@ pub trait Subject: Send + Sync {
     /// reference's here, so only the layout is measured.
     fn align(&self, ours: Tex, _theirs: &Tex, _mask: &[bool]) -> Tex {
         ours
+    }
+
+    /// For subjects measured through the imported layer stack ([`ReferenceKind::Cache`]): our generator id.
+    /// Their cases come from the texture cache, not from [`Subject::run`].
+    fn generator(&self) -> Option<&'static str> {
+        None
     }
 }
 

@@ -57,15 +57,21 @@ impl Verification {
         let count = |s: StackStrategy| self.sets.iter().filter(|r| r.strategy == s).count();
         writeln!(
             f,
-            "\n{} texture sets with a texture cache: {} real stack, {} Painter result on top, {} of them because the cache disagrees",
+            "\n{} texture sets with a texture cache: {} real stack, {} real stack with replacements, {} Painter result on top, {} of them because the cache disagrees",
             self.sets.len(),
             count(StackStrategy::RealStack),
+            count(StackStrategy::Replacements),
             count(StackStrategy::PainterResultOnTop) + count(StackStrategy::CacheDisagrees),
             count(StackStrategy::CacheDisagrees)
         )?;
         let all: usize = self.sets.iter().map(|s| s.channels.len()).sum();
-        for (name, exact) in [("exact", true), ("approximated", false)] {
-            let of: Vec<_> = self.compared().filter(|(_, c)| c.status.is_exact() == exact).collect();
+        let kinds: [(&str, fn(&Computability) -> bool); 3] = [
+            ("exact", |s| matches!(s, Computability::Exact)),
+            ("replaced", |s| matches!(s, Computability::Replaced(_))),
+            ("approximated", |s| matches!(s, Computability::Approximated(_))),
+        ];
+        for (name, is) in kinds {
+            let of: Vec<_> = self.compared().filter(|(_, c)| is(&c.status)).collect();
             let ok = of
                 .iter()
                 .filter(|(_, c)| c.score.is_some_and(|s| s.reproduced()))

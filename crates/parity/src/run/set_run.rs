@@ -56,6 +56,7 @@ impl SetRun<'_> {
             .iter()
             .filter_map(|s| match s.reference() {
                 ReferenceKind::Baked(kind) => MapKind::from_name(kind.id()),
+                ReferenceKind::Cache => None,
             })
             .collect();
         params.bake.maps = MapSelection::of(&kinds);

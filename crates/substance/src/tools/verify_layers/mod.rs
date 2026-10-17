@@ -4,6 +4,7 @@
 //! our modes ([`fit`]).
 
 mod fit;
+pub mod generator_cases;
 mod prepared;
 mod project_mesh;
 mod table;
@@ -114,16 +115,7 @@ fn verify_project(path: &Path, label: &str, options: &VerifyOptions) -> Result<P
         };
         set.plan = options.plan.clone();
         if options.plan != ProceduralPlan::default() {
-            let refs = records
-                .iter()
-                .find(|r| r.name == painter.name)
-                .map(|r| r.baked.clone())
-                .unwrap_or_default();
-            set.baked = baked
-                .sources(&painter.name, &refs)
-                .iter()
-                .filter_map(|s| baked.read(s).ok().map(|i| i.map))
-                .collect();
+            set.load_baked(&baked, &records);
         }
         let stack = set.import(&table, &images);
         let mut channels = Vec::new();

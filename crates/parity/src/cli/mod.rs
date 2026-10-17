@@ -11,6 +11,10 @@
 //! `--projects`/`--corpus` may repeat; without them `$MC_SUBSTANCE_CORPUS` is used. `run` prints a table,
 //! writes the HTML report to `$XDG_CACHE_HOME/materialcraft-parity/<run>/index.html` (or `--out`) and appends
 //! the numbers to the history (`$MC_PARITY_HISTORY`, else the docs' `parity/history.jsonl`).
+//!
+//! `generator.<id>` subjects measure MaterialCraft's replacements for Substance procedurals against Painter's
+//! texture cache (channels where that generator is the only replaced procedural); `mcsub analyze` and the
+//! import review read their median MAE from the history.
 
 mod args;
 
@@ -71,6 +75,13 @@ fn selected(args: &Args) -> Result<Vec<Box<dyn crate::subject::Subject>>, String
 
 fn cases(args: &Args) -> Result<(), String> {
     let subject = selected(args)?.into_iter().next().ok_or("no subject")?;
+    if subject.generator().is_some() {
+        return Err(format!(
+            "{}: generator cases are found while measuring; use `mcparity run {}`",
+            subject.id(),
+            subject.id()
+        ));
+    }
     let projects = args.projects.resolve()?;
     let rows = survey(subject.as_ref(), &projects, &mut |p| eprintln!("reading {p}"));
     for r in &rows {

@@ -73,6 +73,25 @@ pub fn score(ours: &Tex, cache: &TiledImage, spec: &ChannelSpec, islands: Option
     }
 }
 
+/// The cache image as the final look: straight values over Painter's channel default, in the stored encoding,
+/// full coverage (what [`score`] compares `ours` with).
+pub fn final_look(cache: &TiledImage, spec: &ChannelSpec) -> Tex {
+    let space = SpaceConverter::new(WorkingSpace::of(spec.color_space));
+    let default = space.to_working(painter_default(spec.channel));
+    let mut tex = cache.to_tex();
+    for p in &mut tex.px {
+        let straight = space.to_working([p[0], p[1], p[2], 1.0]);
+        let a = p[3];
+        let mut fin = [[0.0, 0.0, 0.0, 1.0]];
+        for i in 0..3 {
+            fin[0][i] = straight[i] * a + (1.0 - a) * default[i];
+        }
+        space.to_stored_all(&mut fin);
+        *p = fin[0];
+    }
+    tex
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

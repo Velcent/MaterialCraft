@@ -41,12 +41,16 @@ impl<'a> References<'a> {
     pub fn has(&self, set: &SetCase, kind: &ReferenceKind) -> bool {
         match kind {
             ReferenceKind::Baked(k) => self.baked_sources(set).iter().any(|s| s.kind == *k),
+            ReferenceKind::Cache => false,
         }
     }
 
     pub fn load(&self, set: &SetCase, kind: &ReferenceKind) -> Result<Reference, CaseError> {
         match kind {
             ReferenceKind::Baked(k) => self.load_baked(set, k),
+            ReferenceKind::Cache => Err(CaseError::skipped(
+                "texture-cache cases are measured through the layer stack",
+            )),
         }
     }
 
