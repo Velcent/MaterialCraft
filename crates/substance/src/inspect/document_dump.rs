@@ -49,11 +49,11 @@ impl DocumentDump {
     fn line(&mut self, text: &str) {
         let field = self.pending_field.take();
         let mut beyond_preview = false;
-        if let Some(top) = self.stack.last_mut() {
-            if top.is_list {
-                top.seen += 1;
-                beyond_preview = top.seen > self.preview;
-            }
+        if let Some(top) = self.stack.last_mut()
+            && top.is_list
+        {
+            top.seen += 1;
+            beyond_preview = top.seen > self.preview;
         }
         if beyond_preview || self.hidden() {
             return;
@@ -100,11 +100,13 @@ impl Visitor for DocumentDump {
     }
 
     fn end_list(&mut self) {
-        if let Some(l) = self.stack.pop() {
-            if l.seen > self.preview && !l.hidden_before && !self.hidden() {
-                let indent = "  ".repeat(self.stack.len() + 1);
-                let _ = writeln!(self.out, "{indent}… {} more", l.seen - self.preview);
-            }
+        if let Some(l) = self.stack.pop()
+            && l.seen > self.preview
+            && !l.hidden_before
+            && !self.hidden()
+        {
+            let indent = "  ".repeat(self.stack.len() + 1);
+            let _ = writeln!(self.out, "{indent}… {} more", l.seen - self.preview);
         }
     }
 

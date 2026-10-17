@@ -851,42 +851,42 @@ fn color_wheel(ui: &mut egui::Ui, id: Id, rgb: &mut [f32; 3]) -> bool {
     let (r_out, r_in) = (size * 0.5 - 2.0, size * 0.5 - 18.0);
     let (mut h, mut sv, mut vv) = ops::rgb_to_hsv(rgb[0], rgb[1], rgb[2]);
     let hue_id = id.with("hue");
-    if sv < 0.01 || vv < 0.01 {
-        if let Some(hs) = ui.data(|d| d.get_temp::<f32>(hue_id)) {
-            h = hs;
-        }
+    if (sv < 0.01 || vv < 0.01)
+        && let Some(hs) = ui.data(|d| d.get_temp::<f32>(hue_id))
+    {
+        h = hs;
     }
     let half = r_in * 0.68;
     let sq = Rect::from_center_size(c, vec2(half * 2.0, half * 2.0));
     let mode_id = id.with("mode");
     let mut changed = false;
-    if resp.drag_started() || resp.clicked() {
-        if let Some(p) = resp.interact_pointer_pos() {
-            let d = (p - c).length();
-            let mode = if d > r_in - 4.0 && d < r_out + 8.0 {
-                1u8
-            } else if sq.expand(4.0).contains(p) {
-                2
-            } else {
-                0
-            };
-            ui.data_mut(|dd| dd.insert_temp(mode_id, mode));
-        }
+    if (resp.drag_started() || resp.clicked())
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        let d = (p - c).length();
+        let mode = if d > r_in - 4.0 && d < r_out + 8.0 {
+            1u8
+        } else if sq.expand(4.0).contains(p) {
+            2
+        } else {
+            0
+        };
+        ui.data_mut(|dd| dd.insert_temp(mode_id, mode));
     }
-    if resp.dragged() || resp.clicked() {
-        if let Some(p) = resp.interact_pointer_pos() {
-            match ui.data(|d| d.get_temp::<u8>(mode_id)).unwrap_or(0) {
-                1 => {
-                    h = ((p - c).y.atan2((p - c).x) / std::f32::consts::TAU).rem_euclid(1.0);
-                    changed = true;
-                }
-                2 => {
-                    sv = ((p.x - sq.min.x) / sq.width()).clamp(0.0, 1.0);
-                    vv = 1.0 - ((p.y - sq.min.y) / sq.height()).clamp(0.0, 1.0);
-                    changed = true;
-                }
-                _ => {}
+    if (resp.dragged() || resp.clicked())
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        match ui.data(|d| d.get_temp::<u8>(mode_id)).unwrap_or(0) {
+            1 => {
+                h = ((p - c).y.atan2((p - c).x) / std::f32::consts::TAU).rem_euclid(1.0);
+                changed = true;
             }
+            2 => {
+                sv = ((p.x - sq.min.x) / sq.width()).clamp(0.0, 1.0);
+                vv = 1.0 - ((p.y - sq.min.y) / sq.height()).clamp(0.0, 1.0);
+                changed = true;
+            }
+            _ => {}
         }
     }
     if changed {
@@ -1022,14 +1022,14 @@ fn gradient_editor(ui: &mut egui::Ui, id: Id, stops: &mut Vec<(f32, [f32; 3])>) 
             sel = i;
             grabbed = true;
         }
-        if r.dragged() {
-            if let Some(p) = r.interact_pointer_pos() {
-                let lo = if i > 0 { stops[i - 1].0 + 0.002 } else { 0.0 };
-                let hi = if i + 1 < stops.len() { stops[i + 1].0 - 0.002 } else { 1.0 };
-                stops[i].0 = ((p.x - bar.min.x) / bar.width()).clamp(lo, hi.max(lo));
-                changed = true;
-                grabbed = true;
-            }
+        if r.dragged()
+            && let Some(p) = r.interact_pointer_pos()
+        {
+            let lo = if i > 0 { stops[i - 1].0 + 0.002 } else { 0.0 };
+            let hi = if i + 1 < stops.len() { stops[i + 1].0 - 0.002 } else { 1.0 };
+            stops[i].0 = ((p.x - bar.min.x) / bar.width()).clamp(lo, hi.max(lo));
+            changed = true;
+            grabbed = true;
         }
         let edge = if sel == i { Color32::from_rgb(255, 170, 60) } else { Color32::from_gray(200) };
         painter.add(egui::Shape::convex_polygon(
@@ -1041,15 +1041,17 @@ fn gradient_editor(ui: &mut egui::Ui, id: Id, stops: &mut Vec<(f32, [f32; 3])>) 
         painter.rect_filled(sq, 1.0, c32(stops[i].1));
         painter.rect_stroke(sq, 1.0, Stroke::new(1.5_f32, edge), egui::StrokeKind::Outside);
     }
-    if bar_resp.clicked() && !grabbed && stops.len() < 16 {
-        if let Some(p) = bar_resp.interact_pointer_pos() {
-            let t = ((p.x - bar.min.x) / bar.width()).clamp(0.0, 1.0);
-            let col = grad_at(stops, t);
-            let at = stops.iter().position(|s| s.0 > t).unwrap_or(stops.len());
-            stops.insert(at, (t, col));
-            sel = at;
-            changed = true;
-        }
+    if bar_resp.clicked()
+        && !grabbed
+        && stops.len() < 16
+        && let Some(p) = bar_resp.interact_pointer_pos()
+    {
+        let t = ((p.x - bar.min.x) / bar.width()).clamp(0.0, 1.0);
+        let col = grad_at(stops, t);
+        let at = stops.iter().position(|s| s.0 > t).unwrap_or(stops.len());
+        stops.insert(at, (t, col));
+        sel = at;
+        changed = true;
     }
     sel = sel.min(stops.len() - 1);
     ui.data_mut(|d| d.insert_temp(id, sel));
@@ -1278,11 +1280,11 @@ impl App {
                                 ui.painter().rect_filled(r, 3.0, c32(rgb));
                                 ui.painter().rect_stroke(r, 3.0, Stroke::new(1.0_f32, Color32::from_gray(15)), egui::StrokeKind::Outside);
                                 let mut hex = rgb_hex(rgb);
-                                if ui.add(egui::TextEdit::singleline(&mut hex).desired_width(60.0)).changed() {
-                                    if let Some(c) = parse_hex(&hex) {
-                                        rgb = c;
-                                        ch = true;
-                                    }
+                                if ui.add(egui::TextEdit::singleline(&mut hex).desired_width(60.0)).changed()
+                                    && let Some(c) = parse_hex(&hex)
+                                {
+                                    rgb = c;
+                                    ch = true;
                                 }
                             });
                         });
@@ -1359,10 +1361,10 @@ impl App {
                 "bitmap" => {
                     let file = node.strs.get("file").cloned().unwrap_or_default();
                     ui.label(if file.is_empty() { "(no file)".to_string() } else { file });
-                    if ui.button("Browse PNG...").clicked() {
-                        if let Some(p) = rfd::FileDialog::new().add_filter("PNG image", &["png"]).pick_file() {
-                            strs.push(("file".into(), Some(p.to_string_lossy().to_string())));
-                        }
+                    if ui.button("Browse PNG...").clicked()
+                        && let Some(p) = rfd::FileDialog::new().add_filter("PNG image", &["png"]).pick_file()
+                    {
+                        strs.push(("file".into(), Some(p.to_string_lossy().to_string())));
                     }
                 }
                 "subgraph" => {

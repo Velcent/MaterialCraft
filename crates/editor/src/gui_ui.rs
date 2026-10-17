@@ -120,7 +120,8 @@ impl App {
             painter.rect_stroke(
                 r,
                 4.0 * z,
-                Stroke::new(if selected { 2.0_f32 } else { 1.0_f32 }, if selected { Color32::from_rgb(255, 160, 40) } else { base.gamma_multiply(0.8) }), egui::StrokeKind::Outside,
+                Stroke::new(if selected { 2.0_f32 } else { 1.0_f32 }, if selected { Color32::from_rgb(255, 160, 40) } else { base.gamma_multiply(0.8) }),
+                egui::StrokeKind::Outside,
             );
             painter.text(title.left_center() + vec2(8.0 * z, 0.0), Align2::LEFT_CENTER, &c.text, FontId::proportional(13.0 * z), Color32::WHITE);
             let tr = ui.interact(title, Id::new(("cmt", ci)), Sense::click_and_drag());
@@ -299,7 +300,8 @@ impl App {
                     Stroke::new(
                         if selected { 2.4_f32 } else { 1.0_f32 },
                         if selected { Color32::from_rgb(255, 160, 40) } else { Color32::from_rgb(14, 14, 14) },
-                    ), egui::StrokeKind::Outside,
+                    ),
+                    egui::StrokeKind::Outside,
                 );
                 if self.active == Some(id) && !selected {
                     painter.rect_stroke(card, 3.0 * z, Stroke::new(1.5_f32, Color32::from_rgb(150, 150, 150)), egui::StrokeKind::Outside);
@@ -387,10 +389,10 @@ impl App {
                     self.dirty = true;
                 }
             }
-            if nr.double_clicked() {
-                if let (Some(g), "subgraph") = (&s.graph_name, s.kind.as_str()) {
-                    acts.push(Act::EnterSub(g.clone()));
-                }
+            if nr.double_clicked()
+                && let (Some(g), "subgraph") = (&s.graph_name, s.kind.as_str())
+            {
+                acts.push(Act::EnterSub(g.clone()));
             }
             if nr.secondary_clicked() && !self.sel.contains(&id) {
                 self.sel = [id].into_iter().collect();
@@ -415,13 +417,12 @@ impl App {
                     ui.close();
                 }
                 ui.separator();
-                if kind == "subgraph" {
-                    if let Some(g) = &gname {
-                        if ui.button("Open subgraph").clicked() {
-                            acts.push(Act::EnterSub(g.clone()));
-                            ui.close();
-                        }
-                    }
+                if kind == "subgraph"
+                    && let Some(g) = &gname
+                    && ui.button("Open subgraph").clicked()
+                {
+                    acts.push(Act::EnterSub(g.clone()));
+                    ui.close();
                 }
                 if ui.button("Create subgraph from selection").clicked() {
                     acts.push(Act::Subgraph);
@@ -566,7 +567,13 @@ impl App {
         if let Some(start) = self.rubber {
             if let Some(pt) = pointer {
                 let r = Rect::from_two_pos(start, pt);
-                painter.rect(r, 0.0, Color32::from_rgba_unmultiplied(255, 160, 40, 28), Stroke::new(1.0_f32, Color32::from_rgb(255, 160, 40)), egui::StrokeKind::Outside);
+                painter.rect(
+                    r,
+                    0.0,
+                    Color32::from_rgba_unmultiplied(255, 160, 40, 28),
+                    Stroke::new(1.0_f32, Color32::from_rgb(255, 160, 40)),
+                    egui::StrokeKind::Outside,
+                );
                 if released {
                     for (s, c) in snaps.iter().zip(&cards) {
                         if r.intersects(*c) {
@@ -842,10 +849,10 @@ impl App {
         if let Some(e) = chosen {
             let (w, l) = (st.world, st.link_from);
             let new_id = self.spawn(&e, w, l);
-            if let (Some(id), Some((dst, slot))) = (new_id, st.link_to.clone()) {
-                if e.kind != "output" {
-                    self.try_connect(id, dst, &slot);
-                }
+            if let (Some(id), Some((dst, slot))) = (new_id, st.link_to.clone())
+                && e.kind != "output"
+            {
+                self.try_connect(id, dst, &slot);
             }
             close = true;
         }
@@ -863,10 +870,10 @@ impl App {
             };
             egui::Window::new("Export textures").open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if ui.button("Choose folder...").clicked() {
-                        if let Some(d) = rfd::FileDialog::new().pick_folder() {
-                            self.export.dir = Some(d);
-                        }
+                    if ui.button("Choose folder...").clicked()
+                        && let Some(d) = rfd::FileDialog::new().pick_folder()
+                    {
+                        self.export.dir = Some(d);
                     }
                     ui.label(self.export.dir.as_ref().map(|d| d.display().to_string()).unwrap_or_else(|| "(none)".into()));
                 });
@@ -936,10 +943,10 @@ impl App {
                 let busy = self.bake.job.is_some();
                 let pick = |label: &str, slot: &mut Option<PathBuf>, ui: &mut egui::Ui| {
                     ui.horizontal(|ui| {
-                        if ui.button(label).clicked() {
-                            if let Some(p) = rfd::FileDialog::new().add_filter("Wavefront OBJ", &["obj"]).pick_file() {
-                                *slot = Some(p);
-                            }
+                        if ui.button(label).clicked()
+                            && let Some(p) = rfd::FileDialog::new().add_filter("Wavefront OBJ", &["obj"]).pick_file()
+                        {
+                            *slot = Some(p);
                         }
                         ui.label(slot.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "(none)".into()));
                     });
@@ -947,10 +954,10 @@ impl App {
                 pick("Low-poly mesh (.obj, needs UVs)", &mut self.bake.low, ui);
                 pick("High-poly mesh (.obj)", &mut self.bake.high, ui);
                 ui.horizontal(|ui| {
-                    if ui.button("Output folder...").clicked() {
-                        if let Some(d) = rfd::FileDialog::new().pick_folder() {
-                            self.bake.out = Some(d);
-                        }
+                    if ui.button("Output folder...").clicked()
+                        && let Some(d) = rfd::FileDialog::new().pick_folder()
+                    {
+                        self.bake.out = Some(d);
                     }
                     ui.label(self.bake.out.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "(none)".into()));
                 });

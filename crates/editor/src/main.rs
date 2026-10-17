@@ -796,14 +796,15 @@ impl App {
         }
         if let Some(src) = link_from {
             let first = slots(&e.kind).first().map(|s| s.0.to_string());
-            if let Some(slot) = first {
-                if src != id && e.kind != "input" {
-                    let o = self.link_out.take();
-                    if let Some(n) = self.g.nodes.get_mut(&id) {
-                        n.ins.insert(slot.clone(), src);
-                        if let Some(o) = o {
-                            n.in_out.insert(slot, o);
-                        }
+            if let Some(slot) = first
+                && src != id
+                && e.kind != "input"
+            {
+                let o = self.link_out.take();
+                if let Some(n) = self.g.nodes.get_mut(&id) {
+                    n.ins.insert(slot.clone(), src);
+                    if let Some(o) = o {
+                        n.in_out.insert(slot, o);
                     }
                 }
             }
@@ -826,11 +827,11 @@ impl App {
 
     fn delete_selected(&mut self) {
         if self.sel.is_empty() {
-            if let Some(ci) = self.sel_comment.take() {
-                if ci < self.g.comments.len() {
-                    self.snap();
-                    self.g.comments.remove(ci);
-                }
+            if let Some(ci) = self.sel_comment.take()
+                && ci < self.g.comments.len()
+            {
+                self.snap();
+                self.g.comments.remove(ci);
             }
             return;
         }
@@ -1228,10 +1229,10 @@ impl App {
         let cache = self.node_cache.clone();
         std::thread::spawn(move || {
             let mut on_first = |t: &Tex| {
-                if let Some(a) = active {
-                    if !tex::stale(r#gen) {
-                        let _ = ptx.send(Partial { r#gen, img2d: qimg(t), img_for: a });
-                    }
+                if let Some(a) = active
+                    && !tex::stale(r#gen)
+                {
+                    let _ = ptx.send(Partial { r#gen, img2d: qimg(t), img_for: a });
                 }
             };
             let r = g.evaluate_all_cached(size, &keep, r#gen, &cache, active, &mut on_first);
@@ -1283,18 +1284,19 @@ impl App {
             while let Ok(p) = prx.try_recv() {
                 latest = Some(p);
             }
-            if let Some(p) = latest {
-                if p.r#gen == self.r#gen && self.active == Some(p.img_for) {
-                    let opts = egui::TextureOptions {
-                        magnification: egui::TextureFilter::Nearest,
-                        minification: egui::TextureFilter::Linear,
-                        wrap_mode: egui::TextureWrapMode::Repeat,
-                        mipmap_mode: Some(egui::TextureFilter::Linear),
-                    };
-                    self.tex2d_size = (p.img2d.size[0], p.img2d.size[1]);
-                    self.tex2d = Some(ctx.load_texture("view2d", p.img2d, opts));
-                    ctx.request_repaint();
-                }
+            if let Some(p) = latest
+                && p.r#gen == self.r#gen
+                && self.active == Some(p.img_for)
+            {
+                let opts = egui::TextureOptions {
+                    magnification: egui::TextureFilter::Nearest,
+                    minification: egui::TextureFilter::Linear,
+                    wrap_mode: egui::TextureWrapMode::Repeat,
+                    mipmap_mode: Some(egui::TextureFilter::Linear),
+                };
+                self.tex2d_size = (p.img2d.size[0], p.img2d.size[1]);
+                self.tex2d = Some(ctx.load_texture("view2d", p.img2d, opts));
+                ctx.request_repaint();
             }
         }
         let Some(rx) = &self.job else { return };
@@ -1349,10 +1351,10 @@ impl App {
                         self.maps.insert(name.clone(), t.clone());
                     }
                 }
-                if !self.maps.contains_key("basecolor") {
-                    if let Some(t) = self.maps.get("out").cloned() {
-                        self.maps.insert("basecolor".into(), t);
-                    }
+                if !self.maps.contains_key("basecolor")
+                    && let Some(t) = self.maps.get("out").cloned()
+                {
+                    self.maps.insert("basecolor".into(), t);
                 }
                 self.dirty3d = true;
                 if let Some(m) = r.gpu {

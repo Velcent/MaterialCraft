@@ -1207,10 +1207,10 @@ pub fn tile_grid(w: usize, h: usize, pattern: Option<&Tex>, mask: Option<&Tex>, 
                     (rnd(wi, wj, p.seed), rnd(wi, wj, p.seed.wrapping_add(1)), rnd(wi, wj, p.seed.wrapping_add(2)), rnd(wi, wj, p.seed.wrapping_add(3)));
                 let cx = (i as f32 + 0.5 + shift) / fnx + (r1 - 0.5) * p.pos_rand / fnx;
                 let cy = (j as f32 + 0.5) / fny + (r2 - 0.5) * p.pos_rand / fny;
-                if let Some(m) = mask {
-                    if lum(m.sample(cx, cy)) < p.thresh {
-                        continue;
-                    }
+                if let Some(m) = mask
+                    && lum(m.sample(cx, cy)) < p.thresh
+                {
+                    continue;
                 }
                 let s = (p.size * (1.0 + (r3 - 0.5) * 2.0 * p.size_rand)).max(0.01);
                 let ang = (p.rot + (r4 - 0.5) * 2.0 * p.rot_rand) * TAU;

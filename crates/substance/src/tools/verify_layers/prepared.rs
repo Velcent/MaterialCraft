@@ -28,10 +28,10 @@ impl<'a> PreparedSet<'a> {
         }
         let mut specs = Vec::new();
         for decl in &painter.channels {
-            if let Some(c) = channel_for_bit(decl.channel.bit()) {
-                if !specs.iter().any(|s: &materialcraft::paint::ChannelSpec| s.channel == c) {
-                    specs.push(channel_spec(c, Some(decl.format)));
-                }
+            if let Some(c) = channel_for_bit(decl.channel.bit())
+                && !specs.iter().any(|s: &materialcraft::paint::ChannelSpec| s.channel == c)
+            {
+                specs.push(channel_spec(c, Some(decl.format)));
             }
         }
         for e in &entries {

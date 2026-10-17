@@ -43,11 +43,11 @@ impl SetBinding {
         for (slot, material) in mesh.iter().enumerate() {
             let found = find_record(material, records);
             if let Some(i) = found {
-                if used[i] {
-                    if let Some(set) = binding.sets.iter_mut().find(|s| s.record == records[i]) {
-                        set.merged_slots.push(slot);
-                        continue;
-                    }
+                if used[i]
+                    && let Some(set) = binding.sets.iter_mut().find(|s| s.record == records[i])
+                {
+                    set.merged_slots.push(slot);
+                    continue;
                 }
                 used[i] = true;
             }

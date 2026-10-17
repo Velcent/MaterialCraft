@@ -143,10 +143,10 @@ impl Visitor for MaterialScan {
     }
 
     fn end_object(&mut self) {
-        if self.below_material() == Some(0) {
-            if let Some((_, m)) = self.open.take() {
-                self.done.push(m);
-            }
+        if self.below_material() == Some(0)
+            && let Some((_, m)) = self.open.take()
+        {
+            self.done.push(m);
         }
         self.context.leave();
     }

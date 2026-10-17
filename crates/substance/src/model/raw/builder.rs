@@ -73,10 +73,10 @@ impl Builder {
 
     /// A field announced without a value was an absent pointer.
     fn close_pending(&mut self) {
-        if let Some(Frame::Object { object, pending }) = self.frames.last_mut() {
-            if let Some(name) = pending.take() {
-                object.fields.push((name, RawValue::Absent));
-            }
+        if let Some(Frame::Object { object, pending }) = self.frames.last_mut()
+            && let Some(name) = pending.take()
+        {
+            object.fields.push((name, RawValue::Absent));
         }
     }
 }

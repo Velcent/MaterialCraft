@@ -995,12 +995,11 @@ impl Graph {
         let renamed: Vec<String> = inner.keys().cloned().collect();
         for g in std::iter::once(&mut other).chain(inner.values_mut()) {
             for n in g.nodes.values_mut() {
-                if n.kind == "subgraph" {
-                    if let Some(r) = n.strs.get_mut("graph") {
-                        if renamed.contains(r) {
-                            *r = format!("{name}__{r}");
-                        }
-                    }
+                if n.kind == "subgraph"
+                    && let Some(r) = n.strs.get_mut("graph")
+                    && renamed.contains(r)
+                {
+                    *r = format!("{name}__{r}");
                 }
             }
         }
@@ -1461,13 +1460,12 @@ fn hash_graph(g: &Graph, ctx: &Ctx) -> HashMap<u32, u64> {
         }
         if n.kind == "bitmap" {
             // a file on disk can change under us: its size and modification time are part of the identity
-            if let Some(f) = n.strs.get("file") {
-                if !ctx.res.contains_key(f) {
-                    if let Ok(m) = std::fs::metadata(f).or_else(|_| std::fs::metadata(f.replace('\\', "/"))) {
-                        h.u64(m.len());
-                        h.u64(m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos() as u64).unwrap_or(0));
-                    }
-                }
+            if let Some(f) = n.strs.get("file")
+                && !ctx.res.contains_key(f)
+                && let Ok(m) = std::fs::metadata(f).or_else(|_| std::fs::metadata(f.replace('\\', "/")))
+            {
+                h.u64(m.len());
+                h.u64(m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos() as u64).unwrap_or(0));
             }
         }
         if depth < 512 {
@@ -1542,17 +1540,17 @@ fn eval_node_out(g: &Graph, id: u32, out: Option<&str>, ctx: &Ctx, ext: &[Option
         return Err(Error::Cancelled);
     }
     let phash = cache.hashes.get(&key).copied();
-    if let (Some(p), Some(h)) = (&cache.persist, phash) {
-        if let Some((t, th, sz)) = p.get(h) {
-            cache.map.insert(key, t.clone());
-            if key == id {
-                cache.sizes.insert(id, sz);
-                if let Some(tm) = cache.thumbs.as_mut() {
-                    tm.insert(id, th);
-                }
+    if let (Some(p), Some(h)) = (&cache.persist, phash)
+        && let Some((t, th, sz)) = p.get(h)
+    {
+        cache.map.insert(key, t.clone());
+        if key == id {
+            cache.sizes.insert(id, sz);
+            if let Some(tm) = cache.thumbs.as_mut() {
+                tm.insert(id, th);
             }
-            return Ok(t);
         }
+        return Ok(t);
     }
     let n = g.nodes.get(&id).ok_or(Error::MissingNode(0, id))?;
     let mut ins: BTreeMap<String, Rc<Tex>> = BTreeMap::new();
@@ -1609,10 +1607,10 @@ fn eval_node_out(g: &Graph, id: u32, out: Option<&str>, ctx: &Ctx, ext: &[Option
     if let (Some(p), Some(h)) = (&cache.persist, phash) {
         p.put(h, rc.clone(), thumb.clone(), sz);
     }
-    if key == id {
-        if let Some(th) = cache.thumbs.as_mut() {
-            th.insert(id, thumb);
-        }
+    if key == id
+        && let Some(th) = cache.thumbs.as_mut()
+    {
+        th.insert(id, thumb);
     }
     // free inputs nobody else is waiting for
     for (slot, rid) in &n.ins {
@@ -1692,12 +1690,11 @@ fn run_sub(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx, out: O
     let mut sub = ctx.lib.get(name).cloned().ok_or_else(|| Error::BadParam(id, format!("unknown subgraph '{name}'")))?;
     sub.check_cycles()?;
     for (k, v) in &n.nums {
-        if let Some((nid, param)) = k.split_once('.') {
-            if let Ok(nid) = nid.parse::<u32>() {
-                if let Some(inner) = sub.nodes.get_mut(&nid) {
-                    inner.nums.insert(param.to_string(), *v);
-                }
-            }
+        if let Some((nid, param)) = k.split_once('.')
+            && let Ok(nid) = nid.parse::<u32>()
+            && let Some(inner) = sub.nodes.get_mut(&nid)
+        {
+            inner.nums.insert(param.to_string(), *v);
         }
     }
     let ext: Vec<Option<Rc<Tex>>> = (0..4).map(|i| ins.get(&format!("in{i}")).cloned()).collect();

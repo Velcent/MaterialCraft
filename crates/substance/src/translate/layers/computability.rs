@@ -57,12 +57,12 @@ impl Computability {
                 Computability::Exact => Computability::Exact,
             };
         }
-        if other.rank() == self.rank() {
-            if let Computability::Approximated(r) | Computability::NotComputable(r) = self {
-                for reason in other.reasons() {
-                    if !r.contains(reason) && r.len() < MAX_REASONS {
-                        r.push(reason.clone());
-                    }
+        if other.rank() == self.rank()
+            && let Computability::Approximated(r) | Computability::NotComputable(r) = self
+        {
+            for reason in other.reasons() {
+                if !r.contains(reason) && r.len() < MAX_REASONS {
+                    r.push(reason.clone());
                 }
             }
         }

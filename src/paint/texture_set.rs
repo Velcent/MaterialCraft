@@ -125,10 +125,10 @@ fn find_mut<'a>(layers: &'a mut [Layer], id: &str) -> Option<&'a mut Layer> {
         if l.id == id {
             return Some(l);
         }
-        if let LayerKind::Group(children) = &mut l.kind {
-            if let Some(found) = find_mut(children, id) {
-                return Some(found);
-            }
+        if let LayerKind::Group(children) = &mut l.kind
+            && let Some(found) = find_mut(children, id)
+        {
+            return Some(found);
         }
     }
     None

@@ -129,12 +129,11 @@ fn spawn_banner() -> Receiver<ColorImage> {
     let (tx, rx) = channel();
     std::thread::spawn(move || {
         let src = "size 512\nnode 1 fbm scale=3 octaves=6 gain=0.55 seed=11\nnode 2 fbm scale=9 octaves=5 seed=4\nnode 3 warp in=@1 warp=@2 intensity=0.14\nnode 4 voronoi scale=6 jitter=0.9 seed=5 mode=2\nnode 5 blend fg=@4 bg=@3 mode=5 opacity=0.4\nnode 6 colorize in=@5 p0=0 r0=0.25 g0=0.17 b0=0.12 p1=0.5 r1=0.62 g1=0.45 b1=0.32 p2=1 r2=0.92 g2=0.78 b2=0.6\noutput o 6\n";
-        if let Ok(g) = Graph::parse(src) {
-            if let Ok(m) = g.evaluate(Some(512)) {
-                if let Some(t) = m.get("o") {
-                    let _ = tx.send(qimg(t));
-                }
-            }
+        if let Ok(g) = Graph::parse(src)
+            && let Ok(m) = g.evaluate(Some(512))
+            && let Some(t) = m.get("o")
+        {
+            let _ = tx.send(qimg(t));
         }
     });
     rx
@@ -145,14 +144,12 @@ fn spawn_library_thumbs() -> Receiver<HashMap<String, ColorImage>> {
     std::thread::spawn(move || {
         let mut out = HashMap::new();
         for s in SPECS {
-            if let Some(text) = materialcraft::graph::demo_graph_for(s.kind) {
-                if let Ok(g) = Graph::parse(&text) {
-                    if let Ok(m) = g.evaluate(Some(64)) {
-                        if let Some(tex) = m.get("o") {
-                            out.insert(s.kind.to_string(), qimg(tex));
-                        }
-                    }
-                }
+            if let Some(text) = materialcraft::graph::demo_graph_for(s.kind)
+                && let Ok(g) = Graph::parse(&text)
+                && let Ok(m) = g.evaluate(Some(64))
+                && let Some(tex) = m.get("o")
+            {
+                out.insert(s.kind.to_string(), qimg(tex));
             }
         }
         let _ = tx.send(out);
@@ -601,84 +598,81 @@ impl App {
                 ui.label(egui::RichText::new("MaterialCraft").size(15.0).color(Color32::from_gray(210)));
             });
         });
-        egui::Panel::left("home_left").exact_size(200.0).frame(egui::Frame::NONE.fill(bg).inner_margin(egui::Margin::symmetric(18, 0))).show(
-            ui,
-            |ui| {
-                ui.add_space(38.0);
-                let w = ui.available_width();
+        egui::Panel::left("home_left").exact_size(200.0).frame(egui::Frame::NONE.fill(bg).inner_margin(egui::Margin::symmetric(18, 0))).show(ui, |ui| {
+            ui.add_space(38.0);
+            let w = ui.available_width();
+            if ui
+                .add(
+                    egui::Button::new(egui::RichText::new("New graph...").color(Color32::WHITE).strong())
+                        .fill(Color32::from_rgb(20, 115, 230))
+                        .corner_radius(16)
+                        .min_size(vec2(w, 32.0)),
+                )
+                .clicked()
+            {
+                self.new_dlg.open = true;
+            }
+            ui.add_space(6.0);
+            if ui.add(egui::Button::new(egui::RichText::new("Open package...").strong()).frame(false).min_size(vec2(w, 30.0))).clicked() {
+                self.open_file();
+            }
+            ui.add_space(6.0);
+            ui.separator();
+            ui.add_space(6.0);
+            if ui.add(egui::Button::new(egui::RichText::new("Open example").strong()).frame(false).min_size(vec2(w, 28.0))).clicked() {
+                self.open_example();
+            }
+            if ui.add(egui::Button::new(egui::RichText::new("Mesh map baker...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked() {
+                self.screen = Screen::Editor;
+                self.bake.open = true;
+            }
+            if ui.add(egui::Button::new(egui::RichText::new("Open in Paint mode...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked()
+                && self.paint.pick(gui_paint::Pick::Any)
+            {
+                self.screen = Screen::Paint;
+            }
+            if ui.add(egui::Button::new(egui::RichText::new("Import Painter project...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked()
+                && self.paint.pick(gui_paint::Pick::Substance)
+            {
+                self.screen = Screen::Paint;
+            }
+            ui.add_space(6.0);
+            ui.separator();
+            ui.add_space(6.0);
+            for (i, label) in ["Home", "Learn"].iter().enumerate() {
+                let sel = self.home_page == i as u8;
                 if ui
                     .add(
-                        egui::Button::new(egui::RichText::new("New graph...").color(Color32::WHITE).strong())
-                            .fill(Color32::from_rgb(20, 115, 230))
-                            .corner_radius(16)
+                        egui::Button::new(egui::RichText::new(*label).size(13.0))
+                            .fill(if sel { Color32::from_rgb(52, 52, 52) } else { Color32::TRANSPARENT })
                             .min_size(vec2(w, 32.0)),
                     )
                     .clicked()
                 {
-                    self.new_dlg.open = true;
+                    self.home_page = i as u8;
+                }
+            }
+            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                ui.add_space(14.0);
+                if ui.checkbox(&mut self.skip_home, "Do not show on startup").changed() {
+                    self.save_settings();
                 }
                 ui.add_space(6.0);
-                if ui.add(egui::Button::new(egui::RichText::new("Open package...").strong()).frame(false).min_size(vec2(w, 30.0))).clicked() {
-                    self.open_file();
-                }
-                ui.add_space(6.0);
-                ui.separator();
-                ui.add_space(6.0);
-                if ui.add(egui::Button::new(egui::RichText::new("Open example").strong()).frame(false).min_size(vec2(w, 28.0))).clicked() {
-                    self.open_example();
-                }
-                if ui.add(egui::Button::new(egui::RichText::new("Mesh map baker...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked() {
+                if ui.add(egui::Button::new("Close home screen").corner_radius(14).min_size(vec2(w - 20.0, 30.0))).clicked() {
                     self.screen = Screen::Editor;
-                    self.bake.open = true;
                 }
-                if ui.add(egui::Button::new(egui::RichText::new("Open in Paint mode...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked()
-                    && self.paint.pick(gui_paint::Pick::Any)
-                {
-                    self.screen = Screen::Paint;
+                ui.add_space(14.0);
+                if ui.add(egui::Button::new("Keyboard shortcuts").frame(false)).clicked() {
+                    self.show_about = true;
                 }
-                if ui.add(egui::Button::new(egui::RichText::new("Import Painter project...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked()
-                    && self.paint.pick(gui_paint::Pick::Substance)
-                {
-                    self.screen = Screen::Paint;
-                }
-                ui.add_space(6.0);
-                ui.separator();
-                ui.add_space(6.0);
-                for (i, label) in ["Home", "Learn"].iter().enumerate() {
-                    let sel = self.home_page == i as u8;
-                    if ui
-                        .add(
-                            egui::Button::new(egui::RichText::new(*label).size(13.0))
-                                .fill(if sel { Color32::from_rgb(52, 52, 52) } else { Color32::TRANSPARENT })
-                                .min_size(vec2(w, 32.0)),
-                        )
-                        .clicked()
-                    {
-                        self.home_page = i as u8;
-                    }
-                }
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                    ui.add_space(14.0);
-                    if ui.checkbox(&mut self.skip_home, "Do not show on startup").changed() {
-                        self.save_settings();
-                    }
-                    ui.add_space(6.0);
-                    if ui.add(egui::Button::new("Close home screen").corner_radius(14).min_size(vec2(w - 20.0, 30.0))).clicked() {
-                        self.screen = Screen::Editor;
-                    }
-                    ui.add_space(14.0);
-                    if ui.add(egui::Button::new("Keyboard shortcuts").frame(false)).clicked() {
-                        self.show_about = true;
-                    }
-                    ui.add_space(2.0);
-                    ui.label(
-                        egui::RichText::new(format!("MaterialCraft {}  -  pure Rust CPU engine", env!("CARGO_PKG_VERSION")))
-                            .size(11.0)
-                            .color(Color32::from_gray(130)),
-                    );
-                });
-            },
-        );
+                ui.add_space(2.0);
+                ui.label(
+                    egui::RichText::new(format!("MaterialCraft {}  -  pure Rust CPU engine", env!("CARGO_PKG_VERSION")))
+                        .size(11.0)
+                        .color(Color32::from_gray(130)),
+                );
+            });
+        });
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(bg).inner_margin(egui::Margin::symmetric(26, 0))).show(ui, |ui| {
             ui.add_space(26.0);
             if self.home_page == 1 {
@@ -1462,10 +1456,10 @@ impl App {
                         ui.small(format!("GPU: {name}"));
                     }
                     ui.small("Real displacement, parallax relief, GGX PBR, mipmaps + anisotropic filtering, MSAA");
-                    if let Ok(mut g) = self.gpu.lock() {
-                        if ui.checkbox(&mut g.opts.self_shadow, "Height self-shadowing").changed() {
-                            ch = true;
-                        }
+                    if let Ok(mut g) = self.gpu.lock()
+                        && ui.checkbox(&mut g.opts.self_shadow, "Height self-shadowing").changed()
+                    {
+                        ch = true;
                     }
                 }
                 if !self.gpu_on {
@@ -1656,153 +1650,146 @@ impl App {
         let (can_undo, can_redo, has_sel, has_clip) = (!self.undo.is_empty(), !self.redo.is_empty(), !self.sel.is_empty(), !self.clip.is_empty());
         let panel_fill = Color32::from_rgb(40, 40, 40);
 
-        egui::Panel::top("menu").frame(egui::Frame::NONE.fill(Color32::from_rgb(34, 34, 34)).inner_margin(egui::Margin::symmetric(6, 2))).show(
-            ui,
-            |ui| {
-                egui::MenuBar::new().ui(ui, |ui| {
-                    ui.menu_button("File", |ui| {
-                        ui.menu_button("New", |ui| {
-                            if ui.button("Material Graph...   Ctrl+N").clicked() {
-                                acts.push(Act::NewGraph);
-                                ui.close();
-                            }
-                            if ui.button("Empty Package...").clicked() {
-                                acts.push(Act::NewPackage);
-                                ui.close();
-                            }
-                        });
-                        for (label, a) in [("Open package(s)...   Ctrl+O", Act::Open), ("Save   Ctrl+S", Act::Save), ("Save as...", Act::SaveAs)] {
-                            if ui.button(label).clicked() {
-                                acts.push(a);
-                                ui.close();
-                            }
+        egui::Panel::top("menu").frame(egui::Frame::NONE.fill(Color32::from_rgb(34, 34, 34)).inner_margin(egui::Margin::symmetric(6, 2))).show(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    ui.menu_button("New", |ui| {
+                        if ui.button("Material Graph...   Ctrl+N").clicked() {
+                            acts.push(Act::NewGraph);
+                            ui.close();
                         }
-                        ui.separator();
-                        for (label, a) in
-                            [("Import bitmap...", Act::ImportBitmap), ("Export textures...", Act::Export), ("Publish package (.mca)...", Act::Publish)]
-                        {
-                            if ui.button(label).clicked() {
-                                acts.push(a);
-                                ui.close();
-                            }
-                        }
-                        ui.separator();
-                        if ui.button("Home screen").clicked() {
-                            acts.push(Act::Home);
+                        if ui.button("Empty Package...").clicked() {
+                            acts.push(Act::NewPackage);
                             ui.close();
                         }
                     });
-                    ui.menu_button("Edit", |ui| {
-                        if ui.add_enabled(can_undo, egui::Button::new("Undo   Ctrl+Z")).clicked() {
-                            acts.push(Act::Undo);
-                            ui.close();
-                        }
-                        if ui.add_enabled(can_redo, egui::Button::new("Redo   Ctrl+Y")).clicked() {
-                            acts.push(Act::Redo);
-                            ui.close();
-                        }
-                        ui.separator();
-                        for (label, a, en) in [
-                            ("Cut   Ctrl+X", Act::Cut, has_sel),
-                            ("Copy   Ctrl+C", Act::Copy, has_sel),
-                            ("Paste   Ctrl+V", Act::Paste(None), has_clip),
-                            ("Duplicate   Ctrl+D", Act::Duplicate, has_sel),
-                            ("Delete   Del", Act::Delete, true),
-                            ("Select all   Ctrl+A", Act::SelectAll, true),
-                        ] {
-                            if ui.add_enabled(en, egui::Button::new(label)).clicked() {
-                                acts.push(a);
-                                ui.close();
-                            }
-                        }
-                        ui.separator();
-                        if ui.button("Add node...   Tab").clicked() {
-                            acts.push(Act::Search(None));
-                            ui.close();
-                        }
-                        if ui.button("Comment frame   C").clicked() {
-                            acts.push(Act::Comment);
-                            ui.close();
-                        }
-                        if ui.add_enabled(has_sel, egui::Button::new("Create subgraph from selection")).clicked() {
-                            acts.push(Act::Subgraph);
-                            ui.close();
-                        }
-                    });
-                    ui.menu_button("Tools", |ui| {
-                        if ui.button("Mesh map baker...").clicked() {
-                            acts.push(Act::Bake);
-                            ui.close();
-                        }
-                        if ui.button("Frame all   F").clicked() {
-                            acts.push(Act::FrameAll);
-                            ui.close();
-                        }
-                        if ui.button("Auto-layout").clicked() {
-                            acts.push(Act::AutoLayout);
-                            ui.close();
-                        }
-                    });
-                    ui.menu_button("Windows", |ui| {
-                        for (i, n) in ["Explorer", "Library", "3D View", "2D View", "Properties"].iter().enumerate() {
-                            ui.checkbox(&mut self.show[i], *n);
-                        }
-                        ui.separator();
-                        if ui.button("Reset layout").clicked() {
-                            self.show = [true; 5];
-                            self.left_split = 0.33;
-                            ui.close();
-                        }
-                    });
-                    ui.menu_button("Help", |ui| {
-                        if ui.button("Keyboard shortcuts").clicked() {
-                            self.show_about = true;
-                            ui.close();
-                        }
-                        ui.separator();
-                        ui.small(self.logo_note.as_str());
-                    });
-                });
-            },
-        );
-        egui::Panel::top("toolbar")
-            .frame(egui::Frame::NONE.fill(Color32::from_rgb(38, 38, 38)).inner_margin(egui::Margin::symmetric(6, 1)))
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    for (ic, tip, a, en) in [
-                        (Ic::New, "New material graph (Ctrl+N)", Act::NewGraph, true),
-                        (Ic::Open, "Open (Ctrl+O)", Act::Open, true),
-                        (Ic::Save, "Save (Ctrl+S)", Act::Save, true),
-                    ] {
-                        if icon_btn(ui, ic, tip, en).clicked() {
+                    for (label, a) in [("Open package(s)...   Ctrl+O", Act::Open), ("Save   Ctrl+S", Act::Save), ("Save as...", Act::SaveAs)] {
+                        if ui.button(label).clicked() {
                             acts.push(a);
+                            ui.close();
                         }
                     }
                     ui.separator();
-                    if icon_btn(ui, Ic::Undo, "Undo (Ctrl+Z)", can_undo).clicked() {
+                    for (label, a) in
+                        [("Import bitmap...", Act::ImportBitmap), ("Export textures...", Act::Export), ("Publish package (.mca)...", Act::Publish)]
+                    {
+                        if ui.button(label).clicked() {
+                            acts.push(a);
+                            ui.close();
+                        }
+                    }
+                    ui.separator();
+                    if ui.button("Home screen").clicked() {
+                        acts.push(Act::Home);
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Edit", |ui| {
+                    if ui.add_enabled(can_undo, egui::Button::new("Undo   Ctrl+Z")).clicked() {
                         acts.push(Act::Undo);
+                        ui.close();
                     }
-                    if icon_btn(ui, Ic::Redo, "Redo (Ctrl+Y)", can_redo).clicked() {
+                    if ui.add_enabled(can_redo, egui::Button::new("Redo   Ctrl+Y")).clicked() {
                         acts.push(Act::Redo);
+                        ui.close();
+                    }
+                    ui.separator();
+                    for (label, a, en) in [
+                        ("Cut   Ctrl+X", Act::Cut, has_sel),
+                        ("Copy   Ctrl+C", Act::Copy, has_sel),
+                        ("Paste   Ctrl+V", Act::Paste(None), has_clip),
+                        ("Duplicate   Ctrl+D", Act::Duplicate, has_sel),
+                        ("Delete   Del", Act::Delete, true),
+                        ("Select all   Ctrl+A", Act::SelectAll, true),
+                    ] {
+                        if ui.add_enabled(en, egui::Button::new(label)).clicked() {
+                            acts.push(a);
+                            ui.close();
+                        }
+                    }
+                    ui.separator();
+                    if ui.button("Add node...   Tab").clicked() {
+                        acts.push(Act::Search(None));
+                        ui.close();
+                    }
+                    if ui.button("Comment frame   C").clicked() {
+                        acts.push(Act::Comment);
+                        ui.close();
+                    }
+                    if ui.add_enabled(has_sel, egui::Button::new("Create subgraph from selection")).clicked() {
+                        acts.push(Act::Subgraph);
+                        ui.close();
                     }
                 });
-            });
-        egui::Panel::bottom("status")
-            .frame(egui::Frame::NONE.fill(Color32::from_rgb(30, 30, 30)).inner_margin(egui::Margin::symmetric(8, 2)))
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    let (msg, ok) = &self.status;
-                    ui.colored_label(if *ok { Color32::from_gray(170) } else { Color32::from_rgb(255, 120, 110) }, msg);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
-                        ui.label(format!(
-                            "MaterialCraft Engine: CPU ({threads} threads){}    Version: {}",
-                            if self.job.is_some() { "   computing..." } else { "" },
-                            env!("CARGO_PKG_VERSION")
-                        ));
-                    });
+                ui.menu_button("Tools", |ui| {
+                    if ui.button("Mesh map baker...").clicked() {
+                        acts.push(Act::Bake);
+                        ui.close();
+                    }
+                    if ui.button("Frame all   F").clicked() {
+                        acts.push(Act::FrameAll);
+                        ui.close();
+                    }
+                    if ui.button("Auto-layout").clicked() {
+                        acts.push(Act::AutoLayout);
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Windows", |ui| {
+                    for (i, n) in ["Explorer", "Library", "3D View", "2D View", "Properties"].iter().enumerate() {
+                        ui.checkbox(&mut self.show[i], *n);
+                    }
+                    ui.separator();
+                    if ui.button("Reset layout").clicked() {
+                        self.show = [true; 5];
+                        self.left_split = 0.33;
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Help", |ui| {
+                    if ui.button("Keyboard shortcuts").clicked() {
+                        self.show_about = true;
+                        ui.close();
+                    }
+                    ui.separator();
+                    ui.small(self.logo_note.as_str());
                 });
             });
+        });
+        egui::Panel::top("toolbar").frame(egui::Frame::NONE.fill(Color32::from_rgb(38, 38, 38)).inner_margin(egui::Margin::symmetric(6, 1))).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                for (ic, tip, a, en) in [
+                    (Ic::New, "New material graph (Ctrl+N)", Act::NewGraph, true),
+                    (Ic::Open, "Open (Ctrl+O)", Act::Open, true),
+                    (Ic::Save, "Save (Ctrl+S)", Act::Save, true),
+                ] {
+                    if icon_btn(ui, ic, tip, en).clicked() {
+                        acts.push(a);
+                    }
+                }
+                ui.separator();
+                if icon_btn(ui, Ic::Undo, "Undo (Ctrl+Z)", can_undo).clicked() {
+                    acts.push(Act::Undo);
+                }
+                if icon_btn(ui, Ic::Redo, "Redo (Ctrl+Y)", can_redo).clicked() {
+                    acts.push(Act::Redo);
+                }
+            });
+        });
+        egui::Panel::bottom("status").frame(egui::Frame::NONE.fill(Color32::from_rgb(30, 30, 30)).inner_margin(egui::Margin::symmetric(8, 2))).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let (msg, ok) = &self.status;
+                ui.colored_label(if *ok { Color32::from_gray(170) } else { Color32::from_rgb(255, 120, 110) }, msg);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+                    ui.label(format!(
+                        "MaterialCraft Engine: CPU ({threads} threads){}    Version: {}",
+                        if self.job.is_some() { "   computing..." } else { "" },
+                        env!("CARGO_PKG_VERSION")
+                    ));
+                });
+            });
+        });
 
         let (mut d_props, mut d_left, mut d_views, mut d_split) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
         if self.show[4] {
@@ -1952,22 +1939,22 @@ impl App {
         self.search_ui(ctx);
         self.acts.extend(acts);
 
-        if let Some(p) = egui::DragAndDrop::payload::<GraphDrag>(ctx) {
-            if let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) {
-                let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, Id::new("dnd_ghost_graph")));
-                let text = format!("{} (graph)", p.1);
-                let r = painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, text.clone(), FontId::proportional(12.0), Color32::WHITE);
-                painter.rect_filled(r.expand(4.0), 3.0, Color32::from_rgba_unmultiplied(20, 20, 20, 200));
-                painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, text, FontId::proportional(12.0), Color32::WHITE);
-            }
+        if let Some(p) = egui::DragAndDrop::payload::<GraphDrag>(ctx)
+            && let Some(pos) = ctx.input(|i| i.pointer.hover_pos())
+        {
+            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, Id::new("dnd_ghost_graph")));
+            let text = format!("{} (graph)", p.1);
+            let r = painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, text.clone(), FontId::proportional(12.0), Color32::WHITE);
+            painter.rect_filled(r.expand(4.0), 3.0, Color32::from_rgba_unmultiplied(20, 20, 20, 200));
+            painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, text, FontId::proportional(12.0), Color32::WHITE);
         }
-        if let Some(p) = egui::DragAndDrop::payload::<String>(ctx) {
-            if let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) {
-                let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, Id::new("dnd_ghost")));
-                let r = painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, (*p).clone(), FontId::proportional(12.0), Color32::WHITE);
-                painter.rect_filled(r.expand(4.0), 3.0, Color32::from_rgba_unmultiplied(20, 20, 20, 200));
-                painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, (*p).clone(), FontId::proportional(12.0), Color32::WHITE);
-            }
+        if let Some(p) = egui::DragAndDrop::payload::<String>(ctx)
+            && let Some(pos) = ctx.input(|i| i.pointer.hover_pos())
+        {
+            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, Id::new("dnd_ghost")));
+            let r = painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, (*p).clone(), FontId::proportional(12.0), Color32::WHITE);
+            painter.rect_filled(r.expand(4.0), 3.0, Color32::from_rgba_unmultiplied(20, 20, 20, 200));
+            painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, (*p).clone(), FontId::proportional(12.0), Color32::WHITE);
         }
     }
 }
@@ -1996,21 +1983,21 @@ impl eframe::App for App {
             }
         }
         // background asset results
-        if let Some(rx) = &self.banner_rx {
-            if let Ok(img) = rx.try_recv() {
-                let mut o = egui::TextureOptions::LINEAR;
-                o.wrap_mode = egui::TextureWrapMode::Repeat;
-                self.banner = Some(ctx.load_texture("banner", img, o));
-                self.banner_rx = None;
-            }
+        if let Some(rx) = &self.banner_rx
+            && let Ok(img) = rx.try_recv()
+        {
+            let mut o = egui::TextureOptions::LINEAR;
+            o.wrap_mode = egui::TextureWrapMode::Repeat;
+            self.banner = Some(ctx.load_texture("banner", img, o));
+            self.banner_rx = None;
         }
-        if let Some(rx) = &self.lib_rx {
-            if let Ok(m) = rx.try_recv() {
-                for (k, img) in m {
-                    self.lib_thumbs.insert(k.clone(), ctx.load_texture(format!("lib_{k}"), img, egui::TextureOptions::LINEAR));
-                }
-                self.lib_rx = None;
+        if let Some(rx) = &self.lib_rx
+            && let Ok(m) = rx.try_recv()
+        {
+            for (k, img) in m {
+                self.lib_thumbs.insert(k.clone(), ctx.load_texture(format!("lib_{k}"), img, egui::TextureOptions::LINEAR));
             }
+            self.lib_rx = None;
         }
         if self.banner_rx.is_some() || self.lib_rx.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(60));
@@ -2099,13 +2086,12 @@ impl eframe::App for App {
                 (redo, undo, copy, cut, paste, dup, all, save, open, del, frame, com, newg, pasted)
             });
             let w = pointer.map(|p| self.screen_to_world(p));
-            if let Some(text) = &k.13 {
-                if let Some(body) = text.strip_prefix("MaterialCraft nodes\n") {
-                    if let Ok(g) = Graph::parse_unchecked(body) {
-                        self.clip = g.nodes.into_iter().collect();
-                        self.acts.push(Act::Paste(w));
-                    }
-                }
+            if let Some(text) = &k.13
+                && let Some(body) = text.strip_prefix("MaterialCraft nodes\n")
+                && let Ok(g) = Graph::parse_unchecked(body)
+            {
+                self.clip = g.nodes.into_iter().collect();
+                self.acts.push(Act::Paste(w));
             }
             for (on, a) in [
                 (k.0, Act::Redo),
@@ -2168,11 +2154,11 @@ fn load_logo() -> (Tex, String) {
     let mut bytes: Option<(Vec<u8>, String)> = logo_data::LOGO_PNG.map(|b| (b.to_vec(), "embedded".to_string()));
     if bytes.is_none() {
         let mut dirs: Vec<PathBuf> = Vec::new();
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(d) = exe.parent() {
-                dirs.push(d.join("assets"));
-                dirs.push(d.to_path_buf());
-            }
+        if let Ok(exe) = std::env::current_exe()
+            && let Some(d) = exe.parent()
+        {
+            dirs.push(d.join("assets"));
+            dirs.push(d.to_path_buf());
         }
         if let Ok(c) = std::env::current_dir() {
             dirs.push(c.join("assets"));
@@ -2182,11 +2168,12 @@ fn load_logo() -> (Tex, String) {
             if let Ok(rd) = std::fs::read_dir(&d) {
                 for e in rd.flatten() {
                     let n = e.file_name().to_string_lossy().to_lowercase();
-                    if n.starts_with("materialcraftlogo") && n.ends_with(".png") {
-                        if let Ok(b) = std::fs::read(e.path()) {
-                            bytes = Some((b, e.path().display().to_string()));
-                            break 'outer;
-                        }
+                    if n.starts_with("materialcraftlogo")
+                        && n.ends_with(".png")
+                        && let Ok(b) = std::fs::read(e.path())
+                    {
+                        bytes = Some((b, e.path().display().to_string()));
+                        break 'outer;
                     }
                 }
             }

@@ -80,12 +80,12 @@ impl<'a> GltfReader<'a> {
         if let Some(mesh) = node.get("mesh") {
             let mesh = mesh.as_usize().ok_or_else(|| GltfError::invalid(format!("{at}.mesh"), "not an index"))?;
             self.add_mesh(mesh, name, &world)?;
-        } else if let Some(extras) = node.get("extras").and_then(|e| e.get(EXTRAS_KEY)) {
-            if extras.get("empty_part").and_then(Value::as_bool) == Some(true) {
-                let material = extras.get("material").and_then(Value::as_usize);
-                let material = material.ok_or_else(|| GltfError::invalid(format!("{at}.extras"), "bad material"))?;
-                self.mesh.parts.push(MeshPart { name: name.unwrap_or_default().to_string(), material, ..MeshPart::default() });
-            }
+        } else if let Some(extras) = node.get("extras").and_then(|e| e.get(EXTRAS_KEY))
+            && extras.get("empty_part").and_then(Value::as_bool) == Some(true)
+        {
+            let material = extras.get("material").and_then(Value::as_usize);
+            let material = material.ok_or_else(|| GltfError::invalid(format!("{at}.extras"), "bad material"))?;
+            self.mesh.parts.push(MeshPart { name: name.unwrap_or_default().to_string(), material, ..MeshPart::default() });
         }
         for child in indices(node, "children", &format!("{at}.children"))? {
             self.visit(child, &world, depth + 1)?;
