@@ -27,7 +27,7 @@ mod uv;
 pub use grow::MeshTopologies;
 pub use region::PickRegion;
 pub use screen::ScreenPick;
-pub use selection::apply_pick;
+pub use selection::{NamedPicks, apply_pick, name_picks};
 pub use uv::uv_pick;
 
 use std::collections::{BTreeMap, BTreeSet};

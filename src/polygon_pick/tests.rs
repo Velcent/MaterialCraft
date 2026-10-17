@@ -101,7 +101,7 @@ fn picks_add_and_take_out_by_part_name() {
     let mesh = Mesh { materials: vec!["m".into()], parts: vec![quad(), MeshPart { name: "other".into(), ..quad() }] };
     let old = Selection { mode: PickMode::Triangle, picks: vec![Pick { part: "gone".into(), triangles: vec![4] }] };
     let picked: Picked = [(0, [1, 0].into_iter().collect()), (1, [1].into_iter().collect())].into_iter().collect();
-    let added = apply_pick(&old, &mesh, &picked, true, PickMode::Polygon);
+    let added = apply_pick(&old, &name_picks(&mesh, &picked), true, PickMode::Polygon);
     assert_eq!(added.mode, PickMode::Polygon);
     assert_eq!(
         added.picks,
@@ -112,7 +112,7 @@ fn picks_add_and_take_out_by_part_name() {
         ]
     );
     let taken: Picked = [(1, [1].into_iter().collect()), (0, [0].into_iter().collect())].into_iter().collect();
-    let left = apply_pick(&added, &mesh, &taken, false, PickMode::Triangle);
+    let left = apply_pick(&added, &name_picks(&mesh, &taken), false, PickMode::Triangle);
     assert_eq!(left.picks, vec![Pick { part: "gone".into(), triangles: vec![4] }, Pick { part: "quad".into(), triangles: vec![1] }]);
 }
 
@@ -157,7 +157,7 @@ fn pick_into(doc: &mut Document) -> Vec<Edit> {
     for (mode, add) in [(PickMode::UvIsland, true), (PickMode::Polygon, false)] {
         let picked = topo.grow(&mesh, mode, pick(&mesh, &PickRegion::Point(front_centre(&mesh)), true));
         let mut tx = Transaction::new(doc);
-        let change = edit_polygon_fill(&mut tx, &layer, StackId::Mask, |s| apply_pick(s, &mesh, &picked, add, mode)).unwrap();
+        let change = edit_polygon_fill(&mut tx, &layer, StackId::Mask, |s| apply_pick(s, &name_picks(&mesh, &picked), add, mode)).unwrap();
         assert_ne!(change, PolygonFillChange::Unchanged);
         undo.push(tx.commit());
     }
@@ -203,10 +203,10 @@ fn picks_undo_one_step_each_and_reach_content_too() {
     let picked: Picked = [(0, [0].into_iter().collect())].into_iter().collect();
     let mut tx = Transaction::new(&mut doc);
     let r = LayerRef::new("s", "below");
-    let change = edit_polygon_fill(&mut tx, &r, StackId::Content, |s| apply_pick(s, &mesh, &picked, true, PickMode::Triangle)).unwrap();
+    let change = edit_polygon_fill(&mut tx, &r, StackId::Content, |s| apply_pick(s, &name_picks(&mesh, &picked), true, PickMode::Triangle)).unwrap();
     assert_eq!(change, PolygonFillChange::Added(0));
     // an un-pick of nothing selected changes nothing
-    let none = edit_polygon_fill(&mut tx, &r, StackId::Content, |s| apply_pick(s, &mesh, &Picked::new(), false, PickMode::Triangle)).unwrap();
+    let none = edit_polygon_fill(&mut tx, &r, StackId::Content, |s| apply_pick(s, &name_picks(&mesh, &Picked::new()), false, PickMode::Triangle)).unwrap();
     assert_eq!(none, PolygonFillChange::Unchanged);
     tx.commit();
     assert_eq!(coverage(&doc), expected(&doc, &[0]), "content fill white on triangle 0, the masked top layer adds nothing");
