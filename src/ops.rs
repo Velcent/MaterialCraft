@@ -1617,6 +1617,13 @@ pub fn curvature_from_normal(n: &Tex, smooth_px: f32, intensity: f32) -> Tex {
     blur(&c, smooth_px)
 }
 
+/// How much of the foreground height `fg` shows over the background height `bg` (0..1): the foreground wins
+/// where it is higher, `offset` (0..1, 0.5 neutral) raises it, `contrast` sharpens the transition.
+pub fn height_blend_factor(bg: f32, fg: f32, offset: f32, contrast: f32) -> f32 {
+    let score = (fg + (offset - 0.5) * 2.0) - bg;
+    (0.5 + score * contrast.max(0.05) * 2.0).clamp(0.0, 1.0) * sm(0.0, 0.08, offset)
+}
+
 /// Returns (height, blend factor).
 pub fn height_blend(bg: &Tex, fg: &Tex, mask: Option<&Tex>, opacity: f32, contrast: f32) -> (Tex, Tex) {
     let mut h = bg.clone();
@@ -1624,8 +1631,7 @@ pub fn height_blend(bg: &Tex, fg: &Tex, mask: Option<&Tex>, opacity: f32, contra
     for i in 0..h.px.len() {
         let m = mask.and_then(|m| m.px.get(i)).map(|p| lum(*p)).unwrap_or(1.0) * opacity;
         let (b, g) = (lum(bg.px[i]), lum(fg.px.get(i).copied().unwrap_or([0.0; 4])));
-        let score = (g + (m - 0.5) * 2.0) - b;
-        let k = (0.5 + score * contrast.max(0.05) * 2.0).clamp(0.0, 1.0) * sm(0.0, 0.08, m);
+        let k = height_blend_factor(b, g, m, contrast);
         let out = b + (g - b) * k;
         h.px[i] = [out, out, out, 1.0];
         f.px[i] = [k, k, k, 1.0];
