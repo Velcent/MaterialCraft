@@ -24,6 +24,8 @@ pub enum Icon {
     Log,
     /// The asset tray: a grid of tiles.
     Assets,
+    /// The bakers panel: rays falling onto a surface.
+    Bake,
     Viewport,
     More,
 }
@@ -114,6 +116,13 @@ impl Icon {
                     painter.rect_stroke(Rect::from_center_size(p(x, y), vec2(s * 0.5, s * 0.5)), 1.0, line, eframe::egui::StrokeKind::Middle);
                 }
                 painter.circle_filled(p(0.33, 0.33), s * 0.25, color);
+            }
+            Icon::Bake => {
+                poly(&[p(-0.65, 0.5), p(0.65, 0.5)]);
+                for x in [-0.4, 0.0, 0.4] {
+                    poly(&[p(x, -0.6), p(x, 0.25)]);
+                    poly(&[p(x - 0.15, 0.1), p(x, 0.25), p(x + 0.15, 0.1)]);
+                }
             }
             Icon::Interface => {
                 for (dy, x) in [(-0.4, 0.2), (0.0, -0.3), (0.4, 0.4)] {

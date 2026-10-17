@@ -7,6 +7,9 @@
 //! clicks and key presses into [`panels::PanelEvent`]s that are applied here ([`documents`]: opening and
 //! closing; [`editing`]: stack edits and history moves; [`tray_host`]: the asset tray's drops and settings).
 
+mod bake_editor;
+mod bake_queue;
+mod baking;
 mod cache;
 mod channel_view;
 mod demo;
@@ -36,6 +39,7 @@ mod window;
 
 use crate::gui_assets::AssetTray;
 use crate::gui_settings::UserSettings;
+use baking::Baking;
 use channel_view::ChannelView;
 use document_state::OpenDocument;
 use eframe::egui;
@@ -45,6 +49,7 @@ use materialcraft::diag::{Area, RingBuffer, Sink, SinkExt, Target};
 use materialcraft::projection::CpuViewProjector;
 use occlusion_check::OcclusionCheck;
 use panels::PanelEvent;
+use panels::bakers::BakersPanel;
 use panels::import_report::ReportPanel;
 use panels::layers::LayerPanel;
 use panels::layout::Screen;
@@ -91,6 +96,9 @@ pub struct PaintMode {
     layers: LayerPanel,
     /// The asset tray (step 15); it works with or without a document.
     tray: AssetTray,
+    bakers: BakersPanel,
+    /// The running bake and waiting auto-rebakes.
+    baking: Baking,
     /// Where status messages and errors go (the log file and the session history).
     diag: Arc<dyn Sink>,
     /// Docking, shortcuts, tools and the user settings they live in.
@@ -122,6 +130,8 @@ impl PaintMode {
             focus: None,
             layers: LayerPanel::default(),
             tray,
+            bakers: BakersPanel::default(),
+            baking: Baking::default(),
             shell: Shell::new(settings, diag.clone()),
             diag,
             shot: launch.shot.map(ShotJob::new),
@@ -151,6 +161,7 @@ impl PaintMode {
             self.open(p);
         }
         self.poll_loader();
+        self.poll_bake();
         self.picking.poll(self.document.as_ref());
         if let Some(doc) = &mut self.document {
             self.scene.poll(doc, self.viewport.gpu(), &*self.diag);
@@ -170,7 +181,7 @@ impl PaintMode {
         }
         let name = self.document.as_ref().map(|d| d.name());
         self.title.update(ctx, name.as_deref());
-        if self.loader.is_some() || self.scene.is_busy() {
+        if self.loader.is_some() || self.scene.is_busy() || self.baking.is_busy() {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
         if let Some(shot) = &mut self.shot {
@@ -213,7 +224,8 @@ impl PaintMode {
             log: &mut self.log,
             tray: &mut self.tray,
             focus_set,
-            activity: Activity { loading: self.loader.as_ref().map(|l| l.progress()), maps: self.scene.progress() },
+            activity: Activity { loading: self.loader.as_ref().map(|l| l.progress()), maps: self.scene.progress(), bake: self.baking.progress() },
+            bakers: &mut self.bakers,
             shell: &mut self.shell,
         };
         panels::layout::show(ui, screen)
@@ -231,7 +243,10 @@ impl PaintMode {
             PanelEvent::Import => {
                 self.pick(Pick::Substance);
             }
-            PanelEvent::Close => self.close(),
+            PanelEvent::Close => {
+                self.baking.stop();
+                self.close();
+            }
             PanelEvent::Home => {
                 self.title.forget(); // the editor sets its own title meanwhile
                 return PaintAction::Home;
@@ -267,6 +282,7 @@ impl PaintMode {
             }
             PanelEvent::Reveal(target) => self.reveal(&target),
             PanelEvent::Assets(ev) => self.apply_tray(ev),
+            PanelEvent::Bakers(ev) => self.bakers_event(ev),
             // Workspace events were handled by the shell.
             _ => {}
         }
@@ -281,9 +297,13 @@ impl PaintMode {
                 self.reveal_layer(set, &layer);
                 set
             }
-            // Hook: the bake panel opens at `key` once it exists.
-            Destination::BakeSetting(key) => {
-                self.diag.info(Area::Bake, format!("The bake setting {key} has no panel to show it yet."));
+            Destination::BakeSetting { set, field } => {
+                self.bakers.reveal(set, &field);
+                if !self.shell.workspace.is_open(PaintPanel::Bakers)
+                    && let Err(e) = self.shell.workspace.open(PaintPanel::Bakers)
+                {
+                    self.diag.warn(Area::General, format!("The bakers panel can't be shown: {e}."));
+                }
                 return;
             }
             Destination::Nowhere(why) => {

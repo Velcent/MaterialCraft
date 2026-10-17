@@ -1185,6 +1185,7 @@ dependencies = [
  "eframe",
  "log",
  "materialcraft",
+ "materialcraft-parity",
  "materialcraft-substance",
  "rfd",
  "serde",

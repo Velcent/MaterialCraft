@@ -5,6 +5,7 @@ use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
 use super::super::shell::Shell;
 use super::super::viewport::Viewport;
+use super::bakers::BakersPanel;
 use super::dock_content::Bodies;
 use super::import_report::ReportPanel;
 use super::layers::LayerPanel;
@@ -33,6 +34,7 @@ pub struct Screen<'a> {
     /// A texture set to highlight this frame.
     pub focus_set: Option<(usize, bool)>,
     pub activity: Activity<'a>,
+    pub bakers: &'a mut BakersPanel,
     pub shell: &'a mut Shell,
 }
 
@@ -76,6 +78,8 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
             tray: s.tray,
             history: s.history,
             focus_set: s.focus_set,
+            bakers: s.bakers,
+            bake: s.activity.bake,
             events: &mut events,
         };
         if let Some(e) = shell.workspace.show(ui, &style, &mut bodies) {

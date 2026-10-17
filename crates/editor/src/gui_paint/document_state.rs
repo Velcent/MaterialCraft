@@ -57,6 +57,12 @@ impl OpenDocument {
         Arc::new(Document { mesh: doc.mesh.clone(), texture_sets: sets, ..Document::default() })
     }
 
+    /// What a bake queue reads besides its jobs: the mesh, copied once per queue (the jobs carry the settings
+    /// and the results come back as edits, so no texture set is needed).
+    pub fn bake_mesh(&self) -> Arc<materialcraft::mesh::Mesh> {
+        Arc::new(self.doc.mesh.clone())
+    }
+
     pub fn history(&self) -> &PaintHistory {
         &self.history
     }

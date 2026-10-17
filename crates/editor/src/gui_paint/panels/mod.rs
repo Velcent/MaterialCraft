@@ -1,6 +1,7 @@
 //! The Paint screen's panels. Each draws one part of the screen and reports what the user asked
 //! for as [`PanelEvent`]s; `PaintMode` applies them.
 
+pub mod bakers;
 pub mod channel_bar;
 mod dock_content;
 pub mod import_report;
@@ -77,4 +78,6 @@ pub enum PanelEvent {
     LayerAction(layers::LayerAction),
     /// A request from the asset tray: a dropped asset, changed library settings.
     Assets(TrayEvent),
+    /// A request from the bakers panel.
+    Bakers(bakers::BakerEvent),
 }

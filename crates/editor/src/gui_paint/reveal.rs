@@ -4,6 +4,7 @@
 use std::time::{Duration, Instant};
 
 use materialcraft::diag::Target;
+use materialcraft::paint::bake_config::SettingKey;
 
 use super::document_state::OpenDocument;
 
@@ -17,8 +18,8 @@ pub enum Destination {
     TextureSet(usize),
     /// A layer of the texture set at `set`: selected in the layer panel, its texture set shown.
     Layer { set: usize, layer: String },
-    /// A bake setting, by key: the hook for the bake panel (not built yet).
-    BakeSetting(String),
+    /// A bake setting (`<section>.<field>`) of the texture set at `set`: shown in the bakers panel.
+    BakeSetting { set: usize, field: String },
     /// Nothing on this screen to go to; the text says why.
     Nowhere(String),
 }
@@ -35,7 +36,13 @@ pub fn resolve(target: &Target, doc: Option<&OpenDocument>) -> Destination {
             Some(i) => Destination::Layer { set: i, layer: layer.clone() },
             None => Destination::Nowhere(format!("Texture set {texture_set} is not in the open document.")),
         },
-        Target::BakeSetting(key) => Destination::BakeSetting(key.clone()),
+        Target::BakeSetting(key) => match SettingKey::parse(key) {
+            Some(k) => match set(&k.set) {
+                Some(i) => Destination::BakeSetting { set: i, field: k.field },
+                None => Destination::Nowhere(format!("Texture set {} is not in the open document.", k.set)),
+            },
+            None => Destination::Nowhere(format!("The bake setting {key} belongs to no texture set.")),
+        },
         Target::Asset(id) => Destination::Nowhere(format!("Asset {id} has no panel to show it yet.")),
         Target::File(path) => Destination::Nowhere(format!("The message is about the file {path}.")),
     }
@@ -81,7 +88,9 @@ mod tests {
         assert_eq!(resolve(&layer, Some(&open)), Destination::Layer { set: 0, layer: "l1".into() });
         assert!(matches!(resolve(&layer, None), Destination::Nowhere(_)));
         assert!(matches!(resolve(&Target::TextureSet("zz".into()), Some(&open)), Destination::Nowhere(_)));
-        assert_eq!(resolve(&Target::BakeSetting("ao.samples".into()), None), Destination::BakeSetting("ao.samples".into()));
+        let key = Target::BakeSetting("ambient_occlusion.rays@b".into());
+        assert_eq!(resolve(&key, Some(&open)), Destination::BakeSetting { set: 1, field: "ambient_occlusion.rays".into() });
+        assert!(matches!(resolve(&Target::BakeSetting("max_dist".into()), Some(&open)), Destination::Nowhere(_)));
     }
 
     #[test]

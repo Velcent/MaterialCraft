@@ -18,6 +18,10 @@ craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "15ed713b8fc
 serde = { version = "1", features = ["derive"] }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 
+[dev-dependencies]
+# The bake queue's corpus gate compares its maps with mcparity's bake of the same project (tests only).
+materialcraft-parity = { path = "../parity" }
+
 [[bin]]
 name = "materialcraft-gui"
 path = "src/main.rs"

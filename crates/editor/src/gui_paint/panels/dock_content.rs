@@ -9,6 +9,7 @@ use super::super::document_state::OpenDocument;
 use super::super::shell::panels::PaintPanel;
 use super::super::shell::tools::ToolState;
 use super::super::viewport::Viewport;
+use super::bakers::{BakeStatus, BakersPanel};
 use super::import_report::ReportPanel;
 use super::layers::LayerPanel;
 use super::log::LogPanel;
@@ -34,6 +35,9 @@ pub struct Bodies<'a> {
     pub history: &'a RingBuffer,
     /// A texture set to highlight this frame (going to a log entry's target).
     pub focus_set: Option<(usize, bool)>,
+    pub bakers: &'a mut BakersPanel,
+    /// (set name, done, total) of the running bake.
+    pub bake: Option<(&'a str, usize, usize)>,
     pub events: &'a mut Vec<PanelEvent>,
 }
 
@@ -77,6 +81,12 @@ impl DockContent<PaintPanel> for Bodies<'_> {
             }
             PaintPanel::Interface => {
                 margin.show(ui, |ui| interface_settings::show(ui, self.scale_draft, self.events));
+            }
+            PaintPanel::Bakers => {
+                margin.show(ui, |ui| match self.document {
+                    Some(doc) => self.bakers.show(ui, doc, &BakeStatus { running: self.bake }, self.events),
+                    None => no_document(ui),
+                });
             }
             PaintPanel::Log => {
                 margin.show(ui, |ui| self.log.show(ui, self.history, self.events));

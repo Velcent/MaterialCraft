@@ -71,6 +71,7 @@ pub const ACTIONS: &[ActionSpec] = &[
     press("paint.window.log", "Show or hide Log", WINDOW, &[]),
     // Asset tray (roadmap step 15).
     press("paint.window.assets", "Show or hide Assets", WINDOW, &[]),
+    press("paint.window.bakers", "Show or hide Bakers", WINDOW, &[]),
     press("paint.layout.painting", "Painting layout", WINDOW, &[]),
     press("paint.layout.baking", "Baking layout", WINDOW, &["F8"]),
     press("paint.layout.reset", "Reset the current layout", WINDOW, &[]),
@@ -145,6 +146,7 @@ pub fn toggle_action(panel: PaintPanel) -> &'static str {
         PaintPanel::Interface => "paint.window.interface_settings",
         PaintPanel::Log => "paint.window.log",
         PaintPanel::Assets => "paint.window.assets",
+        PaintPanel::Bakers => "paint.window.bakers",
     }
 }
 

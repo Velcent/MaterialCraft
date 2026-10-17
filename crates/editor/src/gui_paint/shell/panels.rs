@@ -24,6 +24,8 @@ pub enum PaintPanel {
     Log,
     /// The asset tray (AS-08).
     Assets,
+    /// The bakers panel (BK2-01).
+    Bakers,
 }
 
 impl PanelKind for PaintPanel {
@@ -37,6 +39,7 @@ impl PanelKind for PaintPanel {
         PaintPanel::Interface,
         PaintPanel::Log,
         PaintPanel::Assets,
+        PaintPanel::Bakers,
     ];
 
     fn id(self) -> &'static str {
@@ -50,6 +53,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Interface => "interface_settings",
             PaintPanel::Log => "log",
             PaintPanel::Assets => "assets",
+            PaintPanel::Bakers => "bakers",
         }
     }
 
@@ -64,6 +68,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Interface => "Interface settings",
             PaintPanel::Log => "Log",
             PaintPanel::Assets => "Assets",
+            PaintPanel::Bakers => "Bakers",
         }
     }
 
@@ -78,6 +83,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Interface => Icon::Interface,
             PaintPanel::Log => Icon::Log,
             PaintPanel::Assets => Icon::Assets,
+            PaintPanel::Bakers => Icon::Bake,
         }
     }
 
@@ -89,7 +95,7 @@ impl PanelKind for PaintPanel {
 /// The layout a new user starts with.
 pub const DEFAULT_LAYOUT: &str = "Painting";
 
-/// The built-in layouts. "Baking" is where the bakers panel docks once it exists (ADR 0008 VQ18).
+/// The built-in layouts. "Baking" is bake mode: the bakers panel next to the viewport (ADR 0008 VQ18).
 pub const PRESETS: &[Preset<PaintPanel>] = &[Preset { name: DEFAULT_LAYOUT, build: painting }, Preset { name: "Baking", build: baking }];
 
 fn tabs(panels: &[PaintPanel]) -> Node<PaintPanel> {
@@ -114,15 +120,15 @@ fn painting() -> Layout<PaintPanel> {
     Layout { root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(280.0), left, centre)), floating: Vec::new() }
 }
 
-/// A wide viewport with texture sets (and layers) and display settings stacked on the right.
+/// A wide viewport with the bakers panel on the right, above texture sets, display settings and the log.
 fn baking() -> Layout<PaintPanel> {
     let right = split(
         SplitAxis::Vertical,
-        SplitSize::Ratio(0.4),
-        tabs(&[PaintPanel::TextureSets, PaintPanel::Layers]),
-        tabs(&[PaintPanel::Display, PaintPanel::Assets, PaintPanel::ImportReport, PaintPanel::Log]),
+        SplitSize::Ratio(0.62),
+        tabs(&[PaintPanel::Bakers]),
+        tabs(&[PaintPanel::TextureSets, PaintPanel::Log, PaintPanel::Display, PaintPanel::Assets, PaintPanel::Layers, PaintPanel::ImportReport]),
     );
-    Layout { root: Some(split(SplitAxis::Horizontal, SplitSize::FixedSecond(300.0), tabs(&[PaintPanel::Viewport]), right)), floating: Vec::new() }
+    Layout { root: Some(split(SplitAxis::Horizontal, SplitSize::FixedSecond(340.0), tabs(&[PaintPanel::Viewport]), right)), floating: Vec::new() }
 }
 
 #[cfg(test)]

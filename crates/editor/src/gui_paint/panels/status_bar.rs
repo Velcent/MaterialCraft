@@ -1,4 +1,4 @@
-//! The status bar: the last message, load or import progress (with Cancel) and map progress.
+//! The status bar: the last message, load or import progress (with Cancel), bake and map progress.
 
 use super::PanelEvent;
 use eframe::egui::{self, Color32};
@@ -13,6 +13,8 @@ pub struct Activity<'a> {
     pub loading: Option<(f32, &'a str)>,
     /// (texture sets done, total) of the map computation.
     pub maps: Option<(usize, usize)>,
+    /// (set name, sets done, total) of a running bake.
+    pub bake: Option<(&'a str, usize, usize)>,
 }
 
 /// Draws the bar; `status` is the newest diagnostics entry of the session.
@@ -32,6 +34,9 @@ pub fn show(ui: &mut egui::Ui, status: Option<&Entry>, activity: &Activity, even
                     }
                     ui.add(egui::ProgressBar::new(f).desired_width(160.0).show_percentage());
                     ui.label(step);
+                } else if let Some((name, done, total)) = activity.bake {
+                    ui.add(egui::ProgressBar::new(done as f32 / total.max(1) as f32).desired_width(120.0));
+                    ui.label(format!("Baking {name} ({}/{total})", done + 1));
                 } else if let Some((done, total)) = activity.maps {
                     ui.add(egui::ProgressBar::new(done as f32 / total.max(1) as f32).desired_width(120.0));
                     ui.label(format!("Compositing texture sets {done}/{total}"));
