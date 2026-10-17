@@ -29,7 +29,7 @@ pub fn payload(item: &Item) -> Result<DropPayload, &'static str> {
             let Some((id, params)) = &item.procedural else {
                 return Err("This effect does not name the generator or filter it was made with, so it can't be added yet.");
             };
-            let p = Procedural { id: id.clone(), params: params.clone() };
+            let p = Procedural::new(id.clone()).with_params(params.clone());
             let kind = if item.usage == Usage::Filter { AssetEffect::Filter(p) } else { AssetEffect::Generator(p) };
             Ok(DropPayload::Effect(EffectAsset { name: item.name.clone(), kind }))
         }
