@@ -10,7 +10,7 @@ use crate::paint::image::Rect;
 pub(super) fn generate(c: &Compositor, p: &Procedural, target: EvalTarget, r: Rect, stack: Option<&dyn StackContext>) -> Option<Vec<[f32; 4]>> {
     let generator = c.effects.generator(&p.id)?;
     let mut out = vec![[0.0; 4]; r.area()];
-    let request = EvalRequest { set: c.set, target, rect: r, params: &p.params, stack };
+    let request = EvalRequest { set: c.set, target, rect: r, params: &p.params, stack, surface: c.fills.surface };
     generator.generate(&request, &mut out).ok()?;
     Some(out)
 }
@@ -32,7 +32,7 @@ impl FilterRun<'_, '_> {
         let outer = grow(self.r, kernel.radius(params), self.compositor.set.resolution);
         let pixels = input(outer);
         let mut out = vec![[0.0; 4]; self.r.area()];
-        let request = EvalRequest { set: self.compositor.set, target: self.target, rect: self.r, params, stack: None };
+        let request = EvalRequest { set: self.compositor.set, target: self.target, rect: self.r, params, stack: None, surface: self.compositor.fills.surface };
         kernel.apply(&request, &FilterInput { rect: outer, pixels: &pixels }, &mut out).ok()?;
         Some(out)
     }

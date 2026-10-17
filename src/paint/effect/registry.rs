@@ -5,6 +5,7 @@
 //! Values are in the channel's working space (linear light for sRGB channels, see
 //! [`crate::paint::working_space`]), straight RGBA with alpha = coverage. For a mask the grey value is red.
 
+use crate::mesh::SurfaceMap;
 use crate::paint::channel::Channel;
 use crate::paint::image::Rect;
 use crate::paint::texture_set::TextureSet;
@@ -30,6 +31,8 @@ pub struct EvalRequest<'a> {
     /// The layer stack around the effect, for generators that compare against it (height-comparison masks);
     /// `None` when the effect is evaluated on its own.
     pub stack: Option<&'a dyn StackContext>,
+    /// The texture set's surface map (UV islands, positions), when the compositor has one.
+    pub surface: Option<&'a SurfaceMap>,
 }
 
 /// What an effect may read from the layer stack it sits in, over any rectangle of the texture set. Heights

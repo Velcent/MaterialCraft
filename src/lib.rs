@@ -9,6 +9,7 @@ pub mod diag;
 pub mod export;
 pub mod expr;
 pub mod exr;
+pub mod generators;
 #[cfg(feature = "gui")]
 pub mod gpu3d;
 pub mod graph;
