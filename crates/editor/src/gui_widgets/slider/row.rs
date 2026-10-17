@@ -1,5 +1,5 @@
 // The row layout (label and value field above a full-width thin track with a round knob), the
-// knob painting and the double-click reset follow PhotoCraft's crates/ui-egui/src/widgets.rs
+// knob painting, the gradient track and the double-click reset follow PhotoCraft's crates/ui-egui/src/widgets.rs
 // (`slider_row_prec`, `slider_with`, `RowGestures::reset`), revision 5f65579, rewritten for
 // MaterialCraft's theme, typing and modifier rules. See ATTRIBUTION.md.
 //
@@ -46,11 +46,12 @@ pub struct SliderRow<'a> {
     default: Option<f32>,
     decimals: Option<usize>,
     suffix: &'a str,
+    gradient: Option<&'a [Color32]>,
 }
 
 impl<'a> SliderRow<'a> {
     pub fn new(label: &'a str, value: &'a mut f32, range: RangeInclusive<f32>) -> SliderRow<'a> {
-        SliderRow { label, value, span: Span::new(*range.start(), *range.end()), step: None, default: None, decimals: None, suffix: "" }
+        SliderRow { label, value, span: Span::new(*range.start(), *range.end()), step: None, default: None, decimals: None, suffix: "", gradient: None }
     }
 
     /// The arrow step (default: about a hundredth of the range).
@@ -77,6 +78,13 @@ impl<'a> SliderRow<'a> {
         self
     }
 
+    /// Paints the track with these colours, evenly spaced from the start of the range to its end (a colour
+    /// slider's tinted background, CP-08); fewer than two colours keep the plain track.
+    pub fn gradient(mut self, colors: &'a [Color32]) -> Self {
+        self.gradient = Some(colors);
+        self
+    }
+
     pub fn show(self, ui: &mut Ui) -> SliderResponse {
         let id = ui.next_auto_id().with(self.label);
         let step = self.step.filter(|s| s.is_finite() && *s > 0.0).unwrap_or_else(|| self.span.default_step());
@@ -93,7 +101,7 @@ impl<'a> SliderRow<'a> {
                     field(ui, self.value, self.span, step, decimals, &mut out);
                 });
             });
-            track(ui, self.value, self.span, step, self.default, &mut out);
+            track(ui, self.value, self.span, step, self.default, self.gradient, &mut out);
         });
         out.changed |= *self.value != start;
         out
@@ -138,7 +146,7 @@ fn field(ui: &mut Ui, value: &mut f32, span: Span, step: f32, decimals: usize, o
 }
 
 /// The track with its knob, its drag, jump, arrow and reset gestures.
-fn track(ui: &mut Ui, value: &mut f32, span: Span, step: f32, default: Option<f32>, out: &mut SliderResponse) {
+fn track(ui: &mut Ui, value: &mut f32, span: Span, step: f32, default: Option<f32>, gradient: Option<&[Color32]>, out: &mut SliderResponse) {
     let width = ui.available_width().max(60.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(width, TRACK_H), Sense::click_and_drag());
     let track = Rect::from_center_size(rect.center(), vec2((rect.width() - 2.0 * KNOB_R - 2.0).max(1.0), 3.0));
@@ -193,16 +201,21 @@ fn track(ui: &mut Ui, value: &mut f32, span: Span, step: f32, default: Option<f3
             out.ended = true;
         }
     }
-    paint(ui, &resp, rect, track, span.fraction(*value));
+    paint(ui, &resp, rect, track, span.fraction(*value), gradient.filter(|g| g.len() >= 2));
 }
 
-fn paint(ui: &Ui, resp: &Response, rect: Rect, track: Rect, f: f32) {
+fn paint(ui: &Ui, resp: &Response, rect: Rect, track: Rect, f: f32, gradient: Option<&[Color32]>) {
     let painter = ui.painter();
     let enabled = ui.is_enabled();
-    painter.rect_filled(track, 2.0, gui_theme::SLIDER_TRACK);
     let knob_x = track.left() + f * track.width();
-    let fill = if enabled { gui_theme::SLIDER_FILL } else { gui_theme::SLIDER_TRACK };
-    painter.rect_filled(Rect::from_min_max(track.min, pos2(knob_x, track.max.y)), 2.0, fill);
+    match gradient {
+        Some(colors) => gradient_track(painter, track.expand2(vec2(0.0, 2.0)), colors),
+        None => {
+            painter.rect_filled(track, 2.0, gui_theme::SLIDER_TRACK);
+            let fill = if enabled { gui_theme::SLIDER_FILL } else { gui_theme::SLIDER_TRACK };
+            painter.rect_filled(Rect::from_min_max(track.min, pos2(knob_x, track.max.y)), 2.0, fill);
+        }
+    }
     let knob = pos2(knob_x, rect.center().y);
     painter.circle_filled(knob + vec2(0.0, 1.0), KNOB_R + 0.5, Color32::from_black_alpha(90));
     painter.circle_filled(knob, KNOB_R, if enabled { Color32::from_gray(236) } else { Color32::from_gray(120) });
@@ -213,6 +226,26 @@ fn paint(ui: &Ui, resp: &Response, rect: Rect, track: Rect, f: f32) {
     if resp.has_focus() {
         painter.rect_stroke(rect, 3.0, Stroke::new(1.0, gui_theme::ACCENT.gamma_multiply(0.6)), egui::StrokeKind::Inside);
     }
+}
+
+/// A track filled with `colors`, evenly spaced, each step a linear blend (at least two colours).
+fn gradient_track(painter: &egui::Painter, track: Rect, colors: &[Color32]) {
+    let n = colors.len().saturating_sub(1).max(1) as f32;
+    let mut mesh = egui::Mesh::default();
+    for (i, w) in colors.windows(2).enumerate() {
+        let (Some(&a), Some(&b)) = (w.first(), w.get(1)) else { continue };
+        let x0 = track.left() + track.width() * i as f32 / n;
+        let x1 = track.left() + track.width() * (i + 1) as f32 / n;
+        let base = mesh.vertices.len() as u32;
+        mesh.colored_vertex(pos2(x0, track.top()), a);
+        mesh.colored_vertex(pos2(x1, track.top()), b);
+        mesh.colored_vertex(pos2(x1, track.bottom()), b);
+        mesh.colored_vertex(pos2(x0, track.bottom()), a);
+        mesh.add_triangle(base, base + 1, base + 2);
+        mesh.add_triangle(base, base + 2, base + 3);
+    }
+    painter.add(mesh);
+    painter.rect_stroke(track, 0.0, Stroke::new(1.0, gui_theme::BORDER), egui::StrokeKind::Outside);
 }
 
 /// Takes this frame's Up/Down presses out of the input, each with its modifiers.
