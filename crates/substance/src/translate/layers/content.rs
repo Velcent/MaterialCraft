@@ -12,7 +12,7 @@ use super::effect_data;
 use super::images::{ImageSource, channel_pixels};
 use super::projection_map::ProjectionTable;
 use crate::model::{EffectHeader, FillEffect, FilterEffect, PainterEffect, PainterSource};
-use crate::translate::replacements::{self, ProceduralPlan, Replacement};
+use crate::translate::replacements::{self, ProceduralPlan, Replacement, materials};
 use materialcraft::paint::{BlendMode, Channel, TiledImage};
 use materialcraft::projection::Projection;
 
@@ -65,7 +65,7 @@ pub struct ContentEvaluator<'a> {
     pub resolution: (u32, u32),
     /// What the set's anchors hold, for fills that read one.
     pub anchors: &'a AnchorTable,
-    /// Which Substance filters are replaced by MaterialCraft's.
+    /// Which Substance filters are replaced by MaterialCraft's, and which material fills by our materials.
     pub plan: &'a ProceduralPlan,
 }
 
@@ -236,7 +236,19 @@ impl ContentEvaluator<'_> {
             },
             PainterSource::Procedural(p) => {
                 let name = p.procedural.as_ref().map_or("?", |p| p.name());
-                opaque(state, format!("procedural fill \"{name}\""));
+                match materials::chosen(p, self.plan) {
+                    // the user's pick from the tray: computable, a replacement (not Painter's look)
+                    Some(reference) => {
+                        let mut status =
+                            Computability::replaced(format!("material \"{name}\" replaced by {reference}"));
+                        status.and(&self.projections.map(fill).status);
+                        if !matches!(state.value, Acc::Empty) {
+                            status.and(&blend.status());
+                        }
+                        composited(state, status);
+                    }
+                    None => opaque(state, format!("procedural fill \"{name}\"")),
+                }
             }
             PainterSource::Reference(r) => {
                 let status = self.anchors.status(r.anchor_uid);

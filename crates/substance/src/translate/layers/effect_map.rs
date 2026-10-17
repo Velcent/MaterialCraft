@@ -7,7 +7,8 @@
 //!   empty fill or paint content and the first effect stays an effect.
 //! - Every other Painter effect becomes one of ours: uniform and bitmap fills become fill and paint effects,
 //!   the channels a fill takes from a procedural, an anchor or an unknown source become a generator, reference
-//!   or unknown effect next to it; an effect group becomes a paint effect followed by its own entries; filters,
+//!   or unknown effect next to it (a Substance material the user replaced with one of ours becomes a material
+//!   fill, and the base of a fill layer that is nothing else); an effect group becomes a paint effect followed by its own entries; filters,
 //!   levels, colour selection, polygon fill and anchors keep their kind.
 //!
 //! Each effect gets a blend entry for every declared channel it writes, with the mode and opacity Painter
@@ -23,6 +24,7 @@ use super::strokes;
 use crate::model::{
     EffectHeader, FillEffect, LayerKind as PainterKind, PainterEffect, PainterLayer, PainterSource, PolygonFillEffect,
 };
+use crate::translate::replacements::materials;
 use materialcraft::json::Value;
 use materialcraft::paint::effect::{PolygonFill, Selection};
 use materialcraft::paint::{Channel, ChannelBlend, ContentEffect, EffectKind, Fill, LayerKind, PaintContent};
@@ -78,12 +80,9 @@ impl ContentMapper<'_, '_> {
 
     /// The fill as a base when every channel it computes is at full strength, with effects for the channels
     /// it takes from elsewhere (procedurals, anchors …).
+    /// A fill that is only a picked material at full strength becomes a material fill layer.
     fn fill_base(&self, fill: &FillEffect) -> Option<(LayerKind, Vec<ContentEffect>)> {
-        let values = self.values(fill);
-        let computed: Vec<ChannelContent> = values
-            .into_iter()
-            .filter(|c| !matches!(c.value, ChannelValue::Nothing))
-            .collect();
+        let computed = self.computed(fill);
         let full = computed.iter().all(|c| match c.value {
             ChannelValue::Uniform { coverage, .. } | ChannelValue::Image { coverage, .. } => coverage >= 1.0,
             ChannelValue::Composited | ChannelValue::Nothing => true,
@@ -92,9 +91,41 @@ impl ContentMapper<'_, '_> {
             return None;
         }
         let ev = self.evaluator;
-        let base = core_content(&computed, &PainterKind::Fill, ev.channels, ev.resolution);
         let written: Vec<Channel> = computed.iter().map(|c| c.channel).collect();
-        Some((base, self.fill_sources(fill, &written, true)))
+        let mut leftovers = self.fill_sources(fill, &written, true);
+        if let ([only], true) = (leftovers.as_slice(), computed.is_empty())
+            && let EffectKind::Fill(material) = &only.kind
+            && only.blend.iter().all(|b| b.opacity >= 1.0)
+        {
+            let base = LayerKind::Fill(material.clone());
+            leftovers.clear();
+            return Some((base, leftovers));
+        }
+        let base = core_content(&computed, &PainterKind::Fill, ev.channels, ev.resolution);
+        Some((base, leftovers))
+    }
+
+    /// What the fill computes itself (constants, bitmaps, …), leaving out the channels a picked material
+    /// writes: those become a material fill ([`Self::fill_sources`]).
+    fn computed(&self, fill: &FillEffect) -> Vec<ChannelContent> {
+        self.values(fill)
+            .into_iter()
+            .filter(|c| !matches!(c.value, ChannelValue::Nothing))
+            .filter(|c| !matches!(self.source_of(fill, c.channel), Some(PainterSource::Procedural(p)) if materials::chosen(p, self.evaluator.plan).is_some()))
+            .collect()
+    }
+
+    /// The source the fill takes `channel` from.
+    fn source_of<'f>(&self, fill: &'f FillEffect, channel: Channel) -> Option<&'f PainterSource> {
+        self.source_index(fill, channel).and_then(|i| fill.sources.get(i))
+    }
+
+    fn source_index(&self, fill: &FillEffect, channel: Channel) -> Option<usize> {
+        let painter = self.evaluator.channels.painter(channel);
+        fill.sources.iter().position(|s| {
+            let c = s.channels();
+            c.contains(painter) || (c.is_all() && matches!(s, PainterSource::Procedural(_)))
+        })
     }
 
     fn effects(&self, effects: &[PainterEffect], anchors: &mut AnchorIds, out: &mut Vec<ContentEffect>) {
@@ -169,11 +200,7 @@ impl ContentMapper<'_, '_> {
     /// A fill effect: its uniform and bitmap channels as one fill or paint effect, the other channels as
     /// generator, reference or unknown effects.
     fn fill(&self, fill: &FillEffect, out: &mut Vec<ContentEffect>) {
-        let computed: Vec<ChannelContent> = self
-            .values(fill)
-            .into_iter()
-            .filter(|c| !matches!(c.value, ChannelValue::Nothing))
-            .collect();
+        let computed = self.computed(fill);
         let ev = self.evaluator;
         let blend: Vec<ChannelBlend> = computed
             .iter()
@@ -205,11 +232,9 @@ impl ContentMapper<'_, '_> {
                 continue;
             }
             let painter = ev.channels.painter(channel);
-            let found = fill.sources.iter().position(|s| {
-                let c = s.channels();
-                c.contains(painter) || (c.is_all() && matches!(s, PainterSource::Procedural(_)))
-            });
-            let Some(index) = found else { continue };
+            let Some(index) = self.source_index(fill, channel) else {
+                continue;
+            };
             if !ResolvedBlend::of(&fill.header.blending, painter, Holder::Layer, ev.table).contributes() {
                 continue;
             }
@@ -224,7 +249,14 @@ impl ContentMapper<'_, '_> {
                 continue;
             };
             let kind = match source {
-                PainterSource::Procedural(p) => EffectKind::Generator(data::procedural(p.procedural.as_ref())),
+                PainterSource::Procedural(p) => match materials::chosen(p, ev.plan) {
+                    Some(reference) => EffectKind::Fill(materials::material_fill(
+                        p,
+                        reference,
+                        ev.projections.map(fill).projection,
+                    )),
+                    None => EffectKind::Generator(data::procedural(p.procedural.as_ref())),
+                },
                 PainterSource::Reference(r) => EffectKind::Reference(data::reference(r)),
                 PainterSource::Other(raw) => EffectKind::Unknown(data::unknown(raw)),
                 PainterSource::Bitmap(b) => {

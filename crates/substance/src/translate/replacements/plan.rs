@@ -7,6 +7,15 @@
 //! ```
 //!
 //! `procedurals` may also be the `procedurals` array `mcsub analyze` prints, each entry with a `"choice"`.
+//!
+//! Substance material fills (roadmap step 27) are chosen apart: `"materials"` maps a Painter material's graph
+//! name to a material of ours (a library reference such as `materials/iron-rusted.mca`) or to `"keep"`
+//! (Painter's flattened result, also what every material not listed gets). It may also be the `materials`
+//! array `mcsub analyze --library` prints, each entry with a `"choice"`:
+//!
+//! ```json
+//! {"materials": {"rust_fine": "materials/iron-rusted.mca", "moss": "keep"}}
+//! ```
 
 use materialcraft::json::{self, Value};
 
@@ -41,6 +50,9 @@ impl Choice {
 pub struct ProceduralPlan {
     pub default: Choice,
     pub choices: Vec<(String, Choice)>,
+    /// Material fills replaced by a material of ours: Painter graph name → library reference. Every other
+    /// material fill keeps Painter's result.
+    pub materials: Vec<(String, String)>,
 }
 
 impl Default for ProceduralPlan {
@@ -56,6 +68,7 @@ impl ProceduralPlan {
         ProceduralPlan {
             default: choice,
             choices: Vec::new(),
+            materials: Vec::new(),
         }
     }
 
@@ -74,9 +87,24 @@ impl ProceduralPlan {
         self
     }
 
-    /// A short stable text for cache keys (`keep;mg_dirt=replace`).
+    /// The material of ours replacing Painter material `name`, or `None` to keep Painter's result.
+    pub fn material(&self, name: &str) -> Option<&str> {
+        self.materials.iter().find(|(n, _)| n == name).map(|(_, r)| r.as_str())
+    }
+
+    /// Builder: Painter material `name` is replaced by our material `reference` (`None`: Painter's result).
+    pub fn with_material(mut self, name: &str, reference: Option<&str>) -> ProceduralPlan {
+        self.materials.retain(|(n, _)| n != name);
+        if let Some(r) = reference {
+            self.materials.push((name.to_string(), r.to_string()));
+        }
+        self
+    }
+
+    /// A short stable text for cache keys (`keep;mg_dirt=replace;material:rust_fine=materials/rust.mca`).
     pub fn key(&self) -> String {
         let mut parts: Vec<String> = self.choices.iter().map(|(n, c)| format!("{n}={}", c.id())).collect();
+        parts.extend(self.materials.iter().map(|(n, r)| format!("material:{n}={r}")));
         parts.sort();
         parts.insert(0, self.default.id().to_string());
         parts.join(";")
@@ -105,6 +133,23 @@ impl ProceduralPlan {
             Some(_) => return Err("choices: \"procedurals\" must be an object or an array".into()),
             None => {}
         }
+        match v.get("materials") {
+            Some(Value::Object(entries)) => {
+                for (name, c) in entries {
+                    plan = plan.with_material(name, material_of(c, name)?);
+                }
+            }
+            Some(Value::Array(entries)) => {
+                for e in entries {
+                    let name = e["name"].as_str().ok_or("choices: a material without \"name\"")?;
+                    if let Some(c) = e.get("choice") {
+                        plan = plan.with_material(name, material_of(c, name)?);
+                    }
+                }
+            }
+            Some(_) => return Err("choices: \"materials\" must be an object or an array".into()),
+            None => {}
+        }
         Ok(plan)
     }
 
@@ -114,9 +159,29 @@ impl ProceduralPlan {
             .iter()
             .map(|(n, c)| (n.clone(), Value::from(c.id())))
             .collect();
-        Value::object()
+        let mut v = Value::object()
             .with("default", self.default.id())
-            .with("procedurals", Value::Object(choices))
+            .with("procedurals", Value::Object(choices));
+        if !self.materials.is_empty() {
+            let materials = self
+                .materials
+                .iter()
+                .map(|(n, r)| (n.clone(), Value::from(r.as_str())))
+                .collect();
+            v.insert("materials", Value::Object(materials));
+        }
+        v
+    }
+}
+
+/// A material choice: `"keep"` (Painter's result) or a reference to a material of ours.
+fn material_of<'v>(v: &'v Value, what: &str) -> Result<Option<&'v str>, String> {
+    match v.as_str() {
+        Some("keep") => Ok(None),
+        Some(r) if !r.trim().is_empty() => Ok(Some(r)),
+        _ => Err(format!(
+            "choices: material {what}: expected \"keep\" or a material reference"
+        )),
     }
 }
 
@@ -146,5 +211,27 @@ mod tests {
         );
         assert!(ProceduralPlan::parse(r#"{"default": "maybe"}"#).is_err());
         assert!(ProceduralPlan::parse("[").is_err());
+    }
+
+    #[test]
+    fn material_choices_parse_round_trip_and_key() {
+        let text = r#"{"materials": {"rust_fine": "materials/iron-rusted.mca", "moss": "keep"}}"#;
+        let plan = ProceduralPlan::parse(text).unwrap();
+        assert_eq!(plan.material("rust_fine"), Some("materials/iron-rusted.mca"));
+        assert_eq!((plan.material("moss"), plan.material("gold")), (None, None));
+        assert_eq!(plan.key(), "keep;material:rust_fine=materials/iron-rusted.mca");
+        assert_eq!(ProceduralPlan::parse(&plan.to_json().to_string()).unwrap(), plan);
+        // the analyze array: entries without a choice keep Painter's result
+        let array = r#"{"materials": [{"name": "moss", "choice": "materials/moss.mca"}, {"name": "gold"}]}"#;
+        let plan = ProceduralPlan::parse(array).unwrap();
+        assert_eq!(
+            (plan.material("moss"), plan.material("gold")),
+            (Some("materials/moss.mca"), None)
+        );
+        assert_eq!(plan.clone().with_material("moss", None), ProceduralPlan::default());
+        assert!(ProceduralPlan::parse(r#"{"materials": {"moss": 3}}"#).is_err());
+        // a plan without materials keeps its old key and JSON (conversion caches stay valid)
+        assert_eq!(ProceduralPlan::default().key(), "keep");
+        assert!(ProceduralPlan::default().to_json().get("materials").is_none());
     }
 }

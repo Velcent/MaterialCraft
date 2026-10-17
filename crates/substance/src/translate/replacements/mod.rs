@@ -13,6 +13,7 @@
 //! Painter's saved results (`mcparity run generator…`).
 
 mod filters;
+pub mod materials;
 mod params;
 pub mod plan;
 mod table;

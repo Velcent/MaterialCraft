@@ -3,6 +3,7 @@
 mod effects;
 mod fixtures;
 mod masks_and_bitmaps;
+mod materials;
 mod native;
 mod stacks;
 mod strategies;

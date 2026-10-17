@@ -11,16 +11,20 @@ use super::layers::strokes::{StrokeCount, report_unimported_strokes};
 use super::layers::{BlendTable, LayerImport, ProjectImages, ProjectionTable};
 use super::normal_conventions::NormalConventions;
 use super::replacements::ProceduralPlan;
+use super::replacements::materials::MaterialCount;
 use super::report::Reporter;
 use super::set_builder::SetBuilder;
 use super::set_layers::SetLayers;
 use super::texture_sets::SetBinding;
 use crate::decode::assbin::{AssbinGeometry, AssbinScene};
+use crate::model::PainterDocument;
 use crate::project::{SppProject, paths};
+use materialcraft::material_fill::MaterialResolver;
 use materialcraft::mesh::Mesh;
-use materialcraft::paint::{Document, Fidelity};
+use materialcraft::paint::{Document, Fidelity, embedded};
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::sync::Arc;
 
 /// Share of the progress bar spent on texture sets (the rest: mesh, document, foreign files).
 const SETS_START: f32 = 0.1;
@@ -52,11 +56,29 @@ pub fn import_spp_with(
     Importer::open(path)?.with_plan(plan.clone()).run(progress, cancel)
 }
 
+/// [`import_spp_with`] that also embeds the materials `plan` picks, read through `library` (the asset library
+/// folders), so the document opens anywhere.
+pub fn import_spp_planned(
+    path: &Path,
+    plan: &ProceduralPlan,
+    library: Arc<dyn MaterialResolver>,
+    progress: &mut dyn FnMut(f32, &str),
+    cancel: Cancel<'_>,
+) -> Result<Document, ImportError> {
+    cancel.check()?;
+    Importer::open(path)?
+        .with_plan(plan.clone())
+        .with_library(library)
+        .run(progress, cancel)
+}
+
 /// One import in progress.
 pub struct Importer {
     project: SppProject,
     /// Which Substance procedurals become MaterialCraft generators (none by default).
     plan: ProceduralPlan,
+    /// Where the materials the plan picks are read from to embed them (not embedded without one).
+    library: Option<Arc<dyn MaterialResolver>>,
 }
 
 impl Importer {
@@ -64,6 +86,7 @@ impl Importer {
         Ok(Importer {
             project: SppProject::open(path)?,
             plan: ProceduralPlan::default(),
+            library: None,
         })
     }
 
@@ -71,6 +94,26 @@ impl Importer {
     pub fn with_plan(mut self, plan: ProceduralPlan) -> Importer {
         self.plan = plan;
         self
+    }
+
+    /// Builder: embed the picked materials, read through `library`.
+    pub fn with_library(mut self, library: Arc<dyn MaterialResolver>) -> Importer {
+        self.library = Some(library);
+        self
+    }
+
+    /// The material fills the plan replaces and keeps, in the report; the picked materials embedded.
+    fn materials(&self, model: Option<&PainterDocument>, doc: &mut Document, report: &mut Reporter) {
+        let count = model.map(|m| MaterialCount::of(m, &self.plan)).unwrap_or_default();
+        if count.total() > 0 {
+            report.add("material fills", Fidelity::Approximated, count.describe());
+        }
+        let Some(library) = &self.library else { return };
+        let embedded = embedded::embed_used(doc, |r| library.resolve(r).ok().map(String::into_bytes));
+        for missing in embedded.missing {
+            let note = "not found in the asset library: the material fill shows nothing until the material is there";
+            report.add(format!("material \"{missing}\""), Fidelity::Approximated, note);
+        }
     }
 
     /// Builds the document; `cancel` is asked between stages, per texture set and per image.
@@ -163,6 +206,7 @@ impl Importer {
         doc.texture_sets = sets;
         doc.height_filter = normals.height_filter;
         doc.foreign = kept.files;
+        self.materials(model.as_ref(), &mut doc, &mut report);
         for problem in doc.problems() {
             report.add("document check", Fidelity::Approximated, problem.to_string());
         }
