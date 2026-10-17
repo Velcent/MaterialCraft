@@ -10,9 +10,17 @@ use crate::gui_theme;
 use crate::gui_widgets::toolbar::{self, Group, Side};
 use crate::gui_workspace::shortcuts::ShortcutTable;
 
-pub fn show(ui: &mut Ui, tool_state: &ToolState, keys: &ShortcutTable, display: ChannelView, has_document: bool, events: &mut Vec<PanelEvent>) {
+pub fn show(
+    ui: &mut Ui,
+    tool_state: &ToolState,
+    keys: &ShortcutTable,
+    display: ChannelView,
+    has_document: bool,
+    paintable: bool,
+    events: &mut Vec<PanelEvent>,
+) {
     let tool = tool_state.current;
-    let unavailable = tools::unavailable(has_document);
+    let unavailable = tools::unavailable(has_document, paintable);
     let reset_key = keys.label("paint.view.reset_camera");
     let mut view_events = Vec::new();
     let mut camera_events = Vec::new();

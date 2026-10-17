@@ -12,6 +12,7 @@ use super::job::Job;
 use super::maps_worker::{MapsWorker, SetMaps};
 use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
+use materialcraft::paint::edit::LayerRef;
 use std::collections::BTreeSet;
 
 type GeometryResult = Result<Vec<PartGeometry>, String>;
@@ -26,6 +27,8 @@ pub struct SceneSync {
     waiting: Vec<SetMaps>,
     /// Maps asked for while a worker was still running: started when it has stopped.
     pending: Option<(ChannelView, BTreeSet<usize>)>,
+    /// The layer whose mask is shown alone (MK-05).
+    isolate: Option<LayerRef>,
     pub error: Option<String>,
 }
 
@@ -66,7 +69,15 @@ impl SceneSync {
 
     fn start_maps(&mut self, doc: &OpenDocument, view: ChannelView, sets: Vec<usize>) {
         self.waiting.retain(|m| !sets.contains(&m.set));
-        self.maps = Some(MapsWorker::start(doc.shared(), sets, view));
+        self.maps = Some(MapsWorker::start(doc.shared(), sets, view, self.isolate.clone()));
+    }
+
+    /// Shows `layer`'s mask alone in place of its set's material (`None`: the material again); recomposites.
+    pub fn isolate(&mut self, doc: &mut OpenDocument, view: ChannelView, layer: Option<LayerRef>) {
+        if self.isolate != layer {
+            self.isolate = layer;
+            self.remap(doc, view);
+        }
     }
 
     /// Drops all work and the GPU scene.

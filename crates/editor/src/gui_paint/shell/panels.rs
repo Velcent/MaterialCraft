@@ -12,6 +12,8 @@ pub enum PaintPanel {
     /// The 3D view with its toolbar: the protected canvas.
     Viewport,
     TextureSets,
+    /// The layer stack of the focused texture set.
+    Layers,
     ImportReport,
     /// Display settings (how the viewport shows the document).
     Display,
@@ -26,6 +28,7 @@ impl PanelKind for PaintPanel {
     const ALL: &'static [PaintPanel] = &[
         PaintPanel::Viewport,
         PaintPanel::TextureSets,
+        PaintPanel::Layers,
         PaintPanel::ImportReport,
         PaintPanel::Display,
         PaintPanel::Shortcuts,
@@ -37,6 +40,7 @@ impl PanelKind for PaintPanel {
         match self {
             PaintPanel::Viewport => "viewport",
             PaintPanel::TextureSets => "texture_sets",
+            PaintPanel::Layers => "layers",
             PaintPanel::ImportReport => "import_report",
             PaintPanel::Display => "display_settings",
             PaintPanel::Shortcuts => "shortcuts",
@@ -49,6 +53,7 @@ impl PanelKind for PaintPanel {
         match self {
             PaintPanel::Viewport => "Viewport",
             PaintPanel::TextureSets => "Texture sets",
+            PaintPanel::Layers => "Layers",
             PaintPanel::ImportReport => "Import report",
             PaintPanel::Display => "Display settings",
             PaintPanel::Shortcuts => "Shortcuts",
@@ -61,6 +66,7 @@ impl PanelKind for PaintPanel {
         match self {
             PaintPanel::Viewport => Icon::Viewport,
             PaintPanel::TextureSets => Icon::Layers,
+            PaintPanel::Layers => Icon::Stack,
             PaintPanel::ImportReport => Icon::Report,
             PaintPanel::Display => Icon::Display,
             PaintPanel::Shortcuts => Icon::Keyboard,
@@ -88,19 +94,21 @@ fn split(axis: SplitAxis, size: SplitSize, first: Node<PaintPanel>, second: Node
     Node::Split { axis, size, first: Box::new(first), second: Box::new(second) }
 }
 
-/// Texture sets and the import report (with the log) on the left, the viewport, display settings on the right.
+/// Texture sets and the import report (with the log) on the left, the viewport, layers above display settings
+/// on the right.
 fn painting() -> Layout<PaintPanel> {
     let left = split(SplitAxis::Vertical, SplitSize::Ratio(0.45), tabs(&[PaintPanel::TextureSets]), tabs(&[PaintPanel::ImportReport, PaintPanel::Log]));
-    let centre = split(SplitAxis::Horizontal, SplitSize::FixedSecond(270.0), tabs(&[PaintPanel::Viewport]), tabs(&[PaintPanel::Display]));
+    let right = split(SplitAxis::Vertical, SplitSize::Ratio(0.6), tabs(&[PaintPanel::Layers]), tabs(&[PaintPanel::Display]));
+    let centre = split(SplitAxis::Horizontal, SplitSize::FixedSecond(320.0), tabs(&[PaintPanel::Viewport]), right);
     Layout { root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(280.0), left, centre)), floating: Vec::new() }
 }
 
-/// A wide viewport with texture sets and display settings stacked on the right.
+/// A wide viewport with texture sets (and layers) and display settings stacked on the right.
 fn baking() -> Layout<PaintPanel> {
     let right = split(
         SplitAxis::Vertical,
         SplitSize::Ratio(0.4),
-        tabs(&[PaintPanel::TextureSets]),
+        tabs(&[PaintPanel::TextureSets, PaintPanel::Layers]),
         tabs(&[PaintPanel::Display, PaintPanel::ImportReport, PaintPanel::Log]),
     );
     Layout { root: Some(split(SplitAxis::Horizontal, SplitSize::FixedSecond(300.0), tabs(&[PaintPanel::Viewport]), right)), floating: Vec::new() }

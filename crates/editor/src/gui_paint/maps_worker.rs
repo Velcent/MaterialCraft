@@ -6,6 +6,7 @@ use super::channel_view::ChannelView;
 use super::job::Job;
 use materialcraft::diag::Entry;
 use materialcraft::gpu3d::GpuMaps;
+use materialcraft::paint::edit::LayerRef;
 use materialcraft::paint::{Document, MaterialMaps, OutputOptions, diag_entries};
 use std::sync::Arc;
 
@@ -26,7 +27,8 @@ pub struct MapsWorker {
 }
 
 impl MapsWorker {
-    pub fn start(doc: Arc<Document>, sets: Vec<usize>, view: ChannelView) -> MapsWorker {
+    /// Composites `sets` for `view`; the set of `isolate` shows that layer's mask alone instead (MK-05).
+    pub fn start(doc: Arc<Document>, sets: Vec<usize>, view: ChannelView, isolate: Option<LayerRef>) -> MapsWorker {
         let total = sets.len();
         let listed = sets.clone();
         let job = Job::spawn(move |cancel, tx| {
@@ -35,6 +37,14 @@ impl MapsWorker {
                     return;
                 }
                 let ts = &doc.texture_sets[set];
+                if let Some(r) = isolate.as_ref().filter(|r| r.set == ts.id)
+                    && let Some(maps) = super::isolate::mask_maps(ts, &r.layer)
+                {
+                    if tx.send(SetMaps { set, maps, warnings: Vec::new() }).is_err() {
+                        return;
+                    }
+                    continue;
+                }
                 let maps = MaterialMaps::build(ts, &OutputOptions::for_document(&doc));
                 if cancel.is_cancelled() {
                     return;

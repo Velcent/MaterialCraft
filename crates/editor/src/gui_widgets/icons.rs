@@ -14,6 +14,8 @@ pub enum Icon {
     Clone,
     Picker,
     Layers,
+    /// A stack of layers seen from the side (the layer panel).
+    Stack,
     Report,
     Display,
     Keyboard,
@@ -71,6 +73,11 @@ impl Icon {
             Icon::Layers => {
                 for dy in [-0.4, 0.0, 0.4] {
                     poly(&[p(-0.6, dy), p(0.0, dy - 0.25), p(0.6, dy), p(0.0, dy + 0.25), p(-0.6, dy)]);
+                }
+            }
+            Icon::Stack => {
+                for dy in [-0.45, 0.0, 0.45] {
+                    painter.rect_stroke(Rect::from_min_max(p(-0.6, dy - 0.15), p(0.6, dy + 0.15)), 1.0, line, eframe::egui::StrokeKind::Middle);
                 }
             }
             Icon::Report => {

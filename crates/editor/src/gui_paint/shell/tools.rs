@@ -57,11 +57,15 @@ impl Tool {
     }
 }
 
-/// Why the tools can't be used right now; `None` when they can.
-pub fn unavailable(has_document: bool) -> Option<&'static str> {
-    // Painting needs a selected paint layer or mask (ADR 0008, mc2-q-pt-02c). Layer selection
-    // arrives with the layer stack; until then nothing is paintable.
-    Some(if has_document { "Select a paint layer or a mask to paint." } else { "Open a document and select a paint layer or a mask to paint." })
+/// Why the tools can't be used right now; `None` when they can. Painting needs a selected paint
+/// layer's content or any layer's or folder's mask (ADR 0008, mc2-q-pt-02c); `paintable` says
+/// whether the layer panel's selection is one.
+pub fn unavailable(has_document: bool, paintable: bool) -> Option<&'static str> {
+    match (has_document, paintable) {
+        (true, true) => None,
+        (true, false) => Some("Select a paint layer or a mask to paint."),
+        (false, _) => Some("Open a document and select a paint layer or a mask to paint."),
+    }
 }
 
 /// The chosen tool and the one before it (the quick-mask key returns to it).

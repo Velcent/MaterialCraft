@@ -7,6 +7,7 @@ use super::super::shell::Shell;
 use super::super::viewport::Viewport;
 use super::dock_content::Bodies;
 use super::import_report::ReportPanel;
+use super::layers::LayerPanel;
 use super::log::LogPanel;
 use super::status_bar::Activity;
 use super::{PanelEvent, Strip, menu_bar, panel_strip, status_bar, tools_strip};
@@ -21,6 +22,7 @@ use materialcraft::diag::RingBuffer;
 pub struct Screen<'a> {
     pub document: Option<&'a OpenDocument>,
     pub report: &'a mut ReportPanel,
+    pub layers: &'a mut LayerPanel,
     pub viewport: &'a mut Viewport,
     pub display: ChannelView,
     /// The session's diagnostics: the newest entry for the status bar, all for the log panel.
@@ -37,6 +39,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
     let mut events = Vec::new();
     let title = s.document.map(|d| d.name()).unwrap_or_default();
     let has_document = s.document.is_some();
+    let paintable = s.document.is_some_and(|d| s.layers.paintable(d.doc()));
     menu_bar::show(ui, &title, has_document, s.document.map(|d| d.history()), s.shell, &mut events);
     status_bar::show(ui, s.history.last().map(|(_, e)| e), &s.activity, &mut events);
     let strip_frame = egui::Frame::NONE.fill(gui_theme::STRIP_BG);
@@ -50,7 +53,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
             Side::Right => egui::Panel::right(id),
         };
         panel.frame(strip_frame).exact_size(STRIP_WIDTH).resizable(false).show(ui, |ui| match strip {
-            Strip::Tools => tools_strip::show(ui, s.shell, has_document, &mut events),
+            Strip::Tools => tools_strip::show(ui, s.shell, has_document, paintable, &mut events),
             Strip::Panels => panel_strip::show(ui, s.shell, &mut events),
         });
     }
@@ -60,6 +63,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
         let mut bodies = Bodies {
             document: s.document,
             report: s.report,
+            layers: s.layers,
             viewport: s.viewport,
             display: s.display,
             shortcuts: &shell.shortcuts,

@@ -2,9 +2,9 @@
 //! Paint screen. Every change to the document goes through [`OpenDocument::edit`], so it is one step on the
 //! history; undo, redo and jumps go through the history too (HI-01, HI-07).
 
-use materialcraft::history::PaintHistory;
+use materialcraft::history::{CoalesceKey, PaintHistory};
 use materialcraft::paint::Document;
-use materialcraft::paint::edit::EditError;
+use materialcraft::paint::edit::{EditError, Transaction};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -46,6 +46,25 @@ impl OpenDocument {
 
     pub fn history(&self) -> &PaintHistory {
         &self.history
+    }
+
+    /// Runs `op` on the document as one history step named `label`. Edits with the same `key` join the
+    /// open step (one slider drag); an operation that makes no edit records nothing. On error the document
+    /// is unchanged.
+    pub fn edit<T>(&mut self, label: &str, key: Option<CoalesceKey>, op: impl FnOnce(&mut Transaction) -> Result<T, EditError>) -> Result<T, EditError> {
+        let doc = Arc::make_mut(&mut self.doc);
+        let mut tx = Transaction::new(doc);
+        let out = op(&mut tx)?;
+        let inverses = tx.commit();
+        if !inverses.is_empty() {
+            self.history.record_all(&self.doc, label, key, inverses);
+        }
+        Ok(out)
+    }
+
+    /// Ends the open step (the end of a slider drag).
+    pub fn close_step(&mut self) {
+        self.history.close();
     }
 
     /// Steps back once; false if there was nothing to undo. After a history move call [`Self::sync_sets`] and

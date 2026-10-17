@@ -5,6 +5,7 @@ pub mod channel_bar;
 mod dock_content;
 pub mod import_report;
 mod interface_settings;
+pub mod layers;
 pub mod layout;
 pub mod log;
 pub mod menu_bar;
@@ -69,4 +70,8 @@ pub enum PanelEvent {
     Redo,
     /// Return the document to the state after this many steps (a timeline block).
     JumpHistory(usize),
+    /// A change to the layer stack or a layer panel view state.
+    Layers(layers::LayerEvent),
+    /// A layer shortcut, resolved against the layer panel's selection.
+    LayerAction(layers::LayerAction),
 }

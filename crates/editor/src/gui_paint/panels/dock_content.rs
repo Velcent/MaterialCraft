@@ -10,6 +10,7 @@ use super::super::shell::panels::PaintPanel;
 use super::super::shell::tools::ToolState;
 use super::super::viewport::Viewport;
 use super::import_report::ReportPanel;
+use super::layers::LayerPanel;
 use super::log::LogPanel;
 use super::{PanelEvent, interface_settings, texture_sets, timeline, view_settings, viewport_toolbar};
 use crate::gui_workspace::shortcuts::{ShortcutTable, ShortcutsPage};
@@ -19,6 +20,7 @@ use materialcraft::diag::RingBuffer;
 pub struct Bodies<'a> {
     pub document: Option<&'a OpenDocument>,
     pub report: &'a mut ReportPanel,
+    pub layers: &'a mut LayerPanel,
     pub viewport: &'a mut Viewport,
     pub display: ChannelView,
     pub shortcuts: &'a ShortcutTable,
@@ -41,6 +43,12 @@ impl DockContent<PaintPanel> for Bodies<'_> {
             PaintPanel::TextureSets => {
                 margin.show(ui, |ui| match self.document {
                     Some(doc) => texture_sets::show(ui, doc, self.focus_set, self.events),
+                    None => no_document(ui),
+                });
+            }
+            PaintPanel::Layers => {
+                margin.show(ui, |ui| match self.document {
+                    Some(doc) => self.layers.show(ui, doc, self.events),
                     None => no_document(ui),
                 });
             }
@@ -78,7 +86,8 @@ impl DockContent<PaintPanel> for Bodies<'_> {
 impl Bodies<'_> {
     fn viewport_body(&mut self, ui: &mut Ui) {
         let has_document = self.document.is_some();
-        viewport_toolbar::show(ui, self.tools, self.shortcuts, self.display, has_document, self.events);
+        let paintable = self.document.is_some_and(|d| self.layers.paintable(d.doc()));
+        viewport_toolbar::show(ui, self.tools, self.shortcuts, self.display, has_document, paintable, self.events);
         if let Some(doc) = self.document {
             timeline::show(ui, doc.history(), self.events);
         }

@@ -6,7 +6,9 @@ use super::panels::PaintPanel;
 use super::tools::Tool;
 use crate::gui_paint::channel_view::ChannelView;
 use crate::gui_paint::panels::PanelEvent;
+use crate::gui_paint::panels::layers::LayerAction;
 use crate::gui_workspace::shortcuts::{ActionSpec, Kind};
+use materialcraft::paint::edit::ops::NewLayer;
 
 const fn press(id: &'static str, label: &'static str, group: &'static str, defaults: &'static [&'static str]) -> ActionSpec {
     ActionSpec { id, label, group, kind: Kind::Press, defaults }
@@ -28,6 +30,7 @@ pub const LIGHT: &str = "paint.nav.light";
 
 const FILE: &str = "File";
 const EDIT: &str = "Edit";
+const LAYERS: &str = "Layers";
 const VIEW: &str = "View";
 const NAV: &str = "Navigation";
 const WINDOW: &str = "Window";
@@ -42,6 +45,13 @@ pub const ACTIONS: &[ActionSpec] = &[
     press("paint.home", "Home screen", FILE, &[]),
     press("paint.edit.undo", "Undo", EDIT, &["Mod+Z"]),
     press("paint.edit.redo", "Redo", EDIT, &["Mod+Shift+Z", "Mod+Y"]),
+    press("paint.layer.new_paint", "New paint layer", LAYERS, &["Mod+Shift+N"]),
+    press("paint.layer.new_fill", "New fill layer", LAYERS, &[]),
+    press("paint.layer.new_folder", "New folder", LAYERS, &[]),
+    press("paint.layer.duplicate", "Duplicate the selected layers", LAYERS, &["Mod+D"]),
+    press("paint.layer.group", "Group the selected layers into a folder", LAYERS, &["Mod+G"]),
+    press("paint.layer.delete", "Delete the selected layers", LAYERS, &["Delete"]),
+    press("paint.layer.rename", "Rename the layer", LAYERS, &["F2"]),
     press("paint.view.reset_camera", "Reset camera", VIEW, &["F"]),
     press("paint.view.material", "Show the material", VIEW, &["M"]),
     press("paint.view.next_channel", "Next channel", VIEW, &["C"]),
@@ -52,6 +62,7 @@ pub const ACTIONS: &[ActionSpec] = &[
     gesture(ZOOM, "Zoom", NAV, &["Alt+RightDrag", "Wheel"]),
     gesture(LIGHT, "Turn the light", NAV, &["Shift+RightDrag"]),
     press("paint.window.texture_sets", "Show or hide Texture sets", WINDOW, &[]),
+    press("paint.window.layers", "Show or hide Layers", WINDOW, &[]),
     press("paint.window.import_report", "Show or hide Import report", WINDOW, &[]),
     press("paint.window.display_settings", "Show or hide Display settings", WINDOW, &[]),
     press("paint.window.shortcuts", "Show or hide Shortcuts", WINDOW, &["Mod+Alt+K"]),
@@ -96,6 +107,13 @@ pub fn event_for(id: &str) -> Option<PanelEvent> {
         "paint.home" => PanelEvent::Home,
         "paint.edit.undo" => PanelEvent::Undo,
         "paint.edit.redo" => PanelEvent::Redo,
+        "paint.layer.new_paint" => PanelEvent::LayerAction(LayerAction::New(NewLayer::Paint)),
+        "paint.layer.new_fill" => PanelEvent::LayerAction(LayerAction::New(NewLayer::Fill)),
+        "paint.layer.new_folder" => PanelEvent::LayerAction(LayerAction::New(NewLayer::Folder)),
+        "paint.layer.duplicate" => PanelEvent::LayerAction(LayerAction::Duplicate),
+        "paint.layer.group" => PanelEvent::LayerAction(LayerAction::Group),
+        "paint.layer.delete" => PanelEvent::LayerAction(LayerAction::Delete),
+        "paint.layer.rename" => PanelEvent::LayerAction(LayerAction::Rename),
         "paint.view.reset_camera" => PanelEvent::ResetCamera,
         "paint.view.material" => PanelEvent::ShowChannel(ChannelView::Material),
         "paint.view.next_channel" => PanelEvent::CycleChannel(1),
@@ -118,6 +136,7 @@ pub fn toggle_action(panel: PaintPanel) -> &'static str {
     match panel {
         PaintPanel::Viewport => "",
         PaintPanel::TextureSets => "paint.window.texture_sets",
+        PaintPanel::Layers => "paint.window.layers",
         PaintPanel::ImportReport => "paint.window.import_report",
         PaintPanel::Display => "paint.window.display_settings",
         PaintPanel::Shortcuts => "paint.window.shortcuts",

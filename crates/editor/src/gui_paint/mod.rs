@@ -11,6 +11,7 @@ mod channel_view;
 mod demo;
 mod document_state;
 mod geometry;
+mod isolate;
 mod job;
 mod launch;
 mod loader;
@@ -22,6 +23,7 @@ mod scene_sync;
 pub mod shell;
 mod shot;
 mod spp_import;
+mod stack_editor;
 mod unlit;
 mod viewport;
 mod window;
@@ -37,6 +39,7 @@ use materialcraft::paint::diag_entries;
 use materialcraft::paint::edit::EditError;
 use panels::PanelEvent;
 use panels::import_report::ReportPanel;
+use panels::layers::{LayerEvent, LayerPanel};
 use panels::layout::Screen;
 use panels::log::LogPanel;
 use panels::status_bar::Activity;
@@ -78,6 +81,7 @@ pub struct PaintMode {
     log: LogPanel,
     /// The texture set a log entry led to, highlighted for a moment.
     focus: Option<Focus>,
+    layers: LayerPanel,
     /// Where status messages and errors go (the log file and the session history).
     diag: Arc<dyn Sink>,
     /// Docking, shortcuts, tools and the user settings they live in.
@@ -100,6 +104,7 @@ impl PaintMode {
             report: ReportPanel::default(),
             log: LogPanel::default(),
             focus: None,
+            layers: LayerPanel::default(),
             shell: Shell::new(settings, diag.clone()),
             diag,
             shot: launch.shot.map(ShotJob::new),
@@ -186,6 +191,7 @@ impl PaintMode {
         let screen = Screen {
             document: self.document.as_ref(),
             report: &mut self.report,
+            layers: &mut self.layers,
             viewport: &mut self.viewport,
             display: self.display,
             history,
@@ -198,7 +204,8 @@ impl PaintMode {
     }
 
     fn apply(&mut self, ev: PanelEvent) -> PaintAction {
-        let Some(ev) = self.shell.apply(ev, self.document.is_some()) else {
+        let can_paint = self.document.as_ref().is_some_and(|d| self.layers.paintable(d.doc()));
+        let Some(ev) = self.shell.apply(ev, can_paint) else {
             return PaintAction::Stay;
         };
         match ev {
@@ -232,6 +239,12 @@ impl PaintMode {
             PanelEvent::Undo => self.move_in_history("Undo", |d| d.undo().map(|_| ())),
             PanelEvent::Redo => self.move_in_history("Redo", |d| d.redo().map(|_| ())),
             PanelEvent::JumpHistory(done) => self.move_in_history("Going back in the history", |d| d.jump_to(done)),
+            PanelEvent::Layers(ev) => self.edit_layers(ev),
+            PanelEvent::LayerAction(action) => {
+                if let Some(ev) = self.document.as_ref().and_then(|d| self.layers.action(d.doc(), action)) {
+                    self.edit_layers(ev);
+                }
+            }
             PanelEvent::CancelLoad => {
                 self.loader = None;
                 self.diag.info(Area::Project, "Cancelled.");
@@ -265,6 +278,27 @@ impl PaintMode {
             self.diag.warn(Area::General, format!("The texture set list can't be shown: {e}."));
         }
         self.focus = Some(Focus::new(set));
+    }
+
+    /// A layer panel request: an edit of the stack as one history step, then the set is recomposited.
+    fn edit_layers(&mut self, ev: LayerEvent) {
+        let Some(doc) = &mut self.document else { return };
+        if let LayerEvent::Isolate(layer) = ev {
+            self.layers.isolated = layer.clone();
+            self.scene.isolate(doc, self.display, layer);
+            return;
+        }
+        match stack_editor::apply(doc, ev) {
+            Ok(applied) => {
+                if let Some(ids) = applied.select {
+                    self.layers.select(ids);
+                }
+                if let Some(set) = applied.set {
+                    self.scene.refresh(doc, self.display, vec![set]);
+                }
+            }
+            Err(e) => self.diag.warn(Area::Project, format!("That layer change was not made: {e}.")),
+        }
     }
 
     /// Undo, redo or a timeline jump, then recompositing: the history does not say which sets changed.
@@ -323,6 +357,7 @@ impl PaintMode {
             // The import report panel keeps the details; the log gets its summary line (LG-12).
             self.diag.emit(diag_entries::import_summary(report, &doc.source().display().to_string(), doc.summary.as_deref()));
         }
+        self.layers.reset();
         self.scene.rebuild(&mut doc, self.display);
         self.viewport.reset_camera();
         self.document = Some(doc);
@@ -330,6 +365,7 @@ impl PaintMode {
 
     fn close(&mut self) {
         self.scene.clear(self.viewport.gpu());
+        self.layers.reset();
         self.document = None;
         self.diag.info(Area::Project, "Document closed.");
     }

@@ -88,8 +88,9 @@ impl Shell {
         ctx.input_mut(|i| self.shortcuts.take_presses(i)).into_iter().filter_map(actions::event_for).collect()
     }
 
-    /// Applies a workspace event; returns the event back if it is not one.
-    pub fn apply(&mut self, ev: PanelEvent, has_document: bool) -> Option<PanelEvent> {
+    /// Applies a workspace event; returns the event back if it is not one. `can_paint` says whether
+    /// the selection is a paintable target (tools can only be chosen then).
+    pub fn apply(&mut self, ev: PanelEvent, can_paint: bool) -> Option<PanelEvent> {
         match ev {
             PanelEvent::TogglePanel(p) => {
                 let r = self.workspace.toggle(p).map_err(|e| e.to_string());
@@ -118,12 +119,12 @@ impl Shell {
                 });
             }
             PanelEvent::SelectTool(tool) => {
-                if tools::unavailable(has_document).is_none() {
+                if tools::unavailable(true, can_paint).is_none() {
                     self.tools.select(tool);
                 }
             }
             PanelEvent::PreviousTool => {
-                if tools::unavailable(has_document).is_none() {
+                if tools::unavailable(true, can_paint).is_none() {
                     self.tools.select(self.tools.previous);
                 }
             }

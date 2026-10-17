@@ -8,12 +8,12 @@ use super::super::shell::tools::{self, Tool};
 use super::{PanelEvent, Strip};
 use crate::gui_widgets::strip::{self, StripItem};
 
-pub fn show(ui: &mut Ui, shell: &Shell, has_document: bool, events: &mut Vec<PanelEvent>) {
+pub fn show(ui: &mut Ui, shell: &Shell, has_document: bool, paintable: bool, events: &mut Vec<PanelEvent>) {
     let items: Vec<StripItem> = Tool::ALL
         .iter()
         .map(|t| StripItem { icon: t.icon(), label: t.label(), shortcut: Some(shell.shortcuts.label(t.action())), selected: shell.tools.current == *t })
         .collect();
-    let out = strip::vertical(ui, &items, tools::unavailable(has_document));
+    let out = strip::vertical(ui, &items, tools::unavailable(has_document, paintable));
     if let Some(tool) = out.clicked.and_then(|i| Tool::ALL.get(i)) {
         events.push(PanelEvent::SelectTool(*tool));
     }
