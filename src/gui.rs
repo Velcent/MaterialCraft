@@ -1133,8 +1133,7 @@ impl App {
             return self.status("Select at least one output to export.", false);
         }
         let fmt = self.export.fmt;
-        let depth =
-            if fmt != Format::Jpeg && (self.export.depth16 || self.g.meta.get("output_format").map(|f| f == "16" && false).unwrap_or(false)) { 16 } else { 8 };
+        let depth = if fmt != Format::Jpeg && self.export.depth16 { 16 } else { 8 };
         let mut count = 0;
         for &s in &sizes {
             match self.g.evaluate(Some(s)) {
