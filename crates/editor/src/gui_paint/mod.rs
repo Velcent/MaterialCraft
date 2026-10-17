@@ -15,6 +15,7 @@ mod baking;
 mod cache;
 mod channel_view;
 mod demo;
+mod dialogs;
 mod document_state;
 mod documents;
 mod editing;
@@ -31,6 +32,8 @@ mod navigation;
 mod occlusion_check;
 mod panels;
 mod reveal;
+mod save_point;
+mod saving;
 mod scene_sync;
 pub mod shell;
 mod shot;
@@ -42,6 +45,7 @@ mod strokes;
 mod tools;
 mod tray_host;
 mod unlit;
+mod unsaved;
 mod view_pick;
 mod viewport;
 mod window;
@@ -128,6 +132,8 @@ pub struct PaintMode {
     painting: tools::Painting,
     /// `--stroke-test`: paint one stroke once the document has settled.
     stroke_test: Option<stroke_test::StrokeTest>,
+    /// The running save and the "Save changes?" question.
+    saving: unsaved::Saving,
 }
 
 impl PaintMode {
@@ -163,6 +169,7 @@ impl PaintMode {
             color_read: None,
             painting: tools::Painting::default(),
             stroke_test: launch.stroke_test.then_some(stroke_test::StrokeTest::Waiting),
+            saving: unsaved::Saving::default(),
         };
         if launch.stroke_test && launch.stroke_helpers {
             pm.painting.brush.helpers = stroke_test::helpers();
@@ -186,10 +193,11 @@ impl PaintMode {
         let ctx = &ui.ctx().clone();
         self.shell.frame(ctx);
         if let Some(p) = window::dropped_document(ctx) {
-            self.open_reviewed(p);
+            self.guard(unsaved::Then::OpenPath(p));
         }
         self.poll_review(ctx);
         self.poll_loader();
+        self.poll_save();
         self.poll_bake();
         self.picking.poll(self.document.as_ref());
         if let Some(doc) = &mut self.document {
@@ -211,9 +219,10 @@ impl PaintMode {
         }
         self.color.frame(ctx, &mut self.shell.settings);
         self.eyedrop(ctx);
-        let name = self.document.as_ref().map(|d| d.name());
+        self.poll_unsaved(ctx);
+        let name = self.document.as_ref().map(|d| d.title());
         self.title.update(ctx, name.as_deref());
-        if self.loader.is_some() || self.scene.is_busy() || self.baking.is_busy() {
+        if self.loader.is_some() || self.scene.is_busy() || self.baking.is_busy() || self.is_saving() {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
         let settled = self.loader.is_none() && self.document.is_some() && !self.scene.is_busy() && self.picking.is_ready();
@@ -257,7 +266,12 @@ impl PaintMode {
             log: &mut self.log,
             tray: &mut self.tray,
             focus_set,
-            activity: Activity { loading: self.loader.as_ref().map(|l| l.progress()), maps: self.scene.progress(), bake: self.baking.progress() },
+            activity: Activity {
+                loading: self.loader.as_ref().map(|l| l.progress()),
+                maps: self.scene.progress(),
+                bake: self.baking.progress(),
+                saving: self.saving.job.as_ref().map(|j| j.progress()),
+            },
             bakers: &mut self.bakers,
             shell: &mut self.shell,
             brush: &mut self.painting.brush,
@@ -272,16 +286,11 @@ impl PaintMode {
             return PaintAction::Stay;
         };
         match ev {
-            PanelEvent::Open => {
-                self.pick(Pick::Any);
-            }
-            PanelEvent::Import => {
-                self.pick(Pick::Substance);
-            }
-            PanelEvent::Close => {
-                self.baking.stop();
-                self.close();
-            }
+            PanelEvent::Open => self.guard(unsaved::Then::Open(Pick::Any)),
+            PanelEvent::Import => self.guard(unsaved::Then::Open(Pick::Substance)),
+            PanelEvent::Close => self.guard(unsaved::Then::Close),
+            PanelEvent::Save => self.save(None),
+            PanelEvent::SaveAs => self.save_as(None),
             PanelEvent::Home => {
                 self.title.forget(); // the editor sets its own title meanwhile
                 return PaintAction::Home;
@@ -377,8 +386,9 @@ impl PaintMode {
         self.shell.ui_scale()
     }
 
-    /// Saves the workspace and settings (on exit).
+    /// On exit: offers to save unsaved changes, then saves the workspace and settings.
     pub fn flush(&mut self) {
+        self.save_on_exit();
         self.shell.flush();
     }
 }

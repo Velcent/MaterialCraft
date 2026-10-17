@@ -47,6 +47,8 @@ const TOOL_KEYS: &str = "Tool modifiers";
 pub const ACTIONS: &[ActionSpec] = &[
     press("paint.open", "Open document", FILE, &["Mod+O"]),
     press("paint.import", "Import Substance Painter project", FILE, &["Mod+I"]),
+    press("paint.save", "Save document", FILE, &["Mod+S"]),
+    press("paint.save_as", "Save document as", FILE, &["Mod+Shift+S"]),
     press("paint.close", "Close document", FILE, &["Mod+W"]),
     press("paint.home", "Home screen", FILE, &[]),
     press("paint.edit.undo", "Undo", EDIT, &["Mod+Z"]),
@@ -113,6 +115,8 @@ pub fn event_for(id: &str) -> Option<PanelEvent> {
     Some(match id {
         "paint.open" => PanelEvent::Open,
         "paint.import" => PanelEvent::Import,
+        "paint.save" => PanelEvent::Save,
+        "paint.save_as" => PanelEvent::SaveAs,
         "paint.close" => PanelEvent::Close,
         "paint.home" => PanelEvent::Home,
         "paint.edit.undo" => PanelEvent::Undo,

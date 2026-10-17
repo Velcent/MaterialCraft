@@ -17,6 +17,10 @@ pub fn show(ui: &mut Ui, title: &str, has_document: bool, history: Option<&Paint
             ui.menu_button("File", |ui| {
                 item(ui, shell, events, "Open in Paint mode...", "paint.open", true, PanelEvent::Open);
                 item(ui, shell, events, "Import Substance Painter project...", "paint.import", true, PanelEvent::Import);
+                ui.separator();
+                item(ui, shell, events, "Save", "paint.save", has_document, PanelEvent::Save);
+                item(ui, shell, events, "Save as...", "paint.save_as", has_document, PanelEvent::SaveAs);
+                ui.separator();
                 item(ui, shell, events, "Close document", "paint.close", has_document, PanelEvent::Close);
                 ui.separator();
                 item(ui, shell, events, "Home screen", "paint.home", true, PanelEvent::Home);
