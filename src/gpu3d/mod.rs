@@ -71,6 +71,16 @@ pub struct DepthShot {
     pub camera: crate::camera::Camera,
 }
 
+/// The displayed colour at one point of a drawn frame (the viewport eyedropper).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ColorShot {
+    /// Where it was read, in UI points from the viewport's top-left corner (as requested).
+    pub at: [f32; 2],
+    /// The pixel as drawn, display-encoded (sRGB) RGBA8; `None` if the point is outside the view or the driver
+    /// refused the read.
+    pub rgba: Option<[u8; 4]>,
+}
+
 #[derive(Default)]
 pub struct Gpu {
     pub opts: GpuOpts,
@@ -85,6 +95,10 @@ pub struct Gpu {
     /// Request a depth read-back of the next frame (checks of the CPU view projector against the GPU).
     pub want_depth: bool,
     pub depth: Option<DepthShot>,
+    /// Request the displayed colour at this point (UI points from the viewport's top-left corner) of the next frame.
+    pub want_color: Option<[f32; 2]>,
+    /// The answer to `want_color`, set by the next drawn frame.
+    pub color: Option<ColorShot>,
     /// GPU name reported by the driver, for the UI.
     pub renderer: String,
     res: Option<Renderer>,
@@ -171,6 +185,7 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
     let self_shadow = g.opts.self_shadow;
     let want_shot = std::mem::take(&mut g.want_shot);
     let want_depth = std::mem::take(&mut g.want_depth);
+    let want_color = g.want_color.take();
     let vp_px = info.viewport_in_pixels();
     if vp_px.width_px <= 0 || vp_px.height_px <= 0 {
         return;
@@ -184,6 +199,11 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
         let (width, height) = (vp_px.width_px as usize, vp_px.height_px as usize);
         let camera = view_camera(view, [width as f32, height as f32]);
         g.depth = read_depth(gl, info).map(|depth| DepthShot { width, height, depth, camera });
+    }
+    if let Some(at) = want_color
+        && result.is_ok()
+    {
+        g.color = Some(ColorShot { at, rgba: read_color(gl, info, at) });
     }
     g.frames += 1;
     if let Err(e) = result {
@@ -243,6 +263,31 @@ fn read_depth(gl: &glow::Context, info: &PaintCallbackInfo) -> Option<Vec<f32>> 
         return None;
     }
     Some((0..h).rev().flat_map(|y| buf[y * w..(y + 1) * w].iter().copied()).collect())
+}
+
+/// Read the drawn colour at `at` (UI points from the viewport's top-left corner), or `None` outside the viewport or if
+/// the driver refuses (the frame stays drawn).
+// SAFETY: called from `paint` on its current context; `buf` holds exactly one RGBA8 pixel, read from inside the viewport.
+fn read_color(gl: &glow::Context, info: &PaintCallbackInfo, at: [f32; 2]) -> Option<[u8; 4]> {
+    let vp_px = info.viewport_in_pixels();
+    let ppp = info.pixels_per_point;
+    let (x, y) = ((at[0] * ppp).floor(), (at[1] * ppp).floor());
+    if !(x >= 0.0 && y >= 0.0 && x < vp_px.width_px as f32 && y < vp_px.height_px as f32) {
+        return None;
+    }
+    // GL rows start at the bottom
+    let (gx, gy) = (vp_px.left_px + x as i32, vp_px.from_bottom_px + vp_px.height_px - 1 - y as i32);
+    let mut buf = [0u8; 4];
+    let ok = unsafe {
+        for _ in 0..16 {
+            if gl.get_error() == glow::NO_ERROR {
+                break;
+            }
+        }
+        gl.read_pixels(gx, gy, 1, 1, glow::RGBA, glow::UNSIGNED_BYTE, glow::PixelPackData::Slice(Some(&mut buf)));
+        gl.get_error() == glow::NO_ERROR
+    };
+    ok.then_some(buf)
 }
 
 /// Raw writable bytes of an f32 slice for GL read-backs.
