@@ -15,13 +15,14 @@ use super::factors::TexelFactor;
 use super::frame::{DabFrame, screen_scale_at};
 use super::index::{CELL, CELLS_PER_TILE, TexelIndex};
 use super::occlusion::DepthMap;
-use super::symmetry::{CopyTransform, SymmetrySpec};
+use super::through_mesh::TexelLookup;
 use super::write::{Blend, ChannelTarget};
 use crate::camera::Camera;
 use crate::mesh::{SurfaceMap, Vec3};
 use crate::paint::brush::Placement;
 use crate::paint::{TILE_SIZE, TiledImage};
 use crate::projection::{ScreenPoint, ViewProjector};
+use crate::symmetry::{CopyTransform, SymmetrySpec};
 use crate::v3::{len, sub};
 use std::collections::BTreeMap;
 use std::fmt;
@@ -115,8 +116,8 @@ pub struct StampStroke {
 }
 
 impl StampStroke {
-    /// A stroke into `targets` (all of one texture set's size) with the copies `symmetry` asks for (3D-view
-    /// strokes only).
+    /// A stroke into `targets` (all of one texture set's size) with the copies `symmetry` asks for. 3D-view dabs
+    /// repeat on the mesh through the view; texture-space dabs repeat through the mesh (see `through_mesh`).
     pub fn new(symmetry: SymmetrySpec, targets: &[ChannelTarget]) -> Result<StampStroke, StampError> {
         let size = targets.first().map_or((0, 0), |t| t.image.size());
         if targets.iter().any(|t| t.image.size() != size) {
@@ -202,8 +203,23 @@ impl StampStroke {
         }
         let (x0, y0, x1, y1) = (x0 as usize, y0 as usize, x1 as usize, y1 as usize);
         let tiles_x = self.tiles_x;
-        let wanted: Vec<usize> = (y0 / T..=(y1 - 1) / T).flat_map(|ty| (x0 / T..=(x1 - 1) / T).map(move |tx| ty * tiles_x + tx)).collect();
-        let factors = ctx.factors;
+        let mut wanted: Vec<usize> = (y0 / T..=(y1 - 1) / T).flat_map(|ty| (x0 / T..=(x1 - 1) / T).map(move |tx| ty * tiles_x + tx)).collect();
+        // symmetric copies: cells whose texels may land on the surface under the dab once transformed
+        let mirrored = self.copies.iter().any(|c| !c.is_identity());
+        let lookup = if mirrored { TexelLookup::build(ctx.surface, x0, y0, x1, y1) } else { None };
+        let mut work: BTreeMap<usize, Vec<(usize, usize)>> = BTreeMap::new();
+        if let Some(lookup) = &lookup {
+            for (ci, copy) in self.copies.iter().enumerate().filter(|(_, c)| !c.is_identity()) {
+                for (tile, cell) in ctx.index.cull(|aabb| transform_box(*copy, aabb).overlaps(lookup.bounds())) {
+                    work.entry(tile).or_default().push((ci, cell));
+                }
+            }
+            wanted.extend(work.keys());
+            wanted.sort_unstable();
+            wanted.dedup();
+        }
+        let (factors, surface, copies) = (ctx.factors, ctx.surface, &self.copies);
+        let (w, cells_x) = (surface.width(), ctx.index.cells_x());
         for_tiles(&mut self.tiles, self.tiles_x, &wanted, |ti, state, tiles_x| {
             let (tx, ty) = ((ti % tiles_x) * T, (ti / tiles_x) * T);
             let mut changed = false;
@@ -211,6 +227,26 @@ impl StampStroke {
                 for x in x0.max(tx)..x1.min(tx + T) {
                     let p = frame.to_frame([x as f32 + 0.5, y as f32 + 0.5]);
                     let mut v = dab.footprint.sample(p);
+                    if v <= 0.0 {
+                        continue;
+                    }
+                    v *= factor(factors, x, y, None);
+                    changed |= build_up(state, (y - ty) * T + (x - tx), v, ceiling);
+                }
+            }
+            let (Some(lookup), Some(cells)) = (&lookup, work.get(&ti)) else { return changed };
+            for &(copy_i, cell) in cells {
+                let Some(copy) = copies.get(copy_i) else { continue };
+                let (cx, cy) = ((cell % cells_x) * CELL, (cell / cells_x) * CELL);
+                for k in 0..CELL * CELL {
+                    let (x, y) = (cx + k % CELL, cy + k / CELL);
+                    if x >= w || y >= surface.height() {
+                        continue;
+                    }
+                    let Some((p, n, _)) = surface.point_index(y * w + x) else { continue };
+                    let Some(s) = lookup.nearest(copy.point(p), copy.normal(n)) else { continue };
+                    let f = copy.frame(frame.to_frame([s[0] as f32 + 0.5, s[1] as f32 + 0.5]), frame.center);
+                    let mut v = dab.footprint.sample(f);
                     if v <= 0.0 {
                         continue;
                     }
@@ -235,12 +271,16 @@ impl StampStroke {
         let b = dab.footprint.bounds();
         let reach = ((b[2] - b[0]).max(b[3] - b[1])) * 0.5 * std::f32::consts::SQRT_2;
         let frame = DabFrame::new(view.projector, view.placement, dab.center, reach);
+        // a flipped copy samples the footprint mirrored about the dab's centre: its bounds mirrored as well
+        let c = dab.center;
+        let flipped = [b[0].min(2.0 * c[0] - b[2]), b[1].min(2.0 * c[1] - b[3]), b[2].max(2.0 * c[0] - b[0]), b[3].max(2.0 * c[1] - b[1])];
         // cells per tile, per copy
         let mut work: BTreeMap<usize, Vec<(usize, usize)>> = BTreeMap::new();
         for (ci, copy) in self.copies.iter().enumerate() {
+            let bounds = if copy.flips() { flipped } else { b };
             let cells = ctx.index.cull(|aabb| {
                 let moved = transform_box(*copy, aabb);
-                frame.may_touch(view.projector, &moved, b)
+                frame.may_touch(view.projector, &moved, bounds)
             });
             for (tile, cell) in cells {
                 work.entry(tile).or_default().push((ci, cell));
@@ -275,7 +315,7 @@ impl StampStroke {
                         continue;
                     }
                     let Some((p, fade)) = frame.map(t.pos, t.screen) else { continue };
-                    let mut v = dab.footprint.sample(p);
+                    let mut v = dab.footprint.sample(copy.frame(p, dab.center));
                     if v <= 0.0 {
                         continue;
                     }
@@ -375,15 +415,13 @@ fn view_cell(surface: &SurfaceMap, view: ViewSpace, copy: CopyTransform, cx: usi
 
 /// The box around `b`'s corners moved by `copy`.
 fn transform_box(copy: CopyTransform, b: &super::index::Aabb) -> super::index::Aabb {
-    match copy {
-        CopyTransform::Identity => *b,
-        _ => {
-            let [first, rest @ ..] = b.corners().map(|p| copy.point(p));
-            let mut out = super::index::Aabb::point(first);
-            rest.into_iter().for_each(|p| out.include(p));
-            out
-        }
+    if copy.is_identity() {
+        return *b;
     }
+    let [first, rest @ ..] = b.corners().map(|p| copy.point(p));
+    let mut out = super::index::Aabb::point(first);
+    rest.into_iter().for_each(|p| out.include(p));
+    out
 }
 
 fn factor(factors: &[&dyn TexelFactor], x: usize, y: usize, screen: Option<[f32; 2]>) -> f32 {
