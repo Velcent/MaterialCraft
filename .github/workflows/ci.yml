@@ -23,7 +23,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev
       - name: Build (core + editor)
-        run: cargo build --release --features gui
+        run: cargo build --release --workspace --all-features
       - name: Tests
         run: cargo test --release --workspace
       - name: CLI smoke test

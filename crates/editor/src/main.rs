@@ -1,5 +1,5 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
-//! MaterialCraft visual editor. Run: cargo run --release --features gui --bin materialcraft-gui
+//! MaterialCraft visual editor. Run: cargo run --release -p materialcraft-editor
 use eframe::egui::{
     self, Align2, Color32, ColorImage, FontId, Id, Key, Modifiers, PointerButton, Pos2, Rect, Sense, Stroke, TextStyle, Vec2, epaint::CubicBezierShape, pos2,
     vec2,

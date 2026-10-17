@@ -13,7 +13,7 @@ our discord is here: if you want to submit features or got any cool ideas! https
 Procedural, node-based material authoring in pure Rust (Windows / Linux / macOS).
 
 ## Build & run
-    cargo run --release --features gui --bin materialcraft-gui     # visual editor
+    cargo run --release -p materialcraft-editor                     # visual editor (binary materialcraft-gui)
     cargo run --release -- render examples/brick.mcg out --size 1024 --render3d   # CLI
 
 Requires a current stable Rust toolchain (https://rustup.rs). On Windows the MSVC build tools are needed.

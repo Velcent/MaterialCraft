@@ -15,9 +15,11 @@ src/                      materialcraft: std-only core library + the `materialcr
   graph nodes2 ops ...    node graph and procedural nodes
   paint/                  Paint mode document model: tiled images, channels, layers, compositing, .mcpaint format
   mesh/ bake render3d     meshes (OBJ/glTF), baking, CPU 3D preview
-  gpu3d/                  OpenGL viewport through glow (feature "gui" only)
-  gui.rs                  editor binary `materialcraft-gui` (feature "gui"); include!s gui_params/gui_ui/gui_home.rs
-  gui_paint/ gui_theme.rs Paint mode screen and the editor theme
+  gpu3d/                  OpenGL viewport through glow (feature "gui" only; used by the editor and examples)
+crates/editor             materialcraft-editor: the editor binary `materialcraft-gui`
+  src/main.rs             node editor; include!s gui_params/gui_ui/gui_home.rs
+  src/gui_paint/          Paint mode screen
+  src/gui_theme.rs        the editor theme
 crates/substance          materialcraft-substance: reads .spp projects; `mcsub` (inspect, convert, maps, compare)
 crates/parity             materialcraft-parity: `mcparity`, measures our results against Painter's on local projects
 ```
@@ -26,10 +28,10 @@ crates/parity             materialcraft-parity: `mcparity`, measures our results
 
 ```sh
 cargo build --workspace --all-features
-cargo test --workspace                       # add --features gui for the editor's tests
+cargo test --workspace
 cargo clippy --workspace --all-targets --all-features
 cargo fmt --all
-cargo run --release --features gui --bin materialcraft-gui
+cargo run --release -p materialcraft-editor
 cargo run --release -p materialcraft-substance --bin mcsub -- convert <in.spp> <out.mcpaint>
 ```
 

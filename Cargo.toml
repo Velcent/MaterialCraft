@@ -7,7 +7,7 @@ description = "Procedural, node-based material authoring engine in pure Rust"
 license = "MIT"
 
 [workspace]
-members = ["crates/substance", "crates/parity"]
+members = ["crates/substance", "crates/parity", "crates/editor"]
 
 # Suite lints (same as PhotoCraft). Every member crate inherits them with `[lints] workspace = true`.
 [workspace.lints.rust]
@@ -29,21 +29,15 @@ todo = "warn"
 
 [features]
 default = []
-gui = ["dep:eframe", "dep:rfd"]
+# OpenGL viewport renderer (gpu3d) for the editor and the gpu_shot/scene_shot examples.
+gui = ["dep:eframe"]
 
 [dependencies]
 eframe = { version = "0.36", optional = true, default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
 
-rfd = { version = "0.17", optional = true, default-features = false, features = ["xdg-portal"] }
-
 [[bin]]
 name = "materialcraft"
 path = "src/main.rs"
-
-[[bin]]
-name = "materialcraft-gui"
-path = "src/gui.rs"
-required-features = ["gui"]
 
 [[example]]
 name = "gpu_shot"

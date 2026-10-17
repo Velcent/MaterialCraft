@@ -1125,6 +1125,14 @@ name = "materialcraft"
 version = "0.1.0"
 dependencies = [
  "eframe",
+]
+
+[[package]]
+name = "materialcraft-editor"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "materialcraft",
  "rfd",
 ]
 

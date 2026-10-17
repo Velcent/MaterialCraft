@@ -21,7 +21,7 @@ USAGE:
   materialcraft example <outdir>
   materialcraft nodes
 
-The visual editor is a separate binary:  cargo run --release --features gui --bin materialcraft-gui
+The visual editor is a separate binary:  cargo run --release -p materialcraft-editor
 ";
 
 fn write_png(path: &Path, t: &Tex, depth: u8) -> Result<(), String> {

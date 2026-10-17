@@ -1,0 +1,20 @@
+[package]
+name = "materialcraft-editor"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "MaterialCraft's visual editor: node graphs, the 3D view and Paint mode"
+license = "MIT"
+publish = false
+
+[dependencies]
+materialcraft = { path = "../..", features = ["gui"] }
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+
+[[bin]]
+name = "materialcraft-gui"
+path = "src/main.rs"
+
+[lints]
+workspace = true

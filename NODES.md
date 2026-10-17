@@ -7,7 +7,7 @@ Research only, no code changed. For every MaterialCraft node type this lists the
 - **Adobe's pages almost never state defaults or data types.** Where a range is given it is shown, otherwise `n/s` (not stated). Defaults still have to be checked in Designer itself.
 - Screenshots could not be read, so anything only visible in the UI (property order, grouping, slider soft limits) is unconfirmed.
 - Some pages were missing or ambiguous. Those cases are listed per node and in the "Not in Designer / not found" section.
-- "Ours" lists the labels in our Properties panel today (`src/gui_params.rs`). Every node also has our per-node Output Size.
+- "Ours" lists the labels in our Properties panel today (`crates/editor/src/gui_params.rs`). Every node also has our per-node Output Size.
 
 ## Implementation status (updated Oct 2026)
 The sections below are the research snapshot. Items marked here are **done in code**; everything else listed below is still open. New properties default to the old behaviour, so existing `.mcg` graphs render the same.
