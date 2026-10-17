@@ -4,9 +4,17 @@
 //! - [`fields`]: typed access to JSON objects; exact `f32` numbers.
 //! - [`extras`]: unknown fields kept across load → save.
 //! - [`texture_set`], [`layer`], [`image_ref`], [`report`]: one file per model type.
+//! - [`effect`] (with [`effect_content`], [`effect_mask`], [`effect_kinds`]), [`blend`], [`geometry_mask`]:
+//!   effect stacks, blend entries and geometry masks of layers.
 
+pub mod blend;
+pub mod effect;
+pub mod effect_content;
+pub mod effect_kinds;
+pub mod effect_mask;
 pub mod extras;
 pub mod fields;
+pub mod geometry_mask;
 pub mod image_ref;
 pub mod layer;
 pub mod report;

@@ -4,7 +4,7 @@
 use super::FormatError;
 use super::images::Encoding;
 use super::slot::ImageSlot;
-use crate::paint::{Document, TiledImage};
+use crate::paint::{Document, LayerImage, TiledImage};
 use std::collections::{HashMap, HashSet};
 
 pub const DOCUMENT: &str = "document.json";
@@ -24,7 +24,8 @@ pub struct ImagePlan<'d> {
 
 impl<'d> ImagePlan<'d> {
     /// Names every image: `textures/<set>/layers/<layer>/<channel>.<ext>`,
-    /// `textures/<set>/layers/<layer>/mask.<ext>` and `textures/<set>/baked/<kind>.<ext>`.
+    /// `textures/<set>/layers/<layer>/effect-<index>-<channel>.<ext>`,
+    /// `textures/<set>/layers/<layer>/mask-<index>.<ext>` and `textures/<set>/baked/<kind>.<ext>`.
     pub fn new(doc: &'d Document) -> ImagePlan<'d> {
         let mut plan = ImagePlan { entries: Vec::new(), index: HashMap::new() };
         let mut set_dirs = Names::default();
@@ -33,15 +34,13 @@ impl<'d> ImagePlan<'d> {
             let mut layer_dirs = Names::default();
             for (_, layer) in set.walk_layers() {
                 let ldir = format!("{dir}/layers/{}", layer_dirs.claim(&segment(&layer.id)));
-                for (channel, img) in layer.images() {
-                    let (slot, stem) = match channel {
-                        Some(channel) => {
-                            let slot = ImageSlot::Paint { set: s, layer: layer.id.clone(), channel };
-                            (slot, channel.id())
-                        }
-                        None => (ImageSlot::Mask { set: s, layer: layer.id.clone() }, "mask".into()),
+                for (image, img) in layer.images() {
+                    let stem = match image {
+                        LayerImage::Paint(channel) => channel.id(),
+                        LayerImage::Effect { effect, channel } => format!("effect-{effect}-{}", channel.id()),
+                        LayerImage::Mask { effect } => format!("mask-{effect}"),
                     };
-                    plan.push(slot, format!("{ldir}/{stem}"), img);
+                    plan.push(ImageSlot::Layer { set: s, layer: layer.id.clone(), image }, format!("{ldir}/{stem}"), img);
                 }
             }
             let mut baked_names = Names::default();
@@ -55,7 +54,7 @@ impl<'d> ImagePlan<'d> {
 
     fn push(&mut self, slot: ImageSlot, stem: String, img: &'d TiledImage) {
         let path = format!("{stem}.{}", Encoding::for_format(img.format()).extension());
-        // Mask and channel stems cannot collide: channel ids never equal "mask".
+        // Stems cannot collide: channel ids never start with "mask-" or "effect-".
         self.index.insert(slot.clone(), self.entries.len());
         self.entries.push((slot, path, img));
     }

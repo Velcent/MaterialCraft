@@ -3,7 +3,7 @@
 use super::channel::Channel;
 use super::doc::Document;
 use super::image::MAX_DIMENSION;
-use super::layer::{FillSource, Layer, LayerKind};
+use super::layer::{FillSource, Layer, LayerImage, LayerKind};
 use super::texture_set::TextureSet;
 use std::fmt;
 
@@ -56,17 +56,23 @@ pub enum DocError {
         set: String,
         layer: String,
     },
-    /// A paint image (`channel` = Some) or mask (`None`) does not match the texture set resolution.
+    /// A paint, effect or mask image does not match the texture set resolution.
     ImageSize {
         set: String,
         layer: String,
-        channel: Option<Channel>,
+        image: LayerImage,
         size: (u32, u32),
         expected: (u32, u32),
     },
     GroupTooDeep {
         set: String,
         layer: String,
+    },
+    /// An anchor id is empty or used twice in the set.
+    BadAnchor {
+        set: String,
+        layer: String,
+        anchor: String,
     },
     DuplicateForeignFile {
         path: String,
@@ -97,11 +103,16 @@ impl fmt::Display for DocError {
                 write!(f, "texture set {set:?}, layer {layer:?}: channel {} appears twice", channel.id())
             }
             BadOpacity { set, layer } => write!(f, "texture set {set:?}, layer {layer:?}: opacity must be within 0..=1"),
-            ImageSize { set, layer, channel, size, expected } => {
-                let what = channel.map_or("mask".to_string(), |c| c.id());
+            ImageSize { set, layer, image, size, expected } => {
+                let what = match image {
+                    LayerImage::Paint(c) => c.id(),
+                    LayerImage::Effect { effect, channel } => format!("effect {effect} {}", channel.id()),
+                    LayerImage::Mask { effect } => format!("mask effect {effect}"),
+                };
                 write!(f, "texture set {set:?}, layer {layer:?}: {what} image is {}x{}, expected {}x{}", size.0, size.1, expected.0, expected.1)
             }
             GroupTooDeep { set, layer } => write!(f, "texture set {set:?}, layer {layer:?}: groups nested deeper than {MAX_GROUP_DEPTH}"),
+            BadAnchor { set, layer, anchor } => write!(f, "texture set {set:?}, layer {layer:?}: anchor id {anchor:?} is empty or used twice"),
             DuplicateForeignFile { path } => write!(f, "foreign file {path:?} is stored twice"),
         }
     }
@@ -147,6 +158,7 @@ fn check_set(doc: &Document, set: &TextureSet, out: &mut Vec<DocError>) {
         }
     }
     let mut seen: Vec<&str> = Vec::new();
+    let mut anchors = effects::Anchors::default();
     for (depth, layer) in set.walk_layers() {
         if layer.id.is_empty() {
             out.push(DocError::EmptyId { set: sid() });
@@ -158,6 +170,7 @@ fn check_set(doc: &Document, set: &TextureSet, out: &mut Vec<DocError>) {
             out.push(DocError::GroupTooDeep { set: sid(), layer: layer.id.clone() });
         }
         check_layer(set, layer, out);
+        effects::check_layer(set, layer, &mut anchors, out);
     }
 }
 
@@ -178,9 +191,20 @@ fn check_layer(set: &TextureSet, layer: &Layer, out: &mut Vec<DocError>) {
         }
         LayerKind::Group(_) => {}
     }
-    for list in &channels {
-        for (i, &c) in list.iter().enumerate() {
+    check_channel_lists(set, layer, &channels, out);
+    for (image, img) in layer.images() {
+        if img.size() != set.resolution {
             let (s, l) = err_ctx();
+            out.push(DocError::ImageSize { set: s, layer: l, image, size: img.size(), expected: set.resolution });
+        }
+    }
+}
+
+/// Every channel in each list is declared and appears once per list.
+fn check_channel_lists(set: &TextureSet, layer: &Layer, lists: &[Vec<Channel>], out: &mut Vec<DocError>) {
+    for list in lists {
+        for (i, &c) in list.iter().enumerate() {
+            let (s, l) = (set.id.clone(), layer.id.clone());
             if !set.has_channel(c) {
                 out.push(DocError::UndeclaredChannel { set: s, layer: l, channel: c });
             } else if list[..i].contains(&c) {
@@ -188,13 +212,10 @@ fn check_layer(set: &TextureSet, layer: &Layer, out: &mut Vec<DocError>) {
             }
         }
     }
-    for (channel, img) in layer.images() {
-        if img.size() != set.resolution {
-            let (s, l) = err_ctx();
-            out.push(DocError::ImageSize { set: s, layer: l, channel, size: img.size(), expected: set.resolution });
-        }
-    }
 }
+
+#[path = "validate_effects.rs"]
+mod effects;
 
 #[cfg(test)]
 #[path = "validate_tests.rs"]

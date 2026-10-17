@@ -2,49 +2,57 @@
 //!
 //! Rules, bottom to top, starting from the channel default with coverage 0:
 //! - hidden layers, layers without a blend entry for the channel and `Disable` entries are skipped;
-//! - a layer's strength is `layer opacity × entry opacity × mask` (mask = red × alpha of the mask image);
-//! - paint layers blend their channel image (alpha = coverage), uniform fills blend their value with
-//!   coverage 1, material fills are skipped and reported by [`Compositor::warnings`];
+//! - a layer's strength is `layer opacity × entry opacity × mask`; the mask is its initial value with its
+//!   effects on top ([`crate::paint::mask`]), a disabled mask counts as 1;
+//! - a layer's content is its base (paint image with alpha = coverage, uniform fill with coverage 1; material
+//!   fills are skipped and reported) with its content effects on top, each blended by its own entry for the
+//!   channel; the content is blended over the stack with the layer's mode and strength;
 //! - groups: `Passthrough` blends the children straight into the stack, then fades the result
 //!   against the stack below by the group's strength; any other mode composites the children in
-//!   isolation (from the default, coverage 0) and blends that over the stack with the group's mode.
+//!   isolation (from the default, coverage 0), applies the group's effects, and blends that over the stack
+//!   with the group's mode;
+//! - generators and filters are evaluated by the implementations in the [`EffectRegistry`]; effects without
+//!   one, and kinds that are not computable yet, are left out and reported by [`Compositor::warnings`].
 //!
 //! Layers blend in the channel's working space (see [`super::working_space`]): sRGB channels in linear
 //! light. The output's RGB is the channel value in its stored encoding, alpha the accumulated coverage.
 
 use super::blend::BlendMode;
 use super::channel::Channel;
+use super::effect::EffectRegistry;
+use super::effect::registry::EMPTY_REGISTRY;
 use super::image::{ImageError, Rect, TILE_SIZE, TiledImage};
-use super::layer::{FillSource, Layer, LayerKind};
+use super::layer::{Layer, LayerKind};
 use super::par::for_each_mut;
 use super::texture_set::TextureSet;
 use super::validate::MAX_GROUP_DEPTH;
 use super::working_space::{SpaceConverter, WorkingSpace};
-use pass::{Pass, Scratch, affects, layer_weights};
+use pass::{Pass, Scratch, affects};
 
+mod content;
+mod mask_eval;
 mod pass;
+mod procedural;
+mod warnings;
 use crate::tex::Tex;
-
-/// Something the compositor could not do exactly. Layers are named by id.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CompositeWarning {
-    /// A material fill cannot be evaluated by the core; the layer was left out.
-    MaterialFillSkipped { layer: String },
-    /// A group nested deeper than [`MAX_GROUP_DEPTH`]; it was left out.
-    GroupTooDeep { layer: String },
-    /// A paint image or mask does not match the texture set resolution; it was read as is (cropped / zero-padded).
-    ImageSizeMismatch { layer: String },
-}
+pub use warnings::CompositeWarning;
 
 /// Composites the layer stack of one texture set. Cheap to create; borrows the set.
 #[derive(Debug, Clone, Copy)]
 pub struct Compositor<'a> {
     set: &'a TextureSet,
+    effects: &'a EffectRegistry,
 }
 
 impl<'a> Compositor<'a> {
+    /// A compositor without generator or filter implementations (they are all not computable).
     pub fn new(set: &'a TextureSet) -> Compositor<'a> {
-        Compositor { set }
+        Compositor { set, effects: &EMPTY_REGISTRY }
+    }
+
+    /// A compositor that evaluates generators and filters through `effects`.
+    pub fn with_effects(set: &'a TextureSet, effects: &'a EffectRegistry) -> Compositor<'a> {
+        Compositor { set, effects }
     }
 
     /// Composites `channel` over the pixel rectangle `r` into `out` (`r.area()` pixels, row by row).
@@ -108,21 +116,6 @@ impl<'a> Compositor<'a> {
         out
     }
 
-    fn collect_warnings(&self, layers: &[Layer], channel: Channel, depth: usize, out: &mut Vec<CompositeWarning>) {
-        for l in layers.iter().filter(|l| affects(l, channel)) {
-            let id = || l.id.clone();
-            if l.images().iter().any(|(c, i)| c.is_none_or(|c| c == channel) && i.size() != self.set.resolution) {
-                out.push(CompositeWarning::ImageSizeMismatch { layer: id() });
-            }
-            match &l.kind {
-                LayerKind::Fill(f) if matches!(f.source, FillSource::Material { .. }) => out.push(CompositeWarning::MaterialFillSkipped { layer: id() }),
-                LayerKind::Group(_) if depth >= MAX_GROUP_DEPTH => out.push(CompositeWarning::GroupTooDeep { layer: id() }),
-                LayerKind::Group(children) => self.collect_warnings(children, channel, depth + 1, out),
-                _ => {}
-            }
-        }
-    }
-
     fn apply_layers(&self, layers: &[Layer], pass: &Pass, acc: &mut [[f32; 4]], depth: usize, s: &mut Scratch) {
         for l in layers {
             self.apply_layer(l, pass, acc, depth, s);
@@ -135,10 +128,21 @@ impl<'a> Compositor<'a> {
             return;
         };
         let strength = l.opacity * blend.opacity;
-        let Some(weights) = layer_weights(l, strength, r) else {
+        let Some(weights) = self.layer_weights(l, strength, r) else {
             return;
         };
         let mode = blend.mode;
+        let group = matches!(l.kind, LayerKind::Group(_));
+        if (!group || mode != BlendMode::Passthrough) && self.has_active_effects(l, pass) {
+            if group && depth >= MAX_GROUP_DEPTH {
+                return;
+            }
+            let content = self.content(l, l.effects.len(), pass, depth);
+            for (i, a) in acc.iter_mut().enumerate() {
+                *a = mode.mix(*a, content[i], weights.at(i));
+            }
+            return;
+        }
         match &l.kind {
             LayerKind::Paint(p) => {
                 let Some(img) = p.image(channel) else { return };
@@ -187,3 +191,5 @@ impl<'a> Compositor<'a> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_effects;

@@ -64,10 +64,13 @@ fn reports_each_broken_invariant() {
     assert!(matches!(e, DocError::BadOpacity { .. }));
     let e = first_problem(|d| {
         if let Some(l) = d.texture_sets[0].layer_mut("p") {
-            l.mask = Some(crate::paint::Mask::Image(img(32, 64)));
+            l.mask = Some(crate::paint::Mask::from_image(img(32, 64)));
         }
     });
-    assert_eq!(e, DocError::ImageSize { set: "body".into(), layer: "p".into(), channel: None, size: (32, 64), expected: (64, 64) });
+    assert_eq!(
+        e,
+        DocError::ImageSize { set: "body".into(), layer: "p".into(), image: crate::paint::LayerImage::Mask { effect: 0 }, size: (32, 64), expected: (64, 64) }
+    );
     let e = first_problem(|d| {
         if let Some(LayerKind::Paint(p)) = d.texture_sets[0].layer_mut("p").map(|l| &mut l.kind) {
             p.images.push((Channel::BaseColor, img(64, 64)));
@@ -87,4 +90,33 @@ fn deep_groups_are_rejected() {
     }
     let e = first_problem(|d| d.texture_sets[0].layers.push(layer));
     assert!(matches!(e, DocError::GroupTooDeep { .. }));
+}
+
+#[test]
+fn effect_stacks_are_checked() {
+    use crate::paint::effect::{Anchor, EffectKind, GreyBlend};
+    use crate::paint::{ContentEffect, LayerImage, Mask, MaskEffect};
+    let anchor = |id: &str| ContentEffect::new(Vec::new(), EffectKind::Anchor(Anchor { id: id.into() }));
+    let height_fill = ContentEffect::new(Vec::new(), EffectKind::Fill(Fill::uniform(vec![(Channel::Height, [0.0; 4])])));
+    let e = first_problem(|d| d.texture_sets[0].layers[0].effects.push(height_fill));
+    assert!(matches!(e, DocError::UndeclaredChannel { channel: Channel::Height, .. }));
+    let e = first_problem(|d| d.texture_sets[0].layers[0].effects.push(anchor("a").with_blend(Channel::Roughness, BlendMode::Normal, 2.0)));
+    assert!(matches!(e, DocError::BadOpacity { .. }));
+    let e = first_problem(|d| d.texture_sets[0].layers[0].mask = Some(Mask::new(-0.5)));
+    assert!(matches!(e, DocError::BadOpacity { .. }));
+    let e = first_problem(|d| {
+        d.texture_sets[0].layers[0].effects.push(anchor("a"));
+        let mask = Mask::new(1.0).with_effect(MaskEffect::new(GreyBlend::default(), EffectKind::Anchor(Anchor { id: "a".into() })));
+        d.texture_sets[0].layer_mut("p").unwrap().mask = Some(mask);
+    });
+    assert_eq!(e, DocError::BadAnchor { set: "body".into(), layer: "p".into(), anchor: "a".into() });
+    let e = first_problem(|d| d.texture_sets[0].layers[0].effects.push(anchor("")));
+    assert!(matches!(e, DocError::BadAnchor { .. }));
+    let e = first_problem(|d| {
+        let mut p = PaintContent::default();
+        p.set_image(Channel::Roughness, img(8, 8));
+        d.texture_sets[0].layers[0].effects.push(ContentEffect::new(Vec::new(), EffectKind::Paint(p)));
+    });
+    assert!(matches!(e, DocError::ImageSize { image: LayerImage::Effect { effect: 0, channel: Channel::Roughness }, .. }));
+    assert!(!e.to_string().is_empty());
 }

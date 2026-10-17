@@ -20,7 +20,7 @@ fn entries_and_methods() {
     assert_eq!(names.last().map(String::as_str), Some("thumbnail.png"));
     assert!(names.contains(&"textures/body/layers/p0/base_color.png".to_string()));
     assert!(names.contains(&"textures/body/layers/p2/user3.exr".to_string()));
-    assert!(names.contains(&"textures/body/layers/p0/mask.png".to_string()));
+    assert!(names.contains(&"textures/body/layers/p0/mask-0.png".to_string()));
     assert!(names.contains(&"textures/body/baked/curvature-2.png".to_string()));
     assert!(names.contains(&"textures/odd_.._id/layers/x_y-2/roughness.png".to_string()));
     assert!(names.contains(&"foreign/substance/document.bin".to_string()));
@@ -32,7 +32,7 @@ fn entries_and_methods() {
     assert_eq!(zip.find("document.json").unwrap().method(), Some(Method::Deflate));
 
     let text = String::from_utf8(zip.read("document.json").unwrap()).unwrap();
-    assert!(text.starts_with("{\n  \"format\": \"mcpaint\",\n  \"format_version\": \"0.2\",\n"));
+    assert!(text.starts_with("{\n  \"format\": \"mcpaint\",\n  \"format_version\": \"0.3\",\n"));
     assert!(text.contains("\n  \"mesh\": \"mesh/model.glb\",\n  \"height_filter\": \"sobel\",\n"));
     assert!(text.ends_with("}\n"));
     let root = json::parse(&text).unwrap();

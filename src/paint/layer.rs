@@ -1,37 +1,25 @@
-//! Layers of a texture set's stack: paint, fill and group layers, their per-channel blending and masks.
+//! Layers of a texture set's stack: paint, fill and group layers, their per-channel blending, their content
+//! effects and masks.
+//!
+//! A layer's content is its base (the [`LayerKind`]: painted pixels, a fill, or for a group its children)
+//! followed by [`Layer::effects`], an ordered stack applied on top of the base inside the layer (see
+//! [`super::effect`]). The result is blended over the stack below by the layer's own entries, scaled by its
+//! [`Mask`].
 
 use super::blend::BlendMode;
 use super::channel::Channel;
+use super::effect::{ContentEffect, EffectKind};
+use super::geometry_mask::GeometryMask;
 use super::image::TiledImage;
+use super::mask::Mask;
 
-/// How a layer affects one channel. A layer without an entry for a channel does not affect it.
+/// How a layer (or a content effect) affects one channel. Without an entry for a channel it does not affect it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ChannelBlend {
     pub channel: Channel,
     pub mode: BlendMode,
     /// 0..1, multiplied with the layer opacity.
     pub opacity: f32,
-}
-
-/// Restricts where a layer applies: the mask's value (red × alpha) scales the layer's strength.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Mask {
-    /// A grayscale image at the texture set's resolution.
-    Image(TiledImage),
-}
-
-impl Mask {
-    pub fn image(&self) -> &TiledImage {
-        match self {
-            Mask::Image(img) => img,
-        }
-    }
-
-    pub fn image_mut(&mut self) -> &mut TiledImage {
-        match self {
-            Mask::Image(img) => img,
-        }
-    }
 }
 
 /// Painted pixels, one image per channel. Images are straight (not premultiplied); alpha is coverage.
@@ -79,6 +67,14 @@ impl Fill {
         Fill { source: FillSource::Uniform(values) }
     }
 
+    /// The channels a uniform fill sets (none for a material).
+    pub fn channels(&self) -> Vec<Channel> {
+        match &self.source {
+            FillSource::Uniform(v) => v.iter().map(|(c, _)| *c).collect(),
+            FillSource::Material { .. } => Vec::new(),
+        }
+    }
+
     /// The uniform value for `channel`, if this is a uniform fill that sets it.
     pub fn uniform_value(&self, channel: Channel) -> Option<[f32; 4]> {
         match &self.source {
@@ -108,13 +104,29 @@ pub struct Layer {
     pub opacity: f32,
     pub blend: Vec<ChannelBlend>,
     pub mask: Option<Mask>,
+    /// Limits the layer to parts of the geometry (data only for now).
+    pub geometry_mask: Option<GeometryMask>,
+    /// The base content.
     pub kind: LayerKind,
+    /// Content effects on top of the base, bottom → top.
+    pub effects: Vec<ContentEffect>,
+}
+
+/// Which image of a layer an image is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LayerImage {
+    /// The paint layer's image of a channel.
+    Paint(Channel),
+    /// The image of a channel in content effect `effect`.
+    Effect { effect: usize, channel: Channel },
+    /// The image of paint effect `effect` of the mask.
+    Mask { effect: usize },
 }
 
 impl Layer {
-    /// A visible, fully opaque layer with no channel entries yet.
+    /// A visible, fully opaque layer with no channel entries, effects or masks yet.
     pub fn new(id: impl Into<String>, name: impl Into<String>, kind: LayerKind) -> Layer {
-        Layer { id: id.into(), name: name.into(), visible: true, opacity: 1.0, blend: Vec::new(), mask: None, kind }
+        Layer { id: id.into(), name: name.into(), visible: true, opacity: 1.0, blend: Vec::new(), mask: None, geometry_mask: None, kind, effects: Vec::new() }
     }
 
     /// The blend entry for `channel`; `None` means the layer does not affect it.
@@ -137,8 +149,15 @@ impl Layer {
         self
     }
 
+    /// Builder: a painted mask (black with `mask` painted on top, see [`Mask::from_image`]).
     pub fn with_mask(mut self, mask: TiledImage) -> Layer {
-        self.mask = Some(Mask::Image(mask));
+        self.mask = Some(Mask::from_image(mask));
+        self
+    }
+
+    /// Builder: adds `effect` on top of the content.
+    pub fn with_effect(mut self, effect: ContentEffect) -> Layer {
+        self.effects.push(effect);
         self
     }
 
@@ -149,16 +168,36 @@ impl Layer {
         }
     }
 
-    /// Every image the layer owns (paint images and mask), with the channel for paint images.
-    pub fn images(&self) -> Vec<(Option<Channel>, &TiledImage)> {
-        let mut out: Vec<(Option<Channel>, &TiledImage)> = Vec::new();
+    /// Every image the layer owns: paint images, content effect images and mask images, in that order.
+    pub fn images(&self) -> Vec<(LayerImage, &TiledImage)> {
+        let mut out: Vec<(LayerImage, &TiledImage)> = Vec::new();
         if let LayerKind::Paint(p) = &self.kind {
-            out.extend(p.images.iter().map(|(c, i)| (Some(*c), i)));
+            out.extend(p.images.iter().map(|(c, i)| (LayerImage::Paint(*c), i)));
+        }
+        for (effect, e) in self.effects.iter().enumerate() {
+            if let EffectKind::Paint(p) = &e.kind {
+                out.extend(p.images.iter().map(|(channel, i)| (LayerImage::Effect { effect, channel: *channel }, i)));
+            }
         }
         if let Some(m) = &self.mask {
-            out.push((None, m.image()));
+            out.extend(m.images().map(|(effect, i)| (LayerImage::Mask { effect }, i)));
         }
         out
+    }
+
+    /// Mutable access to one of [`Self::images`].
+    pub fn image_mut(&mut self, which: LayerImage) -> Option<&mut TiledImage> {
+        match which {
+            LayerImage::Paint(c) => match &mut self.kind {
+                LayerKind::Paint(p) => p.image_mut(c),
+                _ => None,
+            },
+            LayerImage::Effect { effect, channel } => match &mut self.effects.get_mut(effect)?.kind {
+                EffectKind::Paint(p) => p.image_mut(channel),
+                _ => None,
+            },
+            LayerImage::Mask { effect } => self.mask.as_mut()?.image_mut(effect),
+        }
     }
 }
 
@@ -198,6 +237,8 @@ impl<'a> Iterator for LayerWalk<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paint::PixelFormat;
+    use crate::paint::effect::{GreyBlend, MaskEffect, MaskPixels};
 
     #[test]
     fn blend_entries_and_walk() {
@@ -211,5 +252,25 @@ mod tests {
         let ids: Vec<_> = LayerWalk::new(&top).map(|(d, l)| format!("{d}{}", l.id)).collect();
         assert_eq!(ids, ["0g", "1a", "1b", "0c"]);
         assert_eq!(Fill::uniform(vec![(Channel::Metallic, [1.0; 4])]).uniform_value(Channel::Metallic), Some([1.0; 4]));
+    }
+
+    #[test]
+    fn images_of_base_effects_and_mask() {
+        let img = || TiledImage::new(2, 2, PixelFormat::from_id("graya8").unwrap()).unwrap();
+        let mut base = PaintContent::default();
+        base.set_image(Channel::Roughness, img());
+        let mut fx = PaintContent::default();
+        fx.set_image(Channel::Height, img());
+        let mask = Mask::new(1.0)
+            .with_effect(MaskEffect::new(GreyBlend::default(), EffectKind::Fill(0.5)))
+            .with_effect(MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels { image: img() })));
+        let mut l = Layer::new("l", "L", LayerKind::Paint(base)).with_effect(ContentEffect::new(Vec::new(), EffectKind::Paint(fx)));
+        l.mask = Some(mask);
+        let roles: Vec<_> = l.images().into_iter().map(|(r, _)| r).collect();
+        assert_eq!(roles, [LayerImage::Paint(Channel::Roughness), LayerImage::Effect { effect: 0, channel: Channel::Height }, LayerImage::Mask { effect: 1 }]);
+        for r in roles {
+            assert!(l.image_mut(r).is_some(), "{r:?}");
+        }
+        assert!(l.image_mut(LayerImage::Mask { effect: 0 }).is_none());
     }
 }

@@ -1,13 +1,15 @@
-//! Layers: `{"id", "name", "kind", "visible", "opacity", "blend", "mask", …}` plus `images`
-//! (paint), `fill` (fill) or `children` (group).
+//! Layers: `{"id", "name", "kind", "visible", "opacity", "blend", "mask", "geometry_mask", …}` plus `images`
+//! (paint), `fill` (fill) or `children` (group), and `effects` (the content effects, since 0.3).
 
 use super::extras::{Extras, loc};
 use super::fields::{Obj, as_f32, num, num4};
-use super::{ReadCtx, WriteCtx, image_ref};
+use super::{ReadCtx, WriteCtx, blend, effect, effect_mask, geometry_mask, image_ref};
 use crate::json::Value;
 use crate::paint::format::FormatError;
 use crate::paint::format::slot::ImageSlot;
-use crate::paint::{BlendMode, Channel, ChannelBlend, ChannelSpec, ColorSpace, Fill, FillSource, Layer, LayerKind, Mask, PaintContent};
+use crate::paint::{Channel, ChannelSpec, ColorSpace, Fill, FillSource, Layer, LayerImage, LayerKind, PaintContent};
+
+pub use blend::channel;
 
 /// The texture set a layer belongs to, while writing or reading.
 pub struct SetScope<'a> {
@@ -17,7 +19,7 @@ pub struct SetScope<'a> {
 }
 
 impl SetScope<'_> {
-    fn color_space(&self, c: Channel) -> ColorSpace {
+    pub fn color_space(&self, c: Channel) -> ColorSpace {
         self.channels.iter().find(|s| s.channel == c).map_or(c.default_color_space(), |s| s.color_space)
     }
 }
@@ -33,33 +35,24 @@ fn write(l: &Layer, set: &SetScope, ctx: &WriteCtx) -> Value {
         LayerKind::Fill(_) => "fill",
         LayerKind::Group(_) => "group",
     };
-    let mut blend = Value::object();
-    for b in &l.blend {
-        let mut e = Value::object().with("mode", b.mode.id()).with("opacity", num(b.opacity));
-        ctx.extras.inject(&loc(&here, "blend", &b.channel.id()), &mut e);
-        blend.insert(b.channel.id(), e);
-    }
     let mut v = Value::object()
         .with("id", l.id.as_str())
         .with("name", l.name.as_str())
         .with("kind", kind)
         .with("visible", l.visible)
         .with("opacity", num(l.opacity))
-        .with("blend", blend);
-    if let Some(Mask::Image(img)) = &l.mask {
-        let slot = ImageSlot::Mask { set: set.index, layer: l.id.clone() };
-        let path = ctx.plan.path(&slot).unwrap_or_default();
-        let mloc = format!("{here}/mask");
-        let mut m = Value::object().with("kind", "image");
-        m.insert("image", image_ref::write(path, img, ColorSpace::Linear, &format!("{mloc}/image"), ctx.extras));
-        ctx.extras.inject(&mloc, &mut m);
-        v.insert("mask", m);
+        .with("blend", blend::write_channels(&l.blend, &here, ctx.extras));
+    if let Some(m) = &l.mask {
+        v.insert("mask", effect_mask::write(m, set, &l.id, &format!("{here}/mask"), ctx));
+    }
+    if let Some(g) = &l.geometry_mask {
+        v.insert("geometry_mask", geometry_mask::write(g, &format!("{here}/geometry_mask"), ctx));
     }
     match &l.kind {
         LayerKind::Paint(p) => {
             let mut images = Value::object();
             for (c, img) in &p.images {
-                let slot = ImageSlot::Paint { set: set.index, layer: l.id.clone(), channel: *c };
+                let slot = ImageSlot::Layer { set: set.index, layer: l.id.clone(), image: LayerImage::Paint(*c) };
                 let path = ctx.plan.path(&slot).unwrap_or_default();
                 let r = image_ref::write(path, img, set.color_space(*c), &loc(&here, "images", &c.id()), ctx.extras);
                 images.insert(c.id(), r);
@@ -73,11 +66,15 @@ fn write(l: &Layer, set: &SetScope, ctx: &WriteCtx) -> Value {
             v.insert("children", write_all(children, set, ctx));
         }
     }
+    if !l.effects.is_empty() {
+        v.insert("effects", effect::write_all(&l.effects, set, &l.id, &here, ctx));
+    }
     ctx.extras.inject(&here, &mut v);
     v
 }
 
-fn write_fill(f: &Fill, here: &str, extras: &Extras) -> Value {
+/// A fill object: `{"values"}` or `{"material", "params"}`.
+pub fn write_fill(f: &Fill, here: &str, extras: &Extras) -> Value {
     let mut v = match &f.source {
         FillSource::Uniform(values) => {
             let mut obj = Value::object();
@@ -107,26 +104,12 @@ fn read(v: &Value, at: String, set: &SetScope, ctx: &mut ReadCtx) -> Result<Laye
     let mut layer = Layer::new(id.clone(), o.str("name")?, LayerKind::Group(Vec::new()));
     layer.visible = o.bool_or("visible", true)?;
     layer.opacity = o.f32_or("opacity", 1.0)?;
-    for (key, b) in o.entries("blend")? {
-        let channel = channel(key, &o.path("blend"))?;
-        let mut e = Obj::new(b, format!("{}.{key}", o.path("blend")))?;
-        let mode = e.str("mode")?;
-        let mode = BlendMode::from_id(mode).ok_or_else(|| e.error("mode", format!("unknown blend mode {mode:?}")))?;
-        let opacity = e.f32_or("opacity", 1.0)?;
-        ctx.extras.record(&loc(&here, "blend", key), &e);
-        layer.blend.push(ChannelBlend { channel, mode, opacity });
-    }
+    layer.blend = blend::read_channels(&mut o, &here, ctx)?;
     if let Some(m) = o.opt("mask") {
-        let mloc = format!("{here}/mask");
-        let mut mo = Obj::new(m, o.path("mask"))?;
-        let kind = mo.str("kind")?;
-        if kind != "image" {
-            return Err(mo.error("kind", format!("unknown mask kind {kind:?}")));
-        }
-        let slot = ImageSlot::Mask { set: set.index, layer: id.clone() };
-        let (img, _) = image_ref::read(mo.req("image")?, mo.path("image"), &format!("{mloc}/image"), slot, ctx)?;
-        ctx.extras.record(&mloc, &mo);
-        layer.mask = Some(Mask::Image(img));
+        layer.mask = Some(effect_mask::read(m, o.path("mask"), set, &id, &format!("{here}/mask"), ctx)?);
+    }
+    if let Some(g) = o.opt("geometry_mask") {
+        layer.geometry_mask = Some(geometry_mask::read(g, o.path("geometry_mask"), &format!("{here}/geometry_mask"), ctx)?);
     }
     let kind = o.str("kind")?;
     layer.kind = match kind {
@@ -134,7 +117,7 @@ fn read(v: &Value, at: String, set: &SetScope, ctx: &mut ReadCtx) -> Result<Laye
             let mut content = PaintContent::default();
             for (key, r) in o.entries("images")? {
                 let c = channel(key, &o.path("images"))?;
-                let slot = ImageSlot::Paint { set: set.index, layer: id.clone(), channel: c };
+                let slot = ImageSlot::Layer { set: set.index, layer: id.clone(), image: LayerImage::Paint(c) };
                 let rat = format!("{}.{key}", o.path("images"));
                 let (img, cs) = image_ref::read(r, rat.clone(), &loc(&here, "images", key), slot, ctx)?;
                 if cs != set.color_space(c) {
@@ -154,11 +137,14 @@ fn read(v: &Value, at: String, set: &SetScope, ctx: &mut ReadCtx) -> Result<Laye
         }
         other => return Err(o.error("kind", format!("unknown layer kind {other:?}"))),
     };
+    let effects = o.array("effects")?;
+    layer.effects = effect::read_all(effects, &o.path("effects"), set, &id, &here, ctx)?;
     ctx.extras.record(&here, &o);
     Ok(layer)
 }
 
-fn read_fill(v: &Value, at: String, here: &str, ctx: &mut ReadCtx) -> Result<Fill, FormatError> {
+/// Reads a fill object (`at` is its JSON path, `here` its extras location).
+pub fn read_fill(v: &Value, at: String, here: &str, ctx: &mut ReadCtx) -> Result<Fill, FormatError> {
     let mut o = Obj::new(v, at)?;
     let source = match o.opt_str("material")? {
         Some(path) => {
@@ -182,9 +168,4 @@ fn read_fill(v: &Value, at: String, here: &str, ctx: &mut ReadCtx) -> Result<Fil
     };
     ctx.extras.record(here, &o);
     Ok(Fill { source })
-}
-
-/// A channel id; `at` names the object it is a key of.
-pub fn channel(id: &str, at: &str) -> Result<Channel, FormatError> {
-    Channel::from_id(id).ok_or_else(|| FormatError::manifest(at, format!("unknown channel {id:?}")))
 }

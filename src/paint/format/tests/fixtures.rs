@@ -3,8 +3,8 @@
 use crate::mesh::{Mesh, MeshPart};
 use crate::paint::height_normal::HeightFilter;
 use crate::paint::{
-    BakedKind, BakedMap, BlendMode, Channel, ChannelSpec, ColorSpace, Document, Fidelity, Fill, FillSource, ForeignFile, ImportReport, Layer, LayerKind,
-    PaintContent, PixelFormat, PixelLayout, SampleType, TextureSet, TiledImage,
+    BakedKind, BakedMap, BlendMode, Channel, ChannelSpec, ColorSpace, Document, Fidelity, Fill, FillSource, ForeignFile, ImportReport, Layer, LayerImage,
+    LayerKind, PaintContent, PixelFormat, PixelLayout, SampleType, TextureSet, TiledImage,
 };
 
 /// Every pixel format.
@@ -69,13 +69,15 @@ fn quad(name: &str, material: usize, uv_sets: usize, z: f32) -> MeshPart {
 
 fn paint(id: &str, images: Vec<(Channel, TiledImage)>) -> Layer {
     let mut l = Layer::new(id, format!("Paint {id}"), LayerKind::Paint(PaintContent { images }));
-    for c in l.images().into_iter().filter_map(|(c, _)| c).collect::<Vec<_>>() {
+    let channels: Vec<Channel> = l.images().into_iter().filter_map(|(c, _)| if let LayerImage::Paint(c) = c { Some(c) } else { None }).collect();
+    for c in channels {
         l.set_blend(c, BlendMode::Normal, 1.0);
     }
     l
 }
 
-/// A texture set using every pixel format, every layer kind, masks, nested groups and baked maps.
+/// A texture set using every pixel format, every layer kind, every effect kind, masks, geometry masks, nested
+/// groups and baked maps.
 fn body_set() -> TextureSet {
     let (w, h) = (150, 130);
     let mut set = TextureSet::new("body", "Body / Main", (w, h));
@@ -127,6 +129,8 @@ fn body_set() -> TextureSet {
     );
     set.layers.insert(0, fill);
     set.layers.push(group);
+    set.layers.push(super::effect_fixtures::effects_layer(w, h));
+    set.layers.push(super::effect_fixtures::effects_group());
     for (kind, size, f) in [
         (BakedKind::AmbientOcclusion, (150, 130), "gray8"),
         (BakedKind::Normal, (64, 64), "rgb16"),

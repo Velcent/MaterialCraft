@@ -1,4 +1,4 @@
-//! [`MaskEvaluator`]: a Painter mask (`maskActions` from `maskInitial`) as a [`Mask::Image`], where it is
+//! [`MaskEvaluator`]: a Painter mask (`maskActions` from `maskInitial`) as a painted [`Mask`], where it is
 //! made only of uniform and bitmap fills (and empty paint groups). Generators, filters, strokes, levels and
 //! references are not computable yet; the layer then gets no mask and the reason is reported.
 
@@ -121,7 +121,7 @@ impl MaskEvaluator<'_> {
                 });
             }
         }
-        Some(Mask::Image(image))
+        Some(Mask::from_image(image))
     }
 }
 

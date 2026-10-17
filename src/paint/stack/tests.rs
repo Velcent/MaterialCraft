@@ -1,5 +1,5 @@
 use super::*;
-use crate::paint::{Fill, PaintContent, PixelFormat};
+use crate::paint::{Fill, FillSource, PaintContent, PixelFormat};
 
 const R: Channel = Channel::Roughness;
 
