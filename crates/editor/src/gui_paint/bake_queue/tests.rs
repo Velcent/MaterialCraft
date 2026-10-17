@@ -92,13 +92,16 @@ fn cancel_stops_the_queue_and_missing_high_meshes_fail_with_a_target() {
 use materialcraft::paint::bake_config::HighPoly;
 
 /// The gate of roadmap step 28: every texture set of Zubzub (18) in one queue, with a cancel, and the maps equal
-/// byte for byte to mcparity's bake of the same sets with the same settings. Needs the user's corpus drive:
-/// `cargo test --release -p materialcraft-editor zubzub -- --ignored --nocapture`.
+/// byte for byte to mcparity's bake of the same sets with the same settings. Needs a local copy of the project:
+/// `MC_ZUBZUB=/path/to/Zubzub.spp cargo test --release -p materialcraft-editor zubzub -- --ignored --nocapture`.
 #[test]
 #[ignore]
 fn zubzub_bakes_in_one_queue_like_mcparity() {
     const SIZE: u32 = 256;
-    let path = std::env::var("MC_ZUBZUB").unwrap_or_else(|_| "/path/to/Projekte/3D/Thras/EEEDE/Zubzub.spp".into());
+    let Some(path) = std::env::var_os("MC_ZUBZUB") else {
+        eprintln!("skipped: set MC_ZUBZUB to the project's path");
+        return;
+    };
     let path = std::path::PathBuf::from(path);
     if !path.is_file() {
         eprintln!("skipped: {} not found", path.display());
