@@ -15,8 +15,7 @@ const HIGHLIGHT: Duration = Duration::from_millis(1600);
 pub enum Destination {
     /// The texture set at this index: shown in the texture set list.
     TextureSet(usize),
-    /// A layer of the texture set at `set`. Until the layer panel can select layers, its texture
-    /// set is shown; selecting the layer is the hook for that panel.
+    /// A layer of the texture set at `set`: selected in the layer panel, its texture set shown.
     Layer { set: usize, layer: String },
     /// A bake setting, by key: the hook for the bake panel (not built yet).
     BakeSetting(String),

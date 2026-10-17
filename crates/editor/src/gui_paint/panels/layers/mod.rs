@@ -100,6 +100,21 @@ impl LayerPanel {
         self.selection.set(ids);
     }
 
+    /// Shows texture set `set` with `layer` selected and every folder above it unfolded (a log entry's
+    /// target, LG-10). The list does not scroll to it yet.
+    pub fn reveal(&mut self, set: &TextureSet, layer: &str) {
+        if set.layer(layer).is_none() {
+            return;
+        }
+        self.set = Some(set.id.clone());
+        let mut slot = materialcraft::paint::edit::ops::slot_of(set, layer);
+        while let Some(parent) = slot.and_then(|s| s.parent) {
+            self.folding.folded.remove(&parent);
+            slot = materialcraft::paint::edit::ops::slot_of(set, &parent);
+        }
+        self.selection.set(vec![layer.to_string()]);
+    }
+
     /// Forgets everything about the previous document.
     pub fn reset(&mut self) {
         *self = LayerPanel::default();

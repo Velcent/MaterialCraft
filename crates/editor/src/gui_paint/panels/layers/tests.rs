@@ -124,3 +124,17 @@ fn clicks_select_and_the_drop_target_api_finds_rows() {
     assert!(!panel.paintable(doc.doc()), "a fill layer's content can't be painted");
     assert_eq!(panel.action(doc.doc(), LayerAction::Duplicate), Some(LayerEvent::Duplicate { set: "s".into(), ids: vec!["f39".into()] }));
 }
+
+#[test]
+fn revealing_a_layer_selects_it_and_unfolds_its_folder() {
+    let doc = big_document();
+    let set = &doc.doc().texture_sets[0];
+    let mut panel = LayerPanel::default();
+    panel.folding.folded.insert("g7".into());
+    panel.reveal(set, "p7_2");
+    assert_eq!(panel.selection.ids(), ["p7_2"]);
+    assert!(!panel.folding.folded.contains("g7"));
+    assert!(panel.paintable(doc.doc()));
+    panel.reveal(set, "nope");
+    assert_eq!(panel.selection.ids(), ["p7_2"], "an unknown layer changes nothing");
+}

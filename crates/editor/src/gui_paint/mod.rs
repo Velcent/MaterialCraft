@@ -237,8 +237,10 @@ impl PaintMode {
     fn reveal(&mut self, target: &Target) {
         let set = match reveal::resolve(target, self.document.as_ref()) {
             Destination::TextureSet(set) => set,
-            // Hook: the layer panel selects `layer` once it exists; until then its texture set is shown.
-            Destination::Layer { set, layer: _ } => set,
+            Destination::Layer { set, layer } => {
+                self.reveal_layer(set, &layer);
+                set
+            }
             // Hook: the bake panel opens at `key` once it exists.
             Destination::BakeSetting(key) => {
                 self.diag.info(Area::Bake, format!("The bake setting {key} has no panel to show it yet."));
@@ -255,6 +257,17 @@ impl PaintMode {
             self.diag.warn(Area::General, format!("The texture set list can't be shown: {e}."));
         }
         self.focus = Some(Focus::new(set));
+    }
+
+    /// Selects `layer` of texture set `set` in the layer panel, unfolding its folders, and shows the panel.
+    fn reveal_layer(&mut self, set: usize, layer: &str) {
+        let Some(s) = self.document.as_ref().and_then(|d| d.doc().texture_sets.get(set)) else { return };
+        self.layers.reveal(s, layer);
+        if !self.shell.workspace.is_open(PaintPanel::Layers)
+            && let Err(e) = self.shell.workspace.open(PaintPanel::Layers)
+        {
+            self.diag.warn(Area::General, format!("The layer panel can't be shown: {e}."));
+        }
     }
 
     fn show_channel(&mut self, view: ChannelView) {
