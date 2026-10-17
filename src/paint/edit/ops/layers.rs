@@ -80,6 +80,9 @@ pub fn create(tx: &mut Transaction, set_id: &str, what: NewLayer, above_of: Opti
 /// original; returns the copies' ids in stack order (LS-13).
 pub fn duplicate(tx: &mut Transaction, set_id: &str, ids: &[String]) -> Result<Vec<String>, EditError> {
     let chosen = normalize(set(tx, set_id)?, ids);
+    if chosen.is_empty() {
+        return Err(EditError::NotAccepted("nothing is selected"));
+    }
     let mut pool = IdPool::of(set(tx, set_id)?);
     let mut copies = Vec::new();
     for id in chosen {
@@ -96,6 +99,9 @@ pub fn duplicate(tx: &mut Transaction, set_id: &str, ids: &[String]) -> Result<V
 /// added); returns the copies' ids.
 pub fn duplicate_to(tx: &mut Transaction, set_id: &str, ids: &[String], to: LayerSlot) -> Result<Vec<String>, EditError> {
     let chosen = normalize(set(tx, set_id)?, ids);
+    if chosen.is_empty() {
+        return Err(EditError::NotAccepted("nothing is selected"));
+    }
     let mut pool = IdPool::of(set(tx, set_id)?);
     let mut copies = Vec::new();
     for (k, id) in chosen.iter().enumerate() {

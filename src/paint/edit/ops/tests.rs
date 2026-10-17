@@ -93,6 +93,9 @@ fn duplicate_copies_with_new_ids_above_each_original() {
     let placed = step(&mut d, |tx| duplicate_to(tx, "s", &sel(&["base", "b"]), LayerSlot::top(0)));
     assert_eq!(placed, ["base1", "b2"]);
     assert_eq!(ids(&d)[..2], ["0base1", "0b2"]);
+    // An empty (or unknown) selection is refused with a reason instead of doing nothing.
+    assert!(matches!(refused(&mut d, |tx| duplicate(tx, "s", &sel(&["nope"]))), EditError::NotAccepted(_)));
+    assert!(matches!(refused(&mut d, |tx| duplicate_to(tx, "s", &[], LayerSlot::top(0))), EditError::NotAccepted(_)));
 }
 
 #[test]

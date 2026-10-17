@@ -173,3 +173,22 @@ fn a_right_click_anywhere_on_a_row_opens_its_menu() {
         assert!(egui::Popup::is_any_open(&ctx), "a right-click at x = {x} opens the row's menu");
     }
 }
+
+#[test]
+fn layers_dragged_onto_a_layer_or_mask_land_above_it_and_onto_a_folder_into_it() {
+    let doc = big_document();
+    let set = &doc.doc().texture_sets[0];
+    let rows = rows::Rows::build(set, &rows::Folding::default());
+    let row = |id: &str| rows.rows.iter().position(|r| matches!(&r.kind, rows::RowKind::Layer { id: i, .. } if i == id));
+    let onto = |target: DropTarget, id: &str| rows::Landing { target, line: None, row: row(id) };
+    let between = |l: rows::Landing| match l.target {
+        DropTarget::Between { at, .. } => Some((at, l.line.is_some())),
+        _ => None,
+    };
+    let fill = list::layer_drop(set, &rows, onto(DropTarget::OntoLayer(LayerRef::new("s", "f39")), "f39"));
+    assert_eq!(between(fill), Some((materialcraft::paint::edit::LayerSlot::top(80), true)));
+    let mask = list::layer_drop(set, &rows, onto(DropTarget::OntoMask(LayerRef::new("s", "p39_0")), "p39_0"));
+    assert_eq!(between(mask), Some((materialcraft::paint::edit::LayerSlot::in_group("g39", 1), true)));
+    let folder = list::layer_drop(set, &rows, onto(DropTarget::OntoLayer(LayerRef::new("s", "g39")), "g39"));
+    assert_eq!(folder.target, DropTarget::OntoLayer(LayerRef::new("s", "g39")), "a folder takes the layers in");
+}

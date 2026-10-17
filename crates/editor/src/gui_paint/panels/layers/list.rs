@@ -10,7 +10,7 @@ use super::selection::{ClickMods, Selection};
 use super::thumbnails::Thumbnails;
 use crate::gui_theme;
 use eframe::egui::{self, Key, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
-use materialcraft::paint::edit::ops::{DropPayload, DropTarget};
+use materialcraft::paint::edit::ops::{DropPayload, DropTarget, slot_of};
 use materialcraft::paint::edit::{LayerRef, LayerSlot, StackId};
 use materialcraft::paint::{Channel, LayerKind, TextureSet};
 
@@ -189,6 +189,7 @@ impl ListState {
         }
         let pointer = ui.input(|i| i.pointer.latest_pos());
         let landing = pointer.and_then(|p| landing(c.rows, origin, p));
+        let landing = if self.drag.is_some() { landing.map(|l| layer_drop(c.set, c.rows, l)) } else { landing };
         if let Some(l) = &landing {
             let painter = ui.painter();
             match (l.line, l.row.and_then(|i| c.rows.rows.get(i))) {
@@ -230,8 +231,20 @@ fn landing(rows: &Rows, origin: Pos2, pos: Pos2) -> Option<Landing> {
     rows.landing(y, on_mask)
 }
 
+/// Layers dragged inside the list onto another layer (not a folder) or its mask land directly above it, and the
+/// marker shows that line: a drop (or a Ctrl+drop copy) always does something instead of silently nothing.
+pub(super) fn layer_drop(set: &TextureSet, rows: &Rows, l: Landing) -> Landing {
+    let (DropTarget::OntoLayer(r) | DropTarget::OntoMask(r)) = &l.target else { return l };
+    if matches!(set.layer(&r.layer).map(|x| &x.kind), Some(LayerKind::Group(_))) && matches!(l.target, DropTarget::OntoLayer(_)) {
+        return l;
+    }
+    let (Some(slot), Some(row)) = (slot_of(set, &r.layer), l.row.and_then(|i| rows.rows.get(i))) else { return l };
+    let at = LayerSlot { parent: slot.parent, index: slot.index + 1 };
+    Landing { target: DropTarget::Between { set: set.id.clone(), at }, line: Some(row.top), row: None }
+}
+
 /// Where dropped layers go: between rows as marked, into a folder (on top of its children) when dropped onto
-/// it; dropping onto another layer or a mask moves nothing.
+/// it; a drop onto another layer or a mask has no slot (the list makes those a drop above, see [`layer_drop`]).
 pub fn move_slot(set: &TextureSet, target: DropTarget) -> Option<LayerSlot> {
     match target {
         DropTarget::Between { at, .. } => Some(at),
