@@ -78,20 +78,64 @@ impl Default for InterfaceSettings {
     }
 }
 
-/// A named search of the asset library.
+/// A named search of the asset library (AS-16): type filter, folder and query text, hand-editable.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SavedSearch {
     pub name: String,
     pub query: String,
+    /// Usage keywords (`material`, `smart-mask`, …); empty shows every usage.
+    pub usages: Vec<String>,
+    /// The library id the search is limited to (`user`, `extra:<folder>`); empty searches every library.
+    pub library: String,
+    /// Root-relative folder inside that library; empty for the whole library.
+    pub folder: String,
+    /// Shown as its own tab in the asset tray (AS-17).
+    pub tab: bool,
 }
 
-/// Asset library roots and saved searches; the headless library gets them as plain data.
+/// How the asset tray arranges itself (AS-09).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrayLayout {
+    /// Wide when the panel is wide enough, else narrow.
+    #[default]
+    Auto,
+    /// Type icons and the folder tree beside the assets.
+    Wide,
+    /// Types in one menu, the folder tree folded away.
+    Narrow,
+}
+
+/// The size of the asset tray's thumbnails, or a list (AS-09).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThumbSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+    List,
+}
+
+/// The asset tray's view choices.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TraySettings {
+    pub layout: TrayLayout,
+    pub thumbnails: ThumbSize,
+    /// Leave out folders that hold nothing matching the type filter and search (AS-13).
+    pub hide_empty: bool,
+}
+
+/// Asset library roots and saved searches; the headless library gets them as plain data. The user's
+/// own library is `library/` next to the settings file; `roots` are the further ones (AS-01, AS-18).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LibrarySettings {
     pub roots: Vec<PathBuf>,
     pub saved_searches: Vec<SavedSearch>,
+    pub tray: TraySettings,
 }
 
 /// The colour picker's swatches, linear RGBA.

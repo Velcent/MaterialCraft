@@ -16,7 +16,10 @@ use craft_settings::{Location, SaveStatus, Settings, SettingsStore};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 
-pub use sections::{InterfaceSettings, LibrarySettings, SavedLayout, ShortcutSettings, Side, SwatchSettings, WorkspaceSettings};
+pub use sections::{
+    InterfaceSettings, LibrarySettings, SavedLayout, SavedSearch, ShortcutSettings, Side, SwatchSettings, ThumbSize, TrayLayout, TraySettings,
+    WorkspaceSettings,
+};
 
 /// Everything the editor remembers between runs. Each field is one `[section]` of the file.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -115,7 +118,15 @@ mod tests {
         want.shortcuts.bindings.insert("paint.tool.paint".into(), vec!["B".into()]);
         want.interface.ui_scale = 1.25;
         want.library.roots.push("/tmp/assets".into());
-        want.library.saved_searches.push(sections::SavedSearch { name: "rust".into(), query: "!rust".into() });
+        want.library.saved_searches.push(sections::SavedSearch {
+            name: "rust".into(),
+            query: "!rust".into(),
+            usages: vec!["material".into()],
+            library: "user".into(),
+            folder: "materials".into(),
+            tab: true,
+        });
+        want.library.tray = TraySettings { layout: TrayLayout::Narrow, thumbnails: ThumbSize::List, hide_empty: true };
         want.swatches.colors.push([0.5, 0.25, 0.0, 1.0]);
         {
             let (mut s, problems) = UserSettings::open(Location::Dir(dir.clone()));
