@@ -97,13 +97,107 @@ fn box_rows(src: &[[f32; 4]], w: usize, h: usize, r: i64) -> Vec<[f32; 4]> {
                             acc[c] += p[c];
                         }
                     }
-                    for x in 0..wi {
-                        out[x as usize] = [acc[0] * inv, acc[1] * inv, acc[2] * inv, acc[3] * inv];
-                        let add = row[(x + r + 1).rem_euclid(wi) as usize];
-                        let sub = row[(x - r).rem_euclid(wi) as usize];
+                    let (mut ia, mut is) = ((r + 1).rem_euclid(wi), (-r).rem_euclid(wi));
+                    for x in 0..w {
+                        out[x] = [acc[0] * inv, acc[1] * inv, acc[2] * inv, acc[3] * inv];
+                        let (add, sub) = (row[ia as usize], row[is as usize]);
                         for c in 0..4 {
                             acc[c] += add[c] - sub[c];
                         }
+                        ia += 1;
+                        if ia == wi {
+                            ia = 0;
+                        }
+                        is += 1;
+                        if is == wi {
+                            is = 0;
+                        }
+                    }
+                }
+            });
+        }
+    });
+    dst
+}
+
+/// Single-channel version of `box_rows` (grayscale images need a quarter of the memory traffic).
+fn box_rows1(src: &[f32], w: usize, h: usize, r: i64) -> Vec<f32> {
+    let mut dst = vec![0.0f32; w * h];
+    let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).max(1);
+    let rows_per = (h + n - 1) / n;
+    let inv = 1.0 / (2 * r + 1) as f32;
+    let my = crate::tex::my_job();
+    std::thread::scope(|sc| {
+        for (ci, chunk) in dst.chunks_mut(rows_per.max(1) * w).enumerate() {
+            sc.spawn(move || {
+                for (ri, out) in chunk.chunks_mut(w).enumerate() {
+                    if crate::tex::stale(my) {
+                        return;
+                    }
+                    let row = &src[(ci * rows_per + ri) * w..(ci * rows_per + ri + 1) * w];
+                    let wi = w as i64;
+                    let mut acc = 0.0f32;
+                    for k in -r..=r {
+                        acc += row[k.rem_euclid(wi) as usize];
+                    }
+                    let (mut ia, mut is) = ((r + 1).rem_euclid(wi), (-r).rem_euclid(wi));
+                    for x in 0..w {
+                        out[x] = acc * inv;
+                        acc += row[ia as usize] - row[is as usize];
+                        ia += 1;
+                        if ia == wi {
+                            ia = 0;
+                        }
+                        is += 1;
+                        if is == wi {
+                            is = 0;
+                        }
+                    }
+                }
+            });
+        }
+    });
+    dst
+}
+
+/// Vertical wrapping box blur of a single-channel image without transposing it: every thread owns a band of columns and
+/// slides a running sum down the rows, reading whole row segments (cache friendly).
+fn box_cols1(src: &[f32], w: usize, h: usize, r: i64) -> Vec<f32> {
+    let mut dst = vec![0.0f32; w * h];
+    let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).max(1);
+    let band = ((w + n - 1) / n).max(1);
+    let inv = 1.0 / (2 * r + 1) as f32;
+    let my = crate::tex::my_job();
+    // each thread writes its own columns: split the destination into column bands through raw row pointers
+    struct Ptr(*mut f32);
+    unsafe impl Send for Ptr {}
+    unsafe impl Sync for Ptr {}
+    let base = Ptr(dst.as_mut_ptr());
+    let basep = &base;
+    std::thread::scope(|sc| {
+        for x0 in (0..w).step_by(band) {
+            let x1 = (x0 + band).min(w);
+            sc.spawn(move || {
+                let hi = h as i64;
+                let mut acc = vec![0.0f32; x1 - x0];
+                for k in -r..=r {
+                    let row = &src[(k.rem_euclid(hi) as usize) * w + x0..(k.rem_euclid(hi) as usize) * w + x1];
+                    for (a, v) in acc.iter_mut().zip(row) {
+                        *a += *v;
+                    }
+                }
+                for y in 0..h {
+                    if y % 32 == 0 && crate::tex::stale(my) {
+                        return;
+                    }
+                    // SAFETY: the bands are disjoint column ranges, so no two threads write the same element
+                    let out = unsafe { std::slice::from_raw_parts_mut(basep.0.add(y * w + x0), x1 - x0) };
+                    let ia = ((y as i64 + r + 1).rem_euclid(hi)) as usize;
+                    let is = ((y as i64 - r).rem_euclid(hi)) as usize;
+                    let (add, sub) = (&src[ia * w + x0..ia * w + x1], &src[is * w + x0..is * w + x1]);
+                    for i in 0..acc.len() {
+                        out[i] = acc[i] * inv;
+                        acc[i] += add[i] - sub[i];
                     }
                 }
             });
@@ -138,6 +232,16 @@ pub fn blur(t: &Tex, sigma: f32) -> Tex {
         return t.clone();
     }
     let (w, h) = (t.w, t.h);
+    if sigma >= 2.5 && t.px.iter().all(|p| p[0] == p[1] && p[1] == p[2] && p[3] == 1.0) {
+        // grayscale: blur one channel
+        let mut cur: Vec<f32> = t.px.iter().map(|p| p[0]).collect();
+        for bw in gauss_boxes(sigma) {
+            let r = (bw / 2).max(0);
+            cur = box_rows1(&cur, w, h, r.min((w as i64 - 1) / 2));
+            cur = box_cols1(&cur, w, h, r.min((h as i64 - 1) / 2));
+        }
+        return Tex { w, h, px: cur.into_iter().map(|v| [v, v, v, 1.0]).collect() };
+    }
     if sigma >= 2.5 {
         let mut cur = t.px.clone();
         for bw in gauss_boxes(sigma) {
@@ -214,13 +318,17 @@ pub fn sharpen(t: &Tex, radius: f32, amount: f32) -> Tex {
 pub fn levels(t: &Tex, in_lo: f32, in_hi: f32, gamma: f32, out_lo: f32, out_hi: f32) -> Tex {
     let d = if in_hi >= in_lo { (in_hi - in_lo).max(1e-6) } else { (in_hi - in_lo).min(-1e-6) };
     let g = 1.0 / gamma.max(1e-3);
+    let unit_gamma = (g - 1.0).abs() < 1e-6;
+    let lv = |x: f32| {
+        let v = ((x - in_lo) / d).clamp(0.0, 1.0);
+        out_lo + (out_hi - out_lo) * if unit_gamma { v } else { v.powf(g) }
+    };
     t.map(|p| {
-        let mut o = p;
-        for c in 0..3 {
-            let v = ((p[c] - in_lo) / d).clamp(0.0, 1.0).powf(g);
-            o[c] = out_lo + (out_hi - out_lo) * v;
+        if p[0] == p[1] && p[1] == p[2] {
+            let v = lv(p[0]);
+            return [v, v, v, p[3]];
         }
-        o
+        [lv(p[0]), lv(p[1]), lv(p[2]), p[3]]
     })
 }
 
@@ -234,6 +342,14 @@ pub fn adjust(t: &Tex, brightness: f32, contrast: f32) -> Tex {
     })
 }
 
+/// Cyclic shift by a fraction of the tile (output pixel (x, y) reads input pixel (x + fx * w, y + fy * h)).
+pub fn roll(t: &Tex, fx: f32, fy: f32) -> Tex {
+    let (w, h) = (t.w, t.h);
+    let sx = ((fx * w as f32).round() as i64).rem_euclid(w as i64) as usize;
+    let sy = ((fy * h as f32).round() as i64).rem_euclid(h as i64) as usize;
+    Tex { w, h, px: (0..w * h).map(|i| t.px[((i / w + sy) % h) * w + (i % w + sx) % w]).collect() }
+}
+
 pub fn invert(t: &Tex) -> Tex {
     t.map(|p| [1.0 - p[0], 1.0 - p[1], 1.0 - p[2], p[3]])
 }
@@ -241,6 +357,27 @@ pub fn invert(t: &Tex) -> Tex {
 pub fn threshold(t: &Tex, th: f32, soft: f32) -> Tex {
     t.map(|p| {
         let g = sm(th - soft * 0.5, th + soft * 0.5, lum(p));
+        [g, g, g, 1.0]
+    })
+}
+
+/// Designer's Threshold: mode 0 greater, 1 greater or equal, 2 lower, 3 lower or equal. With softness > 0 the
+/// edge is smoothed and the comparison direction is all that remains of the mode.
+pub fn threshold_mode(t: &Tex, th: f32, soft: f32, mode: u32) -> Tex {
+    t.map(move |p| {
+        let l = lum(p);
+        let g = if soft > 1e-6 {
+            let g = sm(th - soft * 0.5, th + soft * 0.5, l);
+            if mode >= 2 { 1.0 - g } else { g }
+        } else {
+            let on = match mode {
+                0 => l > th,
+                1 => l >= th,
+                2 => l < th,
+                _ => l <= th,
+            };
+            if on { 1.0 } else { 0.0 }
+        };
         [g, g, g, 1.0]
     })
 }
@@ -375,21 +512,72 @@ fn bm(mode: u32, f: f32, b: f32) -> f32 {
         14 => f + b - 2.0 * f * b,
         15 => if f <= 0.001 { b } else { b / f },
         16 => b + 2.0 * f - 1.0,
+        20 => b + (f - 0.5) * 2.0,
         _ => f,
     }
 }
 
-/// Modes: 0 copy,1 add,2 sub,3 multiply,4 screen,5 overlay,6 max,7 min,8 difference,9 soft light,10 color dodge,11 color burn,12 linear burn,13 hard light,14 exclusion,15 divide,16 linear light.
+/// Modes: 0 copy,1 add,2 sub,3 multiply,4 screen,5 overlay,6 max,7 min,8 difference,9 soft light,10 color dodge,11 color burn,12 linear burn,13 hard light,14 exclusion,15 divide,16 linear light,17 color,18 luminosity,19 dissolve,20 add sub,21 switch (copy).
 pub fn blend(fg: &Tex, bg: &Tex, mask: Option<&Tex>, mode: u32, opacity: f32) -> Tex {
+    blend_ex(fg, bg, mask, mode, opacity, 1, [0.0, 0.0, 1.0, 1.0])
+}
+
+/// Blend with Designer's alpha handling and cropping area. `alpha_mode`: 0 use source alpha, 1 ignore alpha, 2 straight alpha
+/// blending, 3 premultiplied alpha blending. `crop` = [x0, y0, x1, y1] in 0..1; outside it only the background shows.
+pub fn blend_ex(fg: &Tex, bg: &Tex, mask: Option<&Tex>, mode: u32, opacity: f32, alpha_mode: u32, crop: [f32; 4]) -> Tex {
     let mut out = bg.clone();
-    for i in 0..out.px.len() {
+    let (ow, oh) = (out.w, out.h);
+    let cropped = crop != [0.0, 0.0, 1.0, 1.0];
+    crate::tex::par_rows(&mut out.px, ow, |start, chunk| {
+      for (j, dst) in chunk.iter_mut().enumerate() {
+        let i = start + j;
         let f = fg.px.get(i).copied().unwrap_or([0.0; 4]);
         let b = bg.px[i];
-        let m = mask.and_then(|m| m.px.get(i)).map(|p| lum(*p)).unwrap_or(1.0) * opacity;
-        for c in 0..3 {
-            out.px[i][c] = (b[c] + (bm(mode, f[c], b[c]).clamp(0.0, 1.0) - b[c]) * m).clamp(0.0, 1.0);
+        let mut m = mask.and_then(|m| m.px.get(i)).map(|p| lum(*p)).unwrap_or(1.0) * opacity;
+        if cropped {
+            let (px, py) = (((i % ow) as f32 + 0.5) / ow as f32, ((i / ow) as f32 + 0.5) / oh as f32);
+            if px < crop[0] || px > crop[2] || py < crop[1] || py > crop[3] {
+                m = 0.0;
+            }
         }
-    }
+        // alpha: 1 leaves the background alpha alone, the others let the foreground alpha act as extra opacity
+        let m_plain = m;
+        match alpha_mode {
+            0 => {
+                dst[3] = b[3] + (f[3] - b[3]) * m_plain;
+                m *= f[3];
+            }
+            2 | 3 => {
+                dst[3] = f[3] * m_plain + b[3] * (1.0 - f[3] * m_plain);
+                m *= f[3];
+            }
+            _ => {}
+        }
+        if (17..=19).contains(&mode) {
+            // 17 color (hue+saturation of the foreground, brightness of the background), 18 luminosity, 19 dissolve
+            let set_lum = |c: [f32; 4], l: f32| {
+                let d = l - lum(c);
+                [(c[0] + d).clamp(0.0, 1.0), (c[1] + d).clamp(0.0, 1.0), (c[2] + d).clamp(0.0, 1.0)]
+            };
+            let r = match mode {
+                17 => set_lum(f, lum(b)),
+                18 => set_lum(b, lum(f)),
+                _ => {
+                    let keep = crate::noise::rnd((i % out.w) as i32, (i / out.w) as i32, 4242) < m;
+                    if keep { [f[0], f[1], f[2]] } else { [b[0], b[1], b[2]] }
+                }
+            };
+            let m2 = if mode == 19 { 1.0 } else { m };
+            for c in 0..3 {
+                dst[c] = (b[c] + (r[c] - b[c]) * m2).clamp(0.0, 1.0);
+            }
+            continue;
+        }
+        for c in 0..3 {
+            dst[c] = (b[c] + (bm(mode, f[c], b[c]).clamp(0.0, 1.0) - b[c]) * m).clamp(0.0, 1.0);
+        }
+      }
+    });
     out
 }
 
@@ -431,6 +619,62 @@ pub fn mirror(t: &Tex, axis: u32) -> Tex {
     o
 }
 
+/// Designer's Mirror: `axis` 0 mirrors across a vertical axis, 1 across a horizontal axis, 2 both, 3 corner.
+/// `ox`/`oy` are the axis positions (0..1); `inv_*` copy the other side; `corner` 0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right.
+pub fn mirror_ex(t: &Tex, axis: u32, ox: f32, oy: f32, inv_x: bool, inv_y: bool, corner: u32) -> Tex {
+    let (w, h) = (t.w as i64, t.h as i64);
+    // pixel on the source side stays, the other side reads the reflected pixel
+    let fold = |x: i64, n: i64, o: f32, inv: bool| -> i64 {
+        let ax = o.clamp(0.0, 1.0) * n as f32;
+        let xc = x as f32 + 0.5;
+        let source = if inv { xc >= ax } else { xc < ax };
+        if source { x } else { ((2.0 * ax - xc - 0.5).round() as i64).rem_euclid(n) }
+    };
+    let (do_x, do_y, ix, iy, ox, oy) = match axis {
+        0 => (true, false, inv_x, false, ox, 0.5),
+        1 => (false, true, false, inv_y, 0.5, oy),
+        2 => (true, true, inv_x, inv_y, ox, oy),
+        _ => (true, true, corner == 1 || corner == 3, corner == 2 || corner == 3, 0.5, 0.5),
+    };
+    let mut o = t.clone();
+    for y in 0..h {
+        let sy = if do_y { fold(y, h, oy, iy) } else { y };
+        for x in 0..w {
+            let sx = if do_x { fold(x, w, ox, ix) } else { x };
+            o.px[(y * w + x) as usize] = t.at(sx, sy);
+        }
+    }
+    o
+}
+
+/// Sampling used by the warps: 0 bilinear, 1 nearest, 2 bicubic.
+fn samp(t: &Tex, mode: u32, u: f32, v: f32) -> [f32; 4] {
+    match mode {
+        0 => t.sample(u, v),
+        1 => t.at((u.rem_euclid(1.0) * t.w as f32) as i64, (v.rem_euclid(1.0) * t.h as f32) as i64),
+        _ => t.sample_cubic(u, v),
+    }
+}
+
+pub fn warp_ex(t: &Tex, w: &Tex, intensity: f32, filtering: u32) -> Tex {
+    Tex::from_fn(t.w, t.h, |u, v| {
+        let x = (u * w.w as f32) as i64;
+        let y = (v * w.h as f32) as i64;
+        let dx = w.gray_at(x + 1, y) - w.gray_at(x - 1, y);
+        let dy = w.gray_at(x, y + 1) - w.gray_at(x, y - 1);
+        samp(t, filtering, u + dx * intensity, v + dy * intensity)
+    })
+}
+
+/// `offset` is subtracted from the intensity map (0.5 = mid grey does not move the pixel).
+pub fn directional_warp_ex(t: &Tex, w: &Tex, angle: f32, intensity: f32, offset: f32, filtering: u32) -> Tex {
+    let (s, c) = (angle * TAU).sin_cos();
+    Tex::from_fn(t.w, t.h, |u, v| {
+        let d = (lum(w.sample(u, v)) - offset) * intensity;
+        samp(t, filtering, u + c * d, v + s * d)
+    })
+}
+
 /// Displace by the gradient of `w` (slope warp).
 pub fn warp(t: &Tex, w: &Tex, intensity: f32) -> Tex {
     Tex::from_fn(t.w, t.h, |u, v| {
@@ -453,20 +697,29 @@ pub fn directional_warp(t: &Tex, w: &Tex, angle: f32, intensity: f32) -> Tex {
 // ---------- surface analysis ----------
 pub fn normal_from_height(h: &Tex, strength: f32, directx: bool) -> Tex {
     let k = strength * h.w as f32 * 0.05;
-    Tex::from_fn(h.w, h.h, |u, v| {
-        let x = (u * h.w as f32) as i64;
-        let y = (v * h.h as f32) as i64;
-        // 3x3 Scharr kernel: smoother and more rotation-invariant than a plain central difference
-        let g = |i: i64, j: i64| h.gray_at(x + i, y + j);
-        let dx = (3.0 * (g(1, -1) - g(-1, -1)) + 10.0 * (g(1, 0) - g(-1, 0)) + 3.0 * (g(1, 1) - g(-1, 1))) / 32.0 * k;
-        let mut dy = (3.0 * (g(-1, 1) - g(-1, -1)) + 10.0 * (g(0, 1) - g(0, -1)) + 3.0 * (g(1, 1) - g(1, -1))) / 32.0 * k;
-        if directx {
-            dy = -dy;
+    let (w, hh) = (h.w, h.h);
+    // luminance once per pixel instead of nine times
+    let gray: Vec<f32> = h.px.iter().map(|p| lum(*p)).collect();
+    let mut out = Tex { w, h: hh, px: vec![[0.0, 0.0, 1.0, 1.0]; w * hh] };
+    crate::tex::par_rows(&mut out.px, w, |start, chunk| {
+        for (j, dst) in chunk.iter_mut().enumerate() {
+            let i = start + j;
+            let (x, y) = (i % w, i / w);
+            let (xm, xp) = (if x == 0 { w - 1 } else { x - 1 }, if x + 1 == w { 0 } else { x + 1 });
+            let (ym, yp) = (if y == 0 { hh - 1 } else { y - 1 }, if y + 1 == hh { 0 } else { y + 1 });
+            // 3x3 Scharr kernel: smoother and more rotation-invariant than a plain central difference
+            let g = |xx: usize, yy: usize| gray[yy * w + xx];
+            let dx = (3.0 * (g(xp, ym) - g(xm, ym)) + 10.0 * (g(xp, y) - g(xm, y)) + 3.0 * (g(xp, yp) - g(xm, yp))) / 32.0 * k;
+            let mut dy = (3.0 * (g(xm, yp) - g(xm, ym)) + 10.0 * (g(x, yp) - g(x, ym)) + 3.0 * (g(xp, yp) - g(xp, ym))) / 32.0 * k;
+            if directx {
+                dy = -dy;
+            }
+            let (nx, ny, nz) = (-dx, dy, 1.0f32);
+            let l = (nx * nx + ny * ny + nz * nz).sqrt();
+            *dst = [nx / l * 0.5 + 0.5, ny / l * 0.5 + 0.5, nz / l * 0.5 + 0.5, 1.0];
         }
-        let (nx, ny, nz) = (-dx, dy, 1.0f32);
-        let l = (nx * nx + ny * ny + nz * nz).sqrt();
-        [nx / l * 0.5 + 0.5, ny / l * 0.5 + 0.5, nz / l * 0.5 + 0.5, 1.0]
-    })
+    });
+    out
 }
 
 pub fn normal_blend(a: &Tex, b: &Tex) -> Tex {
@@ -479,6 +732,23 @@ pub fn normal_blend(a: &Tex, b: &Tex) -> Tex {
         let z = (pa[2] - 0.5) * 2.0 * (pb[2] - 0.5) * 2.0;
         let l = (x * x + y * y + z * z).sqrt().max(1e-6);
         o.px[i] = [x / l * 0.5 + 0.5, y / l * 0.5 + 0.5, z / l * 0.5 + 0.5, 1.0];
+    }
+    o
+}
+
+/// Normal Blend with Designer's Opacity and optional Mask: `a` is the background, `b` the foreground.
+pub fn normal_blend_ex(a: &Tex, b: &Tex, opacity: f32, mask: Option<&Tex>) -> Tex {
+    let full = normal_blend(a, b);
+    let mut o = full.clone();
+    for i in 0..o.px.len() {
+        let k = (opacity * mask.and_then(|m| m.px.get(i)).map(|p| lum(*p)).unwrap_or(1.0)).clamp(0.0, 1.0);
+        if k >= 1.0 {
+            continue;
+        }
+        let (pa, pf) = (a.px[i], full.px[i]);
+        let v: Vec<f32> = (0..3).map(|c| (pa[c] - 0.5) * 2.0 * (1.0 - k) + (pf[c] - 0.5) * 2.0 * k).collect();
+        let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-6);
+        o.px[i] = [v[0] / l * 0.5 + 0.5, v[1] / l * 0.5 + 0.5, v[2] / l * 0.5 + 0.5, 1.0];
     }
     o
 }
@@ -519,6 +789,99 @@ pub fn edge_detect(t: &Tex, intensity: f32) -> Tex {
             + t.gray_at(x + 1, y + 1);
         let m = ((gx * gx + gy * gy).sqrt() * intensity).clamp(0.0, 1.0);
         [m, m, m, 1.0]
+    })
+}
+
+/// Separable grey-scale dilation (maximum filter) of radius `r` pixels, wrapping at the borders.
+pub fn dilate(t: &Tex, r: i64) -> Tex {
+    if r <= 0 {
+        return t.clone();
+    }
+    let h = Tex::from_fn(t.w, t.h, |u, v| {
+        let (x, y) = ((u * t.w as f32) as i64, (v * t.h as f32) as i64);
+        let m = (-r..=r).map(|d| t.gray_at(x + d, y)).fold(0.0f32, f32::max);
+        [m, m, m, 1.0]
+    });
+    Tex::from_fn(t.w, t.h, |u, v| {
+        let (x, y) = ((u * t.w as f32) as i64, (v * t.h as f32) as i64);
+        let m = (-r..=r).map(|d| h.gray_at(x, y + d)).fold(0.0f32, f32::max);
+        [m, m, m, 1.0]
+    })
+}
+
+/// Edge Detect as in Designer: white lines of `width` pixels where the image changes by more than `tolerance`;
+/// `roundness` (pixels) rounds the corners of the lines; `invert` flips the result.
+pub fn edge_detect_ex(t: &Tex, width: f32, roundness: f32, invert: bool, tolerance: f32) -> Tex {
+    let g = to_gray(t);
+    // Sobel magnitude, 1 for a full black / white step
+    let e = Tex::from_fn(t.w, t.h, |u, v| {
+        let (x, y) = ((u * t.w as f32) as i64, (v * t.h as f32) as i64);
+        let gx = -g.gray_at(x - 1, y - 1) - 2.0 * g.gray_at(x - 1, y) - g.gray_at(x - 1, y + 1) + g.gray_at(x + 1, y - 1) + 2.0 * g.gray_at(x + 1, y) + g.gray_at(x + 1, y + 1);
+        let gy = -g.gray_at(x - 1, y - 1) - 2.0 * g.gray_at(x, y - 1) - g.gray_at(x + 1, y - 1) + g.gray_at(x - 1, y + 1) + 2.0 * g.gray_at(x, y + 1) + g.gray_at(x + 1, y + 1);
+        let m = (gx * gx + gy * gy).sqrt() * 0.25;
+        let k = tolerance.clamp(0.0, 0.999);
+        // everything below the tolerance is no edge; a step of the tolerance size already counts as a full edge
+        let o = if m <= k * 0.5 { 0.0 } else { ((m - k * 0.5) / (0.5 * (1.0 - k)).max(1e-3)).clamp(0.0, 1.0) };
+        [o, o, o, 1.0]
+    });
+    let mut d = dilate(&e, ((width.max(1.0) - 1.0) * 0.5).round() as i64);
+    if roundness > 0.5 {
+        let b = blur(&d, roundness * 0.5);
+        d = Tex::from_fn(t.w, t.h, |u, v| {
+            let x = sm(0.25, 0.75, lum(b.sample(u, v)));
+            [x, x, x, 1.0]
+        });
+    }
+    if invert {
+        for p in d.px.iter_mut() {
+            let v = 1.0 - p[0];
+            *p = [v, v, v, 1.0];
+        }
+    }
+    d
+}
+
+/// Curvature of a normal map: the divergence of its XY components (convex bright, concave dark).
+pub fn curvature_normal(n: &Tex, intensity: f32, directx: bool) -> Tex {
+    let s = if directx { -1.0 } else { 1.0 };
+    Tex::from_fn(n.w, n.h, |u, v| {
+        let (x, y) = ((u * n.w as f32) as i64, (v * n.h as f32) as i64);
+        let div = (n.at(x + 1, y)[0] - n.at(x - 1, y)[0]) - s * (n.at(x, y + 1)[1] - n.at(x, y - 1)[1]);
+        let g = (0.5 + div * intensity).clamp(0.0, 1.0);
+        [g, g, g, 1.0]
+    })
+}
+
+/// Mosaic driven by a map: every region of equal map value takes the mean colour of the input inside it.
+/// `intensity` blends between the input (0) and the mosaic (1).
+pub fn mosaic_map(t: &Tex, map: &Tex, intensity: f32) -> Tex {
+    use std::collections::HashMap;
+    let key = |u: f32, v: f32| (lum(map.sample(u, v)) * 4095.0).round() as i32;
+    let mut acc: HashMap<i32, ([f64; 4], f64)> = HashMap::new();
+    for y in 0..t.h {
+        for x in 0..t.w {
+            let (u, v) = ((x as f32 + 0.5) / t.w as f32, (y as f32 + 0.5) / t.h as f32);
+            let e = acc.entry(key(u, v)).or_insert(([0.0; 4], 0.0));
+            let p = t.px[y * t.w + x];
+            for c in 0..4 {
+                e.0[c] += p[c] as f64;
+            }
+            e.1 += 1.0;
+        }
+    }
+    let k = intensity.clamp(0.0, 1.0);
+    Tex::from_fn(t.w, t.h, |u, v| {
+        let src = t.sample(u, v);
+        match acc.get(&key(u, v)) {
+            Some((s, n)) if *n > 0.0 => {
+                let mut o = [0.0f32; 4];
+                for c in 0..4 {
+                    o[c] = src[c] + ((s[c] / n) as f32 - src[c]) * k;
+                }
+                o
+            }
+            _ => src,
+        }
     })
 }
 
@@ -992,6 +1355,11 @@ pub fn distance_field(mask: &[bool], w: usize, h: usize) -> Vec<f32> {
 }
 
 pub fn bevel(t: &Tex, dist_px: f32, smoothing: f32, thr: f32) -> Tex {
+    bevel_ex(t, dist_px, smoothing, thr, false)
+}
+
+/// `round` = circular (quarter-circle) profile, otherwise the linear ramp of an angular bevel.
+pub fn bevel_ex(t: &Tex, dist_px: f32, smoothing: f32, thr: f32, round: bool) -> Tex {
     let mask: Vec<bool> = t.px.iter().map(|p| lum(*p) > thr).collect();
     let d = distance_field(&mask, t.w, t.h);
     let px = d
@@ -1002,6 +1370,7 @@ pub fn bevel(t: &Tex, dist_px: f32, smoothing: f32, thr: f32) -> Tex {
                 return [0.0, 0.0, 0.0, 1.0];
             }
             let tt = (d / dist_px.max(1.0)).clamp(0.0, 1.0);
+            let tt = if round { (1.0 - (1.0 - tt) * (1.0 - tt)).sqrt() } else { tt };
             let g = tt + (tt * tt * (3.0 - 2.0 * tt) - tt) * smoothing.clamp(0.0, 1.0);
             [g, g, g, 1.0]
         })
@@ -1038,38 +1407,109 @@ pub fn vector_warp(t: &Tex, vecmap: &Tex, intensity: f32) -> Tex {
     })
 }
 
+/// Vector Warp with Designer's Vector Format: `directx` reads the green channel as pointing down.
+pub fn vector_warp_ex(t: &Tex, vecmap: &Tex, intensity: f32, directx: bool) -> Tex {
+    let gs = if directx { -1.0 } else { 1.0 };
+    Tex::from_fn(t.w, t.h, |u, v| {
+        let m = vecmap.sample(u, v);
+        t.sample_cubic(u + (m[0] - 0.5) * 2.0 * intensity, v + gs * (m[1] - 0.5) * 2.0 * intensity)
+    })
+}
+
 /// mode: 0 blur (average), 1 min, 2 max.
 pub fn slope_blur(t: &Tex, slope: &Tex, samples: u32, intensity: f32, mode: u32) -> Tex {
-    let g = Tex::from_fn(slope.w, slope.h, |u, v| {
-        let x = (u * slope.w as f32) as i64;
-        let y = (v * slope.h as f32) as i64;
-        [slope.gray_at(x + 1, y) - slope.gray_at(x - 1, y), slope.gray_at(x, y + 1) - slope.gray_at(x, y - 1), 0.0, 1.0]
-    });
+    let (sw, sh) = (slope.w, slope.h);
+    let gray: Vec<f32> = slope.px.iter().map(|p| lum(*p)).collect();
+    // slope direction (central differences) as a two-channel plane
+    let mut gv = vec![[0.0f32; 2]; sw * sh];
+    {
+        let rows_per = ((sh + 7) / 8).max(1);
+        let gray = &gray;
+        let my = crate::tex::my_job();
+        std::thread::scope(|sc| {
+            for (ci, chunk) in gv.chunks_mut(rows_per * sw).enumerate() {
+                sc.spawn(move || {
+                    for (j, dst) in chunk.iter_mut().enumerate() {
+                        if j % sw == 0 && crate::tex::stale(my) {
+                            return;
+                        }
+                        let idx = ci * rows_per * sw + j;
+                        let (x, y) = (idx % sw, idx / sw);
+                        let (xm, xp) = (if x == 0 { sw - 1 } else { x - 1 }, if x + 1 == sw { 0 } else { x + 1 });
+                        let (ym, yp) = (if y == 0 { sh - 1 } else { y - 1 }, if y + 1 == sh { 0 } else { y + 1 });
+                        *dst = [gray[y * sw + xp] - gray[y * sw + xm], gray[yp * sw + x] - gray[ym * sw + x]];
+                    }
+                });
+            }
+        });
+    }
     let n = samples.clamp(1, 64);
     let step = intensity / n as f32;
     let gain = slope.w as f32 * 0.5;
-    Tex::from_fn(t.w, t.h, |u, v| {
+    let nf = n as f32;
+    // bilinear lookups on plain planes (wrapped)
+    #[inline]
+    fn bil<const C: usize>(d: &[[f32; C]], w: usize, h: usize, u: f32, v: f32) -> [f32; C] {
+        let u = if u.is_finite() { u } else { 0.0 };
+        let v = if v.is_finite() { v } else { 0.0 };
+        let (x, y) = (u * w as f32 - 0.5, v * h as f32 - 0.5);
+        let (x0, y0) = (crate::tex::ffloor(x), crate::tex::ffloor(y));
+        let (fx, fy) = (x - x0, y - y0);
+        let (wi, hi) = (w as i64, h as i64);
+        let wrap = |i: i64, n: i64| if i >= 0 && i < n { i } else { i.rem_euclid(n) };
+        let (xa, ya) = (wrap(x0 as i64, wi), wrap(y0 as i64, hi));
+        let xb = if xa + 1 == wi { 0 } else { xa + 1 };
+        let yb = if ya + 1 == hi { 0 } else { ya + 1 };
+        let (r0, r1) = ((ya * wi) as usize, (yb * wi) as usize);
+        let (a, b, c, e) = (d[r0 + xa as usize], d[r0 + xb as usize], d[r1 + xa as usize], d[r1 + xb as usize]);
+        let mut o = [0.0; C];
+        for i in 0..C {
+            let top = a[i] + (b[i] - a[i]) * fx;
+            let bot = c[i] + (e[i] - c[i]) * fx;
+            o[i] = top + (bot - top) * fy;
+        }
+        o
+    }
+    let walk = |u: f32, v: f32, mut visit: &mut dyn FnMut(f32, f32)| {
         let (mut pu, mut pv) = (u, v);
-        let mut acc = match mode {
-            1 => [1.0f32; 4],
-            2 => [0.0f32; 4],
-            _ => [0.0f32; 4],
-        };
         for _ in 0..n {
-            let p = t.sample(pu, pv);
+            visit(pu, pv);
+            let gvv = bil::<2>(&gv, sw, sh, pu, pv);
+            let l = (gvv[0] * gvv[0] + gvv[1] * gvv[1]).sqrt().max(1e-6);
+            let k = (l * gain).min(1.0) * step / l;
+            pu += gvv[0] * k;
+            pv += gvv[1] * k;
+        }
+        let _ = &mut visit;
+    };
+    let is_gray = t.px.iter().all(|p| p[0] == p[1] && p[1] == p[2] && p[3] == 1.0);
+    if is_gray {
+        let plane: Vec<[f32; 1]> = t.px.iter().map(|p| [p[0]]).collect();
+        return Tex::from_fn(t.w, t.h, |u, v| {
+            let mut acc = if mode == 1 { 1.0f32 } else { 0.0 };
+            walk(u, v, &mut |pu, pv| {
+                let p = bil::<1>(&plane, t.w, t.h, pu, pv)[0];
+                acc = match mode {
+                    1 => acc.min(p),
+                    2 => acc.max(p),
+                    _ => acc + p / nf,
+                };
+            });
+            [acc, acc, acc, 1.0]
+        });
+    }
+    Tex::from_fn(t.w, t.h, |u, v| {
+        let mut acc = if mode == 1 { [1.0f32; 4] } else { [0.0f32; 4] };
+        walk(u, v, &mut |pu, pv| {
+            let p = bil::<4>(&t.px, t.w, t.h, pu, pv);
             for c in 0..4 {
                 acc[c] = match mode {
                     1 => acc[c].min(p[c]),
                     2 => acc[c].max(p[c]),
-                    _ => acc[c] + p[c] / n as f32,
+                    _ => acc[c] + p[c] / nf,
                 };
             }
-            let gv = g.sample(pu, pv);
-            let l = (gv[0] * gv[0] + gv[1] * gv[1]).sqrt().max(1e-6);
-            let mag = (l * gain).min(1.0);
-            pu += gv[0] / l * mag * step;
-            pv += gv[1] / l * mag * step;
-        }
+        });
         acc
     })
 }
@@ -1154,10 +1594,15 @@ pub fn height_blend(bg: &Tex, fg: &Tex, mask: Option<&Tex>, opacity: f32, contra
 }
 
 pub fn make_tile_photo(t: &Tex, width: f32) -> Tex {
-    let w = width.clamp(0.1, 1.0);
-    let a = |x: f32| sm(0.0, w, 1.0 - (2.0 * x - 1.0).abs());
+    make_tile_photo_ex(t, width, width)
+}
+
+/// Separate horizontal and vertical transition reach (Designer's Mask Size H / V).
+pub fn make_tile_photo_ex(t: &Tex, width_h: f32, width_v: f32) -> Tex {
+    let (wh, wv) = (width_h.clamp(0.1, 1.0), width_v.clamp(0.1, 1.0));
+    let a = |x: f32, w: f32| sm(0.0, w, 1.0 - (2.0 * x - 1.0).abs());
     Tex::from_fn(t.w, t.h, |u, v| {
-        let (au, av) = (a(u), a(v));
+        let (au, av) = (a(u, wh), a(v, wv));
         let s = |du: f32, dv: f32| t.sample((u + du).rem_euclid(1.0), (v + dv).rem_euclid(1.0));
         let (c00, c10, c01, c11) = (s(0.0, 0.0), s(0.5, 0.0), s(0.0, 0.5), s(0.5, 0.5));
         let (w00, w10, w01, w11) = (au * av, (1.0 - au) * av, au * (1.0 - av), (1.0 - au) * (1.0 - av));
@@ -1247,4 +1692,276 @@ pub fn resize(t: &Tex, size: usize) -> Tex {
         });
     }
     Tex::from_fn(size, size, |u, v| t.sample(u, v))
+}
+
+// ---------- gradient map with alpha, addressing and smoothness ----------
+/// Gradient map. `stops` are (position, rgb, alpha). `interp`: 0 linear, 1 smooth (`smoothness` blends linear and
+/// smoothstep), 2 step, 3 smoother. `repeat` wraps the input instead of clamping it; `use_alpha` writes the
+/// gradient's alpha into the result (otherwise the input's alpha is kept).
+pub fn colorize_ex(t: &Tex, stops: &[(f32, [f32; 3], f32)], interp: u32, smoothness: f32, repeat: bool, use_alpha: bool) -> Tex {
+    let mut st: Vec<(f32, [f32; 3], f32)> = stops.to_vec();
+    st.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let sm = smoothness.clamp(0.0, 1.0);
+    t.map(|p| {
+        let mut g = lum(p);
+        g = if repeat { g.rem_euclid(1.0) } else { g.clamp(0.0, 1.0) };
+        let out = |c: [f32; 3], a: f32| [c[0], c[1], c[2], if use_alpha { a } else { p[3] }];
+        if st.is_empty() {
+            return [g, g, g, p[3]];
+        }
+        if g <= st[0].0 {
+            return out(st[0].1, st[0].2);
+        }
+        for i in 1..st.len() {
+            if g <= st[i].0 {
+                let (a, b) = (st[i - 1], st[i]);
+                let mut f = (g - a.0) / (b.0 - a.0).max(1e-9);
+                f = match interp {
+                    1 => f + (f * f * (3.0 - 2.0 * f) - f) * sm,
+                    2 => 0.0,
+                    3 => f * f * f * (f * (f * 6.0 - 15.0) + 10.0),
+                    _ => f,
+                };
+                let l = |x: f32, y: f32| x + (y - x) * f;
+                return out([l(a.1[0], b.1[0]), l(a.1[1], b.1[1]), l(a.1[2], b.1[2])], l(a.2, b.2));
+            }
+        }
+        let e = st[st.len() - 1];
+        out(e.1, e.2)
+    })
+}
+
+// ---------- colour match (colour swap in OKLCh) ----------
+fn to_lin(c: f32) -> f32 {
+    if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+}
+fn from_lin(c: f32) -> f32 {
+    let c = c.clamp(0.0, 1.0);
+    if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 }
+}
+/// sRGB -> (L, C, h in turns)
+pub fn rgb_to_lch(c: [f32; 3]) -> [f32; 3] {
+    let (r, g, b) = (to_lin(c[0]), to_lin(c[1]), to_lin(c[2]));
+    let l = (0.412_221_47 * r + 0.536_332_55 * g + 0.051_445_995 * b).cbrt();
+    let m = (0.211_903_5 * r + 0.680_699_5 * g + 0.107_396_96 * b).cbrt();
+    let s = (0.088_302_46 * r + 0.281_718_85 * g + 0.629_978_7 * b).cbrt();
+    let ll = 0.210_454_26 * l + 0.793_617_8 * m - 0.004_072_047 * s;
+    let aa = 1.977_998_5 * l - 2.428_592_2 * m + 0.450_593_7 * s;
+    let bb = 0.025_904_037 * l + 0.782_771_77 * m - 0.808_675_77 * s;
+    [ll, (aa * aa + bb * bb).sqrt(), (bb.atan2(aa) / std::f32::consts::TAU).rem_euclid(1.0)]
+}
+pub fn lch_to_rgb(c: [f32; 3]) -> [f32; 3] {
+    let (aa, bb) = ((c[2] * std::f32::consts::TAU).cos() * c[1], (c[2] * std::f32::consts::TAU).sin() * c[1]);
+    let l = (c[0] + 0.396_337_78 * aa + 0.215_803_76 * bb).powi(3);
+    let m = (c[0] - 0.105_561_346 * aa - 0.063_854_17 * bb).powi(3);
+    let s = (c[0] - 0.089_484_18 * aa - 1.291_485_5 * bb).powi(3);
+    [
+        from_lin(4.076_741_7 * l - 3.307_711_6 * m + 0.230_969_94 * s),
+        from_lin(-1.268_438 * l + 2.609_757_4 * m - 0.341_319_4 * s),
+        from_lin(-0.004_196_086 * l - 0.703_418_6 * m + 1.707_614_7 * s),
+    ]
+}
+pub fn mean_rgb(t: &Tex) -> [f32; 3] {
+    let n = t.px.len().max(1) as f32;
+    let mut m = [0.0f32; 3];
+    for p in &t.px {
+        for c in 0..3 {
+            m[c] += p[c] / n;
+        }
+    }
+    m
+}
+
+/// Parameters of the colour swap.
+pub struct ColorSwap {
+    pub source: [f32; 3],
+    pub target: [f32; 3],
+    pub hue_shift: f32,     // turns
+    pub chroma_mul: f32,
+    pub luma_mul: f32,
+    pub use_mask: bool,
+    pub hue_range: f32,     // turns
+    pub chroma_range: f32,
+    pub luma_range: f32,
+    pub smooth: f32,
+    pub strength: f32,
+}
+
+/// Moves every colour near `source` towards `target` (hue rotated, chroma and luma scaled by the ratio between the two,
+/// each times its variation) and returns (result, mask). The mask is how much each pixel was selected.
+pub fn color_swap(t: &Tex, c: &ColorSwap) -> (Tex, Tex) {
+    let (s, g) = (rgb_to_lch(c.source), rgb_to_lch(c.target));
+    let dh = g[2] - s[2] + c.hue_shift;
+    let cr = (g[1] / s[1].max(1e-3)).clamp(0.0, 8.0) * c.chroma_mul;
+    let lr = (g[0] / s[0].max(1e-3)).clamp(0.0, 8.0).powf(1.0) * c.luma_mul;
+    // the chroma ratio is meaningless for a grey source: fall back to adding the target's chroma
+    let grey = s[1] < 0.01;
+    let wrap = |d: f32| {
+        let d = d.rem_euclid(1.0);
+        d.min(1.0 - d)
+    };
+    let calc = |p: [f32; 4]| -> ([f32; 4], f32) {
+        let q = rgb_to_lch([p[0], p[1], p[2]]);
+        let w = if c.use_mask {
+            let d = (wrap(q[2] - s[2]) / c.hue_range.max(1e-4)).max((q[1] - s[1]).abs() / c.chroma_range.max(1e-4)).max((q[0] - s[0]).abs() / c.luma_range.max(1e-4));
+            1.0 - ((d - 1.0) / c.smooth.max(0.02)).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        let w = (w * c.strength).clamp(0.0, 1.0);
+        let nc = if grey { q[1] + g[1] * c.chroma_mul } else { q[1] * cr };
+        let nl = (q[0] * lr).clamp(0.0, 1.2);
+        let res = lch_to_rgb([nl, nc.max(0.0), (q[2] + dh).rem_euclid(1.0)]);
+        ([p[0] + (res[0] - p[0]) * w, p[1] + (res[1] - p[1]) * w, p[2] + (res[2] - p[2]) * w, p[3]], w)
+    };
+    (t.map(|p| calc(p).0), t.map(|p| {
+        let w = calc(p).1;
+        [w, w, w, 1.0]
+    }))
+}
+
+// ---------- horizon based ambient occlusion ----------
+/// Horizon-based AO of a height map. `radius_uv` is the search distance in image units (0..1), `height_scale` how tall
+/// a height of 1.0 is in the same units (screen-relative: the "height depth"; world units: height cm / surface cm),
+/// `dirs` the number of directions (4 / 8 / 16). Wraps at the borders, so tileable inputs give tileable output.
+pub fn hbao(h: &Tex, radius_uv: f32, height_scale: f32, dirs: u32, intensity: f32) -> Tex {
+    let g = to_gray(h);
+    let (w, hh) = (g.w, g.h);
+    let dirs = dirs.clamp(2, 64) as usize;
+    let steps = 14usize;
+    let tab: Vec<(f32, f32)> = (0..dirs).map(|k| ((k as f32 / dirs as f32 * std::f32::consts::TAU).cos(), (k as f32 / dirs as f32 * std::f32::consts::TAU).sin())).collect();
+    let rows = crate::tex::par_map(hh, |y| {
+        let mut row = vec![[0.0f32; 4]; w];
+        for x in 0..w {
+            let (u, v) = ((x as f32 + 0.5) / w as f32, (y as f32 + 0.5) / hh as f32);
+            let h0 = g.px[y * w + x][0];
+            let mut occ = 0.0f32;
+            for &(dx, dy) in &tab {
+                let mut best = 0.0f32;
+                for j in 1..=steps {
+                    let t = j as f32 / steps as f32;
+                    let d = radius_uv * t;
+                    let hs = g.sample(u + dx * d, v + dy * d)[0];
+                    let dz = (hs - h0) * height_scale;
+                    let s = dz / (dz * dz + d * d).sqrt().max(1e-9);
+                    let falloff = 1.0 - t * t;
+                    best = best.max(s * falloff);
+                }
+                occ += best;
+            }
+            let a = (1.0 - occ / dirs as f32 * intensity).clamp(0.0, 1.0);
+            row[x] = [a, a, a, 1.0];
+        }
+        row
+    });
+    let mut o = g.clone();
+    for (y, r) in rows.into_iter().enumerate() {
+        o.px[y * w..(y + 1) * w].copy_from_slice(&r);
+    }
+    o
+}
+
+// ---------- colour quantisation (k-means) ----------
+fn oklab(c: [f32; 3]) -> [f32; 3] {
+    let l = rgb_to_lch(c);
+    let a = (l[2] * std::f32::consts::TAU).cos() * l[1];
+    let b = (l[2] * std::f32::consts::TAU).sin() * l[1];
+    [l[0], a, b]
+}
+
+/// Reduces `t` to at most `k` colours chosen by k-means over the image's colour histogram. `smoothing` blurs the input
+/// first (pixels) so contours between colour regions are smoother; `dither` (0..1) adds an ordered pattern
+/// (`bayer`) or a hash noise before choosing the nearest colour; `lab` measures distance in OKLab instead of RGB.
+pub fn quantize_color(t: &Tex, k: usize, smoothing: f32, dither: f32, bayer: bool, lab: bool, ignore_alpha: bool) -> Tex {
+    let src = if smoothing > 0.0 { blur(t, smoothing) } else { t.clone() };
+    let k = k.clamp(1, 128);
+    let space = |p: [f32; 4]| if lab { oklab([p[0], p[1], p[2]]) } else { [p[0], p[1], p[2]] };
+    // histogram with 24 bins per channel: [count, sum of the three channels in the working space]
+    const B: usize = 24;
+    let mut hist: std::collections::HashMap<usize, (f64, [f64; 3], [f64; 3])> = std::collections::HashMap::new();
+    for p in &src.px {
+        let key = ((p[0].clamp(0.0, 1.0) * (B as f32 - 1e-3)) as usize * B + (p[1].clamp(0.0, 1.0) * (B as f32 - 1e-3)) as usize) * B + (p[2].clamp(0.0, 1.0) * (B as f32 - 1e-3)) as usize;
+        let e = hist.entry(key).or_insert((0.0, [0.0; 3], [0.0; 3]));
+        let s = space(*p);
+        e.0 += 1.0;
+        for c in 0..3 {
+            e.1[c] += s[c] as f64;
+            e.2[c] += p[c] as f64;
+        }
+    }
+    let mut bins: Vec<(usize, f64, [f32; 3], [f32; 3])> = hist
+        .into_iter()
+        .map(|(key, (n, s, r))| (key, n, [(s[0] / n) as f32, (s[1] / n) as f32, (s[2] / n) as f32], [(r[0] / n) as f32, (r[1] / n) as f32, (r[2] / n) as f32]))
+        .collect();
+    bins.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal).then(a.0.cmp(&b.0))); // deterministic
+    if bins.is_empty() {
+        return t.clone();
+    }
+    let d2 = |a: [f32; 3], b: [f32; 3]| (a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2);
+    // farthest-point initialisation starting from the most common colour
+    let mut cent: Vec<[f32; 3]> = vec![bins[0].2];
+    while cent.len() < k.min(bins.len()) {
+        let mut best = (0.0f32, 0usize);
+        for (i, b) in bins.iter().enumerate() {
+            let d = cent.iter().map(|c| d2(*c, b.2)).fold(f32::MAX, f32::min) * (b.1 as f32).sqrt();
+            if d > best.0 {
+                best = (d, i);
+            }
+        }
+        if best.0 <= 0.0 {
+            break;
+        }
+        cent.push(bins[best.1].2);
+    }
+    for _ in 0..10 {
+        let mut acc = vec![([0.0f64; 3], 0.0f64); cent.len()];
+        for b in &bins {
+            let j = (0..cent.len()).min_by(|&x, &y| d2(cent[x], b.2).partial_cmp(&d2(cent[y], b.2)).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(0);
+            for c in 0..3 {
+                acc[j].0[c] += b.2[c] as f64 * b.1;
+            }
+            acc[j].1 += b.1;
+        }
+        for (j, a) in acc.iter().enumerate() {
+            if a.1 > 0.0 {
+                cent[j] = [(a.0[0] / a.1) as f32, (a.0[1] / a.1) as f32, (a.0[2] / a.1) as f32];
+            }
+        }
+    }
+    // palette in RGB: mean RGB of the pixels (bins) that fall to each centre
+    let mut pal = vec![([0.0f64; 3], 0.0f64); cent.len()];
+    for b in &bins {
+        let j = (0..cent.len()).min_by(|&x, &y| d2(cent[x], b.2).partial_cmp(&d2(cent[y], b.2)).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(0);
+        for c in 0..3 {
+            pal[j].0[c] += b.3[c] as f64 * b.1;
+        }
+        pal[j].1 += b.1;
+    }
+    let pal: Vec<[f32; 3]> = pal.iter().zip(&cent).map(|(p, c)| if p.1 > 0.0 { [(p.0[0] / p.1) as f32, (p.0[1] / p.1) as f32, (p.0[2] / p.1) as f32] } else { *c }).collect();
+    const BAYER: [[f32; 8]; 8] = [
+        [0., 32., 8., 40., 2., 34., 10., 42.],
+        [48., 16., 56., 24., 50., 18., 58., 26.],
+        [12., 44., 4., 36., 14., 46., 6., 38.],
+        [60., 28., 52., 20., 62., 30., 54., 22.],
+        [3., 35., 11., 43., 1., 33., 9., 41.],
+        [51., 19., 59., 27., 49., 17., 57., 25.],
+        [15., 47., 7., 39., 13., 45., 5., 37.],
+        [63., 31., 55., 23., 61., 29., 53., 21.],
+    ];
+    let spread = dither * 0.6 / (cent.len() as f32).cbrt();
+    let w = src.w;
+    let mut out = src.clone();
+    for (i, p) in src.px.iter().enumerate() {
+        let (x, y) = (i % w, i / w);
+        let off = if dither > 0.0 {
+            let n = if bayer { BAYER[y % 8][x % 8] / 64.0 } else { rnd(x as i32, y as i32, 4242) };
+            (n - 0.5) * spread
+        } else {
+            0.0
+        };
+        let q = space([p[0] + off, p[1] + off, p[2] + off, p[3]]);
+        let j = (0..cent.len()).min_by(|&a, &b| d2(cent[a], q).partial_cmp(&d2(cent[b], q)).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(0);
+        out.px[i] = [pal[j][0], pal[j][1], pal[j][2], if ignore_alpha { 1.0 } else { p[3] }];
+    }
+    out
 }

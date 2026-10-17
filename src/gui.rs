@@ -5,7 +5,7 @@ use eframe::egui::{
     Rounding, Sense, Stroke, TextStyle, Vec2, pos2, vec2,
 };
 use materialcraft::bake::{self, BakeSettings};
-use materialcraft::graph::{category, label, spec, usage_label, Comment, Exposed, Graph, Node, EXAMPLE, SPECS, THUMB};
+use materialcraft::graph::{category, label, spec, usage_label, Comment, Exposed, Graph, Node, NodeCache, EXAMPLE, SPECS, THUMB};
 use materialcraft::render3d::{self, Maps, View};
 use materialcraft::tex::{self, Tex};
 use materialcraft::export::{self, Format};
@@ -27,6 +27,11 @@ use gui_theme::panel_header;
 const CARD: f32 = 92.0;
 const BAR: f32 = 16.0;
 const CARD_H: f32 = BAR + CARD;
+
+/// Height of a node card's body: the square thumbnail, or taller when many input sockets (or outputs) need room.
+fn card_body(n_slots: usize, n_outs: usize) -> f32 {
+    CARD.max(15.0 * (n_slots as f32 + 1.0)).max(if n_outs >= 2 { 20.0 * n_outs as f32 } else { 0.0 })
+}
 const OUTPUT_NAMES: [&str; 11] = ["basecolor", "normal", "roughness", "metallic", "height", "ambient_occlusion", "opacity", "emissive", "diffuse", "specular", "glossiness"];
 const COMMENT_COLORS: [[u8; 3]; 6] = [[90, 140, 200], [200, 160, 60], [90, 180, 110], [190, 90, 90], [150, 100, 200], [150, 150, 150]];
 
@@ -144,7 +149,7 @@ struct EvalResult {
     gen: u64,
     thumbs: HashMap<u32, Vec<u8>>,
     errors: HashMap<u32, String>,
-    kept: HashMap<u32, Tex>,
+    kept: HashMap<u32, std::sync::Arc<Tex>>,
     outputs: Vec<(String, u32)>,
     sizes: HashMap<u32, usize>,
     /// the 2D view image and the GPU textures are converted on the worker thread so the editor never stalls on them
@@ -153,6 +158,13 @@ struct EvalResult {
     gpu: Option<gpu3d::GpuMaps>,
     /// resolution this pass was computed at
     size: usize,
+}
+
+/// The 2D view image of the selected node, sent as soon as that node is done (before the rest of the graph).
+struct Partial {
+    gen: u64,
+    img2d: ColorImage,
+    img_for: u32,
 }
 
 struct ExportUi {
@@ -215,7 +227,7 @@ struct App {
     node_err: HashMap<u32, String>,
     tex2d: Option<egui::TextureHandle>,
     tex2d_size: (usize, usize),
-    maps: BTreeMap<String, Tex>,
+    maps: BTreeMap<String, std::sync::Arc<Tex>>,
     view3d: View,
     tex3d: Option<egui::TextureHandle>,
     r3d_size: usize,
@@ -233,6 +245,8 @@ struct App {
     dirty3d: bool,
     gen: u64,
     job: Option<Receiver<EvalResult>>,
+    part: Option<Receiver<Partial>>,
+    node_cache: std::sync::Arc<NodeCache>,
     lib_search: String,
     text_focus: bool,
     export: ExportUi,
@@ -331,6 +345,8 @@ impl App {
             dirty3d: true,
             gen: 0,
             job: None,
+            part: None,
+            node_cache: std::sync::Arc::new(NodeCache::with_default_budget()),
             lib_search: String::new(),
             text_focus: false,
             export: ExportUi { open: false, dir: None, prefix: String::new(), sizes: [false, true, false, false, false, false], depth16: false, fmt: Format::Png, quality: 92, skip: BTreeSet::new() },
@@ -720,6 +736,9 @@ impl App {
             }
             _ => {}
         }
+        for (k, v) in new_node_defaults(kind) {
+            n.nums.insert((*k).to_string(), *v);
+        }
         self.g.nodes.insert(id, n);
         self.sel = [id].into_iter().collect();
         self.active = Some(id);
@@ -874,7 +893,7 @@ impl App {
             for id in &self.sel {
                 if let Some(n) = self.g.nodes.get(id) {
                     mn = [mn[0].min(n.pos[0]), mn[1].min(n.pos[1])];
-                    mx = [mx[0].max(n.pos[0] + CARD), mx[1].max(n.pos[1] + CARD_H)];
+                    mx = [mx[0].max(n.pos[0] + CARD), mx[1].max(n.pos[1] + BAR + card_body(slots(&n.kind).len(), 0))];
                 }
             }
             c.pos = [mn[0] - 24.0, mn[1] - 44.0];
@@ -971,7 +990,7 @@ impl App {
         let (mut mn, mut mx) = ([f32::MAX; 2], [f32::MIN; 2]);
         for n in self.g.nodes.values() {
             mn = [mn[0].min(n.pos[0]), mn[1].min(n.pos[1])];
-            mx = [mx[0].max(n.pos[0] + CARD), mx[1].max(n.pos[1] + CARD_H)];
+            mx = [mx[0].max(n.pos[0] + CARD), mx[1].max(n.pos[1] + BAR + card_body(slots(&n.kind).len(), 0))];
         }
         let c = self.canvas_rect;
         let z = ((c.width() - 80.0) / (mx[0] - mn[0]).max(1.0)).min((c.height() - 80.0) / (mx[1] - mn[1]).max(1.0)).clamp(0.3, 1.2);
@@ -1171,14 +1190,24 @@ impl App {
         tex::CURRENT_JOB.store(gen, std::sync::atomic::Ordering::Relaxed);
         let (tx, rx) = channel();
         self.job = Some(rx);
+        let (ptx, prx) = channel();
+        self.part = Some(prx);
+        let cache = self.node_cache.clone();
         std::thread::spawn(move || {
-            let r = g.evaluate_all_cancellable(size, &keep, gen);
+            let mut on_first = |t: &Tex| {
+                if let Some(a) = active {
+                    if !tex::stale(gen) {
+                        let _ = ptx.send(Partial { gen, img2d: qimg(t), img_for: a });
+                    }
+                }
+            };
+            let r = g.evaluate_all_cached(size, &keep, gen, &cache, active, &mut on_first);
             if tex::stale(gen) {
                 return; // superseded: nobody waits for this result
             }
             tex::set_job(gen);
             let outputs: Vec<(String, u32)> = g.output_nodes().into_iter().map(|(u, _, id)| (u, id)).collect();
-            let named = |n: &str| outputs.iter().find(|o| o.0 == n).and_then(|o| r.kept.get(&o.1));
+            let named = |n: &str| outputs.iter().find(|o| o.0 == n).and_then(|o| r.kept.get(&o.1)).map(|a| a.as_ref());
             let inv_gloss = named("glossiness").map(ops::invert);
             let gpu = gpu3d::prepare(&MapInputs {
                 base: named("basecolor").or_else(|| named("out")).or_else(|| named("diffuse")),
@@ -1189,7 +1218,7 @@ impl App {
                 emissive: named("emissive"),
                 height: named("height"),
             });
-            let img2d = active.and_then(|a| r.kept.get(&a)).map(qimg);
+            let img2d = active.and_then(|a| r.kept.get(&a)).map(|a| qimg(a));
             tex::set_job(0);
             if tex::stale(gen) {
                 return;
@@ -1219,6 +1248,26 @@ impl App {
     }
 
     fn poll_eval(&mut self, ctx: &egui::Context) {
+        // the selected node usually finishes long before the whole graph: show it right away
+        if let Some(prx) = &self.part {
+            let mut latest = None;
+            while let Ok(p) = prx.try_recv() {
+                latest = Some(p);
+            }
+            if let Some(p) = latest {
+                if p.gen == self.gen && self.active == Some(p.img_for) {
+                    let opts = egui::TextureOptions {
+                        magnification: egui::TextureFilter::Nearest,
+                        minification: egui::TextureFilter::Linear,
+                        wrap_mode: egui::TextureWrapMode::Repeat,
+                        mipmap_mode: Some(egui::TextureFilter::Linear),
+                    };
+                    self.tex2d_size = (p.img2d.size[0], p.img2d.size[1]);
+                    self.tex2d = Some(ctx.load_texture("view2d", p.img2d, opts));
+                    ctx.request_repaint();
+                }
+            }
+        }
         let Some(rx) = &self.job else { return };
         match rx.try_recv() {
             Ok(r) => {
@@ -1297,15 +1346,16 @@ impl App {
     /// Hand the current graph outputs to the GPU viewer (uploaded on its next paint).
     fn upload_gpu_maps(&mut self) {
         self.gpu_maps_dirty = false;
-        let inv_gloss = self.maps.get("glossiness").map(ops::invert);
+        let get = |k: &str| self.maps.get(k).map(|a| a.as_ref());
+        let inv_gloss = get("glossiness").map(ops::invert);
         let m = MapInputs {
-            base: self.maps.get("basecolor").or_else(|| self.maps.get("diffuse")),
-            normal: self.maps.get("normal"),
-            rough: self.maps.get("roughness").or(inv_gloss.as_ref()),
-            metal: self.maps.get("metallic"),
-            ao: self.maps.get("ambient_occlusion"),
-            emissive: self.maps.get("emissive"),
-            height: self.maps.get("height"),
+            base: get("basecolor").or_else(|| get("diffuse")),
+            normal: get("normal"),
+            rough: get("roughness").or(inv_gloss.as_ref()),
+            metal: get("metallic"),
+            ao: get("ambient_occlusion"),
+            emissive: get("emissive"),
+            height: get("height"),
         };
         let prepared = gpu3d::prepare(&m);
         if let Ok(mut g) = self.gpu.lock() {
@@ -1327,15 +1377,16 @@ impl App {
             return;
         }
         let (flat, half, zero, one) = (Tex::solid(4, 4, [0.5, 0.5, 1.0, 1.0]), Tex::solid(4, 4, [0.5, 0.5, 0.5, 1.0]), Tex::solid(4, 4, [0.0, 0.0, 0.0, 1.0]), Tex::solid(4, 4, [1.0; 4]));
-        let inv_gloss = self.maps.get("glossiness").map(ops::invert);
+        let get = |k: &str| self.maps.get(k).map(|a| a.as_ref());
+        let inv_gloss = get("glossiness").map(ops::invert);
         let m = Maps {
-            base: self.maps.get("basecolor").or_else(|| self.maps.get("diffuse")).unwrap_or(&half),
-            normal: self.maps.get("normal").unwrap_or(&flat),
-            rough: self.maps.get("roughness").or(inv_gloss.as_ref()).unwrap_or(&half),
-            metal: self.maps.get("metallic").unwrap_or(&zero),
-            ao: self.maps.get("ambient_occlusion").unwrap_or(&one),
-            emissive: self.maps.get("emissive"),
-            height: self.maps.get("height"),
+            base: get("basecolor").or_else(|| get("diffuse")).unwrap_or(&half),
+            normal: get("normal").unwrap_or(&flat),
+            rough: get("roughness").or(inv_gloss.as_ref()).unwrap_or(&half),
+            metal: get("metallic").unwrap_or(&zero),
+            ao: get("ambient_occlusion").unwrap_or(&one),
+            emissive: get("emissive"),
+            height: get("height"),
         };
         let mut cpu_view = self.view3d.clone();
         cpu_view.tess = cpu_view.tess.min(256);

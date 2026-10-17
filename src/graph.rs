@@ -3,10 +3,13 @@ use crate::expr;
 use crate::noise;
 use crate::ops;
 use crate::png;
+use crate::grunge;
+use crate::scatter;
 use crate::tex::{lum, Tex};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+use std::sync::Arc as Rc;
 
 #[derive(Debug)]
 pub enum Error {
@@ -58,11 +61,12 @@ macro_rules! s {
 
 pub const SPECS: &[Spec] = &[
     s!("color", [], [], "constant colour: r g b a"),
-    s!("white_noise", [], [], "per-pixel random: seed"),
-    s!("gaussian_noise", [], [], "gaussian-distributed per-pixel noise: seed"),
-    s!("perlin", [], [], "perlin noise: scale scale_x scale_y seed"),
-    s!("fbm", [], [], "fractal noise/clouds: scale octaves gain seed mode(0 fbm,1 ridged,2 turbulence)"),
-    s!("voronoi", [], [], "cellular: scale jitter seed mode(0 dist,1 id,2 edge,3 f2)"),
+    s!("white_noise", [], [], "per-pixel random: seed distribution(0 uniform,1 gaussian,2 triangle)"),
+    s!("gaussian_noise", [], [], "gaussian-distributed per-pixel noise: seed scale contrast invert disorder disorder_speed anisotropy anisotropy_angle tile_x tile_y"),
+    s!("perlin", [], [], "perlin noise: scale scale_x scale_y seed disorder disorder_speed tile_x tile_y"),
+    s!("fbm", [], [], "fractal noise/clouds: scale octaves gain seed mode(0 fbm,1 ridged,2 turbulence) disorder disorder_speed anisotropy anisotropy_angle tile_x tile_y"),
+    s!("voronoi", [], [], "cellular: scale jitter seed mode(0 f1,1 cell id,2 edge,3 f2,4 f2-f1,5 f1*f2,6 f1/f2) aspect offset_x offset_y distortion distortion_scale distance_mode(0 euclid,1 manhattan,2 chebyshev,3 minkowski) minkowski edge_thickness rounded distance_scale color_seed_mode color_seed invert"),
+    s!("voronoi_fractal", [], [], "layered voronoi: scale jitter seed mode aspect offset_x offset_y distortion distortion_scale distance_mode minkowski edge_thickness rounded distance_scale min_level max_level roughness lacunarity opacity blend(0 add,1 max,2 min) color_seed_mode color_seed invert"),
     s!("gradient", [], [], "gradient: mode(0 linear,1 radial) angle"),
     s!("circle", [], [], "radius softness"),
     s!("rect", [], [], "width height softness"),
@@ -78,15 +82,15 @@ pub const SPECS: &[Spec] = &[
     s!("input", [], [], "subgraph input: idx"),
     s!("subgraph", [], ["in0", "in1", "in2", "in3"], "instance of a reusable subgraph: graph=\"name\""),
     s!("shape", [], [], "procedural shape: square, disc, paraboloid, gaussian, diamond, pyramid, half sphere, cone"),
-    s!("tile_sampler", [], ["pattern", "mask"], "grid of pattern instances with random size, rotation, position and color"),
-    s!("tile_generator", [], ["pattern", "mask"], "brick-style tiles with row offset"),
-    s!("splatter", [], ["pattern"], "random scatter of a pattern"),
-    s!("splatter_circular", [], ["pattern"], "instances placed on a circle"),
-    s!("clouds", [], [], "soft cloud noise: scale disorder seed contrast invert"),
-    s!("bnw_spots", [], [], "black and white spots: scale disorder seed contrast invert variant"),
+    s!("tile_sampler", [], ["pattern", "pattern2", "pattern3", "pattern4", "pattern5", "pattern6", "mask", "scale_map", "rotation_map", "displacement_map", "color_map", "distribution_map", "background"], "grid of pattern instances: x_amount y_amount size aspect size_mode scale scale_random size_random rotation rotation_random pattern_rotation symmetry_random position_random offset offset_mode offset_random global_offset_x global_offset_y color color_random lum_by_number lum_by_scale mask_threshold mask_invert mask_random mask_checker invert_mask blending opacity background reverse_order pattern_type pattern_specific pattern_distribution"),
+    s!("tile_generator", [], ["pattern", "pattern2", "pattern3", "pattern4", "pattern5", "pattern6", "mask", "scale_map", "rotation_map", "displacement_map", "color_map", "distribution_map", "background"], "brick-style tiles: x_amount y_amount size aspect size_mode scale scale_random size_random rotation rotation_random pattern_rotation symmetry_random position_random offset offset_mode offset_random global_offset_x global_offset_y color color_random lum_by_number lum_by_scale mask_checker mask_horizontal mask_vertical mask_random invert_mask blending opacity background reverse_order pattern_type pattern_specific pattern_distribution"),
+    s!("splatter", [], ["pattern", "pattern2", "pattern3", "pattern4", "pattern5", "pattern6"], "random scatter of a pattern: count grid_number scale scale_var aspect rotation rot_var pattern_rotation lum_var disorder pan_x pan_y symmetry_random gain output_min output_max background blending opacity pattern_type pattern_specific pattern_distribution"),
+    s!("splatter_circular", [], ["pattern", "pattern2", "pattern3", "pattern4", "pattern5", "pattern6"], "instances on one or more circles: number amount_random rings radius radius_random ring_radius_multiplier angle_random spiral_factor spread size size_random scale_by_number scale_by_ring rotation rotation_random center_orientation ring_rotation ring_rotation_random position_random color luminance_random lum_by_number lum_by_ring mask_random background blending opacity pattern_type pattern_specific pattern_distribution"),
+    s!("clouds", [], [], "soft cloud noise: scale seed contrast invert disorder disorder_speed anisotropy anisotropy_angle tile_x tile_y"),
+    s!("bnw_spots", [], [], "black and white spots: scale seed contrast invert variant disorder disorder_speed anisotropy anisotropy_angle tile_x tile_y"),
     s!("crystal", [], [], "faceted crystal cells: scale disorder seed contrast invert variant"),
-    s!("directional_noise", [], [], "streak noise, seamless at any angle: scale stretch angle seed"),
-    s!("grunge", [], [], "grunge masks: concrete, scratches, spots, smudges"),
+    s!("directional_noise", [], [], "streak noise, seamless at any angle: scale stretch angle seed contrast invert disorder disorder_speed anisotropy anisotropy_angle tile_x tile_y"),
+    s!("grunge", [], [], "grunge masks: variant(0 concrete,1 scratches,2 spots,3 smudges) balance large_variation base_noisiness dirt_specks_opacity invert_dirt scratches_opacity sharpen quantity scratch_width scratch_length details coverage coverage_contrast disorder disorder_speed seed contrast invert"),
     s!("plasma", [], [], "smooth plasma waves"),
     s!("stripes", [], [], "stripes: count angle softness width tile(1 = snap to seamless angle, 0 = exact)"),
     s!("weave", [], [], "woven threads: count width"),
@@ -98,18 +102,18 @@ pub const SPECS: &[Spec] = &[
     s!("flood_fill_random", ["in"], [], "random grayscale per flood-fill region"),
     s!("flood_fill_color", ["in"], [], "random color per flood-fill region"),
     s!("flood_fill_gradient", ["in"], [], "gradient across each flood-fill region"),
-    s!("vector_warp", ["in", "vector"], [], "displace by a vector map: intensity"),
+    s!("vector_warp", ["in", "vector"], [], "displace by a vector map: intensity directx"),
     s!("slope_blur", ["in", "slope"], [], "blur along a slope map: samples intensity mode"),
     s!("blur_hq", ["in"], [], "high quality blur: intensity quality"),
     s!("histogram_range", ["in"], [], "select a range of values: position range contrast invert"),
-    s!("bevel", ["in"], [], "bevel a shape: distance smoothing use_as_normal"),
+    s!("bevel", ["in"], [], "bevel a shape: distance smoothing threshold use_as_normal normal_intensity corner(0 round,1 angular) directx"),
     s!("distance", ["in"], [], "distance field of a mask: distance mode"),
-    s!("color_match", ["in", "reference"], [], "match colors to a reference: strength"),
+    s!("color_match", ["in"], ["reference", "src_color", "target_color"], "recolour: method(0 statistics transfer from reference,1 colour swap) strength source_mode(0 average,1 colour,2 input) src_r src_g src_b target_mode(0 colour,1 input) target_r target_g target_b custom_variation variation_hue variation_chroma variation_luma use_mask mask_hue_range mask_chroma_range mask_luma_range mask_smoothness"),
     s!("curvature_smooth", ["in"], [], "smooth curvature from a normal map"),
     s!("height_blend", ["bg", "fg"], ["mask"], "blend two height maps: opacity contrast output"),
-    s!("make_it_tile_photo", ["in"], [], "make a photo tile: width"),
+    s!("make_it_tile_photo", ["in"], [], "make a photo tile: width width_v"),
     s!("make_it_tile_patch", ["in"], [], "make an image tile with random patches"),
-    s!("clamp", ["in"], [], "clamp values: low high"),
+    s!("clamp", ["in"], [], "clamp values: low high apply_alpha"),
     s!("highpass", ["in"], [], "high-pass filter: radius"),
     s!("swirl", ["in"], [], "swirl distortion: amount radius"),
     s!("edge_wear", ["in"], ["noise"], "edge wear mask from a height map: amount width contrast"),
@@ -122,32 +126,33 @@ pub const SPECS: &[Spec] = &[
     s!("sharpen", ["in"], [], "radius amount"),
     s!("levels", ["in"], [], "low high gamma out_low out_high"),
     s!("adjust", ["in"], [], "brightness contrast"),
-    s!("invert", ["in"], [], "invert colours"),
-    s!("threshold", ["in"], [], "threshold softness"),
+    s!("invert", ["in"], [], "invert colours: invert"),
+    s!("threshold", ["in"], [], "binary threshold: threshold softness mode(0 greater,1 greater or equal,2 lower,3 lower or equal)"),
     s!("histogram_scan", ["in"], [], "position width"),
     s!("quantize", ["in"], [], "steps"),
     s!("to_gray", ["in"], [], "luminance"),
     s!("channel", ["in"], [], "ch(0 r,1 g,2 b,3 a)"),
     s!("merge", [], ["r", "g", "b", "a"], "combine channels"),
     s!("tint", ["in"], [], "multiply by colour: r g b"),
-    s!("colorize", ["in"], [], "gradient map: p0 r0 g0 b0 ... p7 r7 g7 b7"),
+    s!("colorize", ["in"], [], "gradient map: interp(0 linear,1 smooth,2 step,3 smoother) smoothness addressing(0 clamp,1 repeat) use_alpha  stops p0 r0 g0 b0 a0 ... p15 r15 g15 b15 a15"),
     s!("hsl", ["in"], [], "hue sat val"),
     s!("transform", ["in"], [], "offset_x offset_y scale_x scale_y rotation(turns)"),
-    s!("mirror", ["in"], [], "axis(0 x,1 y,2 both)"),
-    s!("warp", ["in", "warp"], [], "slope warp: intensity"),
-    s!("directional_warp", ["in", "warp"], [], "angle intensity"),
-    s!("blend", ["fg", "bg"], ["mask"], "mode(0 copy,1 add,2 sub,3 mul,4 screen,5 overlay,6 max,7 min,8 diff,9 softlight) opacity"),
-    s!("normal", ["in"], [], "height->normal (OpenGL +Y): strength directx"),
-    s!("normal_blend", ["a", "b"], [], "combine normal maps"),
-    s!("ao", ["in"], [], "height-based ambient occlusion: radius intensity"),
-    s!("curvature", ["in"], [], "radius intensity"),
-    s!("edge_detect", ["in"], [], "intensity"),
+    s!("mirror", ["in"], [], "mirror an image: axis(0 x,1 y,2 both,3 corner) offset_x offset_y invert_x invert_y corner(0 top left,1 top right,2 bottom left,3 bottom right)"),
+    s!("warp", ["in", "warp"], [], "slope warp: intensity filtering(0 bilinear,1 nearest,2 bicubic)"),
+    s!("directional_warp", ["in", "warp"], [], "warp in one direction: angle intensity offset filtering(0 bilinear,1 nearest,2 bicubic)"),
+    s!("blend", ["fg", "bg"], ["mask"], "blend two images: mode(0 copy,1 add,2 sub,3 mul,4 screen,5 overlay,6 max,7 min,8 diff,9 softlight,20 add sub,21 switch) opacity alpha_mode(0 source alpha,1 ignore alpha,2 straight,3 premultiplied) crop_x0 crop_y0 crop_x1 crop_y1"),
+    s!("normal", ["in"], [], "height->normal (OpenGL +Y): strength directx alpha_from_input"),
+    s!("normal_blend", ["a", "b"], ["mask"], "blend normal maps (a = background, b = foreground): opacity"),
+    s!("ao", ["in"], [], "ambient occlusion: mode(0 blur,1 horizon) radius intensity hbao_radius hbao_intensity quality(0 4,1 8,2 16 samples) use_world_units height_depth surface_size height_depth_cm"),
+    s!("quantize_color", ["in"], [], "reduce to few colours (k-means): color_amount contour_smoothing dithering dithering_pattern(0 noise,1 bayer) ignore_alpha distance_color_space(0 lab,1 rgb)"),
+    s!("curvature", ["in"], [], "curvature of a normal map: mode(0 normal map,1 height map) intensity directx radius"),
+    s!("edge_detect", ["in"], [], "edge lines: mode(0 designer,1 sobel) edge_width edge_roundness invert tolerance intensity"),
     s!("emboss", ["in"], [], "angle intensity"),
     s!("non_uniform_blur", ["in", "mask"], [], "blur by a mask: intensity"),
-    s!("radial_blur", ["in"], [], "zoom blur around a centre: amount radius x y"),
+    s!("radial_blur", ["in"], [], "spin blur around a centre: mode(0 spin,1 zoom) samples angle x y amount radius"),
     s!("anisotropic_blur", ["in"], [], "blur stretched in one direction: intensity anisotropy angle"),
-    s!("symmetry", ["in"], [], "mirror the image around a line: axis(0 x,1 y,2 both,3 diagonal) offset flip"),
-    s!("skew", ["in"], [], "shear that keeps tiling: skew_x skew_y (whole numbers)"),
+    s!("symmetry", ["in"], [], "mirror the image around a line: axis(0 x,1 y,2 both,3 diagonal,4 anti-diagonal,5 eight-fold) offset flip transfer(0 copy,1 add,2 sub,3 mul,4 add sub,5 max,6 min)"),
+    s!("skew", ["in"], [], "shear that keeps tiling: skew_x skew_y (whole numbers) align(0 centre,1 top left,2 bottom right)"),
     s!("auto_levels", ["in"], [], "stretch values to the full range: per_channel"),
     s!("channel_mixer", ["in"], [], "mix colour channels: rr rg rb gr gg gb br bg bb mono"),
     s!("alpha_merge", ["rgb"], ["alpha"], "put a grayscale image into the alpha channel"),
@@ -156,18 +161,29 @@ pub const SPECS: &[Spec] = &[
     s!("pow", ["in"], [], "raise values to a power: exponent"),
     s!("histogram_shift", ["in"], [], "shift all values: position"),
     s!("grayscale_conversion", ["in"], [], "weighted grayscale: r g b"),
-    s!("cells", [], [], "cellular noise: scale jitter seed variant(0 cells1,1 cells2,2 cells3,3 cells4) contrast invert"),
-    s!("fractal_sum", [], [], "sum of noise octaves: scale min_level max_level roughness seed mode(0 base,1 turbulence,2 creased) contrast invert"),
-    s!("waveform", [], [], "tileable wave pattern: count angle warp warp_scale seed shape(0 sine,1 triangle,2 saw,3 square) contrast invert"),
-    s!("gaussian_spots", [], [], "soft gaussian spots: scale size size_variation seed contrast invert"),
-    s!("normal_invert", ["in"], [], "flip normal map channels: invert_x invert_y"),
+    s!("cells", [], ["color"], "cellular noise: scale jitter seed variant(0 cells1,1 cells2,2 cells3,3 cells4) luminance_random color_source(0 random,1 pseudorandom,2 image) pseudorandom_seed edge_width hardness contrast invert disorder disorder_speed anisotropy anisotropy_angle tile_x tile_y"),
+    s!("fractal_sum", [], [], "sum of noise octaves: scale min_level max_level roughness seed mode(0 base,1 turbulence,2 creased) contrast invert disorder disorder_speed"),
+    s!("waveform", [], [], "tileable wave pattern: count angle warp warp_scale seed shape(0 sine,1 triangle,2 saw,3 square) contrast invert disorder disorder_speed"),
+    s!("gaussian_spots", [], [], "soft gaussian spots: scale size size_variation seed contrast invert disorder disorder_speed anisotropy anisotropy_angle tile_x tile_y"),
+    s!("normal_invert", ["in"], [], "flip normal map channels: invert_x invert_y invert_z invert_a"),
     s!("normal_normalize", ["in"], [], "renormalise a normal map"),
-    s!("normal_vector_rotation", ["in"], [], "rotate normal vectors: angle"),
-    s!("normal_to_height", ["in"], [], "integrate a normal map into a height map: directx"),
+    s!("normal_vector_rotation", ["in"], ["rotation"], "rotate normal vectors: angle directx"),
+    s!("normal_to_height", ["in"], [], "integrate a normal map into a height map: directx relief_balance opacity"),
     s!("sobel", ["in"], [], "sobel edge magnitude: intensity"),
-    s!("glow", ["in"], [], "glow around bright areas: width intensity"),
-    s!("mosaic", ["in"], [], "pixelate: count"),
-    s!("shape_drop_shadow", ["in"], [], "drop shadow of a mask: angle distance blur opacity"),
+    s!("glow", ["in"], [], "glow around bright areas: width intensity clear glow_r glow_g glow_b"),
+    s!("mosaic", ["in"], ["mosaic_map"], "mosaic of the map regions (or a pixel grid without a map): count intensity"),
+    s!("non_uniform_directional_warp", ["in", "intensity"], ["angle"], "warp along a direction chosen per pixel: intensity angle"),
+    s!("multi_directional_warp", ["in", "warp"], [], "warp in several directions at once: intensity directions(0 one,1 two,2 four) angle mode(0 average,1 max,2 min,3 chain)"),
+    s!("normal_combine", ["base", "detail"], [], "combine two normal maps: technique(0 whiteout,1 channel mixer,2 detail oriented)"),
+    s!("triangle_grid", [], [], "grid of triangles: style(0 squares,1 jittered mesh) count border variation x_amount y_amount random_position_multiplier quincunx_offset_x quincunx_offset_y triangulation(0 fixed,1 alternate,2 random) output(0 smooth,1 flat,2 edge distance) height_random thin_lines distance_to_edge_thickness thin_line_color thin_line_background seed contrast invert"),
+    s!("grunge_map", [], [], "grunge map 1-15: map balance contrast brush_pattern cracks disorder coverage seed invert"),
+    s!("weave_generator", [], [], "woven threads with gaps: tile_x tile_y weave shape gap_x gap_y contrast invert"),
+    s!("starburst", [], [], "star-like rays: count rays sharpness size rotation rotation_random seed contrast invert"),
+    s!("gradient_reflected", [], [], "gradient that goes 0-1-0: count angle contrast invert"),
+    s!("shape_stroke", ["in"], [], "outline of a shape: width offset softness threshold opacity color_r color_g color_b"),
+    s!("shape_glow", ["in"], [], "glow around a shape: width softness intensity threshold opacity spread color_r color_g color_b"),
+    s!("chrominance_extract", ["in"], [], "colour without brightness"),
+    s!("shape_drop_shadow", ["in"], [], "drop shadow of a mask: angle distance blur opacity spread"),
 ];
 
 pub fn spec(kind: &str) -> Option<&'static Spec> {
@@ -176,12 +192,12 @@ pub fn spec(kind: &str) -> Option<&'static Spec> {
 
 pub fn category(kind: &str) -> &'static str {
     match kind {
-        "color" | "white_noise" | "gaussian_noise" | "perlin" | "fbm" | "clouds" | "voronoi" | "bnw_spots" | "crystal" | "directional_noise" | "grunge" | "plasma"
+        "color" | "white_noise" | "gaussian_noise" | "perlin" | "fbm" | "clouds" | "voronoi" | "voronoi_fractal" | "bnw_spots" | "crystal" | "directional_noise" | "grunge" | "plasma"
         | "gradient" | "gradient_axial" | "gradient_circular" | "circle" | "rect" | "polygon" | "shape" | "star" | "checker" | "bricks" | "stripes" | "weave"
-        | "tile_sampler" | "tile_generator" | "splatter" | "splatter_circular" | "pixel_processor" | "cells" | "fractal_sum" | "waveform" | "gaussian_spots" => "Generators",
+        | "tile_sampler" | "tile_generator" | "splatter" | "splatter_circular" | "pixel_processor" | "cells" | "fractal_sum" | "waveform" | "gaussian_spots" | "triangle_grid" | "starburst" | "gradient_reflected" | "weave_generator" | "grunge_map" => "Generators",
         "sdf_shape" | "sdf_op" | "sdf_mask" | "sdf_form" => "SDF",
         "bitmap" | "input" | "subgraph" | "output" | "dot" => "Utility",
-        "normal" | "normal_blend" | "normal_invert" | "normal_normalize" | "normal_vector_rotation" | "normal_to_height" | "ao" | "curvature" | "curvature_smooth" | "height_blend" | "edge_wear" | "dirt" | "dust" => "Material",
+        "normal" | "normal_blend" | "normal_combine" | "normal_invert" | "normal_normalize" | "normal_vector_rotation" | "normal_to_height" | "ao" | "curvature" | "curvature_smooth" | "height_blend" | "edge_wear" | "dirt" | "dust" => "Material",
         _ => "Filters",
     }
 }
@@ -194,6 +210,7 @@ pub fn label(kind: &str) -> String {
         "bnw_spots" => "BnW Spots",
         "merge" => "RGBA Merge",
         "colorize" => "Gradient Map",
+        "voronoi_fractal" => "Voronoi Fractal",
         "color" => "Uniform Color",
         "hsl" => "HSL",
         "ao" => "Ambient Occlusion",
@@ -259,15 +276,16 @@ pub fn demo_graph_for(kind: &str) -> Option<String> {
     }
     let sp = spec(kind)?;
     let mut t = String::from(
-        "size 64\nnode 100 fbm scale=4 octaves=4 seed=2\nnode 101 gradient angle=0.1\nnode 102 sdf_shape shape=0 size=0.3\nnode 103 sdf_shape shape=1 size=0.25 x=0.15\nnode 104 voronoi scale=5 mode=2 seed=3\nnode 105 threshold in=@104 threshold=0.2\nnode 106 flood_fill in=@105\nnode 107 normal in=@100 strength=3\n",
+        "size 64\nnode 100 fbm scale=4 octaves=4 seed=2\nnode 101 gradient angle=0.1\nnode 102 sdf_shape shape=0 size=0.3\nnode 103 sdf_shape shape=1 size=0.25 x=0.15\nnode 104 voronoi scale=5 mode=2 seed=3\nnode 105 threshold in=@104 threshold=0.2\nnode 106 flood_fill in=@105\nnode 107 normal in=@100 strength=3\nnode 108 colorize in=@100 p0=0 r0=1 g0=0.2 b0=0.1 p1=1 r1=0.1 g1=0.4 b1=1\n",
     )
     .replace("\\n", "\n");
     let (a, b) = match kind {
         "sdf_op" | "sdf_mask" => (102, 103),
         "flood_fill" => (105, 105),
         k if k.starts_with("flood_fill_") => (106, 106),
-        "dust" | "curvature_smooth" | "normal_invert" | "normal_normalize" | "normal_vector_rotation" | "normal_to_height" => (107, 107),
+        "dust" | "curvature_smooth" | "normal_combine" | "normal_invert" | "normal_normalize" | "normal_vector_rotation" | "normal_to_height" => (107, 107),
         "vector_warp" => (100, 107),
+        "chrominance_extract" => (108, 108),
         _ => (100, 101),
     };
     let mut line = format!("node 1 {kind}");
@@ -414,7 +432,7 @@ pub const THUMB: usize = 96;
 pub struct EvalAll {
     pub thumbs: HashMap<u32, Vec<u8>>,
     pub errors: HashMap<u32, String>,
-    pub kept: HashMap<u32, Tex>,
+    pub kept: HashMap<u32, Arc<Tex>>,
     /// output size of every evaluated node (differs from the graph size when a node has its own Output Size)
     pub sizes: HashMap<u32, usize>,
 }
@@ -986,7 +1004,20 @@ impl Graph {
         r
     }
 
+    /// Editor evaluation: reuses every node result whose settings and inputs are unchanged (`cache` outlives the call),
+    /// evaluates `first` (the node shown in the 2D view) before anything else and hands it to `on_first` at once.
+    pub fn evaluate_all_cached(&self, size: usize, keep: &[u32], job: u64, cache: &Arc<NodeCache>, first: Option<u32>, on_first: &mut dyn FnMut(&Tex)) -> EvalAll {
+        crate::tex::set_job(job);
+        let r = self.evaluate_all_impl(size, keep, Some(cache.clone()), first, on_first);
+        crate::tex::set_job(0);
+        r
+    }
+
     pub fn evaluate_all(&self, size: usize, keep: &[u32]) -> EvalAll {
+        self.evaluate_all_impl(size, keep, None, None, &mut |_| {})
+    }
+
+    fn evaluate_all_impl(&self, size: usize, keep: &[u32], persist: Option<Arc<NodeCache>>, first: Option<u32>, on_first: &mut dyn FnMut(&Tex)) -> EvalAll {
         let mut r = EvalAll { thumbs: HashMap::new(), errors: HashMap::new(), kept: HashMap::new(), sizes: HashMap::new() };
         if size == 0 || size > 8192 {
             r.errors.insert(0, Error::BadSize(size).to_string());
@@ -1000,23 +1031,280 @@ impl Graph {
         // thumbnails are taken the moment a node finishes, so intermediate textures can be freed as soon as every
         // node that reads them is done (a big graph at 4K would not fit in memory otherwise)
         let mut cache = Cache::for_graph(self, keep, true);
-        for id in self.nodes.keys() {
-            match eval_node(self, *id, &ctx, &[], &mut cache) {
+        if let Some(p) = persist {
+            cache.hashes = hash_graph(self, &ctx);
+            cache.persist = Some(p);
+        }
+        // the 2D-view node first, then the outputs (3D view), then everything else (thumbnails)
+        let mut order: Vec<u32> = Vec::new();
+        order.extend(first.filter(|f| self.nodes.contains_key(f)));
+        order.extend(keep.iter().copied().filter(|k| self.nodes.contains_key(k)));
+        order.extend(self.nodes.keys().copied());
+        let mut seen = HashSet::new();
+        order.retain(|i| seen.insert(*i));
+        for id in order {
+            match eval_node(self, id, &ctx, &[], &mut cache) {
                 Ok(t) => {
-                    if keep.contains(id) {
-                        r.kept.insert(*id, (*t).clone());
+                    if Some(id) == first {
+                        on_first(&t);
+                    }
+                    if keep.contains(&id) {
+                        r.kept.insert(id, t.clone());
                     }
                 }
                 Err(Error::Cancelled) => break,
                 Err(e) => {
-                    r.errors.insert(*id, e.to_string());
+                    r.errors.insert(id, e.to_string());
                 }
             }
         }
         r.thumbs = cache.thumbs.take().unwrap_or_default();
         r.sizes = std::mem::take(&mut cache.sizes);
+        if let Some(p) = &cache.persist {
+            p.trim();
+        }
         r
     }
+}
+
+/// Node results kept between editor evaluations, found by a hash of everything a result depends on.
+/// Least recently used entries are dropped when the memory budget is exceeded.
+pub struct NodeCache {
+    inner: Mutex<NcInner>,
+    budget: usize,
+    hits: std::sync::atomic::AtomicUsize,
+    misses: std::sync::atomic::AtomicUsize,
+}
+
+struct NcInner {
+    map: HashMap<u64, NcEntry>,
+    bytes: usize,
+    tick: u64,
+}
+
+struct NcEntry {
+    data: NcData,
+    thumb: Vec<u8>,
+    size: usize,
+    stamp: u64,
+}
+
+/// Grayscale textures (most of a typical graph) are stored with one channel: a quarter of the memory.
+enum NcData {
+    Gray(usize, usize, Vec<f32>),
+    Rgba(Arc<Tex>),
+}
+
+impl NcData {
+    fn pack(t: &Arc<Tex>) -> NcData {
+        if t.px.iter().all(|p| p[0] == p[1] && p[1] == p[2] && p[3] == 1.0) {
+            NcData::Gray(t.w, t.h, t.px.iter().map(|p| p[0]).collect())
+        } else {
+            NcData::Rgba(t.clone())
+        }
+    }
+    fn unpack(&self) -> Arc<Tex> {
+        match self {
+            NcData::Gray(w, h, v) => {
+                let mut px = vec![[0.0f32, 0.0, 0.0, 1.0]; v.len()];
+                let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).max(1);
+                let per = (v.len() / n).max(1 << 16);
+                std::thread::scope(|sc| {
+                    for (dst, src) in px.chunks_mut(per).zip(v.chunks(per)) {
+                        sc.spawn(move || {
+                            for (d, s) in dst.iter_mut().zip(src) {
+                                *d = [*s, *s, *s, 1.0];
+                            }
+                        });
+                    }
+                });
+                Arc::new(Tex { w: *w, h: *h, px })
+            }
+            NcData::Rgba(t) => t.clone(),
+        }
+    }
+    fn bytes(&self) -> usize {
+        match self {
+            NcData::Gray(_, _, v) => v.len() * 4,
+            NcData::Rgba(t) => t.px.len() * 16,
+        }
+    }
+}
+
+impl NodeCache {
+    pub fn new(budget_mb: usize) -> NodeCache {
+        NodeCache { inner: Mutex::new(NcInner { map: HashMap::new(), bytes: 0, tick: 0 }), budget: budget_mb.max(16) << 20, hits: Default::default(), misses: Default::default() }
+    }
+
+    /// Budget from the MC_CACHE_MB environment variable (default 3 GB).
+    pub fn with_default_budget() -> NodeCache {
+        let mb = std::env::var("MC_CACHE_MB").ok().and_then(|s| s.parse().ok()).unwrap_or(3072);
+        NodeCache::new(mb)
+    }
+
+    fn get(&self, h: u64) -> Option<(Arc<Tex>, Vec<u8>, usize)> {
+        let mut g = self.inner.lock().ok()?;
+        g.tick += 1;
+        let tick = g.tick;
+        use std::sync::atomic::Ordering::Relaxed;
+        match g.map.get_mut(&h) {
+            Some(e) => {
+                e.stamp = tick;
+                self.hits.fetch_add(1, Relaxed);
+                Some((e.data.unpack(), e.thumb.clone(), e.size))
+            }
+            None => {
+                self.misses.fetch_add(1, Relaxed);
+                None
+            }
+        }
+    }
+
+    fn put(&self, h: u64, tex: Arc<Tex>, thumb: Vec<u8>, size: usize) {
+        if let Ok(mut g) = self.inner.lock() {
+            g.tick += 1;
+            let tick = g.tick;
+            let data = NcData::pack(&tex);
+            let bytes = data.bytes();
+            if let Some(old) = g.map.insert(h, NcEntry { data, thumb, size, stamp: tick }) {
+                g.bytes -= old.data.bytes();
+            }
+            g.bytes += bytes;
+        }
+    }
+
+    fn trim(&self) {
+        if let Ok(mut g) = self.inner.lock() {
+            while g.bytes > self.budget && g.map.len() > 1 {
+                let oldest = g.map.iter().min_by_key(|(_, e)| e.stamp).map(|(k, _)| *k);
+                match oldest {
+                    Some(k) => {
+                        if let Some(e) = g.map.remove(&k) {
+                            g.bytes -= e.data.bytes();
+                        }
+                    }
+                    None => break,
+                }
+            }
+        }
+    }
+
+    /// (reused, recomputed) node counts since the cache was created.
+    pub fn stats(&self) -> (usize, usize) {
+        use std::sync::atomic::Ordering::Relaxed;
+        (self.hits.load(Relaxed), self.misses.load(Relaxed))
+    }
+
+    pub fn clear(&self) {
+        if let Ok(mut g) = self.inner.lock() {
+            g.map.clear();
+            g.bytes = 0;
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.lock().map(|g| g.map.len()).unwrap_or(0)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn bytes(&self) -> usize {
+        self.inner.lock().map(|g| g.bytes).unwrap_or(0)
+    }
+}
+
+struct Fnv(u64);
+
+impl Fnv {
+    fn new() -> Fnv {
+        Fnv(0xcbf29ce484222325)
+    }
+    fn bytes(&mut self, b: &[u8]) {
+        for x in b {
+            self.0 = (self.0 ^ *x as u64).wrapping_mul(0x100000001b3);
+        }
+    }
+    fn u64(&mut self, v: u64) {
+        self.bytes(&v.to_le_bytes());
+    }
+    fn str(&mut self, s: &str) {
+        self.u64(s.len() as u64);
+        self.bytes(s.as_bytes());
+    }
+}
+
+/// Hash of every node (and named subgraph output) of the graph: kind, settings, evaluation context and the hashes of
+/// its inputs. Two nodes with the same hash always produce the same texture.
+fn hash_graph(g: &Graph, ctx: &Ctx) -> HashMap<u32, u64> {
+    let mut env = Fnv::new();
+    for (k, sub) in ctx.lib {
+        env.str(k);
+        env.str(&sub.to_text());
+    }
+    for (k, v) in ctx.res {
+        env.str(k);
+        env.u64(v.len() as u64);
+        let mut f = Fnv::new();
+        f.bytes(v);
+        env.u64(f.0);
+    }
+    let mut memo: HashMap<u32, u64> = HashMap::new();
+    fn go(g: &Graph, id: u32, out: Option<&str>, ctx: &Ctx, env: u64, memo: &mut HashMap<u32, u64>, depth: u32) -> u64 {
+        let key = cache_key(g, id, out);
+        if let Some(h) = memo.get(&key) {
+            return *h;
+        }
+        let Some(n) = g.nodes.get(&id) else { return 0 };
+        let mut h = Fnv::new();
+        h.u64(env);
+        h.u64(ctx.size as u64);
+        h.u64(ctx.nominal as u64);
+        h.u64(ctx.so as u64);
+        h.str(&n.kind);
+        if key != id {
+            h.str(out.unwrap_or(""));
+        }
+        for (k, v) in &n.nums {
+            h.str(k);
+            h.u64(v.to_bits() as u64);
+        }
+        for (k, v) in &n.strs {
+            h.str(k);
+            h.str(v);
+        }
+        if n.kind == "bitmap" {
+            // a file on disk can change under us: its size and modification time are part of the identity
+            if let Some(f) = n.strs.get("file") {
+                if !ctx.res.contains_key(f) {
+                    if let Ok(m) = std::fs::metadata(f).or_else(|_| std::fs::metadata(f.replace('\\', "/"))) {
+                        h.u64(m.len());
+                        h.u64(m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos() as u64).unwrap_or(0));
+                    }
+                }
+            }
+        }
+        if depth < 512 {
+            for (slot, rid) in &n.ins {
+                let want = n.in_out.get(slot).map(|s| s.as_str());
+                h.str(slot);
+                h.str(want.unwrap_or(""));
+                h.u64(go(g, *rid, want, ctx, env, memo, depth + 1));
+            }
+        }
+        memo.insert(key, h.0);
+        h.0
+    }
+    for (id, n) in &g.nodes {
+        go(g, *id, None, ctx, env.0, &mut memo, 0);
+        for (slot, rid) in &n.ins {
+            if let Some(w) = n.in_out.get(slot) {
+                go(g, *rid, Some(w), ctx, env.0, &mut memo, 0);
+            }
+        }
+    }
+    memo
 }
 
 fn eval_node(g: &Graph, id: u32, ctx: &Ctx, ext: &[Option<Rc<Tex>>], cache: &mut Cache) -> Result<Rc<Tex>, Error> {
@@ -1068,6 +1356,19 @@ fn eval_node_out(g: &Graph, id: u32, out: Option<&str>, ctx: &Ctx, ext: &[Option
     if cancelled() {
         return Err(Error::Cancelled);
     }
+    let phash = cache.hashes.get(&key).copied();
+    if let (Some(p), Some(h)) = (&cache.persist, phash) {
+        if let Some((t, th, sz)) = p.get(h) {
+            cache.map.insert(key, t.clone());
+            if key == id {
+                cache.sizes.insert(id, sz);
+                if let Some(tm) = cache.thumbs.as_mut() {
+                    tm.insert(id, th);
+                }
+            }
+            return Ok(t);
+        }
+    }
     let n = g.nodes.get(&id).ok_or(Error::MissingNode(0, id))?;
     let mut ins: BTreeMap<String, Rc<Tex>> = BTreeMap::new();
     for (slot, rid) in &n.ins {
@@ -1109,15 +1410,23 @@ fn eval_node_out(g: &Graph, id: u32, out: Option<&str>, ctx: &Ctx, ext: &[Option
             r
         }
     };
+    // a superseded evaluation can leave a half-finished texture behind: never keep or show it
+    if cancelled() {
+        return Err(Error::Cancelled);
+    }
     let t = if t.w != sz || t.h != sz { ops::resize(&t, sz) } else { t };
     let rc = Rc::new(t);
     cache.map.insert(key, rc.clone());
     if key == id {
         cache.sizes.insert(id, sz);
     }
+    let thumb = if key == id && (cache.thumbs.is_some() || cache.persist.is_some()) { thumbnail(&rc) } else { Vec::new() };
+    if let (Some(p), Some(h)) = (&cache.persist, phash) {
+        p.put(h, rc.clone(), thumb.clone(), sz);
+    }
     if key == id {
         if let Some(th) = cache.thumbs.as_mut() {
-            th.insert(id, thumbnail(&rc));
+            th.insert(id, thumb);
         }
     }
     // free inputs nobody else is waiting for
@@ -1142,11 +1451,14 @@ struct Cache {
     /// thumbnails taken while evaluating (editor preview)
     thumbs: Option<HashMap<u32, Vec<u8>>>,
     sizes: HashMap<u32, usize>,
+    /// results that outlive one evaluation (editor): a node whose settings and inputs did not change is not recomputed
+    persist: Option<Arc<NodeCache>>,
+    hashes: HashMap<u32, u64>,
 }
 
 impl Cache {
     fn plain() -> Cache {
-        Cache { map: HashMap::new(), left: HashMap::new(), keep: HashSet::new(), thumbs: None, sizes: HashMap::new() }
+        Cache { map: HashMap::new(), left: HashMap::new(), keep: HashSet::new(), thumbs: None, sizes: HashMap::new(), persist: None, hashes: HashMap::new() }
     }
 
     fn for_graph(g: &Graph, keep: &[u32], thumbs: bool) -> Cache {
@@ -1229,19 +1541,17 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         ins.get(slot).map(|r| r.as_ref()).ok_or_else(|| Error::MissingInput(id, slot.to_string()))
     };
     let seed = (f("seed", 0.0).max(0.0) as u32).wrapping_add(ctx.so);
+    // Tile offset: the whole part picks another tile of the infinite noise plane, the fraction pans the result
+    let (tx, ty) = (f("tile_x", 0.0), f("tile_y", 0.0));
+    let seed = if tx.floor() != 0.0 || ty.floor() != 0.0 { noise::tile_seed(seed, tx.floor() as i32, ty.floor() as i32) } else { seed };
     let per = |k: &str, d: f32| f(k, d).round().clamp(1.0, 4096.0) as i32;
     let s = ctx.size;
     let rs = s as f32 / 512.0;
     // one pixel in uv units: hard edges are softened by at least this much, so they are anti-aliased at any resolution
     let px1 = 1.2 / s as f32;
     let (dis, con, inv) = (f("disorder", 0.0), f("contrast", 1.0), f("invert", 0.0) > 0.5);
-    let warp = move |u: f32, v: f32| -> (f32, f32) {
-        if dis <= 0.0 {
-            (u, v)
-        } else {
-            (u + (noise::perlin(u, v, 3, 3, seed.wrapping_add(101)) - 0.5) * dis * 0.3, v + (noise::perlin(u, v, 3, 3, seed.wrapping_add(202)) - 0.5) * dis * 0.3)
-        }
-    };
+    let dz = noise::Disorder::new(seed, dis, f("disorder_speed", 1.0), f("anisotropy", 0.0), f("anisotropy_angle", 0.0));
+    let warp = move |u: f32, v: f32| -> (f32, f32) { dz.warp(u, v) };
     let fin = |t: Tex| -> Tex {
         if (con - 1.0).abs() > 1e-4 || inv {
             ops::contrast_invert(&t, con, inv)
@@ -1263,11 +1573,28 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             None => Tex::solid(s, s, output_default(n.strs.get("usage").map(String::as_str).unwrap_or("basecolor"))),
         },
         "dot" => tex("in")?.clone(),
-        "white_noise" => Tex::gray_fn(s, s, |u, v| noise::rnd((u * s as f32) as i32, (v * s as f32) as i32, seed)),
+        "white_noise" => {
+            // Noise distribution: 0 uniform, 1 gaussian (bell curve), 2 triangle
+            let dist = f("distribution", 0.0).round() as u32;
+            Tex::gray_fn(s, s, move |u, v| {
+                let (x, y) = ((u * s as f32) as i32, (v * s as f32) as i32);
+                match dist {
+                    1 => {
+                        // mean of four uniforms: a bell curve around 0.5 (std about 0.14)
+                        let sum: f32 = (0..4).map(|i| noise::rnd(x, y, seed.wrapping_add(i * 17))).sum();
+                        sum / 4.0
+                    }
+                    2 => (noise::rnd(x, y, seed) + noise::rnd(x, y, seed.wrapping_add(17))) * 0.5,
+                    _ => noise::rnd(x, y, seed),
+                }
+            })
+        }
         "gaussian_noise" => {
             let k = f("scale", 1.0).round().max(1.0) as i32;
             fin(Tex::gray_fn(s, s, move |u, v| {
-                let (x, y) = ((u * s as f32) as i32 / k, (v * s as f32) as i32 / k);
+                // displaced positions wrap around so the noise still tiles
+                let (a, b) = warp(u, v);
+                let (x, y) = (((a * s as f32).floor() as i32).rem_euclid(s as i32) / k, ((b * s as f32).floor() as i32).rem_euclid(s as i32) / k);
                 let sum: f32 = (0..4).map(|i| noise::rnd(x, y, seed.wrapping_add(i * 17))).sum();
                 ((sum / 4.0 - 0.5) * 3.46 + 0.5).clamp(0.0, 1.0)
             }))
@@ -1283,9 +1610,10 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             let cl = n.kind == "clouds";
             let (px, py) = (per("scale_x", f("scale", if cl { 3.0 } else { 4.0 })), per("scale_y", f("scale", if cl { 3.0 } else { 4.0 })));
             let (oct, gain, mode) = (f("octaves", if cl { 6.0 } else { 5.0 }).max(1.0) as u32, f("gain", if cl { 0.6 } else { 0.5 }), f("mode", 0.0).max(0.0) as u32);
+            let kernel = noise::Fbm::new(px, py, oct, gain, seed, mode);
             fin(Tex::gray_fn(s, s, move |u, v| {
                 let (a, b) = warp(u, v);
-                noise::fbm(a, b, px, py, oct, gain, seed, mode)
+                kernel.sample(a, b)
             }))
         }
         "bnw_spots" => {
@@ -1322,7 +1650,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             let (sa, ca) = (ang * std::f32::consts::TAU).sin_cos();
             // a streak never needs to be longer than one tile (longer would wrap and average the noise away)
             let len1 = (st / p1 as f32).min(1.0);
-            let k = ((st * 5.0).ceil() as usize).clamp(8, 160) | 1;
+            let k = ((st * 2.5).ceil() as usize).clamp(8, 96) | 1;
             let taps: Vec<(f32, f32)> = (0..k)
                 .map(|i| {
                     let t = ((i as f32 + 0.5) / k as f32) * 2.0 - 1.0;
@@ -1333,6 +1661,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             let gain = 1.6 * st.min(p1 as f32).powf(0.55); // restores the contrast lost by averaging (calibrated)
             let (g1, g2) = (noise::GradGrid::new(p1, p1, seed), noise::GradGrid::new(p1 * 2, p1 * 2, seed.wrapping_add(7)));
             fin(Tex::gray_fn(s, s, move |u, v| {
+                let (u, v) = warp(u, v);
                 let (mut a1, mut a2) = (0.0f32, 0.0f32);
                 for &(t, w) in &taps {
                     let (o1, o2) = (t * len1 * 0.5, t * len1 * 0.25);
@@ -1345,28 +1674,68 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         }
         "grunge" => {
             let var = f("variant", 0.0) as u32;
+            let balance = f("balance", 0.5).clamp(0.0, 1.0);
+            // concrete
+            let (large, noisy) = (f("large_variation", 0.55), f("base_noisiness", 0.45));
+            let (specks, scr_op, sharpen) = (f("dirt_specks_opacity", 0.0).clamp(0.0, 1.0), f("scratches_opacity", 0.0).clamp(0.0, 1.0), f("sharpen", 0.0).clamp(0.0, 1.0));
+            let invert_dirt = f("invert_dirt", 0.0) > 0.5;
+            // scratches
+            let (quant, width, length) = (per("quantity", 3.0).min(32), f("scratch_width", 0.4).clamp(0.05, 0.95), f("scratch_length", 0.45).clamp(0.0, 0.9));
+            // spots
+            let (details, cover, cover_c) = (per("details", 22.0).min(128), f("coverage", 0.35).clamp(0.0, 0.9), f("coverage_contrast", 0.25).clamp(0.02, 1.0));
             fin(Tex::gray_fn(s, s, move |u, v| {
                 let (a, b) = warp(u, v);
-                match var {
+                let val = match var {
                     0 => {
-                        let n = noise::fbm(a, b, 8, 8, 6, 0.55, seed, 0) * 0.55 + noise::fbm(a, b, 40, 40, 3, 0.5, seed.wrapping_add(1), 0) * 0.45;
-                        ((n - 0.35) * 2.2).clamp(0.0, 1.0)
+                        let n = noise::fbm(a, b, 8, 8, 6, 0.55, seed, 0) * large + noise::fbm(a, b, 40, 40, 3, 0.5, seed.wrapping_add(1), 0) * noisy;
+                        let mut c = ((n - 0.35) * 2.2).clamp(0.0, 1.0);
+                        if specks > 0.0 {
+                            let sp = noise::spots(a, b, 64, 64, seed.wrapping_add(11), |id| (0.1, 0.18 + id * 0.2), 0.0);
+                            c = if invert_dirt { c + (1.0 - c) * sp * specks } else { c * (1.0 - sp * specks) };
+                        }
+                        if scr_op > 0.0 {
+                            let line = noise::perlin(a * 3.0 % 1.0, b, 3, 160, seed.wrapping_add(13));
+                            c = (c + smooth(0.62, 0.7, line) * scr_op).clamp(0.0, 1.0);
+                        }
+                        if sharpen > 0.0 {
+                            c += (smooth(0.0, 1.0, c) - c) * sharpen;
+                        }
+                        c
                     }
                     1 => {
-                        let line = noise::perlin(a * 3.0 % 1.0, b, 3, 90, seed);
+                        let q = quant as f32;
+                        let line = noise::perlin(a * q % 1.0, b, quant, 90, seed);
                         let m = noise::fbm(a, b, 5, 5, 4, 0.5, seed.wrapping_add(3), 0);
-                        smooth(0.6, 0.7, line) * smooth(0.45, 0.6, m)
+                        smooth(1.0 - width, 1.1 - width, line) * smooth(length, length + 0.15, m)
                     }
                     2 => {
                         let m = noise::fbm(a, b, 6, 6, 4, 0.5, seed.wrapping_add(4), 0);
-                        noise::spots(a, b, 22, 22, seed, |id| (0.12, 0.2 + id * 0.3), 0.0) * smooth(0.35, 0.6, m)
+                        noise::spots(a, b, details, details, seed, |id| (0.12, 0.2 + id * 0.3), 0.0) * smooth(cover, cover + cover_c, m)
                     }
                     _ => {
                         let n = noise::fbm(a, b, 3, 3, 5, 0.6, seed, 2);
                         smooth(0.2, 0.8, n)
                     }
-                }
+                };
+                (val + (balance - 0.5)).clamp(0.0, 1.0)
             }))
+        }
+        "grunge_map" => {
+            let gp = grunge::GrungeP {
+                map: per("map", 1.0).clamp(1, 15) as u32,
+                seed,
+                balance: f("balance", 0.5).clamp(0.0, 1.0),
+                contrast: f("contrast", 0.5).clamp(0.0, 1.0),
+                brush: f("brush_pattern", 0.0).clamp(0.0, 1.0),
+                cracks: f("cracks", 0.5).clamp(0.0, 1.0),
+                disorder: f("disorder", 0.0).clamp(0.0, 1.0),
+            };
+            let t0 = f("coverage", grunge::T0[(gp.map - 1) as usize]);
+            let inv = f("invert", 0.0) > 0.5;
+            Tex::gray_fn(s, s, move |u, v| {
+                let x = grunge::grunge_map(&gp, u, v, t0);
+                if inv { 1.0 - x } else { x }
+            })
         }
         "plasma" => {
             let sc = f("scale", 3.0).round().max(1.0);
@@ -1436,17 +1805,42 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
                 0.5 + (a - 0.5) * w
             })
         }
-        "voronoi" => {
-            let (p, j, mode) = (per("scale", 6.0), f("jitter", 1.0).clamp(0.0, 1.0), f("mode", 0.0) as u32);
-            Tex::gray_fn(s, s, move |u, v| {
-                let (a, b, c) = noise::voronoi(u, v, p, p, seed, j);
-                match mode {
-                    1 => c,
-                    2 => ((b - a) * 4.0).clamp(0.0, 1.0),
-                    3 => b,
-                    _ => a,
+        "voronoi" | "voronoi_fractal" => {
+            let fractal = n.kind == "voronoi_fractal";
+            let (p, j, style) = (per("scale", 6.0), f("jitter", 1.0).clamp(0.0, 1.0), f("mode", 0.0) as u32);
+            let aspect = f("aspect", 1.0).clamp(0.25, 4.0);
+            let (ox, oy) = (f("offset_x", 0.0), f("offset_y", 0.0));
+            let (dist, dscale) = (f("distortion", 0.0).clamp(0.0, 2.0), per("distortion_scale", 3.0));
+            let metric = noise::Metric::from_index(f("distance_mode", 0.0) as u32, f("minkowski", 2.0));
+            let (thick, round, dsc) = (f("edge_thickness", 0.25), f("rounded", 0.0), f("distance_scale", 1.0).clamp(0.0, 8.0));
+            let id_seed = if f("color_seed_mode", 0.0) > 0.5 { f("color_seed", 0.0) as u32 } else { seed };
+            let (lo, hi) = (f("min_level", 0.0).clamp(0.0, 8.0) as u32, f("max_level", 3.0).clamp(0.0, 8.0) as u32);
+            let (rough, lac, opac, blend) = (f("roughness", 0.5).clamp(0.0, 1.5), f("lacunarity", 2.0).clamp(1.0, 4.0), f("opacity", 1.0).clamp(0.0, 1.0), f("blend", 0.0) as u32);
+            let hi = hi.max(lo);
+            let one = move |u: f32, v: f32, px: i32, sd: u32| -> f32 {
+                let py = ((px as f32 * aspect).round().max(1.0)) as i32;
+                let (u, v) = (u + ox, v + oy);
+                let (u, v) = if dist > 0.0 { (u + (noise::perlin(u, v, dscale, dscale, seed.wrapping_add(5)) - 0.5) * dist * 0.3, v + (noise::perlin(u, v, dscale, dscale, seed.wrapping_add(6)) - 0.5) * dist * 0.3) } else { (u, v) };
+                let r = noise::voronoi_gen(u, v, px, py, sd, id_seed.wrapping_add(sd.wrapping_sub(seed)), j, metric);
+                (noise::voronoi_style(&r, style, thick, round) * dsc).clamp(0.0, 1.0)
+            };
+            let levels: Vec<(i32, f32)> = if fractal { (lo..=hi).map(|l| (((p as f32) * lac.powi(l as i32)).round().clamp(1.0, 512.0) as i32, rough.powi((l - lo) as i32))).collect() } else { vec![(p, 1.0)] };
+            let norm: f32 = levels.iter().map(|l| l.1).sum::<f32>().max(1e-6);
+            fin(Tex::gray_fn(s, s, move |u, v| {
+                if !fractal {
+                    return one(u, v, p, seed);
                 }
-            })
+                let mut acc: f32 = if blend == 2 { 1.0 } else { 0.0 };
+                for (i, (px, amp)) in levels.iter().enumerate() {
+                    let val = one(u, v, *px, seed.wrapping_add(i as u32 * 131));
+                    match blend {
+                        1 => acc = acc.max(val * if i == 0 { 1.0 } else { opac }),
+                        2 => acc = acc.min(1.0 - (1.0 - val) * if i == 0 { 1.0 } else { opac }),
+                        _ => acc += amp * val * if i == 0 { 1.0 } else { opac },
+                    }
+                }
+                if blend == 0 { acc / norm } else { acc }.clamp(0.0, 1.0)
+            }))
         }
         "gradient" => {
             let (mode, (sa, ca)) = (f("mode", 0.0) as u32, (f("angle", 0.0) * std::f32::consts::TAU).sin_cos());
@@ -1505,36 +1899,120 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         }
         "tile_sampler" | "tile_generator" => {
             let gen = n.kind == "tile_generator";
-            let p = ops::TileP {
-                nx: f("x_amount", if gen { 6.0 } else { 8.0 }),
-                ny: f("y_amount", if gen { 6.0 } else { 8.0 }),
-                size: f("size", if gen { 0.92 } else { 0.8 }),
-                size_rand: f("size_random", 0.0),
-                rot: f("rotation", 0.0),
-                rot_rand: f("rotation_random", 0.0),
-                pos_rand: f("position_random", 0.0),
-                color: f("color", 1.0),
-                color_rand: f("color_random", 0.0),
-                offset: f("offset", 0.5),
-                seed,
-                thresh: f("mask_threshold", 0.5),
-                default_disc: !gen,
-                brick: gen,
-            };
-            ops::tile_grid(s, s, ins.get("pattern").map(|p| p.as_ref()), ins.get("mask").map(|m| m.as_ref()), &p)
+            let mut p = scatter::TileP::legacy(gen);
+            p.nx = f("x_amount", p.nx);
+            p.ny = f("y_amount", p.ny);
+            p.size = f("size", p.size);
+            p.aspect = f("aspect", 1.0);
+            p.size_mode = f("size_mode", 0.0) as u32;
+            p.scale = f("scale", 1.0);
+            p.scale_rand = f("scale_random", 0.0);
+            p.scale_seed = f("scale_seed", 0.0) as u32;
+            p.size_rand = f("size_random", 0.0);
+            p.rot = f("rotation", 0.0);
+            p.rot_rand = f("rotation_random", 0.0);
+            p.pattern_rot90 = f("pattern_rotation", 0.0) as u32;
+            p.symmetry_random = f("symmetry_random", 0.0) as u32;
+            p.pos_rand = f("position_random", 0.0);
+            p.pos_rand_x = f("position_random_x", 1.0);
+            p.pos_rand_y = f("position_random_y", 1.0);
+            p.color = f("color", 1.0);
+            p.color_rand = f("color_random", 0.0);
+            p.lum_by_number = f("lum_by_number", 0.0);
+            p.lum_by_scale = f("lum_by_scale", 0.0);
+            p.offset = f("offset", 0.5);
+            p.offset_mode = f("offset_mode", p.offset_mode as f32) as u32;
+            p.offset_rand = f("offset_random", 0.0);
+            p.offset_seed = f("offset_seed", 0.0) as u32;
+            p.global_offset = [f("global_offset_x", 0.0), f("global_offset_y", 0.0)];
+            p.seed = seed;
+            p.thresh = f("mask_threshold", 0.5);
+            p.mask_invert = f("mask_invert", 0.0) > 0.5;
+            p.mask_random = f("mask_random", 0.0);
+            p.mask_checker = f("mask_checker", 0.0) as u32;
+            p.mask_h = f("mask_horizontal", 0.0) > 0.5;
+            p.mask_v = f("mask_vertical", 0.0) > 0.5;
+            p.invert_mask = f("invert_mask", 0.0) > 0.5;
+            p.scale_map_mult = f("scale_map_multiplier", 1.0);
+            p.rotation_map_mult = f("rotation_map_multiplier", 1.0);
+            p.displacement_intensity = f("displacement_intensity", 0.5);
+            p.displacement_angle = f("displacement_angle", 0.0);
+            p.color_map_mult = f("color_map_multiplier", 1.0);
+            p.pattern_specific = f("pattern_specific", 0.5);
+            p.pattern_specific_rand = f("pattern_specific_random", 0.0);
+            p.blend = scatter::Blend::from_index(f("blending", 0.0) as u32);
+            p.opacity = f("opacity", 1.0);
+            p.background = f("background", 0.0);
+            p.reverse = f("reverse_order", 0.0) > 0.5;
+            let pats = scatter_patterns(ins, f("pattern_type", 0.0) as u32, if gen { 1 } else { 2 }, f("pattern_distribution", 0.0) as u32);
+            let g = |k: &str| ins.get(k).map(|t| t.as_ref());
+            let maps = scatter::TileMaps { mask: g("mask"), scale: g("scale_map"), rotation: g("rotation_map"), displacement: g("displacement_map"), color: g("color_map"), distribution: g("distribution_map"), background: g("background") };
+            scatter::tile_grid(s, s, &pats, &maps, &p)
         }
-        "splatter" => ops::splatter(
-            s,
-            s,
-            ins.get("pattern").map(|p| p.as_ref()),
-            f("count", 40.0).max(0.0) as u32,
-            f("scale", 0.1),
-            f("scale_var", 0.3),
-            f("rot_var", 1.0),
-            f("lum_var", 0.0),
-            seed,
-        ),
-        "splatter_circular" => ops::splatter_circular(s, s, ins.get("pattern").map(|p| p.as_ref()), f("number", 12.0).max(1.0) as u32, f("radius", 0.3), f("size", 0.1), f("size_random", 0.0), f("rotation", 0.0), f("rotation_random", 0.0), f("position_random", 0.0), seed),
+        "splatter" => {
+            let mut p = scatter::SplatterP::legacy();
+            p.count = f("count", 40.0).max(0.0) as u32;
+            p.grid = f("grid_number", 0.0).max(0.0) as u32;
+            p.scale = f("scale", 0.1);
+            p.scale_var = f("scale_var", 0.3);
+            p.aspect = f("aspect", 1.0);
+            p.rot = f("rotation", 0.0);
+            p.rot_var = f("rot_var", 1.0);
+            p.pattern_rot90 = f("pattern_rotation", 0.0) as u32;
+            p.lum_var = f("lum_var", 0.0);
+            p.disorder = f("disorder", 1.0);
+            p.pan = [f("pan_x", 0.0), f("pan_y", 0.0)];
+            p.symmetry_random = f("symmetry_random", 0.0) as u32;
+            p.pattern_specific = f("pattern_specific", 0.5);
+            p.gain = f("gain", 1.0);
+            p.out_min = f("output_min", 0.0);
+            p.out_max = f("output_max", 1.0);
+            p.background = f("background", 0.0);
+            p.blend = scatter::Blend::from_index(f("blending", 0.0) as u32);
+            p.opacity = f("opacity", 1.0);
+            p.seed = seed;
+            let pats = scatter_patterns(ins, f("pattern_type", 0.0) as u32, 99, f("pattern_distribution", 0.0) as u32);
+            scatter::splatter(s, s, &pats, &p)
+        }
+        "splatter_circular" => {
+            let mut p = scatter::CircularP::legacy();
+            p.amount = f("number", 12.0).max(1.0) as u32;
+            p.amount_rand = f("amount_random", 0.0);
+            p.amount_rand_min = f("amount_random_min", 1.0).max(1.0) as u32;
+            p.rings = f("rings", 1.0).max(1.0) as u32;
+            p.radius = f("radius", 0.3);
+            p.radius_rand = f("radius_random", 0.0);
+            p.ring_mult = f("ring_radius_multiplier", 0.5);
+            p.angle_rand = f("angle_random", 0.0);
+            p.spiral = f("spiral_factor", 0.0);
+            p.spread = f("spread", 1.0);
+            p.size = f("size", 0.1);
+            p.size_rand = f("size_random", 0.0);
+            p.scale_by_number = f("scale_by_number", 0.0);
+            p.invert_number = f("invert_number", 0.0) > 0.5;
+            p.scale_by_ring = f("scale_by_ring", 0.0);
+            p.invert_ring = f("invert_ring", 0.0) > 0.5;
+            p.rot = f("rotation", 0.0);
+            p.rot_rand = f("rotation_random", 0.0);
+            p.center_orientation = f("center_orientation", 0.0);
+            p.ring_rot = f("ring_rotation", 0.0);
+            p.ring_rot_rand = f("ring_rotation_random", 0.0);
+            p.ring_rot_offset = f("ring_rotation_offset", 0.0);
+            p.pos_rand = f("position_random", 0.0);
+            p.symmetry_random = f("symmetry_random", 0.0) as u32;
+            p.pattern_specific = f("pattern_specific", 0.5);
+            p.color = f("color", 1.0);
+            p.lum_rand = f("luminance_random", 0.0);
+            p.lum_by_number = f("lum_by_number", 0.0);
+            p.lum_by_ring = f("lum_by_ring", 0.0);
+            p.mask_random = f("mask_random", 0.0);
+            p.background = f("background", 0.0);
+            p.blend = scatter::Blend::from_index(f("blending", 0.0) as u32);
+            p.opacity = f("opacity", 1.0);
+            p.seed = seed;
+            let pats = scatter_patterns(ins, f("pattern_type", 0.0) as u32, 2, f("pattern_distribution", 0.0) as u32);
+            scatter::splatter_circular(s, s, &pats, &p)
+        }
         "switch" => {
             let order = ["a", "b", "c", "d"];
             let idx = f("index", 0.0).max(0.0) as usize;
@@ -1547,7 +2025,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         "flood_fill_random" => ops::flood_fill_random(tex("in")?, seed, f("min", 0.0), f("max", 1.0)),
         "flood_fill_color" => ops::flood_fill_color(tex("in")?, seed),
         "flood_fill_gradient" => ops::flood_fill_gradient(tex("in")?, f("angle", 0.0), f("variation", 0.0), seed),
-        "vector_warp" => ops::vector_warp(tex("in")?, tex("vector")?, f("intensity", 0.05)),
+        "vector_warp" => ops::vector_warp_ex(tex("in")?, tex("vector")?, f("intensity", 0.05), f("directx", 0.0) > 0.5),
         "slope_blur" => ops::slope_blur(tex("in")?, tex("slope")?, f("samples", 16.0) as u32, f("intensity", 0.1), f("mode", 0.0) as u32),
         "blur_hq" => {
             let q = f("quality", 1.0).round().clamp(1.0, 4.0) as u32;
@@ -1570,25 +2048,51 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             })
         }
         "bevel" => {
-            let b = ops::bevel(tex("in")?, f("distance", 0.05) * s as f32, f("smoothing", 0.5), f("threshold", 0.5));
+            let b = ops::bevel_ex(tex("in")?, f("distance", 0.05) * s as f32, f("smoothing", 0.5), f("threshold", 0.5), f("corner", 1.0) < 0.5);
             if f("use_as_normal", 0.0) > 0.5 {
-                ops::normal_from_height(&b, f("normal_intensity", 4.0), false)
+                ops::normal_from_height(&b, f("normal_intensity", 4.0), f("directx", 0.0) > 0.5)
             } else {
                 b
             }
         }
         "distance" => ops::distance(tex("in")?, f("distance", 0.1) * s as f32, f("threshold", 0.5), f("mode", 0.0) as u32),
-        "color_match" => ops::color_match(tex("in")?, tex("reference")?, f("strength", 1.0)),
+        "color_match" if f("method", 0.0) < 0.5 => ops::color_match(tex("in")?, ins.get("reference").map(|r| r.as_ref()).unwrap_or(tex("in")?), f("strength", 1.0)),
+        "color_match" => {
+            let src = tex("in")?;
+            let rgb = |name: &str, d: f32| [f(&format!("{name}_r"), d), f(&format!("{name}_g"), d), f(&format!("{name}_b"), d)];
+            let source = match f("source_mode", 0.0).round() as i32 {
+                1 => rgb("src", 0.5),
+                2 => ops::mean_rgb(tex("src_color")?),
+                _ => ops::mean_rgb(src),
+            };
+            let target = if f("target_mode", 0.0) > 0.5 { ops::mean_rgb(tex("target_color")?) } else { rgb("target", 0.5) };
+            let var = f("custom_variation", 0.0) > 0.5;
+            let sw = ops::ColorSwap {
+                source,
+                target,
+                hue_shift: if var { f("variation_hue", 0.0) / 360.0 } else { 0.0 },
+                chroma_mul: if var { f("variation_chroma", 1.0).max(0.0) } else { 1.0 },
+                luma_mul: if var { f("variation_luma", 1.0).max(0.0) } else { 1.0 },
+                use_mask: f("use_mask", 1.0) > 0.5,
+                hue_range: f("mask_hue_range", 30.0) / 360.0,
+                chroma_range: f("mask_chroma_range", 0.5),
+                luma_range: f("mask_luma_range", 0.5),
+                smooth: f("mask_smoothness", 0.3),
+                strength: f("strength", 1.0),
+            };
+            ops::color_swap(src, &sw).0
+        }
         "curvature_smooth" => ops::curvature_from_normal(tex("in")?, f("smoothing", 2.0) * rs, f("intensity", 6.0)),
         "height_blend" => {
             let (h, m) = ops::height_blend(tex("bg")?, tex("fg")?, ins.get("mask").map(|x| x.as_ref()), f("opacity", 1.0), f("contrast", 0.5));
             if f("output", 0.0) > 0.5 { m } else { h }
         }
-        "make_it_tile_photo" => ops::make_tile_photo(tex("in")?, f("width", 0.6)),
+        "make_it_tile_photo" => ops::make_tile_photo_ex(tex("in")?, f("width", 0.6), f("width_v", f("width", 0.6))),
         "make_it_tile_patch" => ops::make_tile_patch(tex("in")?, f("patches", 6.0), f("softness", 0.5), seed),
         "clamp" => {
             let (lo, hi) = (f("low", 0.0), f("high", 1.0));
-            tex("in")?.map(move |p| [p[0].clamp(lo.min(hi), hi.max(lo)), p[1].clamp(lo.min(hi), hi.max(lo)), p[2].clamp(lo.min(hi), hi.max(lo)), p[3]])
+            let ca = f("apply_alpha", 0.0) > 0.5;
+            tex("in")?.map(move |p| [p[0].clamp(lo.min(hi), hi.max(lo)), p[1].clamp(lo.min(hi), hi.max(lo)), p[2].clamp(lo.min(hi), hi.max(lo)), if ca { p[3].clamp(lo.min(hi), hi.max(lo)) } else { p[3] }])
         }
         "highpass" => ops::highpass(tex("in")?, f("radius", 6.0) * rs),
         "swirl" => ops::swirl(tex("in")?, f("amount", 0.3), f("radius", 0.5)),
@@ -1685,8 +2189,8 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             ops::levels(t, lo, hi, f("gamma", 1.0), f("out_low", 0.0), f("out_high", 1.0))
         }
         "adjust" => ops::adjust(tex("in")?, f("brightness", 0.0), f("contrast", 1.0)),
-        "invert" => ops::invert(tex("in")?),
-        "threshold" => ops::threshold(tex("in")?, f("threshold", 0.5), f("softness", 0.0)),
+        "invert" => if f("invert", 1.0) > 0.5 { ops::invert(tex("in")?) } else { tex("in")?.clone() },
+        "threshold" => ops::threshold_mode(tex("in")?, f("threshold", 0.5), f("softness", 0.0), f("mode", 0.0).max(0.0) as u32),
         "histogram_scan" => {
             let t = ops::histogram_scan(tex("in")?, f("position", 0.5), (1.0 - f("contrast", 0.5).clamp(0.0, 1.0)).max(1e-4));
             if f("invert", 0.0) > 0.5 { ops::invert(&t) } else { t }
@@ -1711,33 +2215,83 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             for i in 0..16 {
                 if let Some(p) = n.nums.get(&format!("p{i}")) {
                     let g = |c: &str| n.nums.get(&format!("{c}{i}")).copied().unwrap_or(0.0);
-                    stops.push((*p, [g("r"), g("g"), g("b")]));
+                    stops.push((*p, [g("r"), g("g"), g("b")], n.nums.get(&format!("a{i}")).copied().unwrap_or(1.0)));
                 }
             }
             if stops.is_empty() {
                 return Err(Error::BadParam(id, "colorize needs at least one stop (p0 r0 g0 b0)".into()));
             }
-            ops::colorize(tex("in")?, &stops, f("interp", 0.0) as u32)
+            ops::colorize_ex(tex("in")?, &stops, f("interp", 0.0) as u32, f("smoothness", 1.0), f("addressing", 0.0) > 0.5, f("use_alpha", 0.0) > 0.5)
         }
         "hsl" => ops::hsl_adjust(tex("in")?, f("hue", 0.0), f("sat", 1.0), f("val", 1.0)),
         "transform" => ops::transform(tex("in")?, f("offset_x", 0.0), f("offset_y", 0.0), f("scale_x", 1.0), f("scale_y", 1.0), f("rotation", 0.0), f("tiling", 0.0) < 0.5),
-        "mirror" => ops::mirror(tex("in")?, f("axis", 0.0) as u32),
-        "warp" => ops::warp(tex("in")?, tex("warp")?, f("intensity", 0.05)),
-        "directional_warp" => ops::directional_warp(tex("in")?, tex("warp")?, f("angle", 0.0), f("intensity", 0.1)),
-        "blend" => ops::blend(tex("fg")?, tex("bg")?, ins.get("mask").map(|m| m.as_ref()), f("mode", 0.0).max(0.0) as u32, f("opacity", 1.0)),
-        "normal" => ops::normal_from_height(tex("in")?, f("strength", 2.0), f("directx", 0.0) > 0.5),
-        "normal_blend" => ops::normal_blend(tex("a")?, tex("b")?),
-        "ao" => ops::ambient_occlusion(tex("in")?, f("radius", 6.0) * rs, f("intensity", 2.0)),
-        "curvature" => ops::curvature(tex("in")?, f("radius", 3.0) * rs, f("intensity", 4.0)),
-        "edge_detect" => ops::edge_detect(tex("in")?, f("intensity", 2.0)),
+        "mirror" => ops::mirror_ex(tex("in")?, f("axis", 0.0) as u32, f("offset_x", 0.5), f("offset_y", 0.5), f("invert_x", 0.0) > 0.5, f("invert_y", 0.0) > 0.5, f("corner", 0.0) as u32),
+        "warp" => ops::warp_ex(tex("in")?, tex("warp")?, f("intensity", 0.05), f("filtering", 2.0).max(0.0) as u32),
+        "directional_warp" => ops::directional_warp_ex(tex("in")?, tex("warp")?, f("angle", 0.0), f("intensity", 0.1), f("offset", 0.5), f("filtering", 2.0).max(0.0) as u32),
+        "blend" => ops::blend_ex(
+            tex("fg")?,
+            tex("bg")?,
+            ins.get("mask").map(|m| m.as_ref()),
+            f("mode", 0.0).max(0.0) as u32,
+            f("opacity", 1.0),
+            f("alpha_mode", 1.0).max(0.0) as u32,
+            [f("crop_x0", 0.0), f("crop_y0", 0.0), f("crop_x1", 1.0), f("crop_y1", 1.0)],
+        ),
+        "normal" => {
+            let n = ops::normal_from_height(tex("in")?, f("strength", 2.0), f("directx", 0.0) > 0.5);
+            if f("alpha_from_input", 0.0) > 0.5 {
+                // "Fill alpha with input": the height map goes into the alpha channel
+                let src = tex("in")?;
+                let mut n = n;
+                for (o, i) in n.px.iter_mut().zip(&src.px) {
+                    o[3] = crate::tex::lum(*i);
+                }
+                n
+            } else {
+                n
+            }
+        }
+        "normal_blend" => ops::normal_blend_ex(tex("a")?, tex("b")?, f("opacity", 1.0), ins.get("mask").map(|m| m.as_ref())),
+        "ao" if f("mode", 0.0) < 0.5 => ops::ambient_occlusion(tex("in")?, f("radius", 6.0) * rs, f("intensity", 2.0)),
+        "ao" => {
+            let scale = if f("use_world_units", 0.0) > 0.5 { f("height_depth_cm", 30.0) / f("surface_size", 300.0).max(1.0) } else { f("height_depth", 0.1) };
+            let dirs = [4u32, 8, 16][(f("quality", 1.0).round() as usize).min(2)];
+            ops::hbao(tex("in")?, f("hbao_radius", 1.0).clamp(0.0, 1.0) * 0.25, scale, dirs, f("hbao_intensity", 1.0))
+        }
+        "quantize_color" => ops::quantize_color(
+            tex("in")?,
+            per("color_amount", 32.0).clamp(1, 128) as usize,
+            f("contour_smoothing", 0.0) * rs,
+            f("dithering", 0.0).clamp(0.0, 1.0),
+            f("dithering_pattern", 0.0) > 0.5,
+            f("distance_color_space", 0.0) < 0.5,
+            f("ignore_alpha", 0.0) > 0.5,
+        ),
+        "curvature" => {
+            if f("mode", 0.0) > 0.5 {
+                ops::curvature(tex("in")?, f("radius", 3.0) * rs, f("intensity", 4.0))
+            } else {
+                ops::curvature_normal(tex("in")?, f("intensity", 4.0), f("directx", 0.0) > 0.5)
+            }
+        }
+        "edge_detect" => {
+            if f("mode", 0.0) > 0.5 {
+                ops::edge_detect(tex("in")?, f("intensity", 2.0))
+            } else {
+                // widths are given in pixels at the 512 reference size and scale with the resolution
+                ops::edge_detect_ex(tex("in")?, (f("edge_width", 2.0) * rs).max(1.0), f("edge_roundness", 4.0) * rs, f("invert", 0.0) > 0.5, f("tolerance", 0.0))
+            }
+        }
         "emboss" => ops::emboss(tex("in")?, f("angle", 0.125), f("intensity", 4.0)),
         other => match crate::nodes2::compute(other, id, n, ins, s, seed)? {
             Some(t) => t,
             None => return Err(Error::UnknownNode(id, other.to_string())),
         },
     };
-    if out.w != s || out.h != s {
-        return Ok(Tex::from_fn(s, s, |u, v| out.sample(u, v)));
+    let out = if out.w != s || out.h != s { Tex::from_fn(s, s, |u, v| out.sample(u, v)) } else { out };
+    let (fx, fy) = (tx - tx.floor(), ty - ty.floor());
+    if fx > 0.0 || fy > 0.0 {
+        return Ok(ops::roll(&out, fx, fy));
     }
     Ok(out)
 }
@@ -1771,3 +2325,14 @@ expose "Brick count" 1 cols 1 12
 expose "Mortar width" 1 mortar 0 0.15
 expose "Normal strength" 6 strength 0 10
 "#;
+
+/// Collect the connected pattern inputs of a scatter node (`pattern`, `pattern2` .. `pattern6`).
+fn scatter_patterns<'a>(ins: &'a BTreeMap<String, Rc<Tex>>, builtin: u32, fallback: u32, distribution: u32) -> scatter::Patterns<'a> {
+    let mut inputs: Vec<&Tex> = Vec::new();
+    for k in ["pattern", "pattern2", "pattern3", "pattern4", "pattern5", "pattern6"] {
+        if let Some(t) = ins.get(k) {
+            inputs.push(t.as_ref());
+        }
+    }
+    scatter::Patterns { inputs, builtin, fallback, distribution }
+}

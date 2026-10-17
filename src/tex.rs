@@ -34,6 +34,18 @@ pub struct Tex {
     pub px: Vec<[f32; 4]>,
 }
 
+/// floor() without a libm call: the baseline x86-64 target has no SSE4.1 rounding instruction, so `f32::floor` is a
+/// function call there. Exact for |x| < 2^31 (callers use texture coordinates).
+#[inline(always)]
+pub fn ffloor(x: f32) -> f32 {
+    let i = x as i32 as f32;
+    if i > x {
+        i - 1.0
+    } else {
+        i
+    }
+}
+
 pub fn lum(p: [f32; 4]) -> f32 {
     0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]
 }
@@ -93,21 +105,27 @@ impl Tex {
     }
 
     /// Bilinear, wrapped sampling in uv space.
+    #[inline]
     pub fn sample(&self, u: f32, v: f32) -> [f32; 4] {
         let u = if u.is_finite() { u } else { 0.0 };
         let v = if v.is_finite() { v } else { 0.0 };
         let x = u * self.w as f32 - 0.5;
         let y = v * self.h as f32 - 0.5;
-        let x0 = x.floor();
-        let y0 = y.floor();
+        let x0 = ffloor(x);
+        let y0 = ffloor(y);
         let fx = x - x0;
         let fy = y - y0;
-        let xi = x0 as i64;
-        let yi = y0 as i64;
-        let a = self.at(xi, yi);
-        let b = self.at(xi + 1, yi);
-        let c = self.at(xi, yi + 1);
-        let d = self.at(xi + 1, yi + 1);
+        let (w, h) = (self.w as i64, self.h as i64);
+        // wrap the two columns and the two rows once (a branch instead of a division in the common case)
+        let wrap = |i: i64, n: i64| if i >= 0 && i < n { i } else { i.rem_euclid(n) };
+        let (xa, ya) = (wrap(x0 as i64, w), wrap(y0 as i64, h));
+        let xb = if xa + 1 == w { 0 } else { xa + 1 };
+        let yb = if ya + 1 == h { 0 } else { ya + 1 };
+        let (r0, r1) = ((ya * w) as usize, (yb * w) as usize);
+        let a = self.px[r0 + xa as usize];
+        let b = self.px[r0 + xb as usize];
+        let c = self.px[r1 + xa as usize];
+        let d = self.px[r1 + xb as usize];
         let mut o = [0.0; 4];
         for i in 0..4 {
             let top = a[i] + (b[i] - a[i]) * fx;
@@ -124,7 +142,7 @@ impl Tex {
         let v = if v.is_finite() { v } else { 0.0 };
         let x = u * self.w as f32 - 0.5;
         let y = v * self.h as f32 - 0.5;
-        let (x0, y0) = (x.floor(), y.floor());
+        let (x0, y0) = (ffloor(x), ffloor(y));
         let (fx, fy) = (x - x0, y - y0);
         let (xi, yi) = (x0 as i64, y0 as i64);
         let wts = |t: f32| {
@@ -137,9 +155,14 @@ impl Tex {
         };
         let (wx, wy) = (wts(fx), wts(fy));
         let mut o = [0.0f32; 4];
+        let inside = xi >= 1 && yi >= 1 && xi + 2 < self.w as i64 && yi + 2 < self.h as i64;
         for j in 0..4 {
             for i in 0..4 {
-                let p = self.at(xi + i as i64 - 1, yi + j as i64 - 1);
+                let p = if inside {
+                    self.px[(yi as usize + j - 1) * self.w + xi as usize + i - 1]
+                } else {
+                    self.at(xi + i as i64 - 1, yi + j as i64 - 1)
+                };
                 let w = wx[i] * wy[j];
                 for c in 0..4 {
                     o[c] += p[c] * w;
@@ -157,15 +180,41 @@ impl Tex {
 
     pub fn map<F: Fn([f32; 4]) -> [f32; 4] + Sync>(&self, f: F) -> Tex {
         let mut out = self.clone();
-        for p in out.px.iter_mut() {
-            *p = f(*p);
-        }
+        par_rows(&mut out.px, self.w.max(1), |_, chunk| {
+            for p in chunk.iter_mut() {
+                *p = f(*p);
+            }
+        });
         out
     }
 
     pub fn gray_at(&self, x: i64, y: i64) -> f32 {
         lum(self.at(x, y))
     }
+}
+
+/// Run `f(first_index, chunk)` on consecutive pieces of `px` in parallel. Pieces are whole rows of width `w`, and a
+/// superseded editor job stops between rows of work, so a stale evaluation gives the CPU back quickly.
+pub fn par_rows<F: Fn(usize, &mut [[f32; 4]]) + Sync>(px: &mut [[f32; 4]], w: usize, f: F) {
+    let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).max(1);
+    let rows = (px.len() / w.max(1)).max(1);
+    let per = ((rows + n - 1) / n).max(1) * w.max(1);
+    let my = my_job();
+    let fref = &f;
+    std::thread::scope(|s| {
+        for (ci, chunk) in px.chunks_mut(per.max(1)).enumerate() {
+            s.spawn(move || {
+                // work in slices of a few rows so the stale check runs regularly
+                let step = (w.max(1) * 16).max(1);
+                for (si, piece) in chunk.chunks_mut(step).enumerate() {
+                    if stale(my) {
+                        return;
+                    }
+                    fref(ci * per + si * step, piece);
+                }
+            });
+        }
+    });
 }
 
 /// Parallel map over 0..n, preserving order.

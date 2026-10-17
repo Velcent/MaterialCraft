@@ -2,6 +2,8 @@
 ### Donate For Claude Max Subscription to support development (all funds go to claude max subscription)
 Donate Here: [Donation Button](https://www.paypal.com/donate/?hosted_button_id=DYD94FKUZ9H7G).
 
+our discord is here: if you want to submit features or got any cool ideas! https://discord.gg/9KVCNatNvX
+
 # MaterialCraft
 
 <img width="1495" height="949" alt="image" src="https://github.com/user-attachments/assets/dc27324c-f63c-4569-beb7-be4766bd839c" />
@@ -43,9 +45,9 @@ EXR / HDR output, path-traced 3D rendering, custom mesh import in the 3D viewer,
 See ROADMAP.md for the complete list.
 
 
-## Nodes (111)
+## Nodes (124)
 Generators: shape, tile sampler, tile generator, splatter, splatter circular, perlin, fractal noise, clouds, gaussian noise,
-BnW spots, crystal, directional noise, grunge, plasma, voronoi, stripes, weave, bricks, checker, gradients, star, SDF shapes.
+BnW spots, crystal, directional noise, grunge, grunge maps, plasma, voronoi, voronoi fractal, stripes, weave, weave generator, bricks, checker, gradients, star, SDF shapes.
 Filters: blend, RGBA merge, switch, flood fill (+ random grayscale / color / gradient), transform 2D, directional / vector /
 slope warps, blur and blur HQ, levels, histogram scan / range, bevel, distance, gradient map, uniform color, HSL, color match,
 make-it-tile photo / patch and more. Material: normal, ambient occlusion, curvature (smooth), height blend, edge wear, dirt, dust.

@@ -51,7 +51,7 @@ fn variants_are_seamless() {
         "directional_noise angle=0.13 scale=5 stretch=6", "directional_noise angle=0.25", "directional_noise angle=0.6 scale=3 stretch=12",
         "gradient mode=0 angle=0.1", "gradient mode=1", "gradient_axial angle=0.2", "gradient_circular offset=0.3",
         "circle radius=0.5", "circle radius=0.7 softness=0.1", "rect width=0.9 height=0.9", "polygon sides=3 radius=0.5", "polygon sides=8 radius=0.6 rotation=0.1",
-        "star points=7 size=0.5", "checker tiles=7", "checker tiles=3", "weave count=5", "weave count=9 width=0.6",
+        "star points=7 size=0.5", "checker tiles=7", "checker tiles=3", "weave count=5", "grunge_map map=1", "grunge_map map=4", "grunge_map map=6 disorder=0.5", "grunge_map map=11 brush_pattern=0.6", "grunge_map map=15", "weave_generator tile_x=2 weave=3", "triangle_grid style=1 x_amount=8 y_amount=8", "triangle_grid style=1 triangulation=2 output=1", "triangle_grid style=1 output=2 thin_lines=1 quincunx_offset_x=0.5", "weave count=9 width=0.6",
         "bricks rows=7 cols=3 offset=0.3", "bricks rows=5 cols=5 offset=0.5", "bricks rows=9 cols=4 offset=0.25", "bricks rows=6 cols=3.5",
         "stripes count=7 angle=0.13", "stripes count=5 angle=0.37", "stripes count=9 angle=0.9",
         "shape shape=0", "shape shape=1", "shape shape=2", "shape shape=3", "shape shape=4", "shape shape=5", "shape shape=6", "shape shape=7",
@@ -157,7 +157,7 @@ fn filters_commute_with_wrapped_shifts() {
     ];
     let mut bad = Vec::new();
     for c in filters {
-        let kind = c.split(' ').next().unwrap();
+        let _kind = c.split(' ').next().unwrap();
         let mut line = format!("node 1 {c}");
         if !line.contains("in=@") {
             line += " in=@100";

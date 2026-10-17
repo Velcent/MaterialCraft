@@ -363,16 +363,17 @@ fn size_handle(ui: &mut egui::Ui, id: &str, panel: Rect, edge: u8) -> f32 {
 
 fn lib_group(kind: &str) -> (&'static str, &'static str) {
     match kind {
-        "white_noise" | "gaussian_noise" | "perlin" | "fbm" | "clouds" | "voronoi" | "bnw_spots" | "crystal" | "directional_noise" | "grunge" | "plasma" | "cells" | "fractal_sum" | "waveform" | "gaussian_spots" => ("Texture generators", "Noises"),
-        "color" | "gradient" | "gradient_axial" | "gradient_circular" | "checker" | "bricks" | "stripes" | "weave" | "tile_sampler" | "tile_generator" | "splatter" | "splatter_circular" | "pixel_processor" => ("Texture generators", "Patterns"),
+        "white_noise" | "gaussian_noise" | "perlin" | "fbm" | "clouds" | "voronoi" | "voronoi_fractal" | "bnw_spots" | "crystal" | "directional_noise" | "grunge" | "grunge_map" | "plasma" | "cells" | "fractal_sum" | "waveform" | "gaussian_spots" => ("Texture generators", "Noises"),
+        "triangle_grid" | "starburst" | "gradient_reflected" => ("Texture generators", "Patterns"),
+        "color" | "gradient" | "gradient_axial" | "gradient_circular" | "checker" | "bricks" | "stripes" | "weave" | "weave_generator" | "tile_sampler" | "tile_generator" | "splatter" | "splatter_circular" | "pixel_processor" => ("Texture generators", "Patterns"),
         "shape" | "circle" | "rect" | "polygon" | "star" => ("Texture generators", "Shapes"),
         "sdf_shape" | "sdf_op" | "sdf_mask" | "sdf_form" => ("Texture generators", "SDF"),
-        "levels" | "adjust" | "invert" | "threshold" | "histogram_scan" | "histogram_range" | "quantize" | "clamp" | "hsl" | "colorize" | "tint" | "to_gray" | "channel" | "merge" | "switch" | "color_match" | "highpass" | "auto_levels" | "channel_mixer" | "alpha_merge" | "color_to_mask" | "replace_color" | "pow" | "histogram_shift" | "grayscale_conversion" => ("Filters", "Adjustments"),
-        "blur" | "blur_hq" | "directional_blur" | "sharpen" | "warp" | "directional_warp" | "vector_warp" | "slope_blur" | "swirl" | "non_uniform_blur" | "radial_blur" | "anisotropic_blur" => ("Filters", "Blur and warp"),
+        "levels" | "adjust" | "invert" | "threshold" | "histogram_scan" | "histogram_range" | "quantize" | "quantize_color" | "clamp" | "hsl" | "colorize" | "tint" | "to_gray" | "channel" | "merge" | "switch" | "color_match" | "highpass" | "auto_levels" | "channel_mixer" | "alpha_merge" | "color_to_mask" | "replace_color" | "pow" | "histogram_shift" | "grayscale_conversion" | "chrominance_extract" => ("Filters", "Adjustments"),
+        "blur" | "blur_hq" | "directional_blur" | "sharpen" | "warp" | "directional_warp" | "vector_warp" | "slope_blur" | "swirl" | "non_uniform_blur" | "radial_blur" | "anisotropic_blur" | "non_uniform_directional_warp" | "multi_directional_warp" => ("Filters", "Blur and warp"),
         "transform" | "mirror" | "make_it_tile_photo" | "make_it_tile_patch" | "symmetry" | "skew" => ("Filters", "Transform"),
-        "glow" | "mosaic" | "shape_drop_shadow" | "sobel" => ("Filters", "Effects"),
+        "glow" | "mosaic" | "shape_drop_shadow" | "shape_stroke" | "shape_glow" | "sobel" => ("Filters", "Effects"),
         "distance" | "bevel" | "edge_detect" | "emboss" | "flood_fill" | "flood_fill_random" | "flood_fill_color" | "flood_fill_gradient" => ("Filters", "Masks and regions"),
-        "normal" | "normal_blend" | "normal_invert" | "normal_normalize" | "normal_vector_rotation" | "normal_to_height" | "ao" | "curvature" | "curvature_smooth" | "height_blend" => ("Material filters", ""),
+        "normal" | "normal_blend" | "normal_combine" | "normal_invert" | "normal_normalize" | "normal_vector_rotation" | "normal_to_height" | "ao" | "curvature" | "curvature_smooth" | "height_blend" => ("Material filters", ""),
         "edge_wear" | "dirt" | "dust" => ("Mesh-based generators", ""),
         "bitmap" | "input" | "subgraph" | "comment" | "frame" | "dot" | "output" => ("Graph items", ""),
         _ => ("Filters", "Adjustments"),

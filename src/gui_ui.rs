@@ -171,23 +171,20 @@ impl App {
                 in_out: n.in_out.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
             })
             .collect();
-        let posmap: HashMap<u32, ([f32; 2], bool)> = snaps.iter().map(|s| (s.id, (s.pos, s.dot))).collect();
-        let out_port = move |p: [f32; 2], dot: bool| if dot { ts(p) + vec2(24.0 * z, 12.0 * z) } else { ts(p) + vec2(CARD * z, (BAR + CARD * 0.5) * z) };
+        let body_of = |s: &NodeSnap| card_body(s.slots.len(), s.outs.len());
+        let posmap: HashMap<u32, ([f32; 2], bool, f32)> = snaps.iter().map(|s| (s.id, (s.pos, s.dot, body_of(s)))).collect();
+        let out_port = move |p: [f32; 2], dot: bool, body: f32| if dot { ts(p) + vec2(24.0 * z, 12.0 * z) } else { ts(p) + vec2(CARD * z, (BAR + body * 0.5) * z) };
         let outs_map: HashMap<u32, Vec<String>> = snaps.iter().filter(|s| !s.outs.is_empty()).map(|s| (s.id, s.outs.clone())).collect();
-        let node_h = |n_outs: usize| if n_outs >= 2 { BAR + CARD.max(20.0 * n_outs as f32) } else { CARD_H };
-        let out_port_i = move |p: [f32; 2], i: usize, n: usize| {
-            let h = BAR + CARD.max(20.0 * n as f32);
-            ts(p) + vec2(CARD * z, (BAR + (h - BAR) * (i as f32 + 1.0) / (n as f32 + 1.0)) * z)
-        };
+        let out_port_i = move |p: [f32; 2], i: usize, n: usize, body: f32| ts(p) + vec2(CARD * z, (BAR + body * (i as f32 + 1.0) / (n as f32 + 1.0)) * z);
         // where the link of output `name` of node `src` leaves its card
         let src_port = |src: u32, name: Option<&str>| -> Option<Pos2> {
             let sp = posmap.get(&src)?;
             Some(match outs_map.get(&src) {
-                Some(o) => out_port_i(sp.0, name.and_then(|nm| o.iter().position(|x| x == nm)).unwrap_or(0), o.len()),
-                None => out_port(sp.0, sp.1),
+                Some(o) => out_port_i(sp.0, name.and_then(|nm| o.iter().position(|x| x == nm)).unwrap_or(0), o.len(), sp.2),
+                None => out_port(sp.0, sp.1, sp.2),
             })
         };
-        let in_port = move |p: [f32; 2], i: usize, n: usize, dot: bool| if dot { ts(p) + vec2(0.0, 12.0 * z) } else { ts(p) + vec2(0.0, (BAR + CARD * (i as f32 + 1.0) / (n as f32 + 1.0)) * z) };
+        let in_port = move |p: [f32; 2], i: usize, n: usize, dot: bool, body: f32| if dot { ts(p) + vec2(0.0, 12.0 * z) } else { ts(p) + vec2(0.0, (BAR + body * (i as f32 + 1.0) / (n as f32 + 1.0)) * z) };
         let link = |painter: &egui::Painter, a: Pos2, b: Pos2, col: Color32, w: f32| {
             let dx = ((b.x - a.x).abs() * 0.5).max(40.0 * z);
             painter.add(CubicBezierShape::from_points_stroke([a, a + vec2(dx, 0.0), b - vec2(dx, 0.0), b], false, Color32::TRANSPARENT, Stroke::new(w * z.max(0.7), col)));
@@ -199,7 +196,7 @@ impl App {
             for (slot, src) in &s.ins {
                 if let (Some(i), Some(a)) = (s.slots.iter().position(|x| x.0 == slot), src_port(*src, s.in_out.iter().find(|(k, _)| k == slot).map(|(_, v)| v.as_str()))) {
                     let hot = self.sel.contains(&s.id) || self.sel.contains(src);
-                    link(&painter, a, in_port(s.pos, i, n, s.dot), if hot { Color32::from_rgb(255, 170, 60) } else { Color32::from_rgb(185, 185, 185) }, 1.8);
+                    link(&painter, a, in_port(s.pos, i, n, s.dot, body_of(s)), if hot { Color32::from_rgb(255, 170, 60) } else { Color32::from_rgb(185, 185, 185) }, 1.8);
                 }
             }
         }
@@ -217,7 +214,7 @@ impl App {
 
         for s in &snaps {
             let id = s.id;
-            let card = Rect::from_min_size(ts(s.pos), if s.dot { vec2(24.0, 24.0) } else { vec2(CARD, node_h(s.outs.len())) } * z);
+            let card = Rect::from_min_size(ts(s.pos), if s.dot { vec2(24.0, 24.0) } else { vec2(CARD, BAR + body_of(s)) } * z);
             cards.push(card);
             let selected = self.sel.contains(&id);
             let err = self.node_err.get(&id).cloned();
@@ -240,7 +237,7 @@ impl App {
             };
             let fs = if label.len() > 16 { 8.0 } else if label.len() > 12 { 9.0 } else { 10.5 };
             painter.text(bar.center(), Align2::CENTER_CENTER, label, FontId::proportional(fs * z), Color32::WHITE);
-            let th = Rect::from_min_size(card.min + vec2(3.0, BAR + 3.0) * z, vec2(CARD - 6.0, CARD - 6.0) * z);
+            let th = Rect::from_min_size(card.min + vec2(3.0, BAR + 3.0 + (body_of(s) - CARD) * 0.5) * z, vec2(CARD - 6.0, CARD - 6.0) * z);
             match self.thumbs.get(&id) {
                 Some(t) => {
                     painter.image(t.id(), th, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
@@ -376,7 +373,7 @@ impl App {
             if s.kind != "output" && s.outs.len() >= 2 {
                 // a graph node: one socket per output, labelled to the right of the card
                 for (oi, oname) in s.outs.iter().enumerate() {
-                    let op = out_port_i(s.pos, oi, s.outs.len());
+                    let op = out_port_i(s.pos, oi, s.outs.len(), body_of(s));
                     out_ports.push((id, Some(oname.clone()), op));
                     let used = used_ports.contains(&(id, oname.clone()));
                     painter.circle(op, 4.8 * z, if used { Color32::from_rgb(240, 170, 50) } else { Color32::from_rgb(200, 200, 200) }, Stroke::new(1.0_f32, Color32::BLACK));
@@ -390,7 +387,7 @@ impl App {
                     }
                 }
             } else if s.kind != "output" {
-                let op = out_port(s.pos, s.dot);
+                let op = out_port(s.pos, s.dot, body_of(s));
                 out_ports.push((id, None, op));
                 painter.circle(op, if s.dot { 3.5 } else { 4.8 } * z, Color32::from_rgb(235, 235, 235), Stroke::new(1.0_f32, Color32::BLACK));
                 let pr = ui.interact(Rect::from_center_size(op, Vec2::splat(14.0 * z)), Id::new(("out", id)), Sense::drag());
@@ -401,7 +398,7 @@ impl App {
             }
             let n = s.slots.len();
             for (i, (slot, required)) in s.slots.iter().enumerate() {
-                let ip = in_port(s.pos, i, n, s.dot);
+                let ip = in_port(s.pos, i, n, s.dot, body_of(s));
                 ports.push((id, *slot, ip));
                 painter.circle(ip, 4.5 * z, if s.kind == "output" { Color32::from_rgb(240, 170, 50) } else if *required { Color32::from_rgb(210, 210, 210) } else { Color32::from_rgb(60, 60, 60) }, Stroke::new(1.2_f32, Color32::from_rgb(190, 190, 190)));
                 let ir = ui.interact(Rect::from_center_size(ip, Vec2::splat(14.0 * z)), Id::new(("in", id, i)), Sense::drag());
