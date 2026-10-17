@@ -4,12 +4,15 @@
 //! [`loader::Loader`] reads documents (and imports `.spp` in-process), [`scene_sync::SceneSync`]
 //! keeps the GPU scene in step with the document, [`viewport::Viewport`] draws it, the
 //! [`shell::Shell`] holds the docking workspace, shortcuts and settings, and the [`panels`] turn
-//! clicks and key presses into [`panels::PanelEvent`]s that are applied here.
+//! clicks and key presses into [`panels::PanelEvent`]s that are applied here ([`documents`]: opening and
+//! closing; [`editing`]: stack edits and history moves).
 
 mod cache;
 mod channel_view;
 mod demo;
 mod document_state;
+mod documents;
+mod editing;
 mod geometry;
 mod isolate;
 mod job;
@@ -35,11 +38,9 @@ use eframe::egui;
 use launch::{Launch, StartDocument};
 use loader::{Loaded, Loader};
 use materialcraft::diag::{Area, RingBuffer, Sink, SinkExt, Target};
-use materialcraft::paint::diag_entries;
-use materialcraft::paint::edit::EditError;
 use panels::PanelEvent;
 use panels::import_report::ReportPanel;
-use panels::layers::{LayerEvent, LayerPanel};
+use panels::layers::LayerPanel;
 use panels::layout::Screen;
 use panels::log::LogPanel;
 use panels::status_bar::Activity;
@@ -48,7 +49,6 @@ use scene_sync::SceneSync;
 use shell::Shell;
 use shell::panels::PaintPanel;
 use shot::ShotJob;
-use std::path::PathBuf;
 use std::sync::Arc;
 use viewport::Viewport;
 use window::WindowTitle;
@@ -121,29 +121,6 @@ impl PaintMode {
     /// True if a document was given on the command line (the editor then starts on this screen).
     pub fn wants_screen(&self) -> bool {
         self.document.is_some() || self.loader.is_some()
-    }
-
-    /// Shows a file dialog and opens the chosen file. Returns false if the user cancelled.
-    pub fn pick(&mut self, pick: Pick) -> bool {
-        let dialog = match pick {
-            Pick::Any => rfd::FileDialog::new()
-                .add_filter("Paint document or Substance Painter project", &["mcpaint", "spp"])
-                .add_filter("MaterialCraft paint document", &["mcpaint"]),
-            Pick::Substance => rfd::FileDialog::new().add_filter("Substance 3D Painter project", &["spp"]),
-        };
-        match dialog.pick_file() {
-            Some(p) => {
-                self.open(p);
-                true
-            }
-            None => false,
-        }
-    }
-
-    /// Starts loading `path` in the background (the current document stays until it is done).
-    pub fn open(&mut self, path: PathBuf) {
-        self.diag.info(Area::Project, format!("Opening {}", path.display()));
-        self.loader = Some(Loader::start(path));
     }
 
     /// Draws the screen and handles its input; `history` is the session's diagnostics (the status
@@ -280,41 +257,6 @@ impl PaintMode {
         self.focus = Some(Focus::new(set));
     }
 
-    /// A layer panel request: an edit of the stack as one history step, then the set is recomposited.
-    fn edit_layers(&mut self, ev: LayerEvent) {
-        let Some(doc) = &mut self.document else { return };
-        if let LayerEvent::Isolate(layer) = ev {
-            self.layers.isolated = layer.clone();
-            self.scene.isolate(doc, self.display, layer);
-            return;
-        }
-        match stack_editor::apply(doc, ev) {
-            Ok(applied) => {
-                if let Some(ids) = applied.select {
-                    self.layers.select(ids);
-                }
-                if let Some(set) = applied.set {
-                    self.scene.refresh(doc, self.display, vec![set]);
-                }
-            }
-            Err(e) => self.diag.warn(Area::Project, format!("That layer change was not made: {e}.")),
-        }
-    }
-
-    /// Undo, redo or a timeline jump, then recompositing: the history does not say which sets changed.
-    fn move_in_history(&mut self, what: &str, step: impl FnOnce(&mut OpenDocument) -> Result<(), EditError>) {
-        let Some(doc) = &mut self.document else { return };
-        if let Err(e) = step(doc) {
-            self.diag.warn(Area::Project, format!("{what} failed: {e}. The history before that point was dropped."));
-        }
-        if doc.sync_sets() {
-            self.scene.rebuild(doc, self.display);
-        } else {
-            let all = (0..doc.doc().texture_sets.len()).collect();
-            self.scene.refresh(doc, self.display, all);
-        }
-    }
-
     fn show_channel(&mut self, view: ChannelView) {
         self.display = view;
         if let Some(doc) = &mut self.document {
@@ -331,47 +273,4 @@ impl PaintMode {
     pub fn flush(&mut self) {
         self.shell.flush();
     }
-
-    fn poll_loader(&mut self) {
-        let Some(result) = self.loader.as_mut().and_then(|l| l.poll()) else {
-            return;
-        };
-        let source = self.loader.take().map(|l| l.source().display().to_string()).unwrap_or_default();
-        match result {
-            Ok(loaded) => self.show(loaded),
-            Err(e) => {
-                self.diag.error(area_of_load(&source), format!("{source}: {e}"));
-                if let Some(shot) = &self.shot {
-                    shot.abort(&format!("{source}: {e}"));
-                }
-            }
-        }
-    }
-
-    /// Replaces the current document with `loaded`.
-    fn show(&mut self, loaded: Loaded) {
-        let mut doc = OpenDocument::new(loaded.document, loaded.source, loaded.summary);
-        let d = doc.doc();
-        self.diag.info(Area::Project, format!("Opened {}: {} texture sets, {} mesh parts.", doc.source().display(), d.texture_sets.len(), d.mesh.parts.len()));
-        if let Some(report) = d.import_report.as_ref().filter(|_| doc.summary.is_some()) {
-            // The import report panel keeps the details; the log gets its summary line (LG-12).
-            self.diag.emit(diag_entries::import_summary(report, &doc.source().display().to_string(), doc.summary.as_deref()));
-        }
-        self.layers.reset();
-        self.scene.rebuild(&mut doc, self.display);
-        self.viewport.reset_camera();
-        self.document = Some(doc);
-    }
-
-    fn close(&mut self) {
-        self.scene.clear(self.viewport.gpu());
-        self.layers.reset();
-        self.document = None;
-        self.diag.info(Area::Project, "Document closed.");
-    }
-}
-
-/// Failed loads of Substance projects are import problems; anything else is a project problem.
-fn area_of_load(source: &str) -> Area {
-    if source.to_ascii_lowercase().ends_with(".spp") { Area::Import } else { Area::Project }
 }
