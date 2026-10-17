@@ -60,6 +60,12 @@ pub fn document_references(doc: &Document) -> BTreeSet<String> {
     doc.texture_sets.iter().flat_map(|s| references(&s.layers)).collect()
 }
 
+/// [`refresh`] of `doc`'s embedded assets with what its texture sets use (done before every save).
+pub fn embed_used(doc: &mut Document, lookup: impl FnMut(&str) -> Option<Vec<u8>>) -> EmbedReport {
+    let used = document_references(doc);
+    refresh(&mut doc.assets, &used, lookup)
+}
+
 /// What [`refresh`] changed.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EmbedReport {

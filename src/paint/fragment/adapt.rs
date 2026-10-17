@@ -4,7 +4,7 @@
 //! their images through the projection at any size.
 
 use crate::paint::channel::Channel;
-use crate::paint::effect::EffectKind;
+use crate::paint::effect::{EffectKind, MaskEffect};
 use crate::paint::fill_image::ImageFill;
 use crate::paint::image::TiledImage;
 use crate::paint::layer::{Fill, FillSource, Layer, LayerKind};
@@ -21,7 +21,12 @@ pub fn fit_layers(layers: &mut [Layer], set: &TextureSet) {
 
 /// Fits a mask's paint images to `resolution`.
 pub fn fit_mask(mask: &mut Mask, resolution: (u32, u32)) {
-    for e in &mut mask.effects {
+    fit_mask_effects(&mut mask.effects, resolution);
+}
+
+/// Fits the paint images among mask effects to `resolution`.
+pub fn fit_mask_effects(effects: &mut [MaskEffect], resolution: (u32, u32)) {
+    for e in effects {
         if let EffectKind::Paint(p) = &mut e.kind {
             refit(&mut p.image, resolution);
         }

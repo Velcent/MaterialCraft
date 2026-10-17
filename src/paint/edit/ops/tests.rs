@@ -250,6 +250,32 @@ fn a_smart_mask_makes_a_black_mask_if_needed() {
 }
 
 #[test]
+fn a_smart_mask_gets_fresh_anchor_ids_and_the_sets_resolution() {
+    use crate::paint::effect::{MaskPixels, Reference};
+    use crate::paint::{PixelFormat, TiledImage};
+    let mut d = doc();
+    let mut pixels = TiledImage::new(16, 16, PixelFormat::from_id("graya8").unwrap()).unwrap();
+    pixels.fill([1.0; 4]);
+    let smart = DropPayload::SmartMask(vec![
+        MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels::new(pixels))),
+        MaskEffect::new(GreyBlend::default(), EffectKind::Anchor(Anchor { id: "pin1".into() })),
+        MaskEffect::new(GreyBlend::default(), EffectKind::Reference(Reference { anchor: "pin1".into() })),
+    ]);
+    // Twice: the second drop must not collide with the first, nor with the set's own "pin1".
+    for target in ["base", "b"] {
+        step(&mut d, |tx| drop_onto(tx, &DropTarget::OntoLayer(lr(target)), &smart, false));
+    }
+    let effects = |id: &str| d.texture_sets[0].layer(id).unwrap().mask.clone().unwrap().effects;
+    let anchor_and_reference = |id: &str| match &effects(id)[1..] {
+        [MaskEffect { kind: EffectKind::Anchor(a), .. }, MaskEffect { kind: EffectKind::Reference(r), .. }] => (a.id.clone(), r.anchor.clone()),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(anchor_and_reference("base"), ("pin2".into(), "pin2".into()));
+    assert_eq!(anchor_and_reference("b"), ("pin3".into(), "pin3".into()));
+    assert!(matches!(&effects("b")[0].kind, EffectKind::Paint(p) if p.image.size() == (64, 64)));
+}
+
+#[test]
 fn a_failure_half_way_rolls_back_the_whole_operation() {
     let mut d = doc();
     let before = d.clone();

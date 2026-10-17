@@ -6,7 +6,8 @@
 //! - with `replace` (Ctrl held) it replaces that stack's effects instead of being added.
 //!
 //! A smart mask (a mask's effects saved as an asset) dropped onto a layer or its mask gives the layer a black
-//! mask if it has none and adds its effects; with `replace` they replace the mask's effects (MK-16).
+//! mask if it has none and adds its effects; with `replace` they replace the mask's effects (MK-16). Its anchors
+//! get ids new in the texture set and its painted pixels the set's resolution.
 //!
 //! A material and a smart material make layers (LS-18, see [`super::drop_layers`]): a material becomes a fill
 //! layer, a smart material a folder. Between layers it lands there; onto a folder on top of its children; onto
@@ -22,6 +23,7 @@ use super::{channels, layer, set};
 use crate::paint::blend::BlendMode;
 use crate::paint::doc::Document;
 use crate::paint::effect::{ColorSelection, ContentEffect, EffectDomain, EffectKind, GreyBlend, Levels, MaskEffect, Procedural};
+use crate::paint::fragment::adapt;
 use crate::paint::layer::{Layer, LayerKind, PaintContent};
 use crate::paint::mask::Mask;
 use crate::paint::texture_set::TextureSet;
@@ -98,11 +100,13 @@ pub enum DropPayload {
     SmartMask(Vec<MaskEffect>),
     /// A material: becomes a fill layer (or the fill of a fill layer it is dropped onto).
     Material(MaterialAsset),
-    /// A smart material: a folder named `name` holding `layers` (bottom to top; their ids are made unique where
-    /// they land).
+    /// A smart material: a folder named `name` holding `layers` (bottom to top). Where they land their ids are
+    /// made unique, their images are resampled to the texture set's resolution and channels it does not declare are
+    /// left out. `asset` is the library reference of the smart material, recorded on the folder (its provenance).
     Folder {
         name: String,
         layers: Vec<Layer>,
+        asset: Option<String>,
     },
 }
 
@@ -155,13 +159,19 @@ pub fn drop_onto(tx: &mut Transaction, target: &DropTarget, payload: &DropPayloa
             into_stack(tx, r, vec![StackEffect::Mask(asset.mask())], replace)
         }
         (DropTarget::OntoLayer(r) | DropTarget::OntoMask(r), DropPayload::SmartMask(effects)) => {
+            let s = set(tx, &r.set)?;
+            // The smart mask's anchors get ids new in the set (references among its effects follow) and its painted
+            // pixels the set's resolution.
+            let mut effects = effects.clone();
+            IdPool::of(s).reid_effects(&mut effects);
+            adapt::fit_mask_effects(&mut effects, s.resolution);
             if layer(tx, r)?.mask.is_none() {
                 tx.apply(Edit::SetLayer { layer: r.clone(), property: LayerProperty::Mask(Some(Mask::new(0.0))) })?;
             }
-            into_stack(tx, r, effects.iter().cloned().map(StackEffect::Mask).collect(), replace)
+            into_stack(tx, r, effects.into_iter().map(StackEffect::Mask).collect(), replace)
         }
         (_, DropPayload::Material(material)) => drop_layers::material(tx, target, material),
-        (_, DropPayload::Folder { name, layers }) => drop_layers::folder(tx, target, name, layers),
+        (_, DropPayload::Folder { name, layers, asset }) => drop_layers::folder(tx, target, name, layers, asset.as_deref()),
     }
 }
 

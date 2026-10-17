@@ -11,6 +11,7 @@ use super::super::{Edit, EditError, LayerProperty, LayerSlot, Transaction};
 use super::drop::{DropOutcome, DropTarget};
 use super::{channels, layer, set, slot_of};
 use crate::paint::blend::BlendMode;
+use crate::paint::fragment::adapt;
 use crate::paint::layer::{Fill, FillSource, Layer, LayerKind};
 use crate::paint::texture_set::TextureSet;
 
@@ -49,13 +50,17 @@ pub(super) fn material(tx: &mut Transaction, target: &DropTarget, asset: &Materi
     Ok(DropOutcome::NewLayer(id))
 }
 
-/// Drops a smart material: a folder named `name` with copies of `layers` under ids new in the texture set.
-pub(super) fn folder(tx: &mut Transaction, target: &DropTarget, name: &str, layers: &[Layer]) -> Result<DropOutcome, EditError> {
+/// Drops a smart material: a folder named `name` with copies of `layers` under ids new in the texture set, fitted
+/// to the set (resolution, declared channels), recording `asset` as its provenance.
+pub(super) fn folder(tx: &mut Transaction, target: &DropTarget, name: &str, layers: &[Layer], asset: Option<&str>) -> Result<DropOutcome, EditError> {
     let s = set(tx, target.set())?;
     let at = slot_for(s, target)?;
     let mut ids = IdPool::of(s);
     let name = if name.is_empty() { "Smart material".to_string() } else { name.to_string() };
-    let mut group = with_every_channel(s, Layer::new("folder", name, LayerKind::Group(layers.to_vec())));
+    let mut children = layers.to_vec();
+    adapt::fit_layers(&mut children, s);
+    let mut group = with_every_channel(s, Layer::new("folder", name, LayerKind::Group(children)));
+    group.asset = asset.map(str::to_string);
     ids.reid(&mut group);
     let id = group.id.clone();
     tx.apply(Edit::InsertLayer { set: target.set().to_string(), at, layer: Box::new(group) })?;
@@ -155,11 +160,12 @@ mod tests {
     fn a_smart_material_becomes_a_folder_with_fresh_ids() {
         let mut d = doc();
         let inner = vec![Layer::new("a", "Dirt", LayerKind::Paint(PaintContent::default())), Layer::new("f", "Base", LayerKind::Fill(Fill::uniform(vec![])))];
-        let payload = DropPayload::Folder { name: "Worn paint".into(), layers: inner };
+        let payload = DropPayload::Folder { name: "Worn paint".into(), layers: inner, asset: Some("smart-materials/worn.mcfrag".into()) };
         let out = drop(&mut d, DropTarget::Between { set: "s".into(), at: LayerSlot::top(3) }, &payload);
         let DropOutcome::NewLayer(id) = out else { panic!("{out:?}") };
         let folder = d.texture_sets[0].layer(&id).unwrap();
         assert_eq!(folder.name, "Worn paint");
+        assert_eq!(folder.asset.as_deref(), Some("smart-materials/worn.mcfrag"));
         let kids: Vec<&str> = folder.children().iter().map(|l| l.id.as_str()).collect();
         assert_eq!(kids.len(), 2);
         assert!(!kids.contains(&"a") && !kids.contains(&"f"), "ids are unique in the set: {kids:?}");

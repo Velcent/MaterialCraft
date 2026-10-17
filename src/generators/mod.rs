@@ -35,6 +35,7 @@ mod tests;
 
 pub use tone::Layering;
 
+use crate::paint::BakedKind;
 use crate::paint::effect::{EffectRegistry, GeneratorSource};
 use std::sync::OnceLock;
 use texel::Cached;
@@ -85,6 +86,22 @@ pub fn generator(id: &str) -> Option<Box<dyn GeneratorSource>> {
         HEIGHT_COMBINATION => Box::new(height_combination::HeightCombination),
         _ => return None,
     })
+}
+
+/// The baked maps the generator `id` reads (AS-05: what a smart material or smart mask using it needs baked).
+/// Maps read only by optional settings (tri-planar placement of breakup noise reads world normal and position)
+/// are not listed. Nothing for unknown ids.
+pub fn baked_maps(id: &str) -> Vec<BakedKind> {
+    use BakedKind::{AmbientOcclusion, Curvature, Position, Thickness, WorldSpaceNormal};
+    match id {
+        DIRT | METAL_EDGE_WEAR => vec![AmbientOcclusion, Curvature],
+        MASK_EDITOR => vec![AmbientOcclusion, WorldSpaceNormal, Position, Thickness],
+        AMBIENT_OCCLUSION => vec![AmbientOcclusion],
+        CURVATURE => vec![Curvature],
+        MASK_BUILDER => vec![AmbientOcclusion, Curvature, WorldSpaceNormal, Position],
+        UV_BORDER_DISTANCE => vec![Position],
+        _ => Vec::new(),
+    }
 }
 
 /// Adds every generator to `registry`.
