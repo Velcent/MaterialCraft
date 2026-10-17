@@ -82,7 +82,7 @@ fn main() {
         };
         let input = pattern(info.id == "hsl");
         let params = settings(info.id);
-        let request = EvalRequest { set: &set, target, rect, params: &params, stack: None, surface: Some(&surface) };
+        let request = EvalRequest { set: &set, target, rect, params: &params, stack: None, surface: Some(&surface), frame: None };
         let mut out = vec![[0.0; 4]; rect.area()];
         filter(info.id).unwrap().apply(&request, &FilterInput { rect, pixels: &input }, &mut out).unwrap();
         // colour values are linear light in the paint model; show them encoded

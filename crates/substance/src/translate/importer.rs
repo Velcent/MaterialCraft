@@ -8,7 +8,7 @@ use super::cancel::Cancel;
 use super::error::ImportError;
 use super::foreign::ForeignFiles;
 use super::layers::strokes::{StrokeCount, report_unimported_strokes};
-use super::layers::{BlendTable, LayerImport, ProjectImages};
+use super::layers::{BlendTable, LayerImport, ProjectImages, ProjectionTable};
 use super::normal_conventions::NormalConventions;
 use super::replacements::ProceduralPlan;
 use super::report::Reporter;
@@ -101,6 +101,7 @@ impl Importer {
         let images = ProjectImages::new(&self.project).with_cancel(cancel);
         let import = LayerImport {
             table: &table,
+            projections: &ProjectionTable::painter(),
             images: &images,
             plan: &self.plan,
         };

@@ -87,6 +87,7 @@ fn generator_masks_the_plan_replaces_become_ours() {
     let plan = ProceduralPlan::all(Choice::Replace);
     let stack = LayerImport {
         table: &table,
+        projections: &crate::translate::layers::ProjectionTable::painter(),
         images: &NoImages,
         plan: &plan,
     }

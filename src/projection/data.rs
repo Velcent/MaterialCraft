@@ -2,6 +2,7 @@
 //! [`Projection`], which combines them with a mode.
 
 use super::modes::ProjectionMode;
+use crate::symmetry::SymmetrySpec;
 
 /// How the source image is sampled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -130,12 +131,28 @@ pub struct Projection {
     pub filter: Filter,
     pub repeat: Repeat,
     pub image: ImagePlacement,
+    /// Fill symmetry (PJ-22, PT-40): the projection repeated at the symmetric copies; only the modes that
+    /// [`ProjectionMode::takes_symmetry`] use it.
+    pub symmetry: SymmetrySpec,
 }
 
 impl Projection {
     /// UV mode with `image` as the placement.
     pub fn uv(image: ImagePlacement) -> Projection {
         Projection { mode: ProjectionMode::Uv, image, ..Projection::default() }
+    }
+
+    /// The repetition the source is sampled with: tri-planar always repeats (ADR 0008), the others as set.
+    pub fn sampling_repeat(&self) -> Repeat {
+        match self.mode {
+            ProjectionMode::TriPlanar(_) => Repeat::Both,
+            _ => self.repeat,
+        }
+    }
+
+    /// The symmetry the projection is evaluated with: none for the modes that take none.
+    pub fn effective_symmetry(&self) -> SymmetrySpec {
+        if self.mode.takes_symmetry() { self.symmetry } else { SymmetrySpec::None }
     }
 
     /// True for the default (texture space, smooth, repeating, identity placement): files leave it out.

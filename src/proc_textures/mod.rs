@@ -1,6 +1,6 @@
 //! MaterialCraft's own noise, grunge, spot, cell and pattern textures for Paint mode: each a grey *point
 //! function* of (u, v), periodic with period 1 in both, so it can be sampled anywhere a projector puts a tap
-//! (texture space, UV placement, and the volume projections once they are evaluated).
+//! (texture space, UV placement and the volume projections: tri-planar, planar, spherical, cylindrical).
 //!
 //! - [`ProcTexture`]: one texture, built from its id and parameter values ([`texture`]); `value(u, v)` is the
 //!   grey value, [`ProcTexture::sample_taps`] evaluates projector taps.
@@ -17,7 +17,8 @@
 //! Common parameters (every texture): `seed`, `scale` (multiplies the look's cell counts; whole numbers keep the
 //! period), `disorder` (0..1, a smooth warp), then the tone: `balance` (0.5 neutral, higher brighter), `contrast`
 //! (0 neutral, 1 a hard step), `position` / `range` (a second scan around `position`), `invert`. Placement on the
-//! texture set (only [`TextureSource`]): `tiling`, `offset_x`, `offset_y`, `rotation` (degrees).
+//! texture set (only [`TextureSource`]): the projection parameters of [`placement`] (`projection`, `tiling`,
+//! `offset_x`, `offset_y`, `rotation` in degrees, the volume …).
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
@@ -26,6 +27,7 @@ mod grunges;
 mod look;
 mod noises;
 mod patterns;
+pub mod placement;
 mod source;
 mod spots;
 #[cfg(test)]

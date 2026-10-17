@@ -6,6 +6,7 @@ use crate::project::{SppProject, paths};
 use crate::translate::layers::decal::geometry::SetGeometry;
 use crate::translate::layers::island_texels::IslandTexels;
 use materialcraft::mesh::{FaceGroups, Mesh, SurfaceKey, SurfaceMap};
+use materialcraft::projection::SceneFrame;
 
 pub struct ProjectMesh {
     mesh: Mesh,
@@ -27,6 +28,11 @@ impl ProjectMesh {
             .map(|m| m.uid)
             .collect();
         Some(ProjectMesh { mesh, faces, uids })
+    }
+
+    /// The frame of the whole scene, which volume projections are placed in.
+    pub fn frame(&self) -> Option<SceneFrame> {
+        SceneFrame::of_mesh(&self.mesh)
     }
 
     /// The surface map of the first slot with material `uid` at `size`.

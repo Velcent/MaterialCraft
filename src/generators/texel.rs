@@ -115,7 +115,7 @@ mod tests {
         let set = TextureSet::new("texel-test", "S", (10, 3));
         let params = vec![("k".to_string(), "0.5".to_string())];
         let rect = Rect { x: 4, y: 1, w: 2, h: 2 };
-        let request = EvalRequest { set: &set, target: EvalTarget::Mask, rect, params: &params, stack: None, surface: None };
+        let request = EvalRequest { set: &set, target: EvalTarget::Mask, rect, params: &params, stack: None, surface: None, frame: None };
         let mut out = vec![[0.0; 4]; 4];
         Cached { id: "u", recipe: U }.generate(&request, &mut out).unwrap();
         assert!((out[0][0] - 0.45 * 0.5).abs() < 1e-4 && (out[1][0] - 0.55 * 0.5).abs() < 1e-4 && out[3][3] == 1.0);

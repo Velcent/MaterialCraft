@@ -44,6 +44,7 @@ pub use blend_table::{BlendTable, Confidence};
 pub use channels::SetChannels;
 pub use computability::Computability;
 pub use images::{ImageSource, NoImages, ProjectImages};
+pub use projection_map::{HardnessCurve, ProjectionTable, VolumeConvention};
 pub use stack_builder::ImportedStack;
 pub use strategy::{PAINTER_RESULT_NAME, REFERENCE_NAME, StackParts, StackStrategy};
 pub use verdict::StackVerdict;
@@ -58,6 +59,8 @@ use stack_builder::StackBuilder;
 /// replacements.
 pub struct LayerImport<'a> {
     pub table: &'a BlendTable,
+    /// How Painter's projection settings map to ours.
+    pub projections: &'a ProjectionTable,
     pub images: &'a dyn ImageSource,
     pub plan: &'a ProceduralPlan,
 }
@@ -80,6 +83,7 @@ impl LayerImport<'_> {
         let builder = |anchors| StackBuilder {
             channels,
             table: self.table,
+            projections: self.projections,
             images: self.images,
             plan: self.plan,
             resolution,

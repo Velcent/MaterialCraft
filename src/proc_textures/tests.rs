@@ -90,7 +90,7 @@ fn generator_writes_the_rectangle_through_the_placement() {
     assert!(source.is_some());
     let params = kv(&[("seed", "4")]);
     let rect = Rect { x: 4, y: 2, w: 8, h: 4 };
-    let request = EvalRequest { set: &set, target: EvalTarget::Mask, rect, params: &params, stack: None, surface: None };
+    let request = EvalRequest { set: &set, target: EvalTarget::Mask, rect, params: &params, stack: None, surface: None, frame: None };
     let mut out = vec![[0.0f32; 4]; rect.area()];
     TextureSource::new("cells_1").generate(&request, &mut out).unwrap_or_else(|e| panic!("{e}"));
     let t = texture("cells_1", &params).map(|t| t.value(4.5 / 16.0, 2.5 / 16.0));
@@ -106,5 +106,51 @@ fn generator_writes_the_rectangle_through_the_placement() {
         for x in 0..8 {
             assert!((full[y * 16 + x][0] - full[y * 16 + x + 8][0]).abs() < 1e-4);
         }
+    }
+}
+
+#[test]
+fn placement_parameters_round_trip_every_volume_mode() {
+    use crate::projection::{Cylindrical, FacingFalloff, Falloff, ImagePlacement, Planar, Projection, ProjectionMode, Repeat, TriPlanar, Volume};
+    let volume = Volume { offset: [0.1, -0.2, 0.3], rotation: [10.0, 20.0, 30.0], scale: [1.0, 2.0, 0.5], clip: true };
+    let image = ImagePlacement { tiling: [2.0, 3.0], rotation: 15.0, offset: [0.25, 0.0], ..ImagePlacement::default() };
+    let modes = [
+        ProjectionMode::Uv,
+        ProjectionMode::TriPlanar(TriPlanar { volume, blend_hardness: 0.8 }),
+        ProjectionMode::Planar(Planar {
+            volume,
+            depth_falloff: Falloff { on: true, hardness: 0.75 },
+            facing_falloff: FacingFalloff { on: true, angle: 60.0, hardness: 0.25 },
+        }),
+        ProjectionMode::default_of("spherical").unwrap(),
+        ProjectionMode::Cylindrical(Cylindrical { volume, coverage_angle: 180.0, hide_caps: true, ..Cylindrical::default() }),
+    ];
+    for mode in modes {
+        let p = Projection { mode, repeat: Repeat::U, image, ..Projection::default() };
+        assert_eq!(placement::read(&placement::params(&p)), p);
+    }
+    assert!(placement::params(&Projection::default()).is_empty());
+    assert_eq!(placement::read(&none()), Projection::default());
+}
+
+#[test]
+fn volume_placements_need_the_surface() {
+    use crate::mesh::{Mesh, SurfaceKey, SurfaceMap, test_util::quad};
+    let set = TextureSet::new("s", "S", (8, 8));
+    let params = kv(&[("seed", "4"), ("projection", "planar")]);
+    let rect = Rect { x: 0, y: 0, w: 8, h: 8 };
+    let request = EvalRequest { set: &set, target: EvalTarget::Mask, rect, params: &params, stack: None, surface: None, frame: None };
+    let mut out = vec![[0.0f32; 4]; 64];
+    assert!(TextureSource::new("cells_1").generate(&request, &mut out).is_err());
+    // on the quad (facing +z, UVs upright) the default planar projection is the texture in texture space
+    let mesh = Mesh { materials: vec!["set".into()], parts: vec![quad()] };
+    let surface = SurfaceMap::build(&mesh, SurfaceKey::square(&mesh, 0, 8)).unwrap();
+    let request = EvalRequest { surface: Some(&surface), frame: crate::projection::SceneFrame::of_mesh(&mesh), ..request };
+    TextureSource::new("cells_1").generate(&request, &mut out).unwrap_or_else(|e| panic!("{e}"));
+    let plain = kv(&[("seed", "4")]);
+    let mut flat = vec![[0.0f32; 4]; 64];
+    TextureSource::new("cells_1").generate(&EvalRequest { params: &plain, ..request }, &mut flat).unwrap_or_else(|e| panic!("{e}"));
+    for (a, b) in out.iter().zip(&flat) {
+        assert!((a[0] - b[0]).abs() < 1e-4 && a[3] == 1.0);
     }
 }

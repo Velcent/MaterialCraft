@@ -199,6 +199,19 @@ impl SurfaceMap {
         Some(add(add(mul(tri.p[0], b[0]), mul(tri.p[1], b[1])), mul(tri.p[2], b[2])))
     }
 
+    /// Object-space length per UV length, averaged over the set (the square root of the triangles' total area
+    /// over their total UV area); 0 for a set without area. A texel `1 / width` wide spans about
+    /// `world_per_uv() / width` object units, which is how projections size their filter footprints.
+    pub fn world_per_uv(&self) -> f32 {
+        let (mut area, mut uv_area) = (0.0f64, 0.0f64);
+        for t in &self.triangles {
+            area += f64::from(crate::v3::len(crate::v3::cross(sub(t.p[1], t.p[0]), sub(t.p[2], t.p[0]))));
+            let (a, b) = ([t.uv[1][0] - t.uv[0][0], t.uv[1][1] - t.uv[0][1]], [t.uv[2][0] - t.uv[0][0], t.uv[2][1] - t.uv[0][1]]);
+            uv_area += f64::from((a[0] * b[1] - a[1] * b[0]).abs());
+        }
+        if uv_area > 0.0 && area.is_finite() { (area / uv_area).sqrt() as f32 } else { 0.0 }
+    }
+
     /// The covered share of every texel, row-major (0 in the gutter and outside).
     pub fn coverage(&self) -> Vec<f32> {
         self.texels.iter().map(|t| t.coverage).collect()

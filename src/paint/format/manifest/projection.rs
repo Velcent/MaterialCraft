@@ -1,6 +1,8 @@
 //! A fill's `"projection"` object (since 0.4): `{"mode", "filter", "repeat", "image": {…}}` plus the members of
 //! the mode (`volume`, `clip_to_volume`, `blend_hardness`, `depth_falloff`, `facing_falloff`, `coverage_angle`,
-//! `hide_caps`, `warp`). Written only when not the default (texture space).
+//! `hide_caps`, `warp`) and, for the volume-based modes, the fill symmetry (`symmetry`: `{"kind": "mirror", "axis",
+//! "offset"}` or `{"kind": "radial", "axis", "point", "count", "flip": "none"|"u"|"v"}`, axes 0 = x … 2 = z; left out
+//! without symmetry). Written only when not the default (texture space).
 //!
 //! An unknown value of `mode`, `filter`, `repeat` or `size_mode` (a newer file) does not make the file unreadable
 //! (ADR 0007): the projection loads as [`ProjectionMode::Unknown`] holding the whole object, which is written back
@@ -14,6 +16,7 @@ use crate::paint::format::FormatError;
 use crate::projection::{
     FacingFalloff, Falloff, Filter, ImagePlacement, Projection, ProjectionMode, Repeat, SizeMode, UnknownMode, Volume, WarpGrid, WarpPoint,
 };
+use crate::symmetry::{Flip, SymmetrySpec};
 
 /// The projection object, or `None` for the default.
 pub fn write(p: &Projection, here: &str, extras: &Extras) -> Option<Value> {
@@ -52,6 +55,29 @@ pub fn write(p: &Projection, here: &str, extras: &Extras) -> Option<Value> {
         }
         ProjectionMode::TextureSpace | ProjectionMode::Uv | ProjectionMode::Unknown(_) => {}
     }
+    if let Some(sym) = write_symmetry(p.symmetry, &format!("{here}/symmetry"), extras) {
+        v.insert("symmetry", sym);
+    }
+    extras.inject(here, &mut v);
+    Some(v)
+}
+
+fn flip_id(f: Flip) -> &'static str {
+    match f {
+        Flip::None => "none",
+        Flip::U => "u",
+        Flip::V => "v",
+    }
+}
+
+fn write_symmetry(s: SymmetrySpec, here: &str, extras: &Extras) -> Option<Value> {
+    let mut v = match s {
+        SymmetrySpec::None => return None,
+        SymmetrySpec::Mirror { axis, offset } => Value::object().with("kind", "mirror").with("axis", axis as u64).with("offset", num(offset)),
+        SymmetrySpec::Radial { axis, point, count, flip } => {
+            Value::object().with("kind", "radial").with("axis", axis as u64).with("point", nums(&point)).with("count", count).with("flip", flip_id(flip))
+        }
+    };
     extras.inject(here, &mut v);
     Some(v)
 }
@@ -154,7 +180,38 @@ fn read_known(o: &mut Obj, here: &str, ctx: &mut ReadCtx) -> Result<Result<Proje
         }
         ProjectionMode::TextureSpace | ProjectionMode::Uv | ProjectionMode::Unknown(_) => {}
     }
-    Ok(Ok(Projection { mode, filter, repeat, image }))
+    let symmetry = match o.opt("symmetry") {
+        Some(v) => match read_symmetry(v, o.path("symmetry"), &format!("{here}/symmetry"), ctx)? {
+            Some(s) => s,
+            None => return unknown(),
+        },
+        None => SymmetrySpec::None,
+    };
+    Ok(Ok(Projection { mode, filter, repeat, image, symmetry }))
+}
+
+/// The symmetry object; `Ok(None)` for a kind or flip this version does not know.
+fn read_symmetry(v: &Value, at: String, here: &str, ctx: &mut ReadCtx) -> Result<Option<SymmetrySpec>, FormatError> {
+    let mut o = Obj::new(v, at)?;
+    let kind = o.str("kind")?.to_string();
+    let axis = match o.opt("axis") {
+        Some(v) => v.as_u64().filter(|a| *a < 3).ok_or_else(|| o.error("axis", "expected 0, 1 or 2"))? as usize,
+        None => 0,
+    };
+    let spec = match kind.as_str() {
+        "mirror" => SymmetrySpec::Mirror { axis, offset: o.f32_or("offset", 0.0)? },
+        "radial" => {
+            let Some(flip) = enum_or(&mut o, "flip", Flip::None, |id| Flip::ALL.into_iter().find(|f| flip_id(*f) == id))? else { return Ok(None) };
+            let count = match o.opt("count") {
+                Some(v) => v.as_u64().and_then(|n| u32::try_from(n).ok()).ok_or_else(|| o.error("count", "expected a non-negative integer"))?,
+                None => 2,
+            };
+            SymmetrySpec::Radial { axis, point: nums_or(&mut o, "point", [0.0; 3])?, count, flip }
+        }
+        _ => return Ok(None),
+    };
+    ctx.extras.record(here, &o);
+    Ok(Some(spec))
 }
 
 /// An enum field: `Ok(Some(default))` when missing, `Ok(None)` for an id this version does not know.

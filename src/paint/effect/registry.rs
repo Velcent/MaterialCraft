@@ -9,6 +9,7 @@ use crate::mesh::SurfaceMap;
 use crate::paint::channel::Channel;
 use crate::paint::image::Rect;
 use crate::paint::texture_set::TextureSet;
+use crate::projection::SceneFrame;
 use std::fmt;
 
 /// What an effect is evaluated for.
@@ -33,6 +34,8 @@ pub struct EvalRequest<'a> {
     pub stack: Option<&'a dyn StackContext>,
     /// The texture set's surface map (UV islands, positions), when the compositor has one.
     pub surface: Option<&'a SurfaceMap>,
+    /// The whole scene's frame, which volume projections are placed in; `None` without a mesh.
+    pub frame: Option<SceneFrame>,
 }
 
 /// What an effect may read from the layer stack it sits in, over any rectangle of the texture set. Heights

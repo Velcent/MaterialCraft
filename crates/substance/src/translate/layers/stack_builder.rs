@@ -16,6 +16,7 @@ use super::effect_map::ContentMapper;
 use super::images::ImageSource;
 use super::layer_content::is_flat_normal;
 use super::mask::MaskEvaluator;
+use super::projection_map::ProjectionTable;
 use super::verdict::{LayerNote, MaskFailure, StackVerdict};
 use crate::model::{LayerKind as PainterKind, PainterLayer};
 use crate::translate::replacements::ProceduralPlan;
@@ -50,6 +51,7 @@ pub struct ImportedStack {
 pub struct StackBuilder<'a> {
     pub channels: &'a SetChannels,
     pub table: &'a BlendTable,
+    pub projections: &'a ProjectionTable,
     pub images: &'a dyn ImageSource,
     pub plan: &'a ProceduralPlan,
     pub resolution: (u32, u32),
@@ -68,6 +70,7 @@ impl StackBuilder<'_> {
     fn masks(&self) -> MaskEvaluator<'_> {
         MaskEvaluator {
             table: self.table,
+            projections: self.projections,
             images: self.images,
             plan: self.plan,
             resolution: self.resolution,
@@ -186,6 +189,7 @@ impl StackBuilder<'_> {
         ContentEvaluator {
             channels: self.channels,
             table: self.table,
+            projections: self.projections,
             images: self.images,
             resolution: self.resolution,
             anchors: self.anchors,

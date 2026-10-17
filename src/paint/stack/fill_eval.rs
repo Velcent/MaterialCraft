@@ -7,7 +7,7 @@ use super::pass::Pass;
 use crate::paint::effect::EvalTarget;
 use crate::paint::fill_image::FillImage;
 use crate::paint::layer::{Fill, FillSource};
-use crate::projection::{NotComputable, Prepared, Projector, SurfacePoint, Tap, Taps};
+use crate::projection::{Mirrored, NotComputable, Prepared, Projector, SurfacePoint, Tap, Taps};
 
 /// What a fill puts on top for one channel (working space, straight, alpha = coverage).
 pub(super) enum FillTop {
@@ -63,8 +63,13 @@ impl Compositor<'_> {
                     return None;
                 }
                 let prepared = self.prepare(f).ok()?;
-                let request =
-                    FillRequest { set: self.set, source, target: EvalTarget::Channel(pass.channel), filter: f.projection.filter, repeat: f.projection.repeat };
+                let request = FillRequest {
+                    set: self.set,
+                    source,
+                    target: EvalTarget::Channel(pass.channel),
+                    filter: f.projection.filter,
+                    repeat: f.projection.sampling_repeat(),
+                };
                 self.projected(&prepared, pass, |taps, out| self.fills.sources.sample(&request, taps, out)).map(FillTop::Pixels)
             }
         }
@@ -88,28 +93,38 @@ impl Compositor<'_> {
         }
     }
 
-    fn prepare(&self, f: &Fill) -> Result<Prepared, NotComputable> {
-        f.projection.prepare(self.fills.frame.as_ref(), self.fills.surface.is_some())
+    fn prepare(&self, f: &Fill) -> Result<Mirrored<Prepared>, NotComputable> {
+        f.projection.prepare_mirrored(self.fills.frame.as_ref(), self.fills.surface.is_some())
     }
 
     /// Projects every texel of the pass's rectangle, lets `sample` evaluate the taps and combines them per texel
     /// (premultiplied by tap weight and value coverage, times the projection's coverage). `None` if `sample`
     /// fails.
-    fn projected(&self, prepared: &Prepared, pass: &Pass, sample: impl FnOnce(&[Tap], &mut [[f32; 4]]) -> bool) -> Option<Vec<[f32; 4]>> {
+    fn projected(&self, prepared: &Mirrored<Prepared>, pass: &Pass, sample: impl FnOnce(&[Tap], &mut [[f32; 4]]) -> bool) -> Option<Vec<[f32; 4]>> {
         let r = pass.r;
         let (w, h) = self.set.resolution;
         let (w, h) = (w.max(1) as f32, h.max(1) as f32);
         let texel_len = 1.0 / w.max(h);
-        let surface = self.fills.surface.filter(|s| !prepared.uv_only() && (s.width() as u32, s.height() as u32) == self.set.resolution);
+        let uv_only = prepared.inner().uv_only();
+        let surface = self.fills.surface.filter(|s| !uv_only && (s.width() as u32, s.height() as u32) == self.set.resolution);
+        let world_len = surface.map_or(0.0, |s| s.world_per_uv() * texel_len);
         let mut per_texel: Vec<Taps> = Vec::with_capacity(r.area());
         let mut taps: Vec<Tap> = Vec::with_capacity(r.area());
         for y in r.y..r.y + r.h {
             for x in r.x..r.x + r.w {
-                let mut p = SurfacePoint { uv: [(x as f32 + 0.5) / w, (y as f32 + 0.5) / h], texel_len, ..SurfacePoint::default() };
-                if let Some(s) = surface.and_then(|s| s.sample(x as usize, y as usize)) {
-                    (p.pos, p.normal) = (s.position, s.normal);
-                }
-                let t = prepared.project(&p);
+                let mut p = SurfacePoint { uv: [(x as f32 + 0.5) / w, (y as f32 + 0.5) / h], texel_len, world_len, ..SurfacePoint::default() };
+                let t = match surface {
+                    // volume projections have nothing to show where no surface lies under the texel
+                    Some(s) => match s.point_index(y as usize * s.width() + x as usize) {
+                        Some((pos, normal, _)) => {
+                            (p.pos, p.normal) = (pos, normal);
+                            prepared.project(&p)
+                        }
+                        None => Taps::default(),
+                    },
+                    None if uv_only => prepared.project(&p),
+                    None => Taps::default(),
+                };
                 taps.extend_from_slice(t.used());
                 per_texel.push(t);
             }
@@ -143,7 +158,7 @@ impl Compositor<'_> {
 /// The image at each tap, filtered in its stored encoding and converted to working space.
 fn sample_image(image: &FillImage, f: &Fill, pass: &Pass, taps: &[Tap], out: &mut [[f32; 4]]) -> bool {
     let levels = image.levels();
-    let (filter, repeat) = (f.projection.filter, f.projection.repeat);
+    let (filter, repeat) = (f.projection.filter, f.projection.sampling_repeat());
     for (tap, o) in taps.iter().zip(out.iter_mut()) {
         *o = match levels.sample(tap.uv, tap.footprint, filter, repeat) {
             Some(v) => pass.space.to_working(v),

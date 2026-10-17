@@ -17,7 +17,7 @@ use super::computability::Computability;
 use super::decal::{self, geometry::SetGeometry};
 use super::effect_data::{self as data, AnchorIds};
 use super::images::{ImageSource, grey_values, resample};
-use super::projection_map::map_projection;
+use super::projection_map::ProjectionTable;
 use super::strokes;
 use crate::model::{EffectHeader, MaskInitial, PainterEffect, PainterMask, PainterSource};
 use crate::translate::replacements::{self, ProceduralPlan};
@@ -41,6 +41,7 @@ pub struct MaskOutcome {
 
 pub struct MaskEvaluator<'a> {
     pub table: &'a BlendTable,
+    pub projections: &'a ProjectionTable,
     pub images: &'a dyn ImageSource,
     /// Which Substance procedurals become MaterialCraft generators.
     pub plan: &'a ProceduralPlan,
@@ -172,7 +173,7 @@ impl Walk<'_, '_> {
                         Ok(loaded) => {
                             // Mask fills hold one grey value, so the bitmap is laid on here, as the compositor
                             // would sample it.
-                            let mapped = map_projection(fill);
+                            let mapped = self.evaluator.projections.map(fill);
                             let size = self.evaluator.resolution;
                             let image = resample(&loaded.image, &mapped.projection, size);
                             let image = image.unwrap_or_else(|| loaded.image.clone());
@@ -188,11 +189,23 @@ impl Walk<'_, '_> {
                     },
                     PainterSource::Procedural(p) => {
                         let name = p.procedural.as_ref().map_or("?", |p| p.name());
-                        let imported = data::procedural(p.procedural.as_ref());
+                        let mapped = self.evaluator.projections.map(fill);
+                        let mut imported = data::procedural(p.procedural.as_ref());
+                        imported.params =
+                            data::with_placement(std::mem::take(&mut imported.params), &mapped.projection);
                         match replacements::replace(&imported, self.evaluator.plan) {
                             Some((r, ours)) => {
                                 let why = format!("mask generator \"{name}\" replaced by {}", r.generator);
                                 self.note(counts, Computability::replaced(why));
+                                if r.is_texture() {
+                                    // a look-alike is approximate anyway: projection guesses add reasons, not a worse state
+                                    for reason in mapped.status.reasons() {
+                                        self.note(
+                                            counts,
+                                            Computability::replaced(format!("texture placement: {reason}")),
+                                        );
+                                    }
+                                }
                                 self.note(counts, resolved.status());
                                 EffectKind::Generator(ours)
                             }

@@ -7,6 +7,7 @@ use crate::json::{self, Value};
 use crate::paint::format::manifest::projection::all_modes;
 use crate::paint::{BlendMode, Channel, ContentEffect, Document, EffectKind, Fill, FillSource, ImageFill, Layer, LayerKind, PixelFormat, TextureSet};
 use crate::projection::{Filter, ImagePlacement, Projection, ProjectionMode, Repeat, SizeMode};
+use crate::symmetry::{Flip, SymmetrySpec};
 use crate::zip::ZipReader;
 use std::io::Cursor;
 
@@ -23,7 +24,13 @@ fn document() -> Document {
     let mut set = TextureSet::new("s", "S", (8, 8)).with_channel(Channel::BaseColor).with_channel(Channel::Roughness);
     let mut layer = Layer::new("img", "Logo", LayerKind::Fill(image_fill())).with_blend(Channel::BaseColor, BlendMode::Normal, 1.0);
     for mode in all_modes() {
-        let fill = Fill::uniform(vec![(Channel::Roughness, [0.5; 4])]).with_projection(Projection { mode, ..Projection::default() });
+        // the volume modes carry a fill symmetry (mirror and radial alternate)
+        let symmetry = match mode.takes_symmetry() {
+            true if mode.id().len() % 2 == 0 => SymmetrySpec::Mirror { axis: 1, offset: 0.25 },
+            true => SymmetrySpec::Radial { axis: 2, point: [0.5, 0.0, -1.0], count: 6, flip: Flip::V },
+            false => SymmetrySpec::None,
+        };
+        let fill = Fill::uniform(vec![(Channel::Roughness, [0.5; 4])]).with_projection(Projection { mode, symmetry, ..Projection::default() });
         layer = layer.with_effect(ContentEffect::new(Vec::new(), EffectKind::Fill(fill)).with_blend(Channel::Roughness, BlendMode::Normal, 1.0));
     }
     layer = layer.with_effect(ContentEffect::new(Vec::new(), EffectKind::Fill(image_fill())).with_blend(Channel::BaseColor, BlendMode::Multiply, 0.5));
@@ -55,6 +62,8 @@ fn image_fills_and_every_mode_round_trip() {
     // the default projection is left out
     assert!(layer["effects"][0]["fill"].get("projection").is_none());
     assert_eq!(layer["effects"][3]["fill"]["projection"]["mode"].as_str(), Some("planar"));
+    assert!(layer["effects"][3]["fill"]["projection"].get("symmetry").is_some());
+    assert!(layer["effects"][1]["fill"]["projection"].get("symmetry").is_none());
     let last = all_modes().len();
     assert_eq!(
         layer["effects"][last]["fill"]["images"]["base_color"]["path"].as_str(),

@@ -44,7 +44,10 @@ fn volume_modes_report_instead_of_guessing() {
     assert!(matches!(planar.prepare(None, false), Err(NotComputable::NeedsMesh { .. })));
     let frame = SceneFrame { centre: [0.0; 3], size: [2.0, 1.0, 0.5] };
     assert_eq!(frame.largest_extent(), 2.0);
-    assert!(matches!(planar.prepare(Some(&frame), true), Err(NotComputable::NotImplemented { .. })));
+    assert!(matches!(planar.prepare(Some(&frame), false), Err(NotComputable::NeedsMesh { .. })));
+    assert!(matches!(planar.prepare(Some(&frame), true), Ok(Prepared::Planar(_))));
+    let warp = Projection { mode: ProjectionMode::default_of("warp").unwrap(), ..Projection::default() };
+    assert!(matches!(warp.prepare(Some(&frame), true), Err(NotComputable::NotImplemented { .. })));
     let unknown = Projection { mode: ProjectionMode::Unknown(UnknownMode { mode: "hologram".into(), json: "{}".into() }), ..Projection::default() };
     assert_eq!(unknown.prepare(Some(&frame), true), Err(NotComputable::Unknown { mode: "hologram".into() }));
     for id in ["texture_space", "uv", "tri_planar", "planar", "spherical", "cylindrical", "warp"] {

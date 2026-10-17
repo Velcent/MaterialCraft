@@ -12,7 +12,7 @@ use crate::translate::channel_table::{channel_for_bit, channel_spec};
 use crate::translate::layers::cache_score::{Score, score};
 use crate::translate::layers::decal::geometry::SetGeometry;
 use crate::translate::layers::island_texels::IslandTexels;
-use crate::translate::layers::{BlendTable, ImageSource, ImportedStack, LayerImport, SetChannels};
+use crate::translate::layers::{BlendTable, ImageSource, ImportedStack, LayerImport, ProjectionTable, SetChannels};
 use crate::translate::replacements::ProceduralPlan;
 use crate::translate::set_layers::defaults_layer;
 use materialcraft::generators;
@@ -82,8 +82,19 @@ impl<'a> PreparedSet<'a> {
     }
 
     pub fn import(&self, table: &BlendTable, images: &dyn ImageSource) -> ImportedStack {
+        self.import_with(table, &ProjectionTable::painter(), images)
+    }
+
+    /// [`Self::import`] with another projection mapping (for fits).
+    pub fn import_with(
+        &self,
+        table: &BlendTable,
+        projections: &ProjectionTable,
+        images: &dyn ImageSource,
+    ) -> ImportedStack {
         LayerImport {
             table,
+            projections,
             images,
             plan: &self.plan,
         }
@@ -166,7 +177,9 @@ impl<'a> PreparedSet<'a> {
             self.mesh?.surface(uid, self.resolution)
         });
         let fills = match surface {
-            Some(s) => FillContext::with_sources(&NoFillSources).with_surface(s, None),
+            Some(s) => {
+                FillContext::with_sources(&NoFillSources).with_surface(s, self.mesh.and_then(ProjectMesh::frame))
+            }
             None => FillContext::with_sources(&NoFillSources),
         };
         Compositor::with_effects(&set, generators::builtin())

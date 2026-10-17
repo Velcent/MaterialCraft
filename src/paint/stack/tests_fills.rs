@@ -127,3 +127,33 @@ fn other_sources_are_evaluated_through_the_chained_context() {
     assert!(close(&row(&s, c), &[-0.25, 0.25, 0.75, 1.25]));
     assert!(c.warnings(R).is_empty());
 }
+
+/// The test quad (x, y −1 … 1, facing +z, UV 0 … 1 with v down) as a surface map of `size` texels.
+fn quad_surface(size: u32) -> (crate::mesh::SurfaceMap, crate::projection::SceneFrame) {
+    let mesh = crate::mesh::Mesh { materials: vec!["set".into()], parts: vec![crate::mesh::test_util::quad()] };
+    let map = crate::mesh::SurfaceMap::build(&mesh, crate::mesh::SurfaceKey::square(&mesh, 0, size)).unwrap();
+    (map, crate::projection::SceneFrame::of_mesh(&mesh).unwrap())
+}
+
+#[test]
+fn volume_projections_read_the_surface_map() {
+    let (surface, frame) = quad_surface(4);
+    let context = FillContext::with_sources(&NoFillSources).with_surface(&surface, Some(frame));
+    // on a quad facing +z, planar and tri-planar with the default volume lay the image like its UVs do
+    for id in ["planar", "tri_planar"] {
+        let projection = Projection { mode: ProjectionMode::default_of(id).unwrap(), filter: Filter::Bilinear, ..Projection::default() };
+        let s = set_with(image_fill(ramp(4, 4), projection));
+        let c = Compositor::new(&s).with_fills(&context);
+        assert!(c.warnings(R).is_empty(), "{id}");
+        assert!(close(&row(&s, c), &[0.0, 0.1, 0.2, 0.3]), "{id}: {:?}", row(&s, c));
+    }
+    // a clipped decal over the left half leaves the right half to the layer below
+    let mut decal = crate::projection::Planar::default();
+    decal.volume.offset = [-0.25, 0.0, 0.0];
+    decal.volume.scale = [0.5, 1.0, 1.0];
+    decal.volume.clip = true;
+    let projection = Projection { mode: ProjectionMode::Planar(decal), filter: Filter::Nearest, repeat: Repeat::None, ..Projection::default() };
+    let s = set_with(image_fill(ramp(4, 4), projection));
+    let c = Compositor::new(&s).with_fills(&context);
+    assert!(close(&row(&s, c), &[0.1, 0.3, 0.9, 0.9]), "{:?}", row(&s, c));
+}

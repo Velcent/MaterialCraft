@@ -1,5 +1,5 @@
 //! [`Verification`]: the results of `mcsub verify-layers` as text: one block per set (strategy, then each
-//! channel with its status and score), then totals, the worst channels and the blend fits.
+//! channel with its status and score), then totals, the worst channels, the blend fits and the projection fits.
 
 use super::fit::FitTally;
 use super::kinds::KindTally;
@@ -17,6 +17,7 @@ pub struct Verification {
     pub fits: FitTally,
     /// Compared and reproduced channels per native effect kind.
     pub kinds: KindTally,
+    pub projection_fits: super::ProjectionFitTally,
     /// Projects that could not be read, with the reason.
     pub failures: Vec<(String, String)>,
 }
@@ -121,6 +122,7 @@ impl fmt::Display for Verification {
         self.write_totals(f)?;
         write!(f, "{}", self.kinds)?;
         write!(f, "{}", self.fits)?;
+        write!(f, "{}", self.projection_fits)?;
         for (project, e) in &self.failures {
             writeln!(f, "FAILED {project}: {e}")?;
         }

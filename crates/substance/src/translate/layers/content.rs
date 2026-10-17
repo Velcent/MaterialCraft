@@ -10,7 +10,7 @@ use super::channels::SetChannels;
 use super::computability::Computability;
 use super::effect_data;
 use super::images::{ImageSource, channel_pixels};
-use super::projection_map::map_projection;
+use super::projection_map::ProjectionTable;
 use crate::model::{EffectHeader, FillEffect, FilterEffect, PainterEffect, PainterSource};
 use crate::translate::replacements::{self, ProceduralPlan, Replacement};
 use materialcraft::paint::{BlendMode, Channel, TiledImage};
@@ -60,6 +60,7 @@ enum Acc {
 pub struct ContentEvaluator<'a> {
     pub channels: &'a SetChannels,
     pub table: &'a BlendTable,
+    pub projections: &'a ProjectionTable,
     pub images: &'a dyn ImageSource,
     pub resolution: (u32, u32),
     /// What the set's anchors hold, for fills that read one.
@@ -261,7 +262,7 @@ impl ContentEvaluator<'_> {
             Ok(l) => l,
             Err(e) => return opaque(state, e),
         };
-        let mapped = map_projection(fill);
+        let mapped = self.projections.map(fill);
         let image = channel_pixels(&loaded, spec);
         state.status.and(&mapped.status_for(image.size(), self.resolution));
         state.value = Acc::Image(image, coverage, mapped.projection);

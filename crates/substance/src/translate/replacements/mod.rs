@@ -23,7 +23,7 @@ pub use plan::{Choice, ProceduralPlan};
 pub use table::TABLE;
 pub use textures::TEXTURES;
 
-use super::layers::effect_data::SUBSTANCE_PREFIX;
+use super::layers::effect_data::{PLACEMENT_PREFIX, SUBSTANCE_PREFIX};
 use materialcraft::paint::effect::Procedural;
 use params::Painter;
 
@@ -46,9 +46,24 @@ impl Replacement {
     /// Our generator for `original` (an imported `substance:<graph>` procedural), keeping it as the original.
     pub fn convert(&self, original: &Procedural) -> Procedural {
         let painter = Painter::new(&original.params);
+        let mut params = (self.translate)(&painter);
+        if self.is_texture() {
+            // a texture places itself like the fill it replaces (tiling, tri-planar volume …)
+            params.extend(
+                original
+                    .params
+                    .iter()
+                    .filter_map(|(k, v)| Some((k.strip_prefix(PLACEMENT_PREFIX)?.to_string(), v.clone()))),
+            );
+        }
         Procedural::new(self.generator)
-            .with_params((self.translate)(&painter))
+            .with_params(params)
             .replacing(original.clone())
+    }
+
+    /// True for the procedural-texture entries ([`TEXTURES`]), which take a placement.
+    pub fn is_texture(&self) -> bool {
+        TEXTURES.iter().any(|t| std::ptr::eq(t, self))
     }
 }
 

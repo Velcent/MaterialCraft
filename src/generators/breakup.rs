@@ -1,12 +1,16 @@
 //! [`Breakup`]: the noise generators use to break up their masks (where a smart mask's dirt or wear is
 //! patchy), and [`Texture`]: one of MaterialCraft's procedural textures ([`crate::proc_textures`]: a grunge
 //! map by number, or any texture by id) used where a generator takes a texture input. Both are tileable in UV and can be projected tri-planar from the
-//! position map instead, which hides UV seams.
+//! position map instead, which hides UV seams: the same planes and blend as the tri-planar fill projection
+//! ([`crate::projection::tri_planar_planes`], [`crate::projection::falloff::tri_planar_weights`]), read from the
+//! baked position and world-normal maps (generator results are cached per texture set, without the mesh).
 
 use super::maps::SetMaps;
 use super::texel::Texel;
 use crate::noise::Fbm;
 use crate::proc_textures::{self, ProcTexture};
+use crate::projection::falloff::tri_planar_weights;
+use crate::projection::tri_planar_planes;
 
 /// Lattice cells across the texture at scale 1.
 const BASE_CELLS: f32 = 3.0;
@@ -15,7 +19,8 @@ const BASE_CELLS: f32 = 3.0;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Placement {
     Uv,
-    /// Three planar projections of the position map, blended by the world normal; `sharpness` 0..1.
+    /// Three planar projections of the position map, blended by the world normal; `sharpness` 0..1 is the
+    /// blend hardness of the tri-planar projection.
     Triplanar {
         sharpness: f32,
     },
@@ -34,13 +39,9 @@ impl Placement {
             Placement::Triplanar { sharpness } => {
                 let p = maps.position(t.u, t.v);
                 let n = maps.normal(t.u, t.v);
-                let power = 1.0 + sharpness * 15.0;
-                let w = n.map(|c| c.abs().powf(power));
-                let sum = (w[0] + w[1] + w[2]).max(1e-6);
-                let x = pattern(wrap(p[2]), wrap(p[1]));
-                let y = pattern(wrap(p[0]), wrap(p[2]));
-                let z = pattern(wrap(p[0]), wrap(p[1]));
-                (x * w[0] + y * w[1] + z * w[2]) / sum
+                let w = tri_planar_weights(n, sharpness);
+                let planes = tri_planar_planes([p[0] - 0.5, p[1] - 0.5, p[2] - 0.5], n);
+                planes.iter().zip(w).filter(|(_, w)| *w > 0.0).map(|(c, w)| w * pattern(wrap(c[0]), wrap(c[1]))).sum()
             }
         }
     }

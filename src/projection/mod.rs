@@ -8,8 +8,11 @@
 //!
 //! Modes ([`ProjectionMode`]): texture space (the source laid 1:1 over the UV tile, no settings), UV (an image
 //! placement in UV space), and the volume-based modes tri-planar, planar, spherical, cylindrical and warp. Texture
-//! space and UV work in UV space alone; the volume modes need the mesh (a [`crate::mesh::SurfaceMap`]) and are data
-//! only in this version: preparing one reports [`NotComputable::NotImplemented`].
+//! space and UV work in UV space alone; the volume modes need the mesh (a [`crate::mesh::SurfaceMap`]: positions
+//! and interpolated vertex normals, ADR 0006 Q-PJ-02) and the [`SceneFrame`] ([`volume`]: the volume's local frame,
+//! [`rotation`]: Euler angles, [`falloff`]: clip, depth and facing falloffs, the tri-planar blend). Warp is data
+//! only in this version: preparing it reports [`NotComputable::NotImplemented`]. [`Mirrored`] repeats any
+//! projector at the copies of a [`crate::symmetry::SymmetrySpec`] (fill symmetry).
 //!
 //! [`view`] maps between the screen and the mesh for one camera ([`ViewProjector`]) and places images on screen
 //! ([`ScreenImageTransform`], [`ScreenProjector`]) for projection painting and stencils.
@@ -21,19 +24,30 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod data;
+pub mod falloff;
 mod frame;
+mod mirrored;
 mod modes;
 mod placement;
 mod projector;
+pub mod rotation;
 pub mod sampling;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_volume;
 pub mod view;
+pub mod volume;
+mod volume_modes;
 
 pub use data::{Filter, ImagePlacement, Projection, Repeat, SizeMode};
 pub use frame::SceneFrame;
+pub use mirrored::Mirrored;
 pub use modes::{Cylindrical, FacingFalloff, Falloff, Planar, ProjectionMode, Spherical, TriPlanar, UnknownMode, Volume, Warp, WarpGrid, WarpPoint};
 pub use placement::UvPlacement;
 pub use projector::{NotComputable, Prepared, Projector, SurfacePoint, Tap, Taps};
+pub use rotation::EulerOrder;
 pub use sampling::{ImageLevels, LevelChain, Texels};
 pub use view::{CpuViewProjector, ScreenImageTransform, ScreenPoint, ScreenProjector, SurfaceHit, ViewProjector, ViewScene};
+pub use volume::VolumeTransform;
+pub use volume_modes::{PreparedCylindrical, PreparedPlanar, PreparedSpherical, PreparedTriPlanar, tri_planar_planes};

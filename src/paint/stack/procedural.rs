@@ -10,7 +10,7 @@ use crate::paint::image::Rect;
 pub(super) fn generate(c: &Compositor, p: &Procedural, target: EvalTarget, r: Rect, stack: Option<&dyn StackContext>) -> Option<Vec<[f32; 4]>> {
     let generator = c.effects.generator(&p.id)?;
     let mut out = vec![[0.0; 4]; r.area()];
-    let request = EvalRequest { set: c.set, target, rect: r, params: &p.params, stack, surface: c.fills.surface };
+    let request = EvalRequest { set: c.set, target, rect: r, params: &p.params, stack, surface: c.fills.surface, frame: c.fills.frame };
     generator.generate(&request, &mut out).ok()?;
     Some(out)
 }
@@ -29,7 +29,15 @@ impl FilterRun<'_, '_> {
     pub fn run(&self, input: impl FnOnce(Rect) -> Vec<[f32; 4]>) -> Option<Vec<[f32; 4]>> {
         let kernel = self.compositor.effects.filter(&self.procedural.id)?;
         let params = &self.procedural.params;
-        let request = EvalRequest { set: self.compositor.set, target: self.target, rect: self.r, params, stack: None, surface: self.compositor.fills.surface };
+        let request = EvalRequest {
+            set: self.compositor.set,
+            target: self.target,
+            rect: self.r,
+            params,
+            stack: None,
+            surface: self.compositor.fills.surface,
+            frame: self.compositor.fills.frame,
+        };
         let outer = grow(self.r, kernel.radius(&request), self.compositor.set.resolution);
         let pixels = input(outer);
         let mut out = vec![[0.0; 4]; self.r.area()];

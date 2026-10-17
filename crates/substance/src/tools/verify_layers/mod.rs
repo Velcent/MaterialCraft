@@ -1,18 +1,21 @@
 //! `mcsub verify-layers`: imports each texture set's layer stack, composites every channel the stack can
 //! compute and compares it with Painter's texture cache (the flattened result Painter saved), per set and
 //! channel, on the texels of the mesh. With `--fit`, guessed blend values are identified by trying each of
-//! our modes ([`fit`]).
+//! our modes ([`fit`]), and Painter's volume projection convention by trying candidate conventions
+//! ([`projection_fit`]).
 
 mod fit;
 pub mod generator_cases;
 pub mod kinds;
 mod prepared;
 mod project_mesh;
+pub mod projection_fit;
 mod table;
 
 pub use crate::translate::layers::cache_score::{EXACT_STEPS, Score};
 pub use fit::{FitRecord, FitTally};
 use kinds::{KindTally, NativeKinds};
+pub use projection_fit::{ProjectionFitRecord, ProjectionFitTally};
 pub use table::Verification;
 
 use crate::inspect::Corpus;
@@ -59,6 +62,7 @@ struct ProjectVerification {
     sets: Vec<SetResult>,
     fits: Vec<FitRecord>,
     kinds: KindTally,
+    projection_fits: Vec<ProjectionFitRecord>,
 }
 
 /// Verifies every `.spp` below `root` (or `root` itself when it is a file), several projects at once on `pool`.
@@ -96,6 +100,7 @@ pub fn verify_path(
                 out.sets.extend(project.sets);
                 out.fits.add(project.fits);
                 out.kinds.merge(project.kinds);
+                out.projection_fits.add(project.projection_fits);
             }
             Err(e) => out.failures.push((label_of(path), e)),
         }
@@ -137,6 +142,16 @@ fn verify_project(path: &Path, label: &str, options: &VerifyOptions) -> Result<P
                     channel,
                     values,
                     score,
+                    (&table, &images),
+                    &example,
+                ));
+            }
+            if let (Some(_), true, Some(modes)) = (score, options.fit, projection_fit::modes_in(status.reasons())) {
+                let example = format!("{label} / {} / {}", painter.name, set.channels.label(channel));
+                out.projection_fits.push(ProjectionFitRecord::measure(
+                    &set,
+                    channel,
+                    modes,
                     (&table, &images),
                     &example,
                 ));

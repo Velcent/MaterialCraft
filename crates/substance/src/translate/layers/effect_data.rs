@@ -20,6 +20,21 @@ pub const SUBSTANCE_PREFIX: &str = "substance:";
 /// Prefix of the parameters that record what feeds an image input (`input:texture` = `ratio_dirt_1`).
 pub const INPUT_PREFIX: &str = "input:";
 
+/// Prefix of the parameters that record the fill's projection on an imported procedural (`placement:projection`
+/// = `tri_planar`, the keys of `materialcraft::proc_textures::placement`), so a texture replacement can place
+/// itself like the fill did. Prefixed so they never meet a Painter tweak of the same name.
+pub const PLACEMENT_PREFIX: &str = "placement:";
+
+/// `params` with the placement parameters of `projection` added (prefixed); none for texture space.
+pub fn with_placement(
+    mut params: Vec<(String, String)>,
+    projection: &materialcraft::projection::Projection,
+) -> Vec<(String, String)> {
+    let placed = materialcraft::proc_textures::placement::params(projection);
+    params.extend(placed.into_iter().map(|(k, v)| (format!("{PLACEMENT_PREFIX}{k}"), v)));
+    params
+}
+
 /// A generator or filter id plus parameters for a Painter procedural; `?` when the effect names none. The
 /// parameters are its tweaks, then one `input:<identifier>` per fed image input naming what feeds it (a
 /// procedural's graph name, `anchor`, `bitmap`, `uniform`), so replacements can follow the wiring.

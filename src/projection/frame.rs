@@ -20,7 +20,8 @@ impl SceneFrame {
         mesh.bounds().map(|b| SceneFrame::from_bounds(&b))
     }
 
-    /// The largest extent (at least a tiny positive value, so divisions stay finite).
+    /// The largest extent (at least a tiny positive value, so divisions stay finite): one *scene unit*, the unit
+    /// of volume offsets and the size of a volume with scale 1 ([`super::volume`]).
     pub fn largest_extent(&self) -> f32 {
         let m = self.size.iter().copied().filter(|v| v.is_finite()).fold(0.0f32, f32::max);
         m.max(1e-6)

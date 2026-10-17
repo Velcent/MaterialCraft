@@ -166,7 +166,7 @@ fn screen_projector_paints_visible_texels_through_the_image() {
     let cam = Camera::looking_at([0.0, 0.0, 5.0], [0.0; 3], [0.0, 1.0, 0.0], &lens, [200.0, 200.0]);
     let view = scene.projector(&mesh, cam).unwrap();
     let proj = ScreenProjector { view: &view, image: ScreenImageTransform::fitted(1.0, [200.0, 200.0]) };
-    let point = |pos, normal| SurfacePoint { uv: [0.0; 2], pos, normal, texel_len: 1.0 / 512.0 };
+    let point = |pos, normal| SurfacePoint { uv: [0.0; 2], pos, normal, texel_len: 1.0 / 512.0, world_len: 0.0 };
     // the front face's centre is the image's centre, fully covered
     let t = proj.project(&point([0.0, 0.0, 1.0], [0.0, 0.0, 1.0]));
     assert!((t.used()[0].uv[0] - 0.5).abs() < 1e-4 && (t.used()[0].uv[1] - 0.5).abs() < 1e-4);

@@ -107,6 +107,7 @@ pub fn import_with(layers: Vec<PainterLayer>, images: &dyn ImageSource) -> Impor
     let table = BlendTable::painter();
     LayerImport {
         table: &table,
+        projections: &super::super::ProjectionTable::painter(),
         images,
         plan: &crate::translate::replacements::ProceduralPlan::default(),
     }

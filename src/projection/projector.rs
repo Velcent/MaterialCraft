@@ -2,10 +2,12 @@
 //! implements the projector by `match`, so the per-texel path has no dynamic dispatch. The trait exists for
 //! projectors made elsewhere (the screen projector of projection painting, symmetry wrappers).
 
-use super::data::Projection;
+use super::data::{ImagePlacement, Projection};
 use super::frame::SceneFrame;
 use super::modes::ProjectionMode;
 use super::placement::UvPlacement;
+use super::volume::VolumeTransform;
+use super::volume_modes::{PreparedCylindrical, PreparedPlanar, PreparedSpherical, PreparedTriPlanar};
 use crate::mesh::Vec3;
 use std::fmt;
 
@@ -20,6 +22,8 @@ pub struct SurfacePoint {
     pub normal: Vec3,
     /// Size of the texel in UV units (1 / resolution).
     pub texel_len: f32,
+    /// Size of the texel on the surface in object units (0 = unknown; volume projections then use `texel_len`).
+    pub world_len: f32,
 }
 
 /// One sample position in the projected source.
@@ -86,6 +90,10 @@ pub enum Prepared {
     TextureSpace,
     /// The placement applied to the UV coordinate.
     Uv(UvPlacement),
+    TriPlanar(PreparedTriPlanar),
+    Planar(PreparedPlanar),
+    Spherical(PreparedSpherical),
+    Cylindrical(PreparedCylindrical),
 }
 
 impl Projection {
@@ -93,13 +101,36 @@ impl Projection {
     /// tells whether a surface map is available for the texture set.
     pub fn prepare(&self, frame: Option<&SceneFrame>, has_surface: bool) -> Result<Prepared, NotComputable> {
         let mode = || self.mode.id().to_string();
-        match &self.mode {
-            ProjectionMode::TextureSpace => Ok(Prepared::TextureSpace),
-            ProjectionMode::Uv => Ok(Prepared::Uv(UvPlacement::new(&self.image))),
-            ProjectionMode::Unknown(_) => Err(NotComputable::Unknown { mode: mode() }),
-            m if m.needs_mesh() && (frame.is_none() || !has_surface) => Err(NotComputable::NeedsMesh { mode: mode() }),
-            _ => Err(NotComputable::NotImplemented { mode: mode() }),
-        }
+        let place = UvPlacement::new(&self.image);
+        let frame = match (&self.mode, frame) {
+            (ProjectionMode::TextureSpace, _) => return Ok(Prepared::TextureSpace),
+            (ProjectionMode::Uv, _) => return Ok(Prepared::Uv(place)),
+            (ProjectionMode::Unknown(_), _) => return Err(NotComputable::Unknown { mode: mode() }),
+            (_, Some(frame)) if has_surface => frame,
+            _ => return Err(NotComputable::NeedsMesh { mode: mode() }),
+        };
+        Ok(match &self.mode {
+            ProjectionMode::TriPlanar(m) => {
+                let place = UvPlacement::new(&ImagePlacement { offset: [0.0; 2], ..self.image });
+                Prepared::TriPlanar(PreparedTriPlanar { vol: VolumeTransform::new(&m.volume, frame), place, hardness: m.blend_hardness })
+            }
+            ProjectionMode::Planar(m) => {
+                Prepared::Planar(PreparedPlanar { vol: VolumeTransform::new(&m.volume, frame), place, depth: m.depth_falloff, facing: m.facing_falloff })
+            }
+            ProjectionMode::Spherical(m) => Prepared::Spherical(PreparedSpherical { vol: VolumeTransform::new(&m.volume, frame), place }),
+            ProjectionMode::Cylindrical(m) => {
+                let angle = if m.coverage_angle.is_finite() { m.coverage_angle.clamp(1e-3, 360.0) } else { 360.0 };
+                Prepared::Cylindrical(PreparedCylindrical {
+                    vol: VolumeTransform::new(&m.volume, frame),
+                    place,
+                    facing: m.facing_falloff,
+                    coverage_angle: angle.to_radians(),
+                    hide_caps: m.hide_caps,
+                })
+            }
+            // warp is evaluated from step 43 on
+            _ => return Err(NotComputable::NotImplemented { mode: mode() }),
+        })
     }
 }
 
@@ -116,6 +147,10 @@ impl Projector for Prepared {
         match self {
             Prepared::TextureSpace => Taps::one(p.uv, p.texel_len),
             Prepared::Uv(m) => Taps::one(m.apply(p.uv), p.texel_len * m.scale()),
+            Prepared::TriPlanar(m) => m.project(p),
+            Prepared::Planar(m) => m.project(p),
+            Prepared::Spherical(m) => m.project(p),
+            Prepared::Cylindrical(m) => m.project(p),
         }
     }
 }

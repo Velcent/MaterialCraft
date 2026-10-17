@@ -227,6 +227,7 @@ fn polygon_fill_picks_are_resolved_on_the_mesh() {
     let table = BlendTable::painter();
     let import = LayerImport {
         table: &table,
+        projections: &crate::translate::layers::ProjectionTable::painter(),
         images: &NoImages,
         plan: &crate::translate::replacements::ProceduralPlan::default(),
     };
@@ -286,6 +287,7 @@ fn content_filters_follow_the_replacement_plan() {
     let import = |plan: &ProceduralPlan| {
         LayerImport {
             table: &table,
+            projections: &crate::translate::layers::ProjectionTable::painter(),
             images: &NoImages,
             plan,
         }

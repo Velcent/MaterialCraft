@@ -42,7 +42,7 @@ fn halves() -> Vec<[f32; 4]> {
 fn apply(id: &str, p: &[(String, String)], target: EvalTarget, surface: Option<&SurfaceMap>, pixels: &[[f32; 4]], rect: Rect) -> Vec<[f32; 4]> {
     let set = TextureSet::new("s", "S", (N, N)).with_channel(Channel::Roughness);
     let kernel = filter(id).unwrap();
-    let request = EvalRequest { set: &set, target, rect, params: p, stack: None, surface };
+    let request = EvalRequest { set: &set, target, rect, params: p, stack: None, surface, frame: None };
     let r = kernel.radius(&request);
     let x0 = rect.x.saturating_sub(r);
     let y0 = rect.y.saturating_sub(r);
