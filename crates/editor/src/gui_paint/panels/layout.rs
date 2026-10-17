@@ -11,6 +11,7 @@ use super::layers::LayerPanel;
 use super::log::LogPanel;
 use super::status_bar::Activity;
 use super::{PanelEvent, Strip, menu_bar, panel_strip, status_bar, tools_strip};
+use crate::gui_assets::AssetTray;
 use crate::gui_settings::Side;
 use crate::gui_theme;
 use crate::gui_widgets::strip::STRIP_WIDTH;
@@ -28,6 +29,7 @@ pub struct Screen<'a> {
     /// The session's diagnostics: the newest entry for the status bar, all for the log panel.
     pub history: &'a RingBuffer,
     pub log: &'a mut LogPanel,
+    pub tray: &'a mut AssetTray,
     /// A texture set to highlight this frame.
     pub focus_set: Option<(usize, bool)>,
     pub activity: Activity<'a>,
@@ -71,6 +73,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
             tools: &shell.tools,
             scale_draft: &mut shell.scale_draft,
             log: s.log,
+            tray: s.tray,
             history: s.history,
             focus_set: s.focus_set,
             events: &mut events,

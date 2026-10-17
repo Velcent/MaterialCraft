@@ -15,6 +15,7 @@ use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
 use materialcraft::material_fill::{FolderResolver, MaterialCache, MaterialFills};
 use materialcraft::paint::edit::LayerRef;
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 type GeometryResult = Result<Vec<PartGeometry>, String>;
@@ -33,6 +34,8 @@ pub struct SceneSync {
     isolate: Option<LayerRef>,
     /// Rendered materials of material fills, kept across maps runs (and documents: keyed by graph content).
     materials: Arc<MaterialCache>,
+    /// The asset library roots, where material references are looked up after the document's folder.
+    library_folders: Vec<PathBuf>,
     pub error: Option<String>,
 }
 
@@ -73,7 +76,7 @@ impl SceneSync {
 
     fn start_maps(&mut self, doc: &OpenDocument, view: ChannelView, sets: Vec<usize>) {
         self.waiting.retain(|m| !sets.contains(&m.set));
-        let materials = MaterialFills::new(Arc::new(material_folders(doc)), self.materials.clone());
+        let materials = MaterialFills::new(Arc::new(material_folders(doc, &self.library_folders)), self.materials.clone());
         self.maps = Some(MapsWorker::start(doc.maps_view(&sets), sets, view, self.isolate.clone(), materials));
     }
 
@@ -87,7 +90,7 @@ impl SceneSync {
 
     /// Drops all work and the GPU scene (rendered materials are kept).
     pub fn clear(&mut self, gpu: &Shared) {
-        *self = SceneSync { materials: self.materials.clone(), ..SceneSync::default() };
+        *self = SceneSync { materials: self.materials.clone(), library_folders: std::mem::take(&mut self.library_folders), ..SceneSync::default() };
         if let Ok(mut g) = gpu.lock() {
             g.clear_scene();
         }
@@ -130,6 +133,11 @@ impl SceneSync {
                 }
             }
         }
+    }
+
+    /// Sets the asset library roots material references are looked up in (used by the next maps run).
+    pub fn set_library_folders(&mut self, folders: Vec<PathBuf>) {
+        self.library_folders = folders;
     }
 
     /// True while geometry or maps are still being built.
@@ -175,7 +183,7 @@ fn copy(m: &GpuMaps) -> GpuMaps {
     GpuMaps { size: m.size, base: m.base.clone(), normal: m.normal.clone(), rma: m.rma.clone(), emissive: m.emissive.clone(), height: m.height.clone() }
 }
 
-/// Where material fill references are looked up: the document's folder (asset library roots join with the tray).
-fn material_folders(doc: &OpenDocument) -> FolderResolver {
-    FolderResolver::new(doc.source().parent().map(|p| p.to_path_buf()))
+/// Where material fill references are looked up: the document's folder, then the asset library roots.
+fn material_folders(doc: &OpenDocument, library: &[PathBuf]) -> FolderResolver {
+    FolderResolver::new(doc.source().parent().map(|p| p.to_path_buf()).into_iter().chain(library.iter().cloned()))
 }

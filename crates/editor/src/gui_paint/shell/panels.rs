@@ -22,6 +22,8 @@ pub enum PaintPanel {
     Interface,
     /// The session log (LG-01).
     Log,
+    /// The asset tray (AS-08).
+    Assets,
 }
 
 impl PanelKind for PaintPanel {
@@ -34,6 +36,7 @@ impl PanelKind for PaintPanel {
         PaintPanel::Shortcuts,
         PaintPanel::Interface,
         PaintPanel::Log,
+        PaintPanel::Assets,
     ];
 
     fn id(self) -> &'static str {
@@ -46,6 +49,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Shortcuts => "shortcuts",
             PaintPanel::Interface => "interface_settings",
             PaintPanel::Log => "log",
+            PaintPanel::Assets => "assets",
         }
     }
 
@@ -59,6 +63,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Shortcuts => "Shortcuts",
             PaintPanel::Interface => "Interface settings",
             PaintPanel::Log => "Log",
+            PaintPanel::Assets => "Assets",
         }
     }
 
@@ -72,6 +77,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Shortcuts => Icon::Keyboard,
             PaintPanel::Interface => Icon::Interface,
             PaintPanel::Log => Icon::Log,
+            PaintPanel::Assets => Icon::Assets,
         }
     }
 
@@ -94,10 +100,15 @@ fn split(axis: SplitAxis, size: SplitSize, first: Node<PaintPanel>, second: Node
     Node::Split { axis, size, first: Box::new(first), second: Box::new(second) }
 }
 
-/// Texture sets and the import report (with the log) on the left, the viewport, layers above display settings
-/// on the right.
+/// Texture sets above the asset tray (with the import report and the log) on the left (AS-08), the viewport,
+/// layers above display settings on the right.
 fn painting() -> Layout<PaintPanel> {
-    let left = split(SplitAxis::Vertical, SplitSize::Ratio(0.45), tabs(&[PaintPanel::TextureSets]), tabs(&[PaintPanel::ImportReport, PaintPanel::Log]));
+    let left = split(
+        SplitAxis::Vertical,
+        SplitSize::Ratio(0.3),
+        tabs(&[PaintPanel::TextureSets]),
+        tabs(&[PaintPanel::Assets, PaintPanel::ImportReport, PaintPanel::Log]),
+    );
     let right = split(SplitAxis::Vertical, SplitSize::Ratio(0.6), tabs(&[PaintPanel::Layers]), tabs(&[PaintPanel::Display]));
     let centre = split(SplitAxis::Horizontal, SplitSize::FixedSecond(320.0), tabs(&[PaintPanel::Viewport]), right);
     Layout { root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(280.0), left, centre)), floating: Vec::new() }
@@ -109,7 +120,7 @@ fn baking() -> Layout<PaintPanel> {
         SplitAxis::Vertical,
         SplitSize::Ratio(0.4),
         tabs(&[PaintPanel::TextureSets, PaintPanel::Layers]),
-        tabs(&[PaintPanel::Display, PaintPanel::ImportReport, PaintPanel::Log]),
+        tabs(&[PaintPanel::Display, PaintPanel::Assets, PaintPanel::ImportReport, PaintPanel::Log]),
     );
     Layout { root: Some(split(SplitAxis::Horizontal, SplitSize::FixedSecond(300.0), tabs(&[PaintPanel::Viewport]), right)), floating: Vec::new() }
 }

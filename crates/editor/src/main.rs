@@ -18,6 +18,7 @@ use std::sync::mpsc::{Receiver, TryRecvError, channel};
 mod logo_data {
     include!(concat!(env!("OUT_DIR"), "/logo.rs"));
 }
+mod gui_assets;
 mod gui_input;
 #[path = "gui_paint/mod.rs"]
 mod gui_paint;

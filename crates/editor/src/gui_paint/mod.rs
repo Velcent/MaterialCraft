@@ -5,7 +5,7 @@
 //! keeps the GPU scene in step with the document, [`viewport::Viewport`] draws it, the
 //! [`shell::Shell`] holds the docking workspace, shortcuts and settings, and the [`panels`] turn
 //! clicks and key presses into [`panels::PanelEvent`]s that are applied here ([`documents`]: opening and
-//! closing; [`editing`]: stack edits and history moves).
+//! closing; [`editing`]: stack edits and history moves; [`tray_host`]: the asset tray's drops and settings).
 
 mod cache;
 mod channel_view;
@@ -28,11 +28,13 @@ pub mod shell;
 mod shot;
 mod spp_import;
 mod stack_editor;
+mod tray_host;
 mod unlit;
 mod view_pick;
 mod viewport;
 mod window;
 
+use crate::gui_assets::AssetTray;
 use crate::gui_settings::UserSettings;
 use channel_view::ChannelView;
 use document_state::OpenDocument;
@@ -87,6 +89,8 @@ pub struct PaintMode {
     /// The texture set a log entry led to, highlighted for a moment.
     focus: Option<Focus>,
     layers: LayerPanel,
+    /// The asset tray (step 15); it works with or without a document.
+    tray: AssetTray,
     /// Where status messages and errors go (the log file and the session history).
     diag: Arc<dyn Sink>,
     /// Docking, shortcuts, tools and the user settings they live in.
@@ -103,6 +107,10 @@ impl PaintMode {
     /// its messages go to `diag`, its workspace is kept in `settings`.
     pub fn from_args(diag: Arc<dyn Sink>, settings: UserSettings) -> PaintMode {
         let launch = Launch::from_args(std::env::args().skip(1));
+        let (tray, first_run) = AssetTray::new(&settings.get().library, settings.dir(), diag.clone());
+        if let Some(note) = first_run {
+            diag.info(Area::Assets, note);
+        }
         let mut pm = PaintMode {
             document: None,
             loader: None,
@@ -113,6 +121,7 @@ impl PaintMode {
             log: LogPanel::default(),
             focus: None,
             layers: LayerPanel::default(),
+            tray,
             shell: Shell::new(settings, diag.clone()),
             diag,
             shot: launch.shot.map(ShotJob::new),
@@ -150,7 +159,9 @@ impl PaintMode {
             }
         }
         let mut events = self.shell.take_shortcuts(ctx);
+        self.before_tray_frame();
         events.extend(self.draw(ui, history));
+        events.extend(self.tray.end_frame(ctx).map(PanelEvent::Assets));
         let mut action = PaintAction::Stay;
         for ev in events {
             if self.apply(ev) == PaintAction::Home {
@@ -200,6 +211,7 @@ impl PaintMode {
             display: self.display,
             history,
             log: &mut self.log,
+            tray: &mut self.tray,
             focus_set,
             activity: Activity { loading: self.loader.as_ref().map(|l| l.progress()), maps: self.scene.progress() },
             shell: &mut self.shell,
@@ -254,6 +266,7 @@ impl PaintMode {
                 self.diag.info(Area::Project, "Cancelled.");
             }
             PanelEvent::Reveal(target) => self.reveal(&target),
+            PanelEvent::Assets(ev) => self.apply_tray(ev),
             // Workspace events were handled by the shell.
             _ => {}
         }

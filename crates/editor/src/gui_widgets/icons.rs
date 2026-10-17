@@ -22,6 +22,8 @@ pub enum Icon {
     Interface,
     /// The session log.
     Log,
+    /// The asset tray: a grid of tiles.
+    Assets,
     Viewport,
     More,
 }
@@ -106,6 +108,12 @@ impl Icon {
                     painter.circle_filled(p(-0.55, dy), s * 0.08, color);
                     poly(&[p(-0.3, dy), p(-0.3 + w + 0.3, dy)]);
                 }
+            }
+            Icon::Assets => {
+                for (x, y) in [(-0.33, -0.33), (0.33, -0.33), (-0.33, 0.33)] {
+                    painter.rect_stroke(Rect::from_center_size(p(x, y), vec2(s * 0.5, s * 0.5)), 1.0, line, eframe::egui::StrokeKind::Middle);
+                }
+                painter.circle_filled(p(0.33, 0.33), s * 0.25, color);
             }
             Icon::Interface => {
                 for (dy, x) in [(-0.4, 0.2), (0.0, -0.3), (0.4, 0.4)] {

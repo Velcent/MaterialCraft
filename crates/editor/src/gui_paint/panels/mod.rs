@@ -20,6 +20,7 @@ mod viewport_toolbar;
 use super::channel_view::ChannelView;
 use super::shell::panels::PaintPanel;
 use super::shell::tools::Tool;
+use crate::gui_assets::TrayEvent;
 use crate::gui_settings::Side;
 use crate::gui_workspace::shortcuts::PageEdit;
 use materialcraft::diag::Target;
@@ -74,4 +75,6 @@ pub enum PanelEvent {
     Layers(layers::LayerEvent),
     /// A layer shortcut, resolved against the layer panel's selection.
     LayerAction(layers::LayerAction),
+    /// A request from the asset tray: a dropped asset, changed library settings.
+    Assets(TrayEvent),
 }

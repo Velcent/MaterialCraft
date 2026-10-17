@@ -13,6 +13,7 @@ use super::import_report::ReportPanel;
 use super::layers::LayerPanel;
 use super::log::LogPanel;
 use super::{PanelEvent, interface_settings, texture_sets, timeline, view_settings, viewport_toolbar};
+use crate::gui_assets::AssetTray;
 use crate::gui_workspace::shortcuts::{ShortcutTable, ShortcutsPage};
 use materialcraft::diag::RingBuffer;
 
@@ -28,6 +29,7 @@ pub struct Bodies<'a> {
     pub tools: &'a ToolState,
     pub scale_draft: &'a mut f32,
     pub log: &'a mut LogPanel,
+    pub tray: &'a mut AssetTray,
     /// The session's diagnostics, for the log panel.
     pub history: &'a RingBuffer,
     /// A texture set to highlight this frame (going to a log entry's target).
@@ -78,6 +80,13 @@ impl DockContent<PaintPanel> for Bodies<'_> {
             }
             PaintPanel::Log => {
                 margin.show(ui, |ui| self.log.show(ui, self.history, self.events));
+            }
+            PaintPanel::Assets => {
+                margin.show(ui, |ui| {
+                    let mut out = Vec::new();
+                    self.tray.show(ui, &mut out);
+                    self.events.extend(out.into_iter().map(PanelEvent::Assets));
+                });
             }
         }
     }
