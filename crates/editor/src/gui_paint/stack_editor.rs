@@ -77,6 +77,7 @@ fn run(doc: &mut OpenDocument, ev: LayerEvent) -> Result<Option<Vec<String>>, Ed
         Drop { target, payload, replace } => doc.edit("Drop asset", None, |tx| {
             ops::drop_onto(tx, &target, &payload, replace).map(|out| match out {
                 DropOutcome::NewLayer(id) => Some(vec![id]),
+                DropOutcome::Filled(r) => Some(vec![r.layer]),
                 DropOutcome::Effects { .. } => None,
             })
         }),

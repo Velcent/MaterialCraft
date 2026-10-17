@@ -8,11 +8,16 @@
 //! A smart mask (a mask's effects saved as an asset) dropped onto a layer or its mask gives the layer a black
 //! mask if it has none and adds its effects; with `replace` they replace the mask's effects (MK-16).
 //!
+//! A material and a smart material make layers (LS-18, see [`super::drop_layers`]): a material becomes a fill
+//! layer, a smart material a folder. Between layers it lands there; onto a folder on top of its children; onto
+//! another layer directly above it, except that a material dropped onto a fill layer becomes that layer's fill.
+//!
 //! The asset tray builds a [`DropPayload`]; the layer panel turns the pointer position into a
 //! [`DropTarget`], asks [`accepts`] while hovering and calls [`drop_onto`] on release.
 
 use super::super::ids::IdPool;
 use super::super::{Edit, EditError, LayerProperty, LayerRef, LayerSlot, StackEffect, StackId, Transaction};
+use super::drop_layers::{self, MaterialAsset};
 use super::{channels, layer, set};
 use crate::paint::blend::BlendMode;
 use crate::paint::doc::Document;
@@ -91,6 +96,14 @@ pub enum DropPayload {
     Effect(EffectAsset),
     /// A mask's effects, bottom to top.
     SmartMask(Vec<MaskEffect>),
+    /// A material: becomes a fill layer (or the fill of a fill layer it is dropped onto).
+    Material(MaterialAsset),
+    /// A smart material: a folder named `name` holding `layers` (bottom to top; their ids are made unique where
+    /// they land).
+    Folder {
+        name: String,
+        layers: Vec<Layer>,
+    },
 }
 
 /// What a drop did.
@@ -100,13 +113,15 @@ pub enum DropOutcome {
     NewLayer(String),
     /// Effects went into this stack of the layer (added on top, or replacing what was there).
     Effects { layer: LayerRef, stack: StackId, replaced: bool },
+    /// The fill layer's fill now comes from the dropped material.
+    Filled(LayerRef),
 }
 
 /// True if dropping `payload` onto `target` would do something (for the hover marker).
 pub fn accepts(doc: &Document, target: &DropTarget, payload: &DropPayload) -> bool {
     let Some(set) = doc.texture_set(target.set()) else { return false };
     match (target, payload) {
-        (DropTarget::Between { at, .. }, DropPayload::Effect(_)) => match &at.parent {
+        (DropTarget::Between { at, .. }, DropPayload::Effect(_) | DropPayload::Material(_) | DropPayload::Folder { .. }) => match &at.parent {
             None => at.index <= set.layers.len(),
             Some(p) => set.layer(p).is_some_and(|g| matches!(g.kind, LayerKind::Group(_)) && at.index <= g.children().len()),
         },
@@ -114,6 +129,7 @@ pub fn accepts(doc: &Document, target: &DropTarget, payload: &DropPayload) -> bo
         (DropTarget::OntoLayer(r), _) => set.layer(&r.layer).is_some(),
         (DropTarget::OntoMask(r), DropPayload::Effect(_)) => set.layer(&r.layer).is_some_and(|l| l.mask.is_some()),
         (DropTarget::OntoMask(r), DropPayload::SmartMask(_)) => set.layer(&r.layer).is_some(),
+        (DropTarget::OntoMask(_), DropPayload::Material(_) | DropPayload::Folder { .. }) => false,
     }
 }
 
@@ -144,6 +160,8 @@ pub fn drop_onto(tx: &mut Transaction, target: &DropTarget, payload: &DropPayloa
             }
             into_stack(tx, r, effects.iter().cloned().map(StackEffect::Mask).collect(), replace)
         }
+        (_, DropPayload::Material(material)) => drop_layers::material(tx, target, material),
+        (_, DropPayload::Folder { name, layers }) => drop_layers::folder(tx, target, name, layers),
     }
 }
 

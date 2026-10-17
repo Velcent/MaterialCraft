@@ -4,12 +4,14 @@
 //! - [`layers`]: create, duplicate, delete, group and move layers (a selection of several at once);
 //! - [`effects`]: new effects for either stack and switching them on and off;
 //! - [`masks`]: adding, removing, switching and inverting masks;
-//! - [`drop`]: what dropping an asset onto the stack does (ADR 0008, q-effect-drop).
+//! - [`drop`]: what dropping an asset onto the stack does (ADR 0008, q-effect-drop); [`drop_layers`]: the
+//!   layers a dropped material or smart material makes.
 //!
 //! Selections name layers by id. Before an operation a selection is put in stack order and layers whose
 //! group is selected too are left out (the group carries them), see [`normalize`].
 
 mod drop;
+mod drop_layers;
 mod effects;
 mod layers;
 mod masks;
@@ -18,6 +20,7 @@ mod masks;
 mod tests;
 
 pub use drop::{AssetEffect, DropOutcome, DropPayload, DropTarget, EffectAsset, accepts, drop_onto};
+pub use drop_layers::MaterialAsset;
 pub use effects::{NewEffect, add_effect, new_effect, set_effect_enabled};
 pub use layers::{NewLayer, create, delete, duplicate, duplicate_to, group, move_layers};
 pub use masks::{MaskStart, add_mask, invert_mask, remove_mask, set_mask_enabled};
