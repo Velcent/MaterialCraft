@@ -1,14 +1,18 @@
 //! [`PreparedSet`]: one texture set of a project, ready to verify: its declared channels, resolution and the
-//! texture-cache images of the channels being compared. Imports and composites the layer stack on request.
+//! texture-cache images of the channels being compared, and its texels on the mesh. Imports and composites the
+//! layer stack on request.
 
+use super::project_mesh::ProjectMesh;
 use crate::model::PainterTextureSet;
 use crate::project::CacheEntryRef;
 use crate::translate::cache_channels::CacheChannels;
 use crate::translate::channel_table::{channel_for_bit, channel_spec};
 use crate::translate::layers::cache_score::{Score, score};
+use crate::translate::layers::island_texels::IslandTexels;
 use crate::translate::layers::{BlendTable, ImageSource, ImportedStack, LayerImport, SetChannels};
 use crate::translate::set_layers::defaults_layer;
 use materialcraft::paint::{Channel, Compositor, TextureSet, TiledImage};
+use std::sync::OnceLock;
 
 pub struct PreparedSet<'a> {
     pub painter: &'a PainterTextureSet,
@@ -16,11 +20,18 @@ pub struct PreparedSet<'a> {
     pub resolution: (u32, u32),
     entries: Vec<&'a CacheEntryRef>,
     cache: Vec<(Channel, TiledImage)>,
+    mesh: Option<&'a ProjectMesh>,
+    /// The set's texels on the mesh at `resolution`, rasterised on the first score.
+    islands: OnceLock<Option<IslandTexels>>,
 }
 
 impl<'a> PreparedSet<'a> {
-    /// `None` when the set has no texture cache.
-    pub fn new(painter: &'a PainterTextureSet, cache: &'a CacheChannels<'a>) -> Option<PreparedSet<'a>> {
+    /// `None` when the set has no texture cache. Without `mesh` scores compare every texel.
+    pub fn new(
+        painter: &'a PainterTextureSet,
+        cache: &'a CacheChannels<'a>,
+        mesh: Option<&'a ProjectMesh>,
+    ) -> Option<PreparedSet<'a>> {
         let folder = painter.material_uid?.to_string();
         let entries = cache.entries_of(&folder);
         if entries.is_empty() {
@@ -46,6 +57,8 @@ impl<'a> PreparedSet<'a> {
             resolution,
             entries,
             cache: Vec::new(),
+            mesh,
+            islands: OnceLock::new(),
         })
     }
 
@@ -69,6 +82,7 @@ impl<'a> PreparedSet<'a> {
             Ok(image) => {
                 if image.image.size() != self.resolution {
                     self.resolution = image.image.size();
+                    self.islands = OnceLock::new();
                 }
                 self.cache.push((channel, image.image));
                 true
@@ -86,6 +100,10 @@ impl<'a> PreparedSet<'a> {
         set.layers.push(defaults_layer(&set));
         set.layers.extend(stack.layers.iter().cloned());
         let (ours, _) = Compositor::new(&set).composite_tex(channel);
-        Some(score(&ours, cache, spec))
+        let islands = self.islands.get_or_init(|| {
+            let uid = self.painter.material_uid?;
+            self.mesh?.islands(uid, self.resolution)
+        });
+        Some(score(&ours, cache, spec, islands.as_ref()))
     }
 }

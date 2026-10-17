@@ -93,7 +93,7 @@ impl Importer {
                 &mut report,
                 &source.record.name,
             );
-            sets.push(builder.build(source, &mut report, &mut translated));
+            sets.push(builder.build(source, &mesh, &mut report, &mut translated));
         }
         for r in &binding.unused {
             report.unused_material(&r.name);

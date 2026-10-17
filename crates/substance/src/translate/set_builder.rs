@@ -8,6 +8,7 @@ use super::normal_conventions::NormalConventions;
 use super::report::Reporter;
 use super::set_layers::{Flattened, SetLayers, painter_result_layer};
 use super::texture_sets::SetSource;
+use materialcraft::mesh::Mesh;
 use materialcraft::paint::{BlendMode, Channel, Fidelity, Layer, LayerKind, PaintContent, TextureSet};
 use std::collections::BTreeSet;
 
@@ -24,8 +25,15 @@ pub struct SetBuilder<'a> {
 }
 
 impl SetBuilder<'_> {
-    /// Builds the set; parts that fail are reported and left out. Datasets turned into pixels are added to `translated`.
-    pub fn build(&self, source: &SetSource, report: &mut Reporter, translated: &mut BTreeSet<String>) -> TextureSet {
+    /// Builds the set on `mesh` (its slots merged); parts that fail are reported and left out. Datasets turned
+    /// into pixels are added to `translated`.
+    pub fn build(
+        &self,
+        source: &SetSource,
+        mesh: &Mesh,
+        report: &mut Reporter,
+        translated: &mut BTreeSet<String>,
+    ) -> TextureSet {
         let name = &source.record.name;
         let images = self.cache_images(source, report, translated);
         let resolution = resolve_resolution(source, &images, report);
@@ -39,7 +47,7 @@ impl SetBuilder<'_> {
             fully_covered,
             complete,
         };
-        self.layers.build(&mut set, source, flattened, report);
+        self.layers.build(&mut set, source, flattened, mesh, report);
         self.add_baked(source, &mut set, report, translated);
         set
     }

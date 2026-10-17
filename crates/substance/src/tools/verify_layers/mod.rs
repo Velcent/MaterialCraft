@@ -1,9 +1,11 @@
 //! `mcsub verify-layers`: imports each texture set's layer stack, composites every channel the stack can
 //! compute and compares it with Painter's texture cache (the flattened result Painter saved), per set and
-//! channel. With `--fit`, guessed blend values are identified by trying each of our modes ([`fit`]).
+//! channel, on the texels of the mesh. With `--fit`, guessed blend values are identified by trying each of
+//! our modes ([`fit`]).
 
 mod fit;
 mod prepared;
+mod project_mesh;
 mod table;
 
 pub use crate::translate::layers::cache_score::{EXACT_STEPS, Score};
@@ -18,6 +20,7 @@ use crate::translate::layers::cache_agreement::{CacheAgreement, disagrees};
 use crate::translate::layers::{BlendTable, Computability, ProjectImages, StackStrategy};
 use materialcraft::paint::Channel;
 use prepared::PreparedSet;
+use project_mesh::ProjectMesh;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -97,9 +100,10 @@ fn verify_project(path: &Path, label: &str, options: VerifyOptions) -> Result<Pr
     let (document, _) = project.model().map_err(|e| e.to_string())?;
     let cache = CacheChannels::new(&project);
     let images = ProjectImages::new(&project);
+    let mesh = ProjectMesh::read(&project);
     let table = BlendTable::painter();
     for painter in &document.texture_sets {
-        let Some(mut set) = PreparedSet::new(painter, &cache) else {
+        let Some(mut set) = PreparedSet::new(painter, &cache, mesh.as_ref()) else {
             continue;
         };
         let stack = set.import(&table, &images);

@@ -4,7 +4,7 @@
 //! | Painter | Ours | Status |
 //! |---|---|---|
 //! | `projection` 6 | texture space | exact (ADR 0006 Q-PJ-01: no placement was ever edited in 1,639 fills; a stale guess shows up as a cache disagreement) |
-//! | `projection` 0, identity `uvTransformation0` | UV, identity (the same pixels as texture space on one tile) | exact |
+//! | `projection` 0, identity `uvTransformation0` | UV, identity (the same pixels as texture space on one tile) | exact (LEAD STAMM/HERZ bitmap fills: ≤ 0.33 steps on the mesh's texels; the cache's padding off the islands is not layer content, see [`super::island_texels`]) |
 //! | `projection` 0 with tiling/offset/rotation | UV with that placement (radians → degrees) | approximated: the rotation/offset convention is not verified |
 //! | `projection` 1, 2, 3, 4, 7 | texture space for now; the volume modes are evaluated from step 24 on | approximated |
 //! | other values | texture space | approximated (unknown mode) |

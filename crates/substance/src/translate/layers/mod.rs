@@ -8,7 +8,8 @@
 //! - [`effect_map`] and [`effect_data`]: Painter's effects → our base content and content effects, one to one.
 //! - [`mask`]: Painter masks → our mask stacks and their computability; [`images`]: bitmap resources.
 //! - [`stack_builder`]: the tree walk; [`verdict`] and [`computability`]: what is exact, per channel/layer.
-//! - [`cache_score`] and [`cache_agreement`]: a fully computable stack measured against Painter's cache.
+//! - [`cache_score`] and [`cache_agreement`]: a fully computable stack measured against Painter's cache, on
+//!   the texels of the mesh ([`island_texels`]).
 //! - [`strategy`]: the per-set decision between the real stack and Painter's flattened result.
 //! - [`strokes`]: Painter's brush strokes → stroke records next to the (empty) paint pixels.
 //! - [`report`]: the import report lines.
@@ -23,6 +24,7 @@ pub mod content;
 pub mod effect_data;
 pub mod effect_map;
 pub mod images;
+pub mod island_texels;
 pub mod layer_content;
 pub mod mask;
 pub mod projection_map;

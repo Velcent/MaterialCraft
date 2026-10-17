@@ -4,6 +4,7 @@
 //! set edited last, e.g. a folder hidden, may keep the old pixels).
 
 use super::cache_score::{Score, score};
+use super::island_texels::IslandTexels;
 use materialcraft::paint::{Channel, Compositor, Layer, LayerKind, TextureSet};
 
 /// Mean difference above which a channel counts as disagreeing (8-bit steps). Above the 0.5 of float vs
@@ -23,8 +24,14 @@ pub struct CacheAgreement {
 
 impl CacheAgreement {
     /// Composites `imported` over `defaults` with `set`'s channels and resolution and scores every channel
-    /// the cache layer `result` has an image for.
-    pub fn measure(set: &TextureSet, defaults: &Layer, imported: &[Layer], result: &Layer) -> CacheAgreement {
+    /// the cache layer `result` has an image for, on the texels of the mesh when `islands` is given.
+    pub fn measure(
+        set: &TextureSet,
+        defaults: &Layer,
+        imported: &[Layer],
+        result: &Layer,
+        islands: Option<&IslandTexels>,
+    ) -> CacheAgreement {
         let LayerKind::Paint(cache) = &result.kind else {
             return CacheAgreement::default();
         };
@@ -39,7 +46,7 @@ impl CacheAgreement {
                 continue;
             };
             let (ours, _) = compositor.composite_tex(*channel);
-            let s = score(&ours, image, spec);
+            let s = score(&ours, image, spec, islands);
             if disagrees(&s) {
                 disagreeing.push((*channel, s));
             }
@@ -78,9 +85,9 @@ mod tests {
         .with_blend(Channel::Roughness, BlendMode::Normal, 1.0);
         let defaults = Layer::new("d", "D", LayerKind::Fill(Fill::uniform(vec![])));
         let (set, result) = set_and_cache(76.0 / 255.0);
-        assert!(CacheAgreement::measure(&set, &defaults, std::slice::from_ref(&fill), &result).agrees());
+        assert!(CacheAgreement::measure(&set, &defaults, std::slice::from_ref(&fill), &result, None).agrees());
         let (set, result) = set_and_cache(0.9);
-        let a = CacheAgreement::measure(&set, &defaults, &[fill], &result);
+        let a = CacheAgreement::measure(&set, &defaults, &[fill], &result, None);
         assert_eq!(a.disagreeing.len(), 1);
         assert!(a.disagreeing[0].1.mean > 100.0);
     }

@@ -4,12 +4,14 @@
 
 use super::channel_table::painter_default;
 use super::layers::cache_agreement::CacheAgreement;
+use super::layers::island_texels::IslandTexels;
 use super::layers::report::{report_cache_disagreement, report_hidden_masks, report_stack};
 use super::layers::strokes::{StrokeCount, report_strokes};
 use super::layers::{LayerImport, PAINTER_RESULT_NAME, SetChannels, StackParts, StackStrategy};
 use super::report::Reporter;
 use super::texture_sets::SetSource;
 use crate::model::{PainterDocument, PainterTextureSet};
+use materialcraft::mesh::Mesh;
 use materialcraft::paint::{BlendMode, Fidelity, Fill, Layer, LayerKind, TextureSet};
 
 pub const PAINTER_RESULT_ID: &str = "painter-result";
@@ -32,8 +34,16 @@ pub struct SetLayers<'a> {
 }
 
 impl SetLayers<'_> {
-    /// Fills `set.layers` (bottom → top) and reports the layer stack.
-    pub fn build(&self, set: &mut TextureSet, source: &SetSource, flattened: Flattened, report: &mut Reporter) {
+    /// Fills `set.layers` (bottom → top) and reports the layer stack. `mesh` (with the set's slots merged)
+    /// limits the cache agreement to the texels on the mesh.
+    pub fn build(
+        &self,
+        set: &mut TextureSet,
+        source: &SetSource,
+        flattened: Flattened,
+        mesh: &Mesh,
+        report: &mut Reporter,
+    ) {
         let name = source.record.name.clone();
         match self.painter_set(source) {
             Some(painter) => {
@@ -41,7 +51,10 @@ impl SetLayers<'_> {
                 let stack = self.import.import(painter, &channels, set.resolution);
                 let defaults = defaults_layer(set);
                 let agreement = match (&flattened.layer, stack.verdict.all_exact()) {
-                    (Some(result), true) => CacheAgreement::measure(set, &defaults, &stack.layers, result),
+                    (Some(result), true) => {
+                        let islands = IslandTexels::rasterise(mesh, &[set.material_slot], set.uv_set, set.resolution);
+                        CacheAgreement::measure(set, &defaults, &stack.layers, result, islands.as_ref())
+                    }
                     _ => CacheAgreement::default(),
                 };
                 let strategy = StackStrategy::choose(&stack.verdict, flattened.layer.is_some(), &agreement);

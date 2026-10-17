@@ -38,7 +38,7 @@ fn status_name(s: &Computability) -> &'static str {
 fn channel_line(c: &ChannelResult) -> String {
     let score = c
         .score
-        .map_or("–".to_string(), |s| format!("mean {:.2} max {:.0}", s.mean, s.max));
+        .map_or("–".to_string(), |s| format!("mean {:.2} max {:.1}", s.mean, s.max));
     let reasons = c.status.reasons().join("; ");
     format!("{:<11} {:<15} {score:<22} {reasons}", c.label, status_name(&c.status))
 }
