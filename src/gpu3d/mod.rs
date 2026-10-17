@@ -27,6 +27,7 @@ mod shaders;
 mod shape;
 mod textures;
 
+pub use camera::view_camera;
 pub use maps::{GpuMaps, MapInputs, prepare};
 pub use scene::ScenePart;
 
@@ -61,6 +62,15 @@ impl Default for GpuOpts {
     }
 }
 
+/// The depth buffer of one drawn frame and the camera it was drawn with (on a viewport in pixels).
+pub struct DepthShot {
+    pub width: usize,
+    pub height: usize,
+    /// Window depth (0 near … 1 far; 1 where nothing was drawn), rows from the top.
+    pub depth: Vec<f32>,
+    pub camera: crate::camera::Camera,
+}
+
 #[derive(Default)]
 pub struct Gpu {
     pub opts: GpuOpts,
@@ -72,6 +82,9 @@ pub struct Gpu {
     pub want_shot: bool,
     /// Result of a read-back: (width, height, RGBA8 rows from the TOP).
     pub shot: Option<(usize, usize, Vec<u8>)>,
+    /// Request a depth read-back of the next frame (checks of the CPU view projector against the GPU).
+    pub want_depth: bool,
+    pub depth: Option<DepthShot>,
     /// GPU name reported by the driver, for the UI.
     pub renderer: String,
     res: Option<Renderer>,
@@ -157,6 +170,7 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
     }
     let self_shadow = g.opts.self_shadow;
     let want_shot = std::mem::take(&mut g.want_shot);
+    let want_depth = std::mem::take(&mut g.want_depth);
     let vp_px = info.viewport_in_pixels();
     if vp_px.width_px <= 0 || vp_px.height_px <= 0 {
         return;
@@ -165,6 +179,11 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
     let result = unsafe { r.draw(gl, view, aspect, self_shadow, &g.scene) };
     if want_shot && result.is_ok() {
         g.shot = Some(read_back(gl, info));
+    }
+    if want_depth && result.is_ok() {
+        let (width, height) = (vp_px.width_px as usize, vp_px.height_px as usize);
+        let camera = view_camera(view, [width as f32, height as f32]);
+        g.depth = read_depth(gl, info).map(|depth| DepthShot { width, height, depth, camera });
     }
     g.frames += 1;
     if let Err(e) = result {
@@ -193,6 +212,44 @@ fn read_back(gl: &glow::Context, info: &PaintCallbackInfo) -> (usize, usize, Vec
         top[y * w * 4..(y + 1) * w * 4].copy_from_slice(&buf[(h - 1 - y) * w * 4..(h - y) * w * 4]);
     }
     (w, h, top)
+}
+
+/// Read the viewport's depth buffer back (rows from the top), or `None` if the driver refuses (the frame stays
+/// drawn; a depth read-back is a check, not part of drawing).
+// SAFETY: called from `paint` on its current context; `buf` holds exactly w * h f32 depth values of the viewport.
+fn read_depth(gl: &glow::Context, info: &PaintCallbackInfo) -> Option<Vec<f32>> {
+    let vp_px = info.viewport_in_pixels();
+    let (w, h) = (vp_px.width_px as usize, vp_px.height_px as usize);
+    let mut buf = vec![0f32; w * h];
+    let ok = unsafe {
+        // clear errors left by earlier calls (bounded: a lost context keeps reporting one)
+        for _ in 0..16 {
+            if gl.get_error() == glow::NO_ERROR {
+                break;
+            }
+        }
+        gl.read_pixels(
+            vp_px.left_px,
+            vp_px.from_bottom_px,
+            w as i32,
+            h as i32,
+            glow::DEPTH_COMPONENT,
+            glow::FLOAT,
+            glow::PixelPackData::Slice(Some(bytes_of_mut(&mut buf))),
+        );
+        gl.get_error() == glow::NO_ERROR
+    };
+    if !ok {
+        return None;
+    }
+    Some((0..h).rev().flat_map(|y| buf[y * w..(y + 1) * w].iter().copied()).collect())
+}
+
+/// Raw writable bytes of an f32 slice for GL read-backs.
+// SAFETY: f32 has no padding and every bit pattern is a valid f32; the returned slice borrows `v` mutably and covers
+// exactly `size_of_val(v)` bytes of it.
+fn bytes_of_mut(v: &mut [f32]) -> &mut [u8] {
+    unsafe { std::slice::from_raw_parts_mut(v.as_mut_ptr() as *mut u8, std::mem::size_of_val(v)) }
 }
 
 /// Free all GL objects (call when the viewer is closed or the GL context goes away).

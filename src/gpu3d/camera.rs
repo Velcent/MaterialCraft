@@ -1,28 +1,33 @@
-//! Orbit camera: view-projection matrix and eye position from the `View`.
+//! Orbit camera: the [`Camera`] the viewport draws a [`View`] with, and the matrices the shaders take from it.
+use crate::camera::{Camera, Lens, Mat4, look_along};
 use crate::render3d::View;
 
-pub(super) type M4 = [f32; 16]; // column-major
-
-fn m_mul(a: &M4, b: &M4) -> M4 {
-    let mut o = [0.0f32; 16];
-    for c in 0..4 {
-        for r in 0..4 {
-            let mut s = 0.0;
-            for k in 0..4 {
-                s += a[k * 4 + r] * b[c * 4 + k];
-            }
-            o[c * 4 + r] = s;
-        }
-    }
-    o
-}
+/// The viewport's lens: 40° vertical field of view, near and far planes around the unit-size model.
+const LENS: Lens = Lens::Perspective { fov_y: 40.0 * std::f32::consts::PI / 180.0, near: 0.03, far: 60.0 };
 
 pub(super) struct CamOut {
-    pub vp: M4,
+    pub vp: Mat4,
     pub eye: [f32; 3],
 }
 
-pub(super) fn camera(v: &View, aspect: f32) -> CamOut {
+impl CamOut {
+    pub fn of(c: &Camera, eye: [f32; 3]) -> CamOut {
+        CamOut { vp: c.view_projection(), eye }
+    }
+}
+
+/// The camera that draws `v` into a viewport of `viewport` units (pixels or UI points; only the aspect ratio
+/// matters to the image, the units are those of screen positions on the camera). The model is the one placed by
+/// its unit-size fit, as the viewport draws it.
+pub fn view_camera(v: &View, viewport: [f32; 2]) -> Camera {
+    let (eye, right, up, fwd) = basis(v);
+    let aspect = viewport[0] / viewport[1];
+    let aspect = if aspect.is_finite() && aspect > 0.0 { aspect } else { 1.0 };
+    Camera::new(look_along(eye, right, up, fwd), LENS.matrix(aspect), viewport)
+}
+
+/// Eye position and the right, up and forward axes of the orbit camera.
+fn basis(v: &View) -> ([f32; 3], [f32; 3], [f32; 3], [f32; 3]) {
     use crate::v3::*;
     let (sy, cy) = v.yaw.sin_cos();
     let (sp, cp) = v.pitch.sin_cos();
@@ -31,44 +36,10 @@ pub(super) fn camera(v: &View, aspect: f32) -> CamOut {
     let right = norm(cross(fwd, [0.0, 1.0, 0.0]));
     let up = cross(right, fwd);
     let eye = add(eye0, add(mul(right, v.pan_x), mul(up, v.pan_y)));
-    // view: rows right, up, -fwd
-    let view: M4 = [
-        right[0],
-        up[0],
-        -fwd[0],
-        0.0, //
-        right[1],
-        up[1],
-        -fwd[1],
-        0.0, //
-        right[2],
-        up[2],
-        -fwd[2],
-        0.0, //
-        -dot(right, eye),
-        -dot(up, eye),
-        dot(fwd, eye),
-        1.0,
-    ];
-    let tf = (20.0f32).to_radians().tan();
-    let (n, f) = (0.03f32, 60.0f32);
-    let proj: M4 = [
-        1.0 / (aspect * tf),
-        0.0,
-        0.0,
-        0.0, //
-        0.0,
-        1.0 / tf,
-        0.0,
-        0.0, //
-        0.0,
-        0.0,
-        -(f + n) / (f - n),
-        -1.0, //
-        0.0,
-        0.0,
-        -2.0 * f * n / (f - n),
-        0.0,
-    ];
-    CamOut { vp: m_mul(&proj, &view), eye }
+    (eye, right, up, fwd)
+}
+
+pub(super) fn camera(v: &View, aspect: f32) -> CamOut {
+    let c = view_camera(v, [aspect, 1.0]);
+    CamOut::of(&c, basis(v).0)
 }
