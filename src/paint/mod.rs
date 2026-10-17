@@ -11,6 +11,7 @@
 //! - [`bake_config`]: per texture set bake settings with link, copy and check commands.
 //! - [`stroke`]: stroke records, the strokes behind painted pixels.
 //! - [`stack`]: [`Compositor`], layer stack → channel; [`layer_preview`]: layer thumbnails on a reduced grid.
+//! - [`probe`]: [`probe::TexelProbe`], the composited channel values under a point of the mesh (eyedropper, material picker).
 //! - [`diag_entries`]: import summaries and compositing warnings as session log entries.
 //! - [`working_space`]: the space layers blend in (linear light for sRGB channels).
 //! - [`output`]: [`MaterialMaps`], final PBR maps for the viewer and export.
@@ -35,6 +36,7 @@ pub mod normal_combine;
 pub mod output;
 mod par;
 pub mod pixel;
+pub mod probe;
 pub mod report;
 pub mod stack;
 pub mod stroke;
