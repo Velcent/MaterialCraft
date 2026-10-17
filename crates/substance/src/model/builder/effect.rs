@@ -104,16 +104,19 @@ impl ModelBuilder {
 
     fn paint(&mut self, e: &RawObject, tool: PaintTool, depth: usize) -> PaintEffect {
         let header = self.header(e);
-        let mut strokes = 0;
-        for s in e.objects("strokes").chain(e.objects("strokes3D")) {
+        let strokes = e.objects("strokes").map(|s| self.stroke(s)).collect();
+        let mut path_strokes = 0;
+        for s in e.objects("strokes3D") {
             self.seen(s);
-            strokes += 1;
+            path_strokes += 1;
         }
         PaintEffect {
             header,
             tool,
             opacity: e.f32("opacity").unwrap_or(1.0),
             strokes,
+            path_strokes,
+            brush_uid: e.object("brush").and_then(|b| b.uid()),
             colors: e.objects("sourceColor").map(|s| self.source(s, depth)).collect(),
             alpha: e.objects("sourceTransparent").map(|s| self.source(s, depth)).collect(),
             stencil: e.object("sourceStencil").map(|s| self.source(s, depth)),

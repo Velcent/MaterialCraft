@@ -5,3 +5,4 @@ mod fixtures;
 mod masks_and_bitmaps;
 mod stacks;
 mod strategies;
+mod strokes;

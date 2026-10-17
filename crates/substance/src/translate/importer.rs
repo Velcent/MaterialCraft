@@ -5,6 +5,7 @@ use super::baked_maps::BakedMaps;
 use super::cache_channels::CacheChannels;
 use super::error::ImportError;
 use super::foreign::ForeignFiles;
+use super::layers::strokes::{StrokeCount, report_unimported_strokes};
 use super::layers::{BlendTable, LayerImport, ProjectImages};
 use super::normal_conventions::NormalConventions;
 use super::report::Reporter;
@@ -94,7 +95,13 @@ impl Importer {
             );
             sets.push(builder.build(source, &mut report, &mut translated));
         }
-        binding.unused.iter().for_each(|r| report.unused_material(&r.name));
+        for r in &binding.unused {
+            report.unused_material(&r.name);
+            let painter = r.scene_uid.and_then(|uid| model.as_ref()?.texture_set(uid));
+            if let Some(set) = painter {
+                report_unimported_strokes(&mut report, &r.name, &StrokeCount::of_set(set));
+            }
+        }
         progress(SETS_END, "keeping original files");
         let kept = ForeignFiles::new(&self.project).collect(&translated);
         report.foreign(&kept);

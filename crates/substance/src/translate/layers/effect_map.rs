@@ -18,6 +18,7 @@ use super::blending::ResolvedBlend;
 use super::content::{ChannelContent, ChannelValue, ContentEvaluator};
 use super::effect_data::{self as data, AnchorIds};
 use super::layer_content::core_content;
+use super::strokes;
 use crate::model::{EffectHeader, FillEffect, LayerKind as PainterKind, PainterEffect, PainterLayer, PainterSource};
 use materialcraft::json::Value;
 use materialcraft::paint::effect::{PolygonFill, Selection};
@@ -53,7 +54,7 @@ impl ContentMapper<'_, '_> {
                 self.brush_work(&group.effects, anchors, &mut effects);
                 self.effects(rest, anchors, &mut effects);
                 return MappedContent {
-                    base: LayerKind::Paint(PaintContent::default()),
+                    base: LayerKind::Paint(painted(strokes::group_record(&group.effects))),
                     effects,
                 };
             }
@@ -116,10 +117,11 @@ impl ContentMapper<'_, '_> {
         let kind = match effect {
             PainterEffect::Fill(fill) => return self.fill(fill, out),
             PainterEffect::Group(g) => {
-                out.push(self.with_header(header, Holder::EffectGroup, EffectKind::Paint(PaintContent::default())));
+                let content = painted(strokes::group_record(&g.effects));
+                out.push(self.with_header(header, Holder::EffectGroup, EffectKind::Paint(content)));
                 return self.brush_work(&g.effects, anchors, out);
             }
-            PainterEffect::Paint(_) => EffectKind::Paint(PaintContent::default()),
+            PainterEffect::Paint(p) => EffectKind::Paint(painted(strokes::record([p]))),
             PainterEffect::Filter(f) => EffectKind::Filter(data::procedural(f.procedural.as_ref())),
             PainterEffect::Levels(l) => EffectKind::Levels(data::levels(l.levels.as_ref())),
             PainterEffect::ColorSelection(c) => EffectKind::ColorSelection(data::color_selection(c)),
@@ -252,5 +254,13 @@ impl ContentMapper<'_, '_> {
             mode: b.mode(),
             opacity: b.opacity,
         }
+    }
+}
+
+/// Paint content without pixels (strokes are not replayed yet), with the stroke record of its brush work.
+fn painted(strokes: Option<materialcraft::paint::stroke::StrokeData>) -> PaintContent {
+    PaintContent {
+        images: Vec::new(),
+        strokes,
     }
 }

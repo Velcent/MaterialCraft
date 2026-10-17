@@ -10,6 +10,7 @@
 //! - [`stack_builder`]: the tree walk; [`verdict`] and [`computability`]: what is exact, per channel/layer.
 //! - [`cache_score`] and [`cache_agreement`]: a fully computable stack measured against Painter's cache.
 //! - [`strategy`]: the per-set decision between the real stack and Painter's flattened result.
+//! - [`strokes`]: Painter's brush strokes → stroke records next to the (empty) paint pixels.
 //! - [`report`]: the import report lines.
 
 pub mod blend_table;
@@ -27,6 +28,7 @@ pub mod mask;
 pub mod report;
 pub mod stack_builder;
 pub mod strategy;
+pub mod strokes;
 #[cfg(test)]
 mod tests;
 pub mod verdict;

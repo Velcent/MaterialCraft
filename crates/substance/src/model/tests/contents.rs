@@ -193,7 +193,7 @@ fn masks_hold_generators_strokes_and_filters() {
     let PainterEffect::Paint(p) = &g.effects[0] else {
         panic!("paint")
     };
-    assert_eq!((p.tool, p.strokes, p.opacity), (PaintTool::Brush, 1, 0.5));
+    assert_eq!((p.tool, p.stroke_count(), p.opacity), (PaintTool::Brush, 1, 0.5));
     assert!(p.colors[0].channels().is_empty(), "mask channel");
     let PainterEffect::Filter(f) = &mask.effects[2] else {
         panic!("filter")
@@ -205,15 +205,109 @@ fn masks_hold_generators_strokes_and_filters() {
 }
 
 #[test]
-fn stroke_points_are_counted_but_not_mirrored() {
-    let points: Vec<V> = (0..3)
-        .map(|_| obj("DataStrokeKey", vec![("type", V::Enum(0))]))
-        .collect();
-    let stroke = obj("DataStroke", vec![("points", V::List(points))]);
-    let paint = obj("DataActionPaint", vec![("strokes", V::List(vec![stroke]))]);
+fn strokes_are_read_with_points_pressure_and_camera() {
+    let key = |x: f32, t: f32| {
+        V::Inline(
+            "DataStrokeKey",
+            vec![
+                ("position", V::Floats(0x02, vec![x, -x])),
+                ("time", V::Float(t)),
+                ("type", V::Enum(0)),
+            ],
+        )
+    };
+    let pressure = |t: f32, v: f32| {
+        V::Inline(
+            "DataTimelineKey",
+            vec![("type", V::Enum(0)), ("value", V::Float(v)), ("x", V::Float(t))],
+        )
+    };
+    let view: Vec<f32> = (0..16).map(|i| i as f32).collect();
+    let stroke = obj(
+        "DataStroke",
+        vec![
+            ("duplicateCount", V::UInt(1)),
+            ("duplicateMatrix", V::Floats(0x0e, vec![-1.0; 16])),
+            ("points", V::Values(vec![key(0.25, 0.0), key(0.5, 0.1), key(0.75, 0.2)])),
+            ("pressure", V::Values(vec![pressure(0.0, 0.2), pressure(0.2, 0.6)])),
+            ("projectionMatrix", V::Floats(0x0e, vec![2.0; 16])),
+            ("randomSeed", V::UInt(4_000_000_000)),
+            ("tilt", V::Values(vec![])),
+            ("uid", V::Uid(77)),
+            ("viewMatrix", V::Floats(0x0e, view.clone())),
+            ("viewType", V::Enum(0)),
+        ],
+    );
+    let brush = obj("DataBrush", vec![("uid", V::Uid(12))]);
+    let paint = obj(
+        "DataActionEraser",
+        vec![
+            ("brush", brush),
+            ("strokes", V::List(vec![stroke, obj("DataStroke", vec![])])),
+            (
+                "strokes3D",
+                V::List(vec![obj("DataStroke3D", vec![("points", V::Values(vec![]))])]),
+            ),
+        ],
+    );
     let (layer, report) = only_layer(vec![paint], None);
     assert_eq!(layer.kind, LayerKind::Paint);
+    let PainterEffect::Paint(p) = &layer.content[0] else {
+        panic!("paint")
+    };
+    assert_eq!(
+        (p.tool, p.stroke_count(), p.path_strokes, p.brush_uid),
+        (PaintTool::Eraser, 3, 1, Some(12))
+    );
+    let s = &p.strokes[0];
+    assert_eq!(s.uid, Some(77));
+    assert_eq!(
+        s.points,
+        [(0.25, 0.0), (0.5, 0.1), (0.75, 0.2)].map(|(x, t)| StrokeKey {
+            position: [x, -x],
+            time: t
+        })
+    );
+    assert_eq!(
+        s.pressure,
+        [
+            TimelineKey { time: 0.0, value: 0.2 },
+            TimelineKey { time: 0.2, value: 0.6 }
+        ]
+    );
+    assert_eq!((s.tilt_keys, s.complete, s.view), (0, true, PainterView::Uv));
+    assert_eq!(s.view_matrix.to_vec(), view);
+    assert_eq!((s.projection_matrix[15], s.duplicate_matrix[0]), (2.0, -1.0));
+    assert_eq!((s.duplicate_count, s.random_seed), (1, 4_000_000_000));
+    let empty = &p.strokes[1];
+    assert!(empty.points.is_empty() && empty.complete && empty.view == PainterView::Mesh);
+    assert_eq!(empty.view_matrix, [0.0; 16]);
     assert_eq!(report.classes["DataStrokeKey"].total, 3);
-    assert_eq!(report.classes["DataStrokeKey"].not_modelled(), 3);
+    assert_eq!(report.classes["DataStrokeKey"].recognised, 3);
+    assert_eq!(report.classes["DataTimelineKey"].not_modelled(), 0);
+    assert_eq!(report.classes["DataStroke"].recognised, 2);
+    assert_eq!(report.classes["DataStroke3D"].recognised, 1);
     assert_eq!(ContentKind::of(&layer.content), ContentKind::Strokes);
+}
+
+#[test]
+fn unexpected_point_layouts_keep_what_was_read() {
+    let good = V::Inline(
+        "DataStrokeKey",
+        vec![("position", V::Floats(0x02, vec![1.0, 2.0])), ("time", V::Float(0.5))],
+    );
+    let nested = V::Inline(
+        "DataStrokeKey",
+        vec![("position", V::Inline("Odd", vec![("x", V::Float(1.0))]))],
+    );
+    let stroke = obj("DataStroke", vec![("points", V::Values(vec![good, nested]))]);
+    let paint = obj("DataActionPaint", vec![("strokes", V::List(vec![stroke]))]);
+    let (layer, report) = only_layer(vec![paint], None);
+    let PainterEffect::Paint(p) = &layer.content[0] else {
+        panic!("paint")
+    };
+    assert_eq!(p.strokes[0].points.len(), 1);
+    assert!(!p.strokes[0].complete);
+    assert_eq!(report.classes["DataStrokeKey"].total, 2);
+    assert_eq!(report.classes["Odd"].total, 1);
 }

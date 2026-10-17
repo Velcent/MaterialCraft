@@ -5,6 +5,7 @@
 use super::channel_table::painter_default;
 use super::layers::cache_agreement::CacheAgreement;
 use super::layers::report::{report_cache_disagreement, report_hidden_masks, report_stack};
+use super::layers::strokes::{StrokeCount, report_strokes};
 use super::layers::{LayerImport, PAINTER_RESULT_NAME, SetChannels, StackParts, StackStrategy};
 use super::report::Reporter;
 use super::texture_sets::SetSource;
@@ -45,6 +46,7 @@ impl SetLayers<'_> {
                 };
                 let strategy = StackStrategy::choose(&stack.verdict, flattened.layer.is_some(), &agreement);
                 report_stack(report, &name, &stack, strategy, &channels);
+                report_strokes(report, &name, &StrokeCount::of_set(painter), &stack.layers);
                 report_cache_disagreement(report, &name, &agreement, &channels);
                 if !strategy.shows_painter_result() {
                     report_hidden_masks(report, &name, &stack.verdict.mask_failures);

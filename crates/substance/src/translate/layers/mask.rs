@@ -12,9 +12,11 @@ use super::blending::ResolvedBlend;
 use super::computability::Computability;
 use super::effect_data::{self as data, AnchorIds};
 use super::images::{ImageSource, fit, grey_values};
+use super::strokes;
 use crate::model::{EffectHeader, MaskInitial, PainterEffect, PainterMask, PainterSource, PolygonFillEffect};
 use materialcraft::json::Value;
 use materialcraft::paint::effect::{Grey, PolygonFill, Selection};
+use materialcraft::paint::stroke::StrokeData;
 use materialcraft::paint::{
     EffectKind, GreyBlend, Mask, MaskEffect, MaskPixels, PixelFormat, PixelLayout, SampleType, TiledImage,
 };
@@ -128,12 +130,12 @@ impl Walk<'_, '_> {
         let blend = header.map_or(GreyBlend::default(), |h| grey(self.blend(h)));
         match effect {
             PainterEffect::Group(g) => {
-                self.push(header, blend, self.empty_paint(), on);
+                self.push(header, blend, self.empty_paint(None), on);
                 self.effects(&g.effects, on);
             }
             PainterEffect::Paint(p) => {
-                self.push(header, blend, self.empty_paint(), on);
-                if p.strokes > 0 {
+                self.push(header, blend, self.empty_paint(strokes::record([p])), on);
+                if p.stroke_count() > 0 {
                     self.stop(on, "painted mask (strokes)".into());
                 }
             }
@@ -210,11 +212,11 @@ impl Walk<'_, '_> {
         }
     }
 
-    /// A paint effect without pixels (strokes are not replayed yet).
-    fn empty_paint(&self) -> EffectKind<Grey> {
+    /// A paint effect without pixels (strokes are not replayed yet), with the stroke record of the brush work.
+    fn empty_paint(&self, strokes: Option<StrokeData>) -> EffectKind<Grey> {
         let (w, h) = self.evaluator.resolution;
         match TiledImage::new(w, h, PAINT_FORMAT) {
-            Ok(image) => EffectKind::Paint(MaskPixels::new(image)),
+            Ok(image) => EffectKind::Paint(MaskPixels { image, strokes }),
             Err(_) => EffectKind::Unknown(data::unknown_named("substance:paint", Value::object())),
         }
     }

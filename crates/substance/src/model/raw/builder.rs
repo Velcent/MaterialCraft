@@ -1,14 +1,15 @@
 //! [`RawTree`]: builds the whole object tree of a `document.bin` in memory from the streaming walk.
-//! Bulky classes (brush strokes with their thousands of points) are kept as pruned stubs: their class is
-//! known and counted, their content is skipped. Every object, pruned or not, is counted per class.
+//! Bulky classes (brush strokes with their thousands of points) keep their lists packed ([`PackedList`]): a
+//! few bytes per point instead of an object each. Every object, packed or not, is counted per class.
 
+use super::packed::PackedBuilder;
 use super::tree::{RawObject, RawValue};
 use crate::decode::DecodeError;
 use crate::decode::document::{DocumentHeader, Scalar, ValueTag, Visitor, walk};
 use std::collections::BTreeMap;
 
-/// Classes whose content is not kept (only counted): strokes hold the bulk of a document.
-const PRUNED: &[&str] = &["DataStroke", "DataStroke3D"];
+/// Classes whose list fields are kept packed: strokes hold the bulk of a document.
+const PACKED: &[&str] = &["DataStroke", "DataStroke3D"];
 /// Upper bound for preallocating a list; real lengths can be larger and simply grow.
 const MAX_PREALLOC: usize = 1024;
 
@@ -40,8 +41,13 @@ impl RawTree {
 
 /// An open container and, for objects, the field whose value comes next.
 enum Frame {
-    Object { object: RawObject, pending: Option<String> },
+    Object {
+        object: RawObject,
+        pending: Option<String>,
+    },
     List(Vec<RawValue>),
+    /// A list field of a [`PACKED`] class.
+    Packed(PackedBuilder),
 }
 
 #[derive(Default)]
@@ -50,8 +56,6 @@ struct Builder {
     root: Option<RawObject>,
     classes: BTreeMap<String, usize>,
     unknown_tags: usize,
-    /// Open containers inside a pruned object (0 = not inside one).
-    skipping: usize,
 }
 
 impl Builder {
@@ -63,6 +67,8 @@ impl Builder {
                 object.fields.push((name, value));
             }
             Some(Frame::List(items)) => items.push(value),
+            // Packed lists take their values themselves; nothing is attached to them.
+            Some(Frame::Packed(_)) => {}
             None => {
                 if let RawValue::Object(o) = value {
                     self.root = Some(*o);
@@ -79,29 +85,37 @@ impl Builder {
             object.fields.push((name, RawValue::Absent));
         }
     }
+
+    /// The packed list being read, if the innermost container is one.
+    fn packing(&mut self) -> Option<&mut PackedBuilder> {
+        match self.frames.last_mut() {
+            Some(Frame::Packed(p)) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// True if the innermost container is an object of a [`PACKED`] class.
+    fn in_packed_object(&self) -> bool {
+        matches!(self.frames.last(), Some(Frame::Object { object, .. }) if PACKED.contains(&object.class.as_str()))
+    }
 }
 
 impl Visitor for Builder {
     fn object(&mut self, class: &str) {
         *self.classes.entry(class.to_string()).or_default() += 1;
-        if self.skipping > 0 {
-            self.skipping += 1;
+        if let Some(p) = self.packing() {
+            p.object(class);
             return;
         }
-        let mut object = RawObject::new(class);
-        if PRUNED.contains(&class) {
-            object.pruned = true;
-            self.skipping = 1;
-        }
+        let object = RawObject::new(class);
         self.frames.push(Frame::Object { object, pending: None });
     }
 
     fn end_object(&mut self) {
-        if self.skipping > 1 {
-            self.skipping -= 1;
+        if let Some(p) = self.packing() {
+            p.end_object();
             return;
         }
-        self.skipping = 0;
         self.close_pending();
         if let Some(Frame::Object { object, .. }) = self.frames.pop() {
             self.attach(RawValue::Object(Box::new(object)));
@@ -109,7 +123,8 @@ impl Visitor for Builder {
     }
 
     fn field(&mut self, name: &[u8]) {
-        if self.skipping > 0 {
+        if let Some(p) = self.packing() {
+            p.field(name);
             return;
         }
         self.close_pending();
@@ -119,7 +134,8 @@ impl Visitor for Builder {
     }
 
     fn scalar(&mut self, tag: ValueTag, payload: &[u8]) {
-        if self.skipping > 0 {
+        if let Some(p) = self.packing() {
+            p.scalar(tag, payload);
             return;
         }
         // `Scalar::decode` only fails for container tags, which never reach this callback.
@@ -129,21 +145,28 @@ impl Visitor for Builder {
     }
 
     fn list(&mut self, count: usize) {
-        if self.skipping > 0 {
-            self.skipping += 1;
+        if let Some(p) = self.packing() {
+            p.list();
             return;
         }
-        self.frames
-            .push(Frame::List(Vec::with_capacity(count.min(MAX_PREALLOC))));
+        let frame = match self.in_packed_object() {
+            true => Frame::Packed(PackedBuilder::new()),
+            false => Frame::List(Vec::with_capacity(count.min(MAX_PREALLOC))),
+        };
+        self.frames.push(frame);
     }
 
     fn end_list(&mut self) {
-        if self.skipping > 0 {
-            self.skipping -= 1;
+        if let Some(p) = self.packing()
+            && !p.end_list()
+        {
             return;
         }
-        if let Some(Frame::List(items)) = self.frames.pop() {
-            self.attach(RawValue::List(items));
+        match self.frames.pop() {
+            Some(Frame::List(items)) => self.attach(RawValue::List(items)),
+            Some(Frame::Packed(p)) => self.attach(RawValue::Packed(Box::new(p.finish()))),
+            Some(other) => self.frames.push(other),
+            None => {}
         }
     }
 

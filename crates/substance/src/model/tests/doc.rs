@@ -7,6 +7,12 @@ pub enum V {
     Obj(&'static str, Vec<(&'static str, V)>),
     /// A list of pointers (tag 0x13).
     List(Vec<V>),
+    /// A value list (tag 0x11) of inline objects (tag 0x14), as stroke points are stored.
+    Values(Vec<V>),
+    /// An object stored inline (tag 0x14).
+    Inline(&'static str, Vec<(&'static str, V)>),
+    /// A vector or matrix with its tag (0x02 vec2, 0x0e mat4 …).
+    Floats(u8, Vec<f32>),
     Absent,
     Float(f32),
     Vec3([f32; 3]),
@@ -44,12 +50,26 @@ fn write(w: &mut DocWriter, v: &V) {
             }
             w.close();
         }
-        V::List(items) => {
-            w.list(0x13, items.len() as u32);
+        V::List(items) | V::Values(items) => {
+            w.list(if matches!(v, V::List(_)) { 0x13 } else { 0x11 }, items.len() as u32);
             for item in items {
                 write(w, item);
             }
             w.close();
+        }
+        V::Inline(class, fields) => {
+            w.object(0x14, class, fields.len() as u16);
+            for (name, value) in fields {
+                w.field(name);
+                write(w, value);
+            }
+            w.close();
+        }
+        V::Floats(tag, values) => {
+            w.raw(&[*tag]);
+            for x in values {
+                w.raw(&x.to_le_bytes());
+            }
         }
         V::Absent => {
             w.raw(&[0x12, 0xff]);

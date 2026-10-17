@@ -36,6 +36,8 @@ pub struct ConvertSummary {
     pub sets: usize,
     pub channels: usize,
     pub baked: usize,
+    /// Strokes and samples kept as stroke records.
+    pub strokes: (usize, usize),
     /// Report entries per fidelity: exact, approximated, baked, kept raw.
     pub fidelity: [usize; 4],
     pub bytes: u64,
@@ -51,6 +53,7 @@ impl ConvertSummary {
             sets: doc.texture_sets.len(),
             channels: doc.texture_sets.iter().map(|s| s.channels.len()).sum(),
             baked: doc.texture_sets.iter().map(|s| s.baked.len()).sum(),
+            strokes: materialcraft::paint::stroke::totals(doc),
             fidelity: [
                 Fidelity::Exact,
                 Fidelity::Approximated,
@@ -70,12 +73,14 @@ impl fmt::Display for ConvertSummary {
         let [exact, approx, baked, raw] = self.fidelity;
         write!(
             f,
-            "ok {}: {} texture sets, {} channels, {} baked maps; report {exact} exact, {approx} approximated, \
-             {baked} baked, {raw} kept raw; {:.1} MB; import {:.1} s, save {:.1} s",
+            "ok {}: {} texture sets, {} channels, {} baked maps, {} strokes ({} samples) recorded; report {exact} \
+             exact, {approx} approximated, {baked} baked, {raw} kept raw; {:.1} MB; import {:.1} s, save {:.1} s",
             self.output.display(),
             self.sets,
             self.channels,
             self.baked,
+            self.strokes.0,
+            self.strokes.1,
             self.bytes as f64 / 1048576.0,
             self.import_seconds,
             self.save_seconds
@@ -151,20 +156,24 @@ impl fmt::Display for ConvertTable {
             match result {
                 Ok(s) => writeln!(
                     f,
-                    "ok    {:>6.1}s {:>6.1}s {:>8.1} MB  {:>2} sets  {}",
+                    "ok    {:>6.1}s {:>6.1}s {:>8.1} MB  {:>2} sets {:>6} strokes  {}",
                     s.import_seconds,
                     s.save_seconds,
                     s.bytes as f64 / 1048576.0,
                     s.sets,
+                    s.strokes.0,
                     path.display()
                 )?,
                 Err(e) => writeln!(f, "FAIL  {}: {e}", path.display())?,
             }
         }
         let sum = |g: fn(&ConvertSummary) -> f64| ok.iter().map(|s| g(s)).sum::<f64>();
+        let strokes: usize = ok.iter().map(|s| s.strokes.0).sum();
+        let samples: usize = ok.iter().map(|s| s.strokes.1).sum();
         writeln!(
             f,
-            "{} converted, {} failed; import {:.0} s, save {:.0} s, output {:.0} MB; wall {:.0} s",
+            "{} converted, {} failed; {strokes} strokes ({samples} samples) recorded; import {:.0} s, save {:.0} s, \
+             output {:.0} MB; wall {:.0} s",
             ok.len(),
             self.rows.len() - ok.len(),
             sum(|s| s.import_seconds),

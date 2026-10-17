@@ -90,7 +90,11 @@ fn is_mcpaint(path: &Path) -> bool {
 /// Loads a `.mcpaint`; imports anything else as a `.spp`.
 fn open_document(path: &Path) -> Result<Document, String> {
     if is_mcpaint(path) {
-        format::load_path(path).map_err(|e| e.to_string())
+        let doc = format::load_path(path).map_err(|e| e.to_string())?;
+        for problem in materialcraft::paint::stroke::problems(&doc) {
+            eprintln!("warning: {problem}");
+        }
+        Ok(doc)
     } else {
         import_spp(path, &mut progress_line).map_err(|e| e.to_string())
     }

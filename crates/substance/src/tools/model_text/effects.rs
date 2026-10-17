@@ -96,7 +96,7 @@ fn paint_text(p: &PaintEffect) -> String {
     format!(
         "{}{opacity}, strokes {}, paints {}",
         p.tool.name(),
-        p.strokes,
+        p.stroke_count(),
         short_list(&colors, 3)
     )
 }

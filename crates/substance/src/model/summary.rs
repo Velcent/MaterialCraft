@@ -55,7 +55,7 @@ fn collect(effects: &[PainterEffect], out: &mut Vec<ContentKind>) {
     for e in effects {
         match e {
             PainterEffect::Fill(f) => out.push(sources_kind(&f.sources)),
-            PainterEffect::Paint(p) if p.strokes > 0 => out.push(ContentKind::Strokes),
+            PainterEffect::Paint(p) if p.stroke_count() > 0 => out.push(ContentKind::Strokes),
             PainterEffect::Paint(_) => {}
             PainterEffect::Group(g) => collect(&g.effects, out),
             PainterEffect::Filter(_) => out.push(ContentKind::Procedural),

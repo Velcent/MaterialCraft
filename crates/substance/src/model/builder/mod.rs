@@ -1,9 +1,11 @@
 //! Turns a [`RawTree`] into a [`PainterDocument`]. Never fails: what it does not know becomes a
-//! [`RawEntry`] and is counted in the [`ModelReport`]. Split by level: texture sets, layers, effects, sources.
+//! [`RawEntry`] and is counted in the [`ModelReport`]. Split by level: texture sets, layers, effects, sources,
+//! strokes.
 
 mod effect;
 mod layer;
 mod source;
+mod stroke;
 mod texture_set;
 
 use super::document::PainterDocument;

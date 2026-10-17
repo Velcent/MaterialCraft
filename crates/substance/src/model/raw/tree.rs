@@ -1,6 +1,7 @@
 //! [`RawObject`]: one object of the serialised tree, generic (class name and named fields), with typed
 //! accessors the model builder uses. Nothing here knows what a class means.
 
+use super::packed::PackedList;
 use crate::decode::document::Scalar;
 
 /// A field value as stored.
@@ -11,6 +12,8 @@ pub enum RawValue {
     /// A pointer field whose object is absent (flag `0xff`).
     Absent,
     List(Vec<RawValue>),
+    /// A list of flat objects kept packed (the points of brush strokes, see [`PackedList`]).
+    Packed(Box<PackedList>),
 }
 
 /// One object: its class and its fields in file order.
@@ -18,9 +21,6 @@ pub enum RawValue {
 pub struct RawObject {
     pub class: String,
     pub fields: Vec<(String, RawValue)>,
-    /// True if the object's content was skipped on purpose (bulky data such as stroke points);
-    /// its class is known but it has no fields here.
-    pub pruned: bool,
 }
 
 impl RawObject {
@@ -108,6 +108,14 @@ impl RawObject {
         match self.field(name) {
             Some(RawValue::List(items)) => items,
             _ => &[],
+        }
+    }
+
+    /// A packed list field, if the field is one.
+    pub fn packed(&self, name: &str) -> Option<&PackedList> {
+        match self.field(name)? {
+            RawValue::Packed(p) => Some(p),
+            _ => None,
         }
     }
 

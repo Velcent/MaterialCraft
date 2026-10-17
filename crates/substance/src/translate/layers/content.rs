@@ -107,7 +107,7 @@ impl ContentEvaluator<'_> {
                         opaque(state, "effect group with its own blending");
                     }
                 }
-                PainterEffect::Paint(p) if p.strokes > 0 && self.writes(&p.header, channel) => {
+                PainterEffect::Paint(p) if p.stroke_count() > 0 && self.writes(&p.header, channel) => {
                     let colours = p.colors.is_empty() || p.colors.iter().any(|c| c.channels().contains(painter));
                     if colours {
                         opaque(state, format!("{} strokes", p.tool.name()));

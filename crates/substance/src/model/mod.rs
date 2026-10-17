@@ -6,7 +6,8 @@
 //! - [`raw`]: the generic tree ([`RawTree`]) the builder reads.
 //! - [`PainterDocument`] → [`PainterTextureSet`]s → [`PainterLayer`]s (bottom → top), each with
 //!   [`ChannelBlending`] entries, an optional [`PainterMask`] and a content stack of [`PainterEffect`]s.
-//! - Effects ([`FillEffect`], [`PaintEffect`], filters, levels, …) take values from [`PainterSource`]s.
+//! - Effects ([`FillEffect`], [`PaintEffect`], filters, levels, …) take values from [`PainterSource`]s; paint
+//!   effects hold their brush strokes ([`PainterStroke`]).
 //! - Unknown classes become [`RawEntry`]s; [`ModelReport`] counts recognised, raw and unmirrored objects.
 
 mod blending;
@@ -23,6 +24,7 @@ pub mod raw;
 mod raw_entry;
 mod report;
 mod source;
+mod stroke;
 mod summary;
 #[cfg(test)]
 mod tests;
@@ -44,5 +46,6 @@ pub use raw::RawTree;
 pub use raw_entry::RawEntry;
 pub use report::{ClassTally, ModelReport};
 pub use source::{BitmapSource, PainterSource, ProceduralSource, ReferenceSource, UniformSource};
+pub use stroke::{PainterStroke, PainterView, StoredMat4, StrokeKey, TimelineKey};
 pub use summary::{ContentKind, StackSummary};
 pub use texture_set::{ChannelDecl, PainterTextureSet};

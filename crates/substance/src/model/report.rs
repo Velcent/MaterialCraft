@@ -56,6 +56,11 @@ impl ModelReport {
         self.classes.entry(class.to_string()).or_default().recognised += 1;
     }
 
+    /// `n` objects of `class` turned into typed values at once (the rows of a packed list).
+    pub fn recognise_many(&mut self, class: &str, n: usize) {
+        self.classes.entry(class.to_string()).or_default().recognised += n;
+    }
+
     pub fn keep_raw(&mut self, class: &str) {
         self.classes.entry(class.to_string()).or_default().raw += 1;
     }

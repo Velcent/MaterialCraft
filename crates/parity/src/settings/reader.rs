@@ -94,7 +94,6 @@ mod tests {
         RawObject {
             class: class.into(),
             fields: fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
-            pruned: false,
         }
     }
 
