@@ -135,7 +135,7 @@ fn sdf_nodes_and_forms() {
 fn baker_produces_maps() {
     let low = bake::parse_obj(&bake::uv_sphere_obj(12, 8, 1.0, 0.0)).unwrap();
     let high = bake::parse_obj(&bake::uv_sphere_obj(48, 32, 1.0, 0.05)).unwrap();
-    let s = bake::BakeSettings { size: 64, max_dist: 0.2, ao_rays: 8, ao_dist: 0.5, padding: 2 };
+    let s = bake::BakeSettings { size: 64, max_dist: 0.2, ao_rays: 8, ao_dist: 0.5, padding: 2, ..Default::default() };
     let m = bake::bake(&low, &high, &s).unwrap();
     assert_eq!(m.len(), 7);
     let n = &m["normal"];
