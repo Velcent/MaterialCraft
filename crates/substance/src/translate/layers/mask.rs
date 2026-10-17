@@ -75,6 +75,7 @@ impl MaskEvaluator<'_> {
             enabled: painter.enabled,
             initial,
             effects: walk.effects,
+            asset: None,
         };
         MaskOutcome {
             mask: Some(mask),

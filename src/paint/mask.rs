@@ -12,12 +12,15 @@ pub struct Mask {
     pub initial: f32,
     /// Bottom → top.
     pub effects: Vec<MaskEffect>,
+    /// The smart mask this mask was made from (its library reference, `smart-masks/edges.mcfrag`): provenance
+    /// only, the mask holds everything it needs. Since format 0.7.
+    pub asset: Option<String>,
 }
 
 impl Mask {
     /// An enabled mask starting from `initial` without effects.
     pub fn new(initial: f32) -> Mask {
-        Mask { enabled: true, initial, effects: Vec::new() }
+        Mask { enabled: true, initial, effects: Vec::new(), asset: None }
     }
 
     /// A painted mask: black with `image` painted on top at full strength, so the value is red × alpha

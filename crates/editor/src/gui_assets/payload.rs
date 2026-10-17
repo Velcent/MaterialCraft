@@ -6,7 +6,7 @@
 //! - a generator or filter made by a built-in procedural (its provenance names it) → [`DropPayload::Effect`]
 //!   (between layers a new effect layer, onto a layer its effects, onto a mask the mask's effects, Ctrl replaces);
 //! - a smart material (`.mcfrag`) → [`DropPayload::Folder`] with its layers, recording the asset's library path as
-//!   the folder's provenance; a smart mask → [`DropPayload::SmartMask`] with its mask's effects. The file is read
+//!   the folder's provenance; a smart mask → [`DropPayload::SmartMask`] with its mask's effects and the same provenance. The file is read
 //!   when the drag starts;
 //! - `.sbsar` files are importable only (ADR 0008) and never dropped.
 
@@ -58,7 +58,11 @@ fn fragment_payload(item: &Item) -> Result<DropPayload, String> {
             embed.push(EmbeddedAsset::new(item.path.clone(), bytes));
             Ok(DropPayload::Folder { name, layers, asset: Some(item.path.clone()), embed })
         }
-        (FragmentKind::SmartMask, FragmentContent::Mask(mask)) => Ok(DropPayload::SmartMask(mask.effects)),
+        (FragmentKind::SmartMask, FragmentContent::Mask(mask)) => {
+            let mut embed = f.assets;
+            embed.push(EmbeddedAsset::new(item.path.clone(), bytes));
+            Ok(DropPayload::SmartMask { effects: mask.effects, asset: Some(item.path.clone()), embed })
+        }
         _ => Err("The file's content does not match its kind.".into()),
     }
 }
@@ -117,7 +121,9 @@ mod tests {
         let DropPayload::Folder { name, layers: dropped, asset, embed } = folder else { panic!("{folder:?}") };
         assert_eq!((name.as_str(), dropped, asset.as_deref()), ("Rust", layers, Some("worn.mcfrag")));
         assert_eq!(embed.iter().map(|a| a.reference.as_str()).collect::<Vec<_>>(), ["worn.mcfrag"]);
-        assert_eq!(payload(&at(Usage::SmartMask, "edges.mcfrag")).unwrap(), DropPayload::SmartMask(mask.effects));
+        let DropPayload::SmartMask { effects, asset, embed } = payload(&at(Usage::SmartMask, "edges.mcfrag")).unwrap() else { panic!("not a smart mask") };
+        assert_eq!((effects, asset.as_deref()), (mask.effects, Some("edges.mcfrag")));
+        assert_eq!(embed.iter().map(|a| a.reference.as_str()).collect::<Vec<_>>(), ["edges.mcfrag"]);
         assert!(payload(&at(Usage::SmartMask, "missing.mcfrag")).unwrap_err().contains("can't be read"));
         std::fs::remove_dir_all(&dir).unwrap();
     }

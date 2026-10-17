@@ -7,7 +7,8 @@
 //!
 //! A smart mask (a mask's effects saved as an asset) dropped onto a layer or its mask gives the layer a black
 //! mask if it has none and adds its effects; with `replace` they replace the mask's effects (MK-16). Its anchors
-//! get ids new in the texture set and its painted pixels the set's resolution.
+//! get ids new in the texture set and its painted pixels the set's resolution. A mask that holds only the smart
+//! mask's effects afterwards (new, replaced or empty before) records the smart mask as its provenance (`asset`).
 //!
 //! A material and a smart material make layers (LS-18, see [`super::drop_layers`]): a material becomes a fill
 //! layer, a smart material a folder. Between layers it lands there; onto a folder on top of its children; onto
@@ -97,8 +98,14 @@ impl EffectAsset {
 #[derive(Debug, Clone, PartialEq)]
 pub enum DropPayload {
     Effect(EffectAsset),
-    /// A mask's effects, bottom to top.
-    SmartMask(Vec<MaskEffect>),
+    /// A smart mask: a mask's effects, bottom to top. `asset` is its library reference, recorded on a mask that
+    /// holds only these effects afterwards; `embed` are the library assets to embed with it (its own file under
+    /// `asset` and the assets it embeds), as for [`DropPayload::Folder`].
+    SmartMask {
+        effects: Vec<MaskEffect>,
+        asset: Option<String>,
+        embed: Vec<EmbeddedAsset>,
+    },
     /// A material: becomes a fill layer (or the fill of a fill layer it is dropped onto).
     Material(MaterialAsset),
     /// A smart material: a folder named `name` holding `layers` (bottom to top). Where they land their ids are
@@ -134,10 +141,10 @@ pub fn accepts(doc: &Document, target: &DropTarget, payload: &DropPayload) -> bo
             None => at.index <= set.layers.len(),
             Some(p) => set.layer(p).is_some_and(|g| matches!(g.kind, LayerKind::Group(_)) && at.index <= g.children().len()),
         },
-        (DropTarget::Between { .. }, DropPayload::SmartMask(_)) => false,
+        (DropTarget::Between { .. }, DropPayload::SmartMask { .. }) => false,
         (DropTarget::OntoLayer(r), _) => set.layer(&r.layer).is_some(),
         (DropTarget::OntoMask(r), DropPayload::Effect(_)) => set.layer(&r.layer).is_some_and(|l| l.mask.is_some()),
-        (DropTarget::OntoMask(r), DropPayload::SmartMask(_)) => set.layer(&r.layer).is_some(),
+        (DropTarget::OntoMask(r), DropPayload::SmartMask { .. }) => set.layer(&r.layer).is_some(),
         (DropTarget::OntoMask(_), DropPayload::Material(_) | DropPayload::Folder { .. }) => false,
     }
 }
@@ -152,7 +159,7 @@ pub fn drop_onto(tx: &mut Transaction, target: &DropTarget, payload: &DropPayloa
             tx.apply(Edit::InsertLayer { set: set_id.clone(), at: at.clone(), layer: Box::new(layer) })?;
             Ok(DropOutcome::NewLayer(id))
         }
-        (DropTarget::Between { .. }, DropPayload::SmartMask(_)) => Err(EditError::NotAccepted("a smart mask goes onto a layer or its mask")),
+        (DropTarget::Between { .. }, DropPayload::SmartMask { .. }) => Err(EditError::NotAccepted("a smart mask goes onto a layer or its mask")),
         (DropTarget::OntoLayer(r), DropPayload::Effect(asset)) => {
             let effect = asset.content(set(tx, &r.set)?, BlendMode::Normal);
             into_stack(tx, r, vec![StackEffect::Content(effect)], replace)
@@ -163,17 +170,27 @@ pub fn drop_onto(tx: &mut Transaction, target: &DropTarget, payload: &DropPayloa
             }
             into_stack(tx, r, vec![StackEffect::Mask(asset.mask())], replace)
         }
-        (DropTarget::OntoLayer(r) | DropTarget::OntoMask(r), DropPayload::SmartMask(effects)) => {
+        (DropTarget::OntoLayer(r) | DropTarget::OntoMask(r), DropPayload::SmartMask { effects, asset, embed }) => {
             let s = set(tx, &r.set)?;
             // The smart mask's anchors get ids new in the set (references among its effects follow) and its painted
             // pixels the set's resolution.
             let mut effects = effects.clone();
             IdPool::of(s).reid_effects(&mut effects);
             adapt::fit_mask_effects(&mut effects, s.resolution);
-            if layer(tx, r)?.mask.is_none() {
-                tx.apply(Edit::SetLayer { layer: r.clone(), property: LayerProperty::Mask(Some(Mask::new(0.0))) })?;
+            let whole = match &layer(tx, r)?.mask {
+                None => {
+                    let mask = Mask { asset: asset.clone(), ..Mask::new(0.0) };
+                    tx.apply(Edit::SetLayer { layer: r.clone(), property: LayerProperty::Mask(Some(mask)) })?;
+                    false
+                }
+                Some(m) => replace || m.effects.is_empty(),
+            };
+            let out = into_stack(tx, r, effects.into_iter().map(StackEffect::Mask).collect(), replace)?;
+            if whole {
+                record_mask_asset(tx, r, asset.as_deref())?;
             }
-            into_stack(tx, r, effects.into_iter().map(StackEffect::Mask).collect(), replace)
+            embed_missing(tx, embed)?;
+            Ok(out)
         }
         (_, DropPayload::Material(material)) => drop_layers::material(tx, target, material),
         (_, DropPayload::Folder { name, layers, asset, embed }) => {
@@ -182,6 +199,13 @@ pub fn drop_onto(tx: &mut Transaction, target: &DropTarget, payload: &DropPayloa
             Ok(out)
         }
     }
+}
+
+/// Records `asset` as the provenance of `r`'s mask (an edit only if it differs).
+fn record_mask_asset(tx: &mut Transaction, r: &LayerRef, asset: Option<&str>) -> Result<(), EditError> {
+    let Some(mask) = layer(tx, r)?.mask.as_ref().filter(|m| m.asset.as_deref() != asset) else { return Ok(()) };
+    let mask = Mask { asset: asset.map(str::to_string), ..mask.clone() };
+    tx.apply(Edit::SetLayer { layer: r.clone(), property: LayerProperty::Mask(Some(mask)) })
 }
 
 /// Adds the assets of `embed` the document does not embed yet.

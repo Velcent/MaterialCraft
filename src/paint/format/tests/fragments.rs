@@ -93,11 +93,35 @@ fn documents_embed_assets_and_folders_record_their_smart_material() {
     let mut doc = full_document();
     doc.assets = vec![EmbeddedAsset::new("materials/rust.mca", b"graph".to_vec()), EmbeddedAsset::new("smart-materials/worn.mcfrag", save(&smart_mask()))];
     doc.texture_sets[0].layer_mut("group").unwrap().asset = Some("smart-materials/worn.mcfrag".into());
+    // Since 0.7 a mask records the smart mask it came from.
+    doc.texture_sets[0].layer_mut("effects").unwrap().mask.as_mut().unwrap().asset = Some("smart-masks/edges.mcfrag".into());
     let bytes = to_bytes(&doc);
     let back = from_bytes(&bytes).unwrap();
     assert_eq!(back, doc);
     assert_eq!(to_bytes(&back), bytes);
     assert!(ZipReader::open(Cursor::new(&bytes)).unwrap().find("resources/assets/smart-materials/worn.mcfrag").is_some());
+    assert_eq!(back.texture_sets[0].layer("effects").unwrap().mask.as_ref().unwrap().asset.as_deref(), Some("smart-masks/edges.mcfrag"));
     doc.assets.push(EmbeddedAsset::new("materials/rust.mca", vec![]));
     assert!(crate::paint::format::save(&doc, &mut Vec::new()).is_err(), "an asset embedded twice");
+}
+
+#[test]
+fn an_observed_save_reports_its_bytes_and_writes_the_same_file() {
+    let doc = full_document();
+    let dir = std::env::temp_dir().join(format!("mc-observed-save-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("doc.mcpaint");
+    let mut last = 0u64;
+    let mut calls = 0usize;
+    crate::paint::format::save_path_observed(&doc, &path, &mut |n| {
+        assert!(n >= last, "the count only grows");
+        last = n;
+        calls += 1;
+    })
+    .unwrap();
+    let written = std::fs::read(&path).unwrap();
+    assert!(calls > 0);
+    assert_eq!(last, written.len() as u64);
+    assert_eq!(written, to_bytes(&doc));
+    std::fs::remove_dir_all(&dir).unwrap();
 }
