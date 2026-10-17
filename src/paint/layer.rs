@@ -8,7 +8,7 @@
 
 use super::blend::BlendMode;
 use super::channel::Channel;
-use super::effect::{ContentEffect, EffectKind};
+use super::effect::{ContentEffect, EffectKind, Procedural};
 use super::fill_image::ImageFill;
 use super::geometry_mask::GeometryMask;
 use super::image::TiledImage;
@@ -73,12 +73,21 @@ pub enum FillSource {
 pub struct Fill {
     pub source: FillSource,
     pub projection: Projection,
+    /// The procedural this fill stands in for (an imported Substance material replaced by one of ours), kept
+    /// unchanged so the choice can be made again later.
+    pub original: Option<Box<Procedural>>,
 }
 
 impl Fill {
     /// A fill from `source` in texture space.
     pub fn new(source: FillSource) -> Fill {
-        Fill { source, projection: Projection::default() }
+        Fill { source, projection: Projection::default(), original: None }
+    }
+
+    /// Builder: the fill standing in for `original`.
+    pub fn replacing(mut self, original: Procedural) -> Fill {
+        self.original = Some(Box::new(original));
+        self
     }
 
     /// A uniform fill.

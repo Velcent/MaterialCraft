@@ -45,7 +45,7 @@ fn version_rules() {
     assert!(msg.contains("2.3") && msg.contains("newer"), "{msg}");
     assert!(
         load_edited(|v| {
-            v.insert("format_version", "0.9");
+            v.insert("format_version", "0.11");
         })
         .is_ok()
     );

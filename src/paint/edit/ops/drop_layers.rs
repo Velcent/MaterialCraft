@@ -37,7 +37,7 @@ pub(super) fn material(tx: &mut Transaction, target: &DropTarget, asset: &Materi
     if let DropTarget::OntoLayer(r) = target
         && let LayerKind::Fill(fill) = &layer(tx, r)?.kind
     {
-        let fill = Fill { source: asset.source(), projection: fill.projection.clone() };
+        let fill = Fill { source: asset.source(), projection: fill.projection.clone(), original: fill.original.clone() };
         tx.apply(Edit::SetLayer { layer: r.clone(), property: LayerProperty::Fill(fill) })?;
         return Ok(DropOutcome::Filled(r.clone()));
     }

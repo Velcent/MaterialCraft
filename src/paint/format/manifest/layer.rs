@@ -4,7 +4,7 @@
 
 use super::extras::loc;
 use super::fields::{Obj, as_f32, num, num4};
-use super::{ReadCtx, WriteCtx, blend, effect, effect_mask, geometry_mask, image_ref, projection, strokes};
+use super::{ReadCtx, WriteCtx, blend, effect, effect_kinds, effect_mask, geometry_mask, image_ref, projection, strokes};
 use crate::json::Value;
 use crate::paint::format::FormatError;
 use crate::paint::format::slot::ImageSlot;
@@ -98,7 +98,7 @@ impl FillAt<'_> {
 }
 
 /// A fill object: `{"values"}`, `{"material", "params"}` or `{"images", "values"}`, plus `"projection"` when it is
-/// not the default.
+/// not the default and `"original"` (`{"id", "params"}`) when the fill stands in for a procedural (format 0.10).
 pub fn write_fill(f: &Fill, at: &FillAt, ctx: &WriteCtx) -> Value {
     let values = |list: &[(Channel, [f32; 4])]| {
         let mut obj = Value::object();
@@ -124,6 +124,11 @@ pub fn write_fill(f: &Fill, at: &FillAt, ctx: &WriteCtx) -> Value {
     };
     if let Some(p) = projection::write(&f.projection, &format!("{}/projection", at.here), ctx.extras) {
         v.insert("projection", p);
+    }
+    if let Some(original) = &f.original {
+        let mut o = Value::object();
+        effect_kinds::write_procedural(original, &mut o);
+        v.insert("original", o);
     }
     ctx.extras.inject(&at.here, &mut v);
     v
@@ -213,8 +218,12 @@ pub fn read_fill(v: &Value, json: String, at: &FillAt, ctx: &mut ReadCtx) -> Res
         Some(p) => projection::read(p, o.path("projection"), &format!("{}/projection", at.here), ctx)?,
         None => Projection::default(),
     };
+    let original = match o.opt("original") {
+        Some(v) => Some(Box::new(effect_kinds::read_procedural(&mut Obj::new(v, o.path("original"))?)?)),
+        None => None,
+    };
     ctx.extras.record(&at.here, &o);
-    Ok(Fill { source, projection })
+    Ok(Fill { source, projection, original })
 }
 
 /// The `images` of an image fill, with `values` for the other channels.

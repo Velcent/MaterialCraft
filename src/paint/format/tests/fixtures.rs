@@ -1,6 +1,7 @@
 //! Documents used by the format tests.
 
 use crate::mesh::{Mesh, MeshPart};
+use crate::paint::effect::Procedural;
 use crate::paint::height_normal::HeightFilter;
 use crate::paint::{
     BakedKind, BakedMap, BlendMode, Channel, ChannelSpec, ColorSpace, Document, Fidelity, Fill, FillSource, ForeignFile, ImportReport, Layer, LayerImage,
@@ -108,7 +109,8 @@ fn body_set() -> TextureSet {
     let material = Fill::new(FillSource::Material {
         path: "materials/rust.mca".into(),
         params: vec![("Amount".into(), "0.4".into()), ("Farbe \"äöü\"".into(), "#ff0000".into())],
-    });
+    })
+    .replacing(Procedural::new("substance:rust_fine").with_params(vec![("Rust_Amount".into(), "0.5".into())]));
     let mut rust = Layer::new("rust", "Rust", LayerKind::Fill(material)).with_blend(Channel::Metallic, BlendMode::Overlay, 1.0).with_mask(noisy(
         w,
         h,
