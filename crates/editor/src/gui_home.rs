@@ -1962,8 +1962,9 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = &ui.ctx().clone();
+        self.diag.drain();
         if self.screen == Screen::Paint {
-            if self.paint.ui(ui) == gui_paint::PaintAction::Home {
+            if self.paint.ui(ui, self.diag.history()) == gui_paint::PaintAction::Home {
                 self.screen = Screen::Home;
                 self.last_title.clear();
             }
@@ -2261,8 +2262,16 @@ fn main() -> eframe::Result<()> {
         depth_buffer: 24,
         ..Default::default()
     };
-    match eframe::run_native("MaterialCraft", make(4), Box::new(|cc| Ok(Box::new(App::new(cc))))) {
-        Err(eframe::Error::NoGlutinConfigs(..)) => eframe::run_native("MaterialCraft", make(0), Box::new(|cc| Ok(Box::new(App::new(cc))))),
+    // Logging starts before the window, so start-up messages (GL context, portal) are kept.
+    let diag = logging::Diagnostics::start();
+    if let Err(e) = diag.attach_dir(&config_dir().join("logs")) {
+        log::warn!("no log file: {e}");
+    }
+    // The fallback run gets the same diagnostics if the first one never created the app.
+    let diag = std::cell::RefCell::new(Some(diag));
+    let take = || diag.borrow_mut().take().unwrap_or_else(logging::Diagnostics::start);
+    match eframe::run_native("MaterialCraft", make(4), Box::new(|cc| Ok(Box::new(App::new(cc, take()))))) {
+        Err(eframe::Error::NoGlutinConfigs(..)) => eframe::run_native("MaterialCraft", make(0), Box::new(|cc| Ok(Box::new(App::new(cc, take()))))),
         other => other,
     }
 }

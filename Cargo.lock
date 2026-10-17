@@ -1132,6 +1132,7 @@ name = "materialcraft-editor"
 version = "0.1.0"
 dependencies = [
  "eframe",
+ "log",
  "materialcraft",
  "materialcraft-substance",
  "rfd",

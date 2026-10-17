@@ -22,6 +22,7 @@ mod gui_input;
 #[path = "gui_paint/mod.rs"]
 mod gui_paint;
 mod gui_theme;
+mod logging;
 use gui_theme::panel_header;
 
 // ---------------------------------------------------------------- layout constants
@@ -282,10 +283,12 @@ struct App {
     logo_note: String,
     /// The Paint screen (owns all of its state).
     paint: gui_paint::PaintMode,
+    /// Session diagnostics: the log file and the history the Paint screen shows.
+    diag: logging::Diagnostics,
 }
 
 impl App {
-    fn new(cc: &eframe::CreationContext<'_>) -> App {
+    fn new(cc: &eframe::CreationContext<'_>, diag: logging::Diagnostics) -> App {
         apply_theme(&cc.egui_ctx);
         let (logo_tex, logo_note) = logo().clone();
         let logo_handle = cc.egui_ctx.load_texture("logo", qimg(&logo_tex), egui::TextureOptions::LINEAR);
@@ -300,7 +303,7 @@ impl App {
             .map(|v| v.split(',').filter(|x| !x.is_empty()).map(String::from).collect())
             .unwrap_or_default();
         let recent: Vec<PathBuf> = read_lines("recent.txt").into_iter().map(PathBuf::from).collect();
-        let paint = gui_paint::PaintMode::from_args();
+        let paint = gui_paint::PaintMode::from_args(diag.sink());
         App {
             parents: Vec::new(),
             undo: Vec::new(),
@@ -400,6 +403,7 @@ impl App {
             logo: Some(logo_handle),
             logo_note,
             paint,
+            diag,
             g,
         }
     }

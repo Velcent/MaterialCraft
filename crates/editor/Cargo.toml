@@ -11,6 +11,7 @@ publish = false
 materialcraft = { path = "../..", features = ["gui"] }
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
 materialcraft-substance = { path = "../substance" }
+log = "0.4"
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 
 [[bin]]

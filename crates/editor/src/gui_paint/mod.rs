@@ -27,13 +27,15 @@ use document_state::OpenDocument;
 use eframe::egui;
 use launch::{Launch, StartDocument};
 use loader::{Loaded, Loader};
+use materialcraft::diag::{Area, RingBuffer, Sink, SinkExt};
 use panels::PanelEvent;
 use panels::import_report::ReportPanel;
 use panels::layout::Screen;
-use panels::status_bar::{Activity, Status};
+use panels::status_bar::Activity;
 use scene_sync::SceneSync;
 use shot::ShotJob;
 use std::path::PathBuf;
+use std::sync::Arc;
 use viewport::Viewport;
 use window::WindowTitle;
 
@@ -62,14 +64,16 @@ pub struct PaintMode {
     viewport: Viewport,
     display: ChannelView,
     report: ReportPanel,
-    status: Status,
+    /// Where status messages and errors go (the log file and the session history).
+    diag: Arc<dyn Sink>,
     shot: Option<ShotJob>,
     title: WindowTitle,
 }
 
 impl PaintMode {
-    /// Paint mode configured from the command line (`--paint`, `--paint-demo`, `--shot`, `--channel`).
-    pub fn from_args() -> PaintMode {
+    /// Paint mode configured from the command line (`--paint`, `--paint-demo`, `--shot`, `--channel`);
+    /// its messages go to `diag`.
+    pub fn from_args(diag: Arc<dyn Sink>) -> PaintMode {
         let launch = Launch::from_args(std::env::args().skip(1));
         let mut pm = PaintMode {
             document: None,
@@ -78,7 +82,7 @@ impl PaintMode {
             viewport: Viewport::new(),
             display: launch.channel.unwrap_or(ChannelView::Material),
             report: ReportPanel::default(),
-            status: Status::info("Open a .mcpaint document or import a Substance Painter project (.spp)."),
+            diag,
             shot: launch.shot.map(ShotJob::new),
             title: WindowTitle::default(),
         };
@@ -114,12 +118,13 @@ impl PaintMode {
 
     /// Starts loading `path` in the background (the current document stays until it is done).
     pub fn open(&mut self, path: PathBuf) {
-        self.status = Status::info(format!("Opening {}", path.display()));
+        self.diag.info(Area::Project, format!("Opening {}", path.display()));
         self.loader = Some(Loader::start(path));
     }
 
-    /// Draws the screen and handles its input.
-    pub fn ui(&mut self, ui: &mut egui::Ui) -> PaintAction {
+    /// Draws the screen and handles its input; `history` is the session's diagnostics (the status
+    /// bar shows the newest entry).
+    pub fn ui(&mut self, ui: &mut egui::Ui, history: &RingBuffer) -> PaintAction {
         let ctx = &ui.ctx().clone();
         if let Some(p) = window::dropped_document(ctx) {
             self.open(p);
@@ -128,10 +133,10 @@ impl PaintMode {
         if let Some(doc) = &mut self.document {
             self.scene.poll(doc, self.viewport.gpu());
             if let Some(e) = self.scene.error.take() {
-                self.status = Status::error(e);
+                self.diag.error(Area::Gpu, e);
             }
         }
-        let events = self.draw(ui);
+        let events = self.draw(ui, history);
         let mut action = PaintAction::Stay;
         for ev in events {
             if self.apply(ev) == PaintAction::Home {
@@ -150,13 +155,13 @@ impl PaintMode {
         action
     }
 
-    fn draw(&mut self, ui: &mut egui::Ui) -> Vec<PanelEvent> {
+    fn draw(&mut self, ui: &mut egui::Ui, history: &RingBuffer) -> Vec<PanelEvent> {
         let screen = Screen {
             document: self.document.as_ref(),
             report: &mut self.report,
             viewport: &mut self.viewport,
             display: self.display,
-            status: &self.status,
+            status: history.last().map(|(_, e)| e),
             activity: Activity { loading: self.loader.as_ref().map(|l| l.progress()), maps: self.scene.progress() },
         };
         panels::layout::show(ui, screen)
@@ -190,7 +195,7 @@ impl PaintMode {
             }
             PanelEvent::CancelLoad => {
                 self.loader = None;
-                self.status = Status::info("Cancelled.");
+                self.diag.info(Area::Project, "Cancelled.");
             }
         }
         PaintAction::Stay
@@ -204,7 +209,7 @@ impl PaintMode {
         match result {
             Ok(loaded) => self.show(loaded),
             Err(e) => {
-                self.status = Status::error(e.clone());
+                self.diag.error(area_of_load(&source), format!("{source}: {e}"));
                 if let Some(shot) = &self.shot {
                     shot.abort(&format!("{source}: {e}"));
                 }
@@ -216,7 +221,7 @@ impl PaintMode {
     fn show(&mut self, loaded: Loaded) {
         let mut doc = OpenDocument::new(loaded.document, loaded.source, loaded.summary);
         let d = doc.doc();
-        self.status = Status::info(format!("Opened {}: {} texture sets, {} mesh parts.", doc.source().display(), d.texture_sets.len(), d.mesh.parts.len()));
+        self.diag.info(Area::Project, format!("Opened {}: {} texture sets, {} mesh parts.", doc.source().display(), d.texture_sets.len(), d.mesh.parts.len()));
         self.scene.rebuild(&mut doc, self.display);
         self.viewport.reset_camera();
         self.document = Some(doc);
@@ -225,6 +230,11 @@ impl PaintMode {
     fn close(&mut self) {
         self.scene.clear(self.viewport.gpu());
         self.document = None;
-        self.status = Status::info("Document closed.");
+        self.diag.info(Area::Project, "Document closed.");
     }
+}
+
+/// Failed loads of Substance projects are import problems; anything else is a project problem.
+fn area_of_load(source: &str) -> Area {
+    if source.to_ascii_lowercase().ends_with(".spp") { Area::Import } else { Area::Project }
 }

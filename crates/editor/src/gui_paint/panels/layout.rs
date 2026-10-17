@@ -5,9 +5,10 @@ use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
 use super::super::viewport::Viewport;
 use super::import_report::ReportPanel;
-use super::status_bar::{Activity, Status};
+use super::status_bar::Activity;
 use super::{PANEL_FILL, PanelEvent, channel_bar, menu_bar, status_bar, texture_sets, view_settings};
 use eframe::egui;
+use materialcraft::diag::Entry;
 
 /// Everything one frame of the screen shows.
 pub struct Screen<'a> {
@@ -15,7 +16,8 @@ pub struct Screen<'a> {
     pub report: &'a mut ReportPanel,
     pub viewport: &'a mut Viewport,
     pub display: ChannelView,
-    pub status: &'a Status,
+    /// The newest diagnostics entry, for the status bar.
+    pub status: Option<&'a Entry>,
     pub activity: Activity<'a>,
 }
 

@@ -2,22 +2,10 @@
 
 use super::PanelEvent;
 use eframe::egui::{self, Color32};
+use materialcraft::diag::{Entry, Level};
 
-/// The last message for the user.
-pub struct Status {
-    pub text: String,
-    pub ok: bool,
-}
-
-impl Status {
-    pub fn info(text: impl Into<String>) -> Status {
-        Status { text: text.into(), ok: true }
-    }
-
-    pub fn error(text: impl Into<String>) -> Status {
-        Status { text: text.into(), ok: false }
-    }
-}
+/// Shown before anything was reported.
+const HINT: &str = "Open a .mcpaint document or import a Substance Painter project (.spp).";
 
 /// What is running in the background.
 pub struct Activity<'a> {
@@ -27,12 +15,16 @@ pub struct Activity<'a> {
     pub maps: Option<(usize, usize)>,
 }
 
-pub fn show(ui: &mut egui::Ui, status: &Status, activity: &Activity, events: &mut Vec<PanelEvent>) {
+/// Draws the bar; `status` is the newest diagnostics entry of the session.
+pub fn show(ui: &mut egui::Ui, status: Option<&Entry>, activity: &Activity, events: &mut Vec<PanelEvent>) {
     let frame = egui::Frame::NONE.fill(crate::gui_theme::HEADER_BG).inner_margin(egui::Margin::symmetric(8, 2));
     egui::Panel::bottom("paint_status").frame(frame).show(ui, |ui| {
         ui.horizontal(|ui| {
-            let col = if status.ok { Color32::from_gray(170) } else { Color32::from_rgb(255, 120, 110) };
-            ui.colored_label(col, &status.text);
+            let (text, col) = match status {
+                Some(e) => (e.text.as_str(), color(e.level)),
+                None => (HINT, color(Level::Info)),
+            };
+            ui.colored_label(col, text);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if let Some((f, step)) = activity.loading {
                     if ui.small_button("Cancel").clicked() {
@@ -47,4 +39,12 @@ pub fn show(ui: &mut egui::Ui, status: &Status, activity: &Activity, events: &mu
             });
         });
     });
+}
+
+fn color(level: Level) -> Color32 {
+    match level {
+        Level::Debug | Level::Info => Color32::from_gray(170),
+        Level::Warning => Color32::from_rgb(230, 180, 90),
+        Level::Error => Color32::from_rgb(255, 120, 110),
+    }
 }

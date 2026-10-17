@@ -17,6 +17,9 @@ This file doesn't change MaterialCraft's own licence (the `license` field in `Ca
 | Path | What | Author | Source (repository, file, revision) | Licence |
 |---|---|---|---|---|
 | `src/diag/time.rs` | UTC timestamp formatting (`timestamp`, `civil_from_days`) and its test | ArtCraft Team and the PhotoCraft contributors | PhotoCraft, `apps/photocraft/src/logging.rs`, revision 57437ea | MIT OR Apache-2.0 |
+| `crates/editor/src/logging/filter.rs` | `RUST_LOG`-style level filter (`Filter`) and its tests | ArtCraft Team and the PhotoCraft contributors | PhotoCraft, `apps/photocraft/src/logging.rs`, revision 57437ea | MIT OR Apache-2.0 |
+| `crates/editor/src/logging/file.rs` | Log rotation, line format and the size-capped log file writer, with tests | ArtCraft Team and the PhotoCraft contributors | PhotoCraft, `apps/photocraft/src/logging.rs`, revision 57437ea | MIT OR Apache-2.0 |
+| `crates/editor/src/logging/logger.rs` | The `log` backend (`AppLogger`, `install`) and its tests, extended with the diagnostics bridge | ArtCraft Team and the PhotoCraft contributors | PhotoCraft, `apps/photocraft/src/logging.rs`, revision 57437ea | MIT OR Apache-2.0 |
 
 ## Assets
 
