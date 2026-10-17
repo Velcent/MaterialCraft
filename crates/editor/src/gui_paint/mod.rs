@@ -164,6 +164,9 @@ impl PaintMode {
             painting: tools::Painting::default(),
             stroke_test: launch.stroke_test.then_some(stroke_test::StrokeTest::Waiting),
         };
+        if launch.stroke_test && launch.stroke_helpers {
+            pm.painting.brush.helpers = stroke_test::helpers();
+        }
         match launch.open {
             Some(StartDocument::File(p)) => pm.open(p),
             Some(StartDocument::Demo) => pm.show(Loaded { document: demo::document(), source: "demo".into(), summary: None }),

@@ -1,11 +1,28 @@
-//! The brush tools' quick-access controls in the viewport toolbar (PT-14): size, flow, stroke opacity and spacing.
-//! Lazy mouse, symmetry and the preview switches join them with their features.
+//! The brush tools' quick-access controls in the viewport toolbar (PT-14): size, flow, stroke opacity and spacing,
+//! then the stroke helpers: lazy mouse on/off with its distance (PT-34) and symmetry on/off with a settings menu
+//! (PT-36). The preview switches join them with their feature.
 
+use super::super::tools::helpers::StrokeHelpers;
 use super::brush_panel::size_range;
+use super::symmetry_menu;
 use eframe::egui::{self, Ui};
 use materialcraft::paint::brush::{BrushPreset, SizeSpace};
+use materialcraft_brush::LazyMouse;
 
-pub fn show(ui: &mut Ui, p: &mut BrushPreset) {
+pub fn show(ui: &mut Ui, p: &mut BrushPreset, helpers: &mut StrokeHelpers) {
+    preset(ui, p);
+    ui.separator();
+    let lazy = &mut helpers.lazy;
+    ui.checkbox(&mut lazy.on, "Lazy mouse").on_hover_text("The brush trails the pointer on a string: smoother lines, slower turns");
+    ui.add_enabled(lazy.on, egui::DragValue::new(&mut lazy.radius).range(1.0..=LazyMouse::MAX_RADIUS).speed(0.5).suffix(" px"))
+        .on_hover_text("Length of the string between the pointer and the brush");
+    ui.separator();
+    let sym = &mut helpers.symmetry;
+    ui.checkbox(&mut sym.on, "Symmetry").on_hover_text("Repeat each stamp at its symmetric places on the mesh");
+    ui.menu_button("⚙", |ui| symmetry_menu::show(ui, sym)).response.on_hover_text("Symmetry settings");
+}
+
+fn preset(ui: &mut Ui, p: &mut BrushPreset) {
     let (range, _, _) = size_range(p.size_space);
     let size = match p.size_space {
         SizeSpace::Model => {

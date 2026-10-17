@@ -1,6 +1,7 @@
 //! `--stroke-test`: once the document has settled, paints one red stroke across the middle of the view through
 //! the same path a pointer stroke takes (a new paint layer on the first texture set, the paint tool, the stroke
-//! gesture's input), so `--shot` can show the brush pipeline at work without a person at the mouse.
+//! gesture's input), so `--shot` can show the brush pipeline at work without a person at the mouse. With
+//! `--stroke-helpers` the stroke is mirrored across X with the lazy mouse on and followed by a straight line.
 
 use super::PaintMode;
 use super::input::{PointerSample, StrokeInput};
@@ -8,6 +9,7 @@ use super::panels::PanelEvent;
 use super::panels::layers::LayerAction;
 use super::shell::tools::Tool;
 use super::tools::PaintFrame;
+use super::tools::helpers::{LazySettings, StrokeHelpers, SymmetrySettings};
 use materialcraft::diag::{Area, SinkExt};
 use materialcraft::paint::Channel;
 use materialcraft::paint::edit::ops::NewLayer;
@@ -19,6 +21,11 @@ pub enum StrokeTest {
     /// A paint layer was asked for; waiting for the brush surface.
     Layer,
     Done,
+}
+
+/// The helpers `--stroke-helpers` paints with: mirror across object X at 0, lazy mouse of 12 points.
+pub fn helpers() -> StrokeHelpers {
+    StrokeHelpers { lazy: LazySettings { on: true, radius: 12.0 }, symmetry: SymmetrySettings { on: true, ..SymmetrySettings::default() } }
 }
 
 impl PaintMode {
@@ -58,6 +65,10 @@ impl PaintMode {
         let mut input = vec![StrokeInput::Down(sample(0))];
         input.extend((1..=40).map(|i| StrokeInput::Move(sample(i))));
         input.push(StrokeInput::Up);
+        if self.painting.brush.helpers.symmetry.on {
+            let to = PointerSample { pos: [w * 0.42, h * 0.78], pressure: 1.0, time: 1.0 };
+            input.extend([StrokeInput::Line { to, snap: true }, StrokeInput::Up]);
+        }
         let frame = PaintFrame { doc, picking: &self.picking, camera: Some(camera), tool: Tool::Paint, target: Some((target, set)) };
         let report = self.painting.frame(input, frame);
         self.after_painting(report);

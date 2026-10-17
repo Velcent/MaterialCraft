@@ -1,7 +1,9 @@
 //! [`BrushTools`]: the settings the brush panel and the quick-access bar edit: one preset per brush tool, the value
-//! painted into each channel (and whether the channel is painted at all, PT-02) and the grey value for masks.
+//! painted into each channel (and whether the channel is painted at all, PT-02), the grey value for masks, and the
+//! stroke helpers (lazy mouse, symmetry).
 
 use super::super::shell::tools::Tool;
+use super::helpers::StrokeHelpers;
 use materialcraft::paint::brush::BrushPreset;
 use materialcraft::paint::{Channel, TextureSet};
 use materialcraft_brush::PaintValues;
@@ -26,11 +28,20 @@ pub struct BrushTools {
     pub mask_value: f32,
     /// Test occlusion (paint only what the view shows).
     pub occlusion: bool,
+    /// Lazy mouse and symmetry, shared by the brush tools.
+    pub helpers: StrokeHelpers,
 }
 
 impl Default for BrushTools {
     fn default() -> BrushTools {
-        BrushTools { paint: BrushPreset::default(), eraser: BrushPreset::eraser(), values: Vec::new(), mask_value: 1.0, occlusion: true }
+        BrushTools {
+            paint: BrushPreset::default(),
+            eraser: BrushPreset::eraser(),
+            values: Vec::new(),
+            mask_value: 1.0,
+            occlusion: true,
+            helpers: StrokeHelpers::default(),
+        }
     }
 }
 
@@ -48,6 +59,15 @@ impl BrushTools {
         match tool {
             Tool::Paint => Some(&mut self.paint),
             Tool::Eraser => Some(&mut self.eraser),
+            _ => None,
+        }
+    }
+
+    /// The preset of `tool` and the stroke helpers together, for the quick-access bar.
+    pub fn quick_mut(&mut self, tool: Tool) -> Option<(&mut BrushPreset, &mut StrokeHelpers)> {
+        match tool {
+            Tool::Paint => Some((&mut self.paint, &mut self.helpers)),
+            Tool::Eraser => Some((&mut self.eraser, &mut self.helpers)),
             _ => None,
         }
     }
