@@ -80,7 +80,7 @@ impl Importer {
         let scene = self.project.read(paths::SCENE)?;
         cancel.check()?;
         let decode = |part| move |source| ImportError::Decode { part, source };
-        let mut mesh = AssbinGeometry::parse(&scene).map_err(decode("mesh"))?;
+        let (mut mesh, faces) = AssbinGeometry::parse_with_faces(&scene).map_err(decode("mesh"))?;
         let materials = AssbinScene::parse(&scene).map_err(decode("mesh"))?.materials;
         report.mesh(mesh.parts.len(), mesh.parts.iter().map(|p| p.triangles.len()).sum());
         cancel.check()?;
@@ -107,6 +107,7 @@ impl Importer {
         let layers = SetLayers {
             import: &import,
             document: model.as_ref(),
+            faces: &faces,
         };
         let cache = CacheChannels::new(&self.project);
         let baked = BakedMaps::new(&self.project);

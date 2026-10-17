@@ -41,6 +41,9 @@ fn reference_fill(anchor_uid: u64) -> PainterEffect {
         channels: ChannelMask(0),
         anchor_uid: Some(anchor_uid),
         anchor_label: String::new(),
+        levels: None,
+        bindings: vec![],
+        mode: 2,
     });
     PainterEffect::Fill(FillEffect {
         header: header(0, vec![]),
@@ -153,7 +156,8 @@ fn a_paint_layer_holds_its_brush_work_and_effects() {
     });
     let decal = PainterEffect::PolygonFill(PolygonFillEffect {
         header: header(ALL, vec![]),
-        hits: 2,
+        hits: vec![],
+        unread: 2,
     });
     let mut paint = layer(
         1,
@@ -197,8 +201,8 @@ fn masks_map_effect_for_effect_and_references_find_their_anchor() {
     assert!(matches!(&m.effects[1].kind, EffectKind::Reference(r) if r.anchor == "anchor-5"));
     assert_eq!(
         stack.verdict.channel(Channel::Roughness).reasons(),
-        ["mask reads an anchor"],
-        "first reason only"
+        ["mask filter \"blur\""],
+        "the reference is computable; first reason only"
     );
 }
 

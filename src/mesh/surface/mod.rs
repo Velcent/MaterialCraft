@@ -91,6 +91,8 @@ pub struct SurfaceMap {
     texels: Vec<Texel>,
     triangles: Vec<SurfaceTriangle>,
     island_count: u32,
+    /// The names of all of the mesh's parts, by part index (polygon-fill picks name their part).
+    part_names: Vec<String>,
 }
 
 impl SurfaceMap {
@@ -104,7 +106,8 @@ impl SurfaceMap {
         let (w, h) = (w as usize, h as usize);
         let mut texels = raster::rasterise(&triangles, w, h);
         gutter::fill(&mut texels, &triangles, w, h, key.gutter);
-        Ok(SurfaceMap { key, texels, triangles, island_count })
+        let part_names = mesh.parts.iter().map(|p| p.name.clone()).collect();
+        Ok(SurfaceMap { key, texels, triangles, island_count, part_names })
     }
 
     pub fn key(&self) -> &SurfaceKey {
@@ -117,6 +120,19 @@ impl SurfaceMap {
 
     pub fn height(&self) -> usize {
         self.key.height as usize
+    }
+
+    /// The name of mesh part `part` (an index of [`SurfaceSample::part`]).
+    pub fn part_name(&self, part: usize) -> Option<&str> {
+        self.part_names.get(part).map(String::as_str)
+    }
+
+    /// The part and triangle of texel `i` (row-major) and its covered share, or `None` outside the set and its
+    /// gutter: the lookup polygon fill rasterises picks with.
+    pub fn triangle_index(&self, i: usize) -> Option<(usize, usize, f32)> {
+        let texel = self.texels.get(i)?;
+        let tri = self.triangles.get(texel.tri as usize)?;
+        Some((tri.part as usize, tri.triangle as usize, texel.coverage))
     }
 
     /// How many UV islands the set has.

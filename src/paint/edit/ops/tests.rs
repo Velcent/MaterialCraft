@@ -277,7 +277,7 @@ fn a_smart_mask_gets_fresh_anchor_ids_and_the_sets_resolution() {
     let smart = smart_mask(vec![
         MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels::new(pixels))),
         MaskEffect::new(GreyBlend::default(), EffectKind::Anchor(Anchor { id: "pin1".into() })),
-        MaskEffect::new(GreyBlend::default(), EffectKind::Reference(Reference { anchor: "pin1".into() })),
+        MaskEffect::new(GreyBlend::default(), EffectKind::Reference(Reference::new("pin1"))),
     ]);
     // Twice: the second drop must not collide with the first, nor with the set's own "pin1".
     for target in ["base", "b"] {

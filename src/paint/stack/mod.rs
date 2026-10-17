@@ -7,12 +7,16 @@
 //! - a layer's content is its base (paint image with alpha = coverage, uniform fill with coverage 1, image
 //!   fill through its projection; other sources through the [`FillContext`], else skipped and reported) with its content effects on top, each blended by its own entry for the
 //!   channel; the content is blended over the stack with the layer's mode and strength;
+//! - effect layers (a layer that is not a folder, blending the channel with `Passthrough`): the content starts
+//!   from the composite below instead of from nothing, and the result replaces the stack by the layer's strength;
 //! - groups: `Passthrough` blends the children straight into the stack, then fades the result
 //!   against the stack below by the group's strength; any other mode composites the children in
 //!   isolation (from the default, coverage 0), applies the group's effects, and blends that over the stack
 //!   with the group's mode;
 //! - generators and filters are evaluated by the implementations in the [`EffectRegistry`]; effects without
 //!   one, and kinds that are not computable yet, are left out and reported by [`Compositor::warnings`];
+//! - levels, colour selection, polygon fill and references are native (see `native`); polygon fill needs the
+//!   [`FillContext`]'s surface map, colour selection the set's baked map, a reference its anchor;
 //! - fills are laid on by their projection ([`crate::projection`]); sources other than uniform values and
 //!   images, and projections that need the mesh, are evaluated through the [`FillContext`].
 //!
@@ -36,6 +40,7 @@ mod content;
 mod fill_context;
 mod fill_eval;
 mod mask_eval;
+mod native;
 mod pass;
 mod preview;
 mod procedural;
@@ -148,6 +153,14 @@ impl<'a> Compositor<'a> {
         };
         let mode = blend.mode;
         let group = matches!(l.kind, LayerKind::Group(_));
+        if content::is_effect_layer(l, channel) {
+            let content = self.content_over(l, l.effects.len(), pass, depth, acc.to_vec());
+            for (i, a) in acc.iter_mut().enumerate() {
+                let w = weights.at(i);
+                *a = [0, 1, 2, 3].map(|k| a[k] + (content[i][k] - a[k]) * w);
+            }
+            return;
+        }
         if (!group || mode != BlendMode::Passthrough) && self.has_active_effects(l, pass) {
             if group && depth >= MAX_GROUP_DEPTH {
                 return;
@@ -209,3 +222,5 @@ mod tests;
 mod tests_effects;
 #[cfg(test)]
 mod tests_fills;
+#[cfg(test)]
+mod tests_native;

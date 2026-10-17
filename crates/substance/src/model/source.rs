@@ -2,6 +2,7 @@
 //! (`DataSourceUniform`, `DataSourceBitmap`, `DataSourceProcedural`, `DataSourceReference`).
 
 use super::channel::ChannelMask;
+use super::effect::Levels;
 use super::procedural::Procedural;
 use super::raw_entry::RawEntry;
 
@@ -55,6 +56,13 @@ pub struct ReferenceSource {
     pub anchor_uid: Option<u64>,
     /// `DataReference.sourceLabel`, often empty.
     pub anchor_label: String,
+    /// `levels`: applied to what is read.
+    pub levels: Option<Levels>,
+    /// `DataReference.bindings`: (`source` channel bit read from the anchor, `output` channel bit written; 0 = the
+    /// mask's grey).
+    pub bindings: Vec<(u64, u64)>,
+    /// `mode` (2 ×430, 0 ×31, 1 ×6; meaning not known).
+    pub mode: u64,
 }
 
 impl PainterSource {

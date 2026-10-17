@@ -128,6 +128,13 @@ impl TextureSet {
         find_mut(&mut self.layers, id)
     }
 
+    /// True if a layer's content or mask has a polygon fill, which composites only with the set's surface map.
+    pub fn uses_polygon_fill(&self) -> bool {
+        let picks = |id: &str| id == "polygon_fill";
+        self.walk_layers()
+            .any(|(_, l)| l.effects.iter().any(|e| picks(e.kind.id())) || l.mask.as_ref().is_some_and(|m| m.effects.iter().any(|e| picks(e.kind.id()))))
+    }
+
     /// The first baked map of `kind`.
     pub fn baked(&self, kind: &BakedKind) -> Option<&TiledImage> {
         self.baked.iter().find(|b| &b.kind == kind).map(|b| &b.image)

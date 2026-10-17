@@ -4,24 +4,28 @@
 //! Every Painter mask effect becomes one of ours: an effect group becomes a paint effect (its brush work)
 //! followed by its other entries, uniform fills grey fills, bitmap fills painted images, procedural fills
 //! generators, reference fills references; filters, levels, colour selection, polygon fill and anchors keep
-//! their kind. Only uniform and bitmap fills (and empty paint) are computable, plus the procedural fills the
-//! plan replaces with MaterialCraft's generators ([`crate::translate::replacements`], status "replaced"); the
-//! first effect that is not gives the reason (generators, filters, strokes, levels, references …).
+//! their kind; a polygon fill becomes one polygon fill per run of picks with the same value ([`super::decal`]).
+//! Computable are uniform and bitmap fills, empty paint, levels, colour selection (on the set's baked ID map),
+//! reference fills whose anchor is computable, polygon fills resolved on the mesh, plus the procedural
+//! fills the plan replaces with MaterialCraft's generators ([`crate::translate::replacements`], status
+//! "replaced"); the first effect that is not gives the reason (generators, filters, strokes, levels, references …).
 
+use super::anchors::AnchorTable;
 use super::blend_table::BlendTable;
 use super::blending::ResolvedBlend;
 use super::computability::Computability;
+use super::decal::{self, geometry::SetGeometry};
 use super::effect_data::{self as data, AnchorIds};
 use super::images::{ImageSource, grey_values, resample};
 use super::projection_map::map_projection;
 use super::strokes;
-use crate::model::{EffectHeader, MaskInitial, PainterEffect, PainterMask, PainterSource, PolygonFillEffect};
+use crate::model::{EffectHeader, MaskInitial, PainterEffect, PainterMask, PainterSource};
 use crate::translate::replacements::{self, ProceduralPlan};
 use materialcraft::json::Value;
 use materialcraft::paint::effect::{Grey, PolygonFill, Selection};
 use materialcraft::paint::stroke::StrokeData;
 use materialcraft::paint::{
-    EffectKind, GreyBlend, Mask, MaskEffect, MaskPixels, PixelFormat, PixelLayout, SampleType, TiledImage,
+    BlendMode, EffectKind, GreyBlend, Mask, MaskEffect, MaskPixels, PixelFormat, PixelLayout, SampleType, TiledImage,
 };
 
 /// Stored format of imported bitmap masks (16 bits: constant masks stay exact to well below 8-bit rounding).
@@ -41,6 +45,10 @@ pub struct MaskEvaluator<'a> {
     /// Which Substance procedurals become MaterialCraft generators.
     pub plan: &'a ProceduralPlan,
     pub resolution: (u32, u32),
+    /// The set's mesh, for polygon-fill picks.
+    pub geometry: Option<&'a SetGeometry<'a>>,
+    /// What the set's anchors hold, for fills that read one.
+    pub anchors: &'a AnchorTable,
 }
 
 impl MaskEvaluator<'_> {
@@ -195,7 +203,16 @@ impl Walk<'_, '_> {
                         }
                     }
                     PainterSource::Reference(r) => {
-                        self.stop(counts, "mask reads an anchor".into());
+                        let status = self.evaluator.anchors.status(r.anchor_uid);
+                        match status.is_computable() {
+                            true => {
+                                self.note(counts, status);
+                                self.note(counts, resolved.status());
+                            }
+                            false => {
+                                self.stop(counts, format!("mask reads an anchor: {}", status.reasons().join("; ")))
+                            }
+                        }
                         EffectKind::Reference(data::reference(r))
                     }
                     PainterSource::Other(raw) => {
@@ -230,16 +247,46 @@ impl Walk<'_, '_> {
                 self.push(header, blend, kind, on);
             }
             PainterEffect::Levels(l) => {
-                self.stop(on, "mask levels".into());
+                if let Some(h) = header {
+                    self.note(on, self.blend(h).status());
+                }
                 self.push(header, blend, EffectKind::Levels(data::levels(l.levels.as_ref())), on);
             }
             PainterEffect::ColorSelection(c) => {
-                self.stop(on, "mask colour selection".into());
+                if let Some(h) = header {
+                    self.note(on, self.blend(h).status());
+                }
                 self.push(header, blend, EffectKind::ColorSelection(data::color_selection(c)), on);
             }
             PainterEffect::PolygonFill(p) => {
-                self.stop(on, "mask polygon fill".into());
-                self.push(header, blend, polygon_fill(p), on);
+                let decal = decal::runs(self.evaluator.geometry, p);
+                let counts = on && blend.opacity > 0.0 && blend.mode != BlendMode::Disable;
+                self.note(counts, decal.status.clone());
+                if let Some(h) = header {
+                    self.note(counts, self.blend(h).status());
+                }
+                let normal = blend.mode == BlendMode::Normal && blend.opacity >= 1.0;
+                if decal.runs.len() > 1 && !normal {
+                    let why = "polygon fill: picks with several values blended one by one";
+                    self.note(counts, Computability::approximated(why));
+                }
+                if decal.runs.is_empty() {
+                    let selection = Selection::default();
+                    self.push(
+                        header,
+                        blend,
+                        EffectKind::PolygonFill(PolygonFill { selection, values: 1.0 }),
+                        on,
+                    );
+                }
+                for run in decal.runs {
+                    let values = run.color[0];
+                    let kind = EffectKind::PolygonFill(PolygonFill {
+                        selection: run.selection,
+                        values,
+                    });
+                    self.push(header, blend, kind, on);
+                }
             }
             PainterEffect::Other(raw) => {
                 self.stop(on, format!("mask effect {}", raw.class));
@@ -256,14 +303,6 @@ impl Walk<'_, '_> {
             Err(_) => EffectKind::Unknown(data::unknown_named("substance:paint", Value::object())),
         }
     }
-}
-
-/// Painter's picks are not read yet: the selection is empty, the fill white.
-fn polygon_fill(_: &PolygonFillEffect) -> EffectKind<Grey> {
-    EffectKind::PolygonFill(PolygonFill {
-        selection: Selection::default(),
-        values: 1.0,
-    })
 }
 
 /// The grey values (red × alpha) of `image` as a 16-bit grey image of `size`.

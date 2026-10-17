@@ -2,6 +2,7 @@
 //! channel with its status and score), then totals, the worst channels and the blend fits.
 
 use super::fit::FitTally;
+use super::kinds::KindTally;
 use super::{ChannelResult, SetResult};
 use crate::translate::layers::cache_score::EXACT_STEPS;
 use crate::translate::layers::{Computability, StackStrategy};
@@ -14,6 +15,8 @@ const WORST: usize = 20;
 pub struct Verification {
     pub sets: Vec<SetResult>,
     pub fits: FitTally,
+    /// Compared and reproduced channels per native effect kind.
+    pub kinds: KindTally,
     /// Projects that could not be read, with the reason.
     pub failures: Vec<(String, String)>,
 }
@@ -116,6 +119,7 @@ impl fmt::Display for Verification {
             }
         }
         self.write_totals(f)?;
+        write!(f, "{}", self.kinds)?;
         write!(f, "{}", self.fits)?;
         for (project, e) in &self.failures {
             writeln!(f, "FAILED {project}: {e}")?;

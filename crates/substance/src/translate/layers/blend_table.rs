@@ -1,6 +1,13 @@
 //! [`BlendTable`]: THE mapping from Painter's stored blend mode (`DataBlending.blendingMode`) to ours, with
 //! how sure each entry is, plus Painter's per-channel defaults for entries a sparse list leaves out.
 //! Evidence per value: `interop/painter-document-catalogue.md`, "Blend modes".
+//!
+//! Pixel fits (`mcsub verify-layers --all --fit`, whole corpus, with levels, references, colour selection, polygon
+//! fill and stacked fills computable, 2026-10-17): only 2, 10 and 27 occur in a channel that can be compared.
+//! 2 → normal: 131 channels, mean 0.16 steps (128 reproduced; next best replace 2.89). 10 → add: 10 height
+//! channels, 0.00, but every one adds onto zero height, where all modes tie. 27: 42 normal channels, 0.00, all
+//! with flat normals, where every mode ties. No other value has pixels in the corpus (fit error unknown); they
+//! stay guesses until a Painter-made test file exists (`research/painter-test-recipes.md`).
 
 use crate::model::{PainterBlendMode, PainterChannel};
 use materialcraft::paint::BlendMode;
@@ -113,14 +120,18 @@ pub enum Holder {
     Layer,
     /// An effect group (`DataActionGroup`).
     EffectGroup,
+    /// A filter-like effect that transforms what is below it (levels): without a stored entry it replaces its
+    /// input (normal at full strength) in every channel.
+    Filter,
 }
 
 /// Painter's default mode for a channel missing from a blending list (format ≥ 61 stores only entries
 /// that differ). From the full lists of format ≤ 59: normal except height = linear dodge, normal = 27,
-/// ambient occlusion = multiply; effect groups default to passthrough.
+/// ambient occlusion = multiply; effect groups default to passthrough, levels (which store no list) to normal.
 pub fn default_mode(channel: PainterChannel, holder: Holder) -> PainterBlendMode {
     match (holder, channel) {
         (Holder::EffectGroup, _) => PainterBlendMode::Passthrough,
+        (Holder::Filter, _) => PainterBlendMode::Normal,
         (_, PainterChannel::Height) => PainterBlendMode::LinearDodge,
         (_, PainterChannel::Normal) => PainterBlendMode::Unknown(27),
         (_, PainterChannel::AmbientOcclusion) => PainterBlendMode::Multiply,

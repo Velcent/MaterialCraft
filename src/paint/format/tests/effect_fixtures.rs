@@ -44,7 +44,11 @@ pub fn effects_layer(w: u32, h: u32) -> Layer {
         rough(EffectKind::ColorSelection(ColorSelection { map: BakedKind::Id, colors: vec![[1.0, 0.0, 0.5], [0.1, 0.2, 0.3]], tolerance: 0.1, hardness: 0.9 })),
         rough(EffectKind::PolygonFill(PolygonFill { selection: selection.clone(), values: Fill::uniform(vec![(Channel::Roughness, [0.1, 0.1, 0.1, 1.0])]) })),
         anchor,
-        rough(EffectKind::Reference(Reference { anchor: "anchor-1".into() })),
+        rough(EffectKind::Reference(Reference {
+            channel: Some(Channel::Height),
+            levels: Some(Levels { gamma: [2.0; 3], ..Levels::default() }),
+            ..Reference::new("anchor-1")
+        })),
         ContentEffect::new(Vec::new(), EffectKind::Unknown(UnknownEffect { kind: "warp3d".into(), data: unknown.clone() })),
     ];
     let mut mask = Mask::new(1.0);
@@ -61,7 +65,7 @@ pub fn effects_layer(w: u32, h: u32) -> Layer {
         ),
         grey(BlendMode::Normal, 1.0, EffectKind::PolygonFill(PolygonFill { selection, values: 1.0 })),
         grey(BlendMode::Normal, 1.0, EffectKind::Anchor(Anchor { id: "mask-anchor".into() })),
-        grey(BlendMode::Lighten, 1.0, EffectKind::Reference(Reference { anchor: "anchor-1".into() })),
+        grey(BlendMode::Lighten, 1.0, EffectKind::Reference(Reference::new("anchor-1"))),
         grey(BlendMode::Normal, 1.0, EffectKind::Unknown(UnknownEffect { kind: "warp3d".into(), data: unknown })),
     ];
     mask.enabled = false;

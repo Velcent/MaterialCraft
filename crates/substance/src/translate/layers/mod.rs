@@ -12,8 +12,11 @@
 //!   the texels of the mesh ([`island_texels`]).
 //! - [`strategy`]: the per-set decision between the real stack and Painter's flattened result.
 //! - [`strokes`]: Painter's brush strokes → stroke records next to the (empty) paint pixels.
+//! - [`decal`]: Painter's polygon-fill hits resolved on the set's mesh into picked triangles.
+//! - [`anchors`]: how exactly what each anchor holds is computable, for the effects that read it.
 //! - [`report`]: the import report lines.
 
+pub mod anchors;
 pub mod blend_table;
 pub mod blending;
 pub mod cache_agreement;
@@ -21,6 +24,7 @@ pub mod cache_score;
 pub mod channels;
 pub mod computability;
 pub mod content;
+pub mod decal;
 pub mod effect_data;
 pub mod effect_map;
 pub mod images;
@@ -46,6 +50,8 @@ pub use verdict::StackVerdict;
 
 use crate::model::PainterTextureSet;
 use crate::translate::replacements::ProceduralPlan;
+use anchors::AnchorTable;
+use decal::geometry::SetGeometry;
 use stack_builder::StackBuilder;
 
 /// Imports layer stacks with one blend table, one image source and the user's choice of procedural
@@ -57,15 +63,33 @@ pub struct LayerImport<'a> {
 }
 
 impl LayerImport<'_> {
-    /// The set's layers for the declared `channels` at `resolution`.
+    /// The set's layers for the declared `channels` at `resolution`, without the mesh (polygon fills are then
+    /// not computable).
     pub fn import(&self, set: &PainterTextureSet, channels: &SetChannels, resolution: (u32, u32)) -> ImportedStack {
-        StackBuilder {
+        self.import_on(set, channels, resolution, None)
+    }
+
+    /// [`Self::import`] with the set's mesh, which polygon-fill picks are resolved on.
+    pub fn import_on(
+        &self,
+        set: &PainterTextureSet,
+        channels: &SetChannels,
+        resolution: (u32, u32),
+        geometry: Option<&SetGeometry>,
+    ) -> ImportedStack {
+        let builder = |anchors| StackBuilder {
             channels,
             table: self.table,
             images: self.images,
             plan: self.plan,
             resolution,
-        }
-        .build(&set.layers)
+            geometry,
+            anchors,
+        };
+        // anchors read through other anchors need a second pass
+        let none = AnchorTable::default();
+        let first = builder(&none).anchor_table(&set.layers);
+        let anchors = builder(&first).anchor_table(&set.layers);
+        builder(&anchors).build(&set.layers)
     }
 }

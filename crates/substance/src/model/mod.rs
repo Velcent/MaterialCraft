@@ -15,6 +15,7 @@ pub mod baking;
 mod blending;
 mod builder;
 mod channel;
+mod decal;
 mod document;
 mod effect;
 mod fill;
@@ -35,6 +36,7 @@ mod texture_set;
 
 pub use blending::{ChannelBlending, PainterBlendMode, blending_for};
 pub use channel::{ChannelMask, PainterChannel};
+pub use decal::{DecalHit, HitGranularity, HitShape};
 pub use document::PainterDocument;
 pub use effect::{
     ColorSelectionEffect, EffectGroup, EffectHeader, FilterEffect, Levels, LevelsEffect, PainterEffect,

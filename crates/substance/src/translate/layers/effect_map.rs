@@ -15,11 +15,14 @@
 
 use super::blend_table::Holder;
 use super::blending::ResolvedBlend;
-use super::content::{ChannelContent, ChannelValue, ContentEvaluator};
+use super::content::{ChannelContent, ChannelValue, ContentEvaluator, filter_replacement};
+use super::decal::{self, geometry::SetGeometry};
 use super::effect_data::{self as data, AnchorIds};
 use super::layer_content::core_content;
 use super::strokes;
-use crate::model::{EffectHeader, FillEffect, LayerKind as PainterKind, PainterEffect, PainterLayer, PainterSource};
+use crate::model::{
+    EffectHeader, FillEffect, LayerKind as PainterKind, PainterEffect, PainterLayer, PainterSource, PolygonFillEffect,
+};
 use materialcraft::json::Value;
 use materialcraft::paint::effect::{PolygonFill, Selection};
 use materialcraft::paint::{Channel, ChannelBlend, ContentEffect, EffectKind, Fill, LayerKind, PaintContent};
@@ -32,6 +35,8 @@ pub struct MappedContent {
 
 pub struct ContentMapper<'e, 'a> {
     pub evaluator: &'e ContentEvaluator<'a>,
+    /// The set's mesh, for polygon-fill picks.
+    pub geometry: Option<&'a SetGeometry<'a>>,
 }
 
 impl ContentMapper<'_, '_> {
@@ -81,7 +86,7 @@ impl ContentMapper<'_, '_> {
             .collect();
         let full = computed.iter().all(|c| match c.value {
             ChannelValue::Uniform { coverage, .. } | ChannelValue::Image { coverage, .. } => coverage >= 1.0,
-            ChannelValue::Nothing => true,
+            ChannelValue::Composited | ChannelValue::Nothing => true,
         });
         if !full {
             return None;
@@ -114,6 +119,10 @@ impl ContentMapper<'_, '_> {
             }
             return;
         };
+        let holder = match effect {
+            PainterEffect::Levels(_) | PainterEffect::Filter(_) => Holder::Filter,
+            _ => Holder::Layer,
+        };
         let kind = match effect {
             PainterEffect::Fill(fill) => return self.fill(fill, out),
             PainterEffect::Group(g) => {
@@ -122,17 +131,39 @@ impl ContentMapper<'_, '_> {
                 return self.brush_work(&g.effects, anchors, out);
             }
             PainterEffect::Paint(p) => EffectKind::Paint(painted(strokes::record([p]))),
-            PainterEffect::Filter(f) => EffectKind::Filter(data::procedural(f.procedural.as_ref())),
+            PainterEffect::Filter(f) => match filter_replacement(f, self.evaluator.plan) {
+                Some((_, ours)) => EffectKind::Filter(ours),
+                None => EffectKind::Filter(data::procedural(f.procedural.as_ref())),
+            },
             PainterEffect::Levels(l) => EffectKind::Levels(data::levels(l.levels.as_ref())),
             PainterEffect::ColorSelection(c) => EffectKind::ColorSelection(data::color_selection(c)),
-            PainterEffect::PolygonFill(_) => EffectKind::PolygonFill(PolygonFill {
-                selection: Selection::default(),
-                values: Fill::uniform(Vec::new()),
-            }),
+            PainterEffect::PolygonFill(p) => return self.polygon_fill(header, p, out),
             PainterEffect::Anchor(h) => EffectKind::Anchor(anchors.anchor(h)),
             PainterEffect::Other(_) => return,
         };
-        out.push(self.with_header(header, Holder::Layer, kind));
+        out.push(self.with_header(header, holder, kind));
+    }
+
+    /// A polygon fill in layer content (rare): one effect per run of picks, writing the picks' colour into base
+    /// colour (what Painter writes there is not known; the content verdict calls it not computable).
+    fn polygon_fill(&self, header: &EffectHeader, p: &PolygonFillEffect, out: &mut Vec<ContentEffect>) {
+        let decal = decal::runs(self.geometry, p);
+        let runs = match decal.runs.is_empty() {
+            true => vec![decal::DecalRun {
+                color: [1.0; 3],
+                selection: Selection::default(),
+            }],
+            false => decal.runs,
+        };
+        for run in runs {
+            let [r, g, b] = run.color;
+            let values = Fill::uniform(vec![(Channel::BaseColor, [r, g, b, 1.0])]);
+            let kind = EffectKind::PolygonFill(PolygonFill {
+                selection: run.selection,
+                values,
+            });
+            out.push(self.with_header(header, Holder::Layer, kind));
+        }
     }
 
     /// A fill effect: its uniform and bitmap channels as one fill or paint effect, the other channels as

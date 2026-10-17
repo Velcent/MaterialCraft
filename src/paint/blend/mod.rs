@@ -69,7 +69,9 @@ pub enum BlendMode {
     NormalMapDetail,
     /// Reoriented normal mapping with the base as detail on the top.
     NormalMapInverseDetail,
-    /// Groups only: children blend straight into the stack below. On a non-group layer it acts as `Normal`.
+    /// Groups: children blend straight into the stack below. A layer that is not a group becomes an effect layer:
+    /// its content and effects start from the composite below and replace it by the layer's strength. As a
+    /// plain formula (inside a content stack) it acts as `Normal`.
     Passthrough,
 }
 

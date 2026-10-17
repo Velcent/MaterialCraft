@@ -57,8 +57,11 @@ impl OpenDocument {
     /// place instead of copying it.
     pub fn maps_view(&self, sets: &[usize]) -> Arc<Document> {
         let doc = &self.doc;
-        let texture_sets = doc.texture_sets.iter().enumerate().map(|(i, s)| if sets.contains(&i) { s.clone() } else { placement(s) }).collect();
-        Arc::new(Document { texture_sets, height_filter: doc.height_filter, ..Document::default() })
+        let texture_sets: Vec<TextureSet> =
+            doc.texture_sets.iter().enumerate().map(|(i, s)| if sets.contains(&i) { s.clone() } else { placement(s) }).collect();
+        // polygon fills composite through the set's surface map, which needs the mesh
+        let mesh = if texture_sets.iter().any(TextureSet::uses_polygon_fill) { doc.mesh.clone() } else { Default::default() };
+        Arc::new(Document { texture_sets, mesh, height_filter: doc.height_filter, ..Document::default() })
     }
 
     /// What a geometry worker reads: the mesh and each set's slot and UV set (no layers, baked maps or kept

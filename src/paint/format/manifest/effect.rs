@@ -58,9 +58,7 @@ fn write<D: DomainCodec>(e: &Effect<D>, at: &EffectAt, ctx: &WriteCtx) -> Value 
         EffectKind::Anchor(a) => {
             v.insert("id", a.id.as_str());
         }
-        EffectKind::Reference(r) => {
-            v.insert("anchor", r.anchor.as_str());
-        }
+        EffectKind::Reference(r) => kinds::write_reference(r, &mut v),
         EffectKind::Unknown(_) => {}
     }
     ctx.extras.inject(&at.here, &mut v);

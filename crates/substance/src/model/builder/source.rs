@@ -44,14 +44,14 @@ impl ModelBuilder {
 
     fn reference(&mut self, s: &RawObject, uid: Option<u64>, channels: ChannelMask) -> ReferenceSource {
         self.seen(s);
-        if let Some(levels) = s.object("levels") {
-            self.levels(levels);
-        }
+        let levels = s.object("levels").map(|l| self.levels(l));
         let reference = s.object("reference");
+        let mut bindings = Vec::new();
         if let Some(r) = reference {
             self.seen(r);
             for binding in r.objects("bindings") {
                 self.seen(binding);
+                bindings.push((binding.u64("source").unwrap_or(0), binding.u64("output").unwrap_or(0)));
             }
         }
         ReferenceSource {
@@ -62,6 +62,9 @@ impl ModelBuilder {
                 .and_then(|r| r.string("sourceLabel"))
                 .unwrap_or_default()
                 .to_string(),
+            levels,
+            bindings,
+            mode: s.u64("mode").unwrap_or(0),
         }
     }
 

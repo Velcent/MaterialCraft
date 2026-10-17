@@ -2,7 +2,7 @@
 
 use super::EffectDomain;
 use crate::json::Value;
-use crate::paint::BakedKind;
+use crate::paint::{BakedKind, Channel};
 
 /// A generator or filter: which implementation (an id resolved through the [`super::EffectRegistry`]) and
 /// its parameter values as strings, in order.
@@ -70,7 +70,7 @@ pub struct ColorSelection {
     pub hardness: f32,
 }
 
-/// How a polygon-fill pick grows from the clicked triangle.
+/// How the triangles of a polygon fill were picked: what one clicked triangle grew to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PickMode {
     Triangle,
@@ -104,7 +104,9 @@ pub struct Pick {
     pub triangles: Vec<u32>,
 }
 
-/// What a polygon fill covers: picks re-rasterised at the texture set's resolution.
+/// What a polygon fill covers: every covered triangle, listed by its picks (the tool grows a click by `mode`
+/// when picking, so evaluating needs no mesh topology), rasterised through the set's surface map at the
+/// texture set's resolution.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Selection {
     pub mode: PickMode,
@@ -130,10 +132,22 @@ pub struct Anchor {
     pub id: String,
 }
 
-/// Reads the content of the anchor with id `anchor`.
+/// Reads what the anchor with id `anchor` holds: the stack the anchor sits in, evaluated up to the anchor.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Reference {
     pub anchor: String,
+    /// The channel read from an anchor in a layer's content; `None`: the channel being evaluated (for a mask
+    /// reading content: the anchor layer's first channel). An anchor in a mask always gives the mask's grey.
+    pub channel: Option<Channel>,
+    /// Applied to what is read.
+    pub levels: Option<Levels>,
+}
+
+impl Reference {
+    /// Reads `anchor` as it is.
+    pub fn new(anchor: impl Into<String>) -> Reference {
+        Reference { anchor: anchor.into(), channel: None, levels: None }
+    }
 }
 
 /// An effect of a kind this version does not know, kept as written (the whole JSON object) so that saving

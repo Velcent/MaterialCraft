@@ -1,14 +1,18 @@
 //! [`ContentEvaluator`]: what a layer's content (its effect stack, bottom → top) gives each declared channel:
-//! a constant from uniform fills, an image from a bitmap fill, or nothing computable (procedurals,
-//! strokes, filters, references, …) with the reason. Anchors only mark a place and change nothing.
+//! a constant from uniform fills, an image from a bitmap fill, a stack the compositor evaluates from the mapped
+//! effects (levels, fills stacked over images, references to anchors whose content is computable), or nothing
+//! computable (procedurals, strokes, filters, …) with the reason. Anchors only mark a place and change nothing.
 
+use super::anchors::AnchorTable;
 use super::blend_table::{BlendTable, Holder};
 use super::blending::ResolvedBlend;
 use super::channels::SetChannels;
 use super::computability::Computability;
+use super::effect_data;
 use super::images::{ImageSource, channel_pixels};
 use super::projection_map::map_projection;
-use crate::model::{EffectHeader, FillEffect, PainterEffect, PainterSource};
+use crate::model::{EffectHeader, FillEffect, FilterEffect, PainterEffect, PainterSource};
+use crate::translate::replacements::{self, ProceduralPlan, Replacement};
 use materialcraft::paint::{BlendMode, Channel, TiledImage};
 use materialcraft::projection::Projection;
 
@@ -23,6 +27,8 @@ pub enum ChannelValue {
         coverage: f32,
         projection: Projection,
     },
+    /// Computed by the compositor from the layer's effects (no single value to show here).
+    Composited,
     /// Nothing that can be shown.
     Nothing,
 }
@@ -46,6 +52,8 @@ enum Acc {
     Empty,
     Uniform([f32; 4]),
     Image(TiledImage, f32, Projection),
+    /// The compositor evaluates the effects (status says how exactly).
+    Composited,
     Opaque,
 }
 
@@ -54,6 +62,10 @@ pub struct ContentEvaluator<'a> {
     pub table: &'a BlendTable,
     pub images: &'a dyn ImageSource,
     pub resolution: (u32, u32),
+    /// What the set's anchors hold, for fills that read one.
+    pub anchors: &'a AnchorTable,
+    /// Which Substance filters are replaced by MaterialCraft's.
+    pub plan: &'a ProceduralPlan,
 }
 
 impl ContentEvaluator<'_> {
@@ -85,6 +97,7 @@ impl ContentEvaluator<'_> {
                 coverage,
                 projection,
             },
+            Acc::Composited => ChannelValue::Composited,
             Acc::Empty | Acc::Opaque => ChannelValue::Nothing,
         };
         ChannelContent {
@@ -126,9 +139,21 @@ impl ContentEvaluator<'_> {
                 }
                 PainterEffect::Filter(f) if self.writes(&f.header, channel) => {
                     let name = f.procedural.as_ref().map_or("?", |p| p.name());
-                    opaque(state, format!("filter \"{name}\""));
+                    match filter_replacement(f, self.plan) {
+                        Some((r, _)) => {
+                            let blend = ResolvedBlend::of(&f.header.blending, painter, Holder::Filter, self.table);
+                            let mut status =
+                                Computability::replaced(format!("filter \"{name}\" replaced by {}", r.generator));
+                            status.and(&blend.status());
+                            composited(state, status);
+                        }
+                        None => opaque(state, format!("filter \"{name}\"")),
+                    }
                 }
-                PainterEffect::Levels(l) if self.writes(&l.header, channel) => opaque(state, "levels"),
+                PainterEffect::Levels(l) if self.writes(&l.header, channel) => {
+                    let blend = ResolvedBlend::of(&l.header.blending, painter, Holder::Filter, self.table);
+                    composited(state, blend.status());
+                }
                 PainterEffect::ColorSelection(c) if self.writes(&c.header, channel) => {
                     opaque(state, "colour selection")
                 }
@@ -179,18 +204,50 @@ impl ContentEvaluator<'_> {
                         }
                         state.value = Acc::Uniform(blend.mode().mix(below, top, blend.opacity));
                     }
-                    _ => opaque(state, "uniform fill over a bitmap or procedural in one layer"),
+                    Acc::Opaque => {}
+                    Acc::Image(..) | Acc::Composited => {
+                        let status = if harmless(&blend, top) {
+                            Computability::Exact
+                        } else {
+                            blend.status()
+                        };
+                        composited(state, status);
+                    }
                 }
             }
             PainterSource::Bitmap(b) => match state.value {
                 Acc::Empty => self.bitmap(fill, &b.url, channel, blend.opacity, state),
-                _ => opaque(state, "bitmap fill over other content in one layer"),
+                Acc::Opaque => {}
+                _ => {
+                    // a bitmap over other content: the compositor stacks the fills
+                    let mut alone = State {
+                        value: Acc::Empty,
+                        status: Computability::Exact,
+                        written: false,
+                    };
+                    self.bitmap(fill, &b.url, channel, blend.opacity, &mut alone);
+                    alone.status.and(&blend.status());
+                    match alone.value {
+                        Acc::Opaque => opaque(state, "bitmap fill that cannot be read"),
+                        _ => composited(state, alone.status),
+                    }
+                }
             },
             PainterSource::Procedural(p) => {
                 let name = p.procedural.as_ref().map_or("?", |p| p.name());
                 opaque(state, format!("procedural fill \"{name}\""));
             }
-            PainterSource::Reference(_) => opaque(state, "fill from an anchor"),
+            PainterSource::Reference(r) => {
+                let status = self.anchors.status(r.anchor_uid);
+                match status.is_computable() {
+                    true => {
+                        let mut s = status;
+                        s.and(&blend.status());
+                        composited(state, s);
+                    }
+                    false => opaque(state, format!("fill from an anchor: {}", status.reasons().join("; "))),
+                }
+            }
             PainterSource::Other(raw) => opaque(state, format!("unknown source {}", raw.class)),
         }
     }
@@ -211,10 +268,28 @@ impl ContentEvaluator<'_> {
     }
 }
 
+/// The replacement of a filter under `plan` (a filter entry of the replacement table), with our procedural.
+pub(super) fn filter_replacement(
+    f: &FilterEffect,
+    plan: &ProceduralPlan,
+) -> Option<(&'static Replacement, materialcraft::paint::effect::Procedural)> {
+    let imported = effect_data::procedural(f.procedural.as_ref());
+    replacements::replace(&imported, plan).filter(|(r, _)| replacements::is_filter(r))
+}
+
 /// A guessed normal-map mode with a flat normal on top cannot change anything (every such mode keeps the base).
 pub(super) fn harmless(blend: &ResolvedBlend, top: [f32; 4]) -> bool {
     let flat = (top[0] - 0.5).abs() < 1e-3 && (top[1] - 0.5).abs() < 1e-3 && (top[2] - 1.0).abs() < 1e-3;
     blend.mode().is_normal_map() && flat
+}
+
+/// The compositor takes over the channel from here, unless something before is already not computable.
+fn composited(state: &mut State, status: Computability) {
+    state.written = true;
+    if !matches!(state.value, Acc::Opaque) {
+        state.value = Acc::Composited;
+    }
+    state.status.and(&status);
 }
 
 fn opaque(state: &mut State, reason: impl Into<String>) {

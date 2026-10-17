@@ -51,12 +51,10 @@ impl ModelBuilder {
             "DataActionAnchor" => PainterEffect::Anchor(self.header(e)),
             "DataActionDecal" => {
                 let header = self.header(e);
-                let mut hits = 0;
-                for hit in e.objects("hits") {
-                    self.seen(hit);
-                    hits += 1;
-                }
-                PainterEffect::PolygonFill(PolygonFillEffect { header, hits })
+                let all: Vec<&RawObject> = e.objects("hits").collect();
+                let hits: Vec<_> = all.iter().filter_map(|h| self.decal_hit(h)).collect();
+                let unread = all.len() - hits.len();
+                PainterEffect::PolygonFill(PolygonFillEffect { header, hits, unread })
             }
             _ => PainterEffect::Other(self.raw(e)),
         }

@@ -2,7 +2,7 @@
 //!
 //! Each face is `u32` flag, `u32` index count, then that many `u32` vertex indices.
 //! The flag is 1 on the first triangle of a source polygon and 0 on the following ones
-//! (Painter's meshes are already triangulated), so it is not needed here.
+//! (Painter's meshes are already triangulated); [`polygon_starts`] reads it for polygon-fill picks.
 
 use super::RECORD;
 use super::block::{read_count, read_u32};
@@ -37,6 +37,28 @@ pub fn triangulate(faces: &[u8], face_count: u32, vertex_count: usize) -> Result
     Ok(triangles)
 }
 
+/// Per triangle of [`triangulate`]'s result: true on the first triangle of a source polygon (the face's flag;
+/// the further triangles of a fanned face never start one).
+pub fn polygon_starts(faces: &[u8], face_count: u32) -> Result<Vec<bool>, DecodeError> {
+    let face_count = face_count as usize;
+    if face_count.saturating_mul(MIN_FACE_LEN) > faces.len() {
+        return Err(DecodeError::invalid(RECORD, format!("{face_count} faces do not fit")));
+    }
+    let mut r = ByteReader::new(faces);
+    let mut starts = Vec::with_capacity(face_count);
+    for _ in 0..face_count {
+        let flag = read_u32(&mut r)? != 0;
+        let len = read_count(&mut r, INDEX_LEN)?;
+        for _ in 0..len {
+            read_u32(&mut r)?;
+        }
+        for k in 0..len.saturating_sub(2) {
+            starts.push(flag && k == 0);
+        }
+    }
+    Ok(starts)
+}
+
 fn checked_index(index: u32, vertex_count: usize) -> Result<u32, DecodeError> {
     if (index as usize) < vertex_count {
         Ok(index)
@@ -64,6 +86,14 @@ mod tests {
         let data = [face(&[0, 1, 2, 3]), face(&[4]), face(&[4, 5]), face(&[3, 4, 5])].concat();
         let tris = triangulate(&data, 4, 6).unwrap();
         assert_eq!(tris, vec![[0, 1, 2], [0, 2, 3], [3, 4, 5]]);
+    }
+
+    #[test]
+    fn polygon_flags_follow_the_triangles() {
+        let mut second = face(&[1, 2, 3]);
+        second[0] = 0;
+        let data = [face(&[0, 1, 2, 3]), face(&[4]), second, face(&[3, 4, 5])].concat();
+        assert_eq!(polygon_starts(&data, 4).unwrap(), vec![true, false, false, true]);
     }
 
     #[test]

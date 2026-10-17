@@ -6,17 +6,20 @@
 //! effect writes ([`EffectDomain`]): content effects write material channels, each with its own blend
 //! entry, mask effects write one grey value with one blend.
 //!
-//! The model only holds data. Kinds the compositor evaluates itself are paint, fill and anchor; generators
-//! and filters are evaluated by implementations registered behind [`registry::GeneratorSource`] and
-//! [`registry::FilterKernel`] (the paint model names no concrete procedural). Everything else (levels,
-//! colour selection, polygon fill, reference, unknown kinds, unregistered procedurals) is kept but *not
-//! computable*: the compositor leaves it out and reports it ([`super::CompositeWarning`]).
+//! The model only holds data. Kinds the compositor evaluates itself are paint, fill, anchor and the native kinds
+//! (levels, colour selection, polygon fill, reference; [`native`] has their per-value maths), the latter as far as
+//! the compositor has what they read (a surface map, a baked map, the anchor); generators and filters are
+//! evaluated by implementations registered behind [`registry::GeneratorSource`] and [`registry::FilterKernel`]
+//! (the paint model names no concrete procedural). Everything else (unknown kinds, unregistered procedurals) is
+//! kept but *not computable*: the compositor leaves it out and reports it ([`super::CompositeWarning`]).
 
 pub mod kinds;
+pub mod native;
 pub mod params;
 pub mod registry;
 
 pub use kinds::{Anchor, ColorSelection, Levels, Pick, PickMode, PolygonFill, Procedural, Reference, Selection, UnknownEffect};
+pub use native::PickLookup;
 pub use params::Params;
 pub use registry::{EffectRegistry, EvalRequest, EvalTarget, FilterInput, FilterKernel, GeneratorSource, StackContext};
 
@@ -150,10 +153,10 @@ impl<D: EffectDomain> EffectKind<D> {
         }
     }
 
-    /// True for kinds the compositor evaluates itself; generators and filters depend on the registry, the
-    /// rest is not computable yet.
+    /// True for kinds the compositor evaluates itself (given what they read); generators and filters depend on
+    /// the registry, unknown kinds are not computable.
     pub fn is_builtin(&self) -> bool {
-        matches!(self, EffectKind::Paint(_) | EffectKind::Fill(_) | EffectKind::Anchor(_))
+        !matches!(self, EffectKind::Generator(_) | EffectKind::Filter(_) | EffectKind::Unknown(_))
     }
 }
 

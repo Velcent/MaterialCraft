@@ -3,6 +3,7 @@
 
 use super::blending::ChannelBlending;
 use super::channel::{ChannelMask, PainterChannel};
+use super::decal::DecalHit;
 use super::fill::FillEffect;
 use super::paint::PaintEffect;
 use super::procedural::Procedural;
@@ -89,8 +90,10 @@ pub struct ColorSelectionEffect {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PolygonFillEffect {
     pub header: EffectHeader,
-    /// Number of picks (`DataDecalHitRect` / `DataDecalHitPunctual`).
-    pub hits: usize,
+    /// The picks (`DataDecalHitRect` / `DataDecalHitPunctual`), in order: later ones paint over earlier ones.
+    pub hits: Vec<DecalHit>,
+    /// Hits that could not be read (unknown class or missing position).
+    pub unread: usize,
 }
 
 impl PainterEffect {

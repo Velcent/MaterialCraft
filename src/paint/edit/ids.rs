@@ -165,8 +165,8 @@ mod tests {
         let mut set = TextureSet::new("s", "S", (8, 8));
         let inner = Layer::new("layer1", "A", LayerKind::Paint(PaintContent::default()))
             .with_effect(anchor("dirt1"))
-            .with_effect(ContentEffect::new(Vec::new(), EffectKind::Reference(Reference { anchor: "dirt1".into() })))
-            .with_effect(ContentEffect::new(Vec::new(), EffectKind::Reference(Reference { anchor: "outside".into() })));
+            .with_effect(ContentEffect::new(Vec::new(), EffectKind::Reference(Reference::new("dirt1"))))
+            .with_effect(ContentEffect::new(Vec::new(), EffectKind::Reference(Reference::new("outside"))));
         set.layers = vec![Layer::new("group1", "G", LayerKind::Group(vec![inner])), Layer::new("layer3", "B", LayerKind::Group(vec![]))];
         let mut pool = IdPool::of(&set);
         assert_eq!(pool.layer("layer"), "layer2");

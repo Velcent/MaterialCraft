@@ -7,6 +7,7 @@ use crate::model::{
     ColorSelectionEffect, EffectHeader, Levels as PainterLevels, PainterSource, Procedural as PainterProcedural,
     RawEntry, ReferenceSource, TweakValue,
 };
+use crate::translate::channel_table::channel_for_bit;
 use materialcraft::json::Value;
 use materialcraft::paint::BakedKind;
 use materialcraft::paint::effect::{Anchor, ColorSelection, Levels, Procedural, Reference, UnknownEffect};
@@ -87,9 +88,12 @@ pub fn color_selection(c: &ColorSelectionEffect) -> ColorSelection {
     }
 }
 
+/// The anchor by id, the channel the first binding reads (none: the channel being evaluated) and the levels.
 pub fn reference(r: &ReferenceSource) -> Reference {
     Reference {
         anchor: r.anchor_uid.map(anchor_id).unwrap_or_default(),
+        channel: r.bindings.first().and_then(|(source, _)| channel_for_bit(*source)),
+        levels: r.levels.as_ref().map(|l| levels(Some(l))).filter(|l| !l.is_identity()),
     }
 }
 
@@ -182,8 +186,19 @@ mod tests {
             channels: Default::default(),
             anchor_uid: Some(7),
             anchor_label: String::new(),
+            levels: Some(PainterLevels {
+                input_maximum: [1.0; 3],
+                gamma: [1.0; 3],
+                output_maximum: [1.0; 3],
+                ..PainterLevels::default()
+            }),
+            bindings: vec![(2, 0)],
+            mode: 2,
         };
-        assert_eq!(reference(&r).anchor, "anchor-7");
+        let ours = reference(&r);
+        assert_eq!(ours.anchor, "anchor-7");
+        assert_eq!(ours.channel, Some(materialcraft::paint::Channel::Height));
+        assert_eq!(ours.levels, None);
         assert_eq!(
             unknown_named("substance:bitmap_fill", Value::object().with("url", "/a"))
                 .data

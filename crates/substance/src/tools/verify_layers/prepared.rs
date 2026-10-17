@@ -10,6 +10,7 @@ use crate::translate::BakedMaps;
 use crate::translate::cache_channels::CacheChannels;
 use crate::translate::channel_table::{channel_for_bit, channel_spec};
 use crate::translate::layers::cache_score::{Score, score};
+use crate::translate::layers::decal::geometry::SetGeometry;
 use crate::translate::layers::island_texels::IslandTexels;
 use crate::translate::layers::{BlendTable, ImageSource, ImportedStack, LayerImport, SetChannels};
 use crate::translate::replacements::ProceduralPlan;
@@ -29,8 +30,10 @@ pub struct PreparedSet<'a> {
     mesh: Option<&'a ProjectMesh>,
     /// The set's texels on the mesh at `resolution`, rasterised on the first score.
     islands: OnceLock<Option<IslandTexels>>,
-    /// The set's surface map at `resolution` (first slot), for generators that need UV islands.
+    /// The set's surface map at `resolution` (first slot), for generators that need UV islands and polygon fills.
     surface: OnceLock<Option<SurfaceMap>>,
+    /// The set's mesh parts, for polygon-fill picks.
+    geometry: Option<SetGeometry<'a>>,
     /// Which Substance procedurals are replaced by MaterialCraft's generators (none by default).
     pub plan: ProceduralPlan,
     /// The set's baked mesh maps, which the generators read (empty unless loaded).
@@ -72,6 +75,7 @@ impl<'a> PreparedSet<'a> {
             mesh,
             islands: OnceLock::new(),
             surface: OnceLock::new(),
+            geometry: mesh.zip(painter.material_uid).map(|(m, uid)| m.geometry(uid)),
             plan: ProceduralPlan::default(),
             baked: Vec::new(),
         })
@@ -83,7 +87,7 @@ impl<'a> PreparedSet<'a> {
             images,
             plan: &self.plan,
         }
-        .import(self.painter, &self.channels, self.resolution)
+        .import_on(self.painter, &self.channels, self.resolution, self.geometry.as_ref())
     }
 
     /// Reads the cache image of `channel` (once); false if there is none or it does not decode.

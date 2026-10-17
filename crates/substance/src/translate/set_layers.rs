@@ -4,6 +4,8 @@
 
 use super::channel_table::painter_default;
 use super::layers::cache_agreement::CacheAgreement;
+use super::layers::cache_agreement::Reference;
+use super::layers::decal::geometry::SetGeometry;
 use super::layers::island_texels::IslandTexels;
 use super::layers::report::{report_cache_disagreement, report_hidden_masks, report_stack};
 use super::layers::strokes::{StrokeCount, report_strokes};
@@ -11,7 +13,7 @@ use super::layers::{LayerImport, PAINTER_RESULT_NAME, SetChannels, StackParts, S
 use super::report::Reporter;
 use super::texture_sets::SetSource;
 use crate::model::{PainterDocument, PainterTextureSet};
-use materialcraft::mesh::Mesh;
+use materialcraft::mesh::{FaceGroups, Mesh, SurfaceKey, SurfaceMap};
 use materialcraft::paint::{BlendMode, Fidelity, Fill, Layer, LayerKind, TextureSet};
 
 pub const PAINTER_RESULT_ID: &str = "painter-result";
@@ -31,6 +33,8 @@ pub struct SetLayers<'a> {
     pub import: &'a LayerImport<'a>,
     /// Painter's model of `document.bin`, if it could be built.
     pub document: Option<&'a PainterDocument>,
+    /// Painter's source polygons per mesh part, for polygon-fill picks.
+    pub faces: &'a [FaceGroups],
 }
 
 impl SetLayers<'_> {
@@ -48,12 +52,20 @@ impl SetLayers<'_> {
         match self.painter_set(source) {
             Some(painter) => {
                 let channels = SetChannels::new(&set.channels);
-                let stack = self.import.import(painter, &channels, set.resolution);
+                let geometry = SetGeometry::new(mesh, self.faces, &[set.material_slot]);
+                let stack = self
+                    .import
+                    .import_on(painter, &channels, set.resolution, Some(&geometry));
                 let defaults = defaults_layer(set);
                 let agreement = match (&flattened.layer, stack.verdict.all_exact()) {
                     (Some(result), true) => {
                         let islands = IslandTexels::rasterise(mesh, &[set.material_slot], set.uv_set, set.resolution);
-                        CacheAgreement::measure(set, &defaults, &stack.layers, result, islands.as_ref())
+                        let surface = uses_picks(&stack.layers).then(|| surface_map(mesh, set)).flatten();
+                        let reference = Reference {
+                            islands: islands.as_ref(),
+                            surface: surface.as_ref(),
+                        };
+                        CacheAgreement::measure(set, &defaults, &stack.layers, result, reference)
                     }
                     _ => CacheAgreement::default(),
                 };
@@ -95,6 +107,32 @@ impl SetLayers<'_> {
         let uid = source.record.scene_uid.filter(|_| source.in_document)?;
         self.document?.texture_set(uid)
     }
+}
+
+/// True if a layer (or a folder's child) has a polygon fill, which needs the surface map to composite.
+fn uses_picks(layers: &[Layer]) -> bool {
+    let picks = |k: &str| k == "polygon_fill";
+    layers.iter().any(|l| {
+        l.effects.iter().any(|e| picks(e.kind.id()))
+            || l.mask
+                .as_ref()
+                .is_some_and(|m| m.effects.iter().any(|e| picks(e.kind.id())))
+            || uses_picks(l.children())
+    })
+}
+
+/// The set's surface map at its resolution, without gutter.
+fn surface_map(mesh: &Mesh, set: &TextureSet) -> Option<SurfaceMap> {
+    let (width, height) = set.resolution;
+    let key = SurfaceKey {
+        material: set.material_slot,
+        uv_set: set.uv_set,
+        width,
+        height,
+        gutter: 0,
+        mesh_revision: 0,
+    };
+    SurfaceMap::build(mesh, key).ok()
 }
 
 /// The flattened cache layer's name and id.

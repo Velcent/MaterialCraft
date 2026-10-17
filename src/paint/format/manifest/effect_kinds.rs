@@ -5,15 +5,15 @@
 //! - levels: `"input_min"`, `"input_max"`, `"gamma"`, `"output_min"`, `"output_max"` (3 numbers each), `"clamp"`;
 //! - color_selection: `"map"` (baked map kind), `"colors"` (arrays of 3 numbers), `"tolerance"`, `"hardness"`;
 //! - polygon_fill: `"mode"` and `"picks"` (`[{"part", "triangles"}]`), plus the values of the stack's fills;
-//! - anchor: `"id"`; reference: `"anchor"`.
+//! - anchor: `"id"`; reference: `"anchor"`, optional `"channel"` (a channel id) and `"levels"` (fields as levels).
 
 use super::ReadCtx;
 use super::extras::{Extras, loc};
 use super::fields::{Obj, as_f32, num};
 use crate::json::Value;
-use crate::paint::BakedKind;
 use crate::paint::effect::{Anchor, ColorSelection, Levels, Pick, PickMode, Procedural, Reference, Selection, UnknownEffect};
 use crate::paint::format::FormatError;
+use crate::paint::{BakedKind, Channel};
 
 /// Effect kinds of this version; any other kind is kept as an [`UnknownEffect`].
 pub const KNOWN: [&str; 9] = ["paint", "fill", "generator", "filter", "levels", "color_selection", "polygon_fill", "anchor", "reference"];
@@ -116,8 +116,29 @@ pub fn read_anchor(o: &mut Obj) -> Result<Anchor, FormatError> {
     Ok(Anchor { id: o.str("id")?.to_string() })
 }
 
+pub fn write_reference(r: &Reference, v: &mut Value) {
+    v.insert("anchor", r.anchor.as_str());
+    if let Some(c) = r.channel {
+        v.insert("channel", c.id());
+    }
+    if let Some(l) = &r.levels {
+        let mut lv = Value::object();
+        write_levels(l, &mut lv);
+        v.insert("levels", lv);
+    }
+}
+
 pub fn read_reference(o: &mut Obj) -> Result<Reference, FormatError> {
-    Ok(Reference { anchor: o.str("anchor")?.to_string() })
+    let anchor = o.str("anchor")?.to_string();
+    let channel = match o.opt_str("channel")? {
+        Some(id) => Some(Channel::from_id(id).ok_or_else(|| o.error("channel", format!("unknown channel {id:?}")))?),
+        None => None,
+    };
+    let levels = match o.opt("levels") {
+        Some(v) => Some(read_levels(&mut Obj::new(v, o.path("levels"))?)?),
+        None => None,
+    };
+    Ok(Reference { anchor, channel, levels })
 }
 
 /// An unknown effect as it was read (its kind first if the data lost it).

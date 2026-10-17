@@ -5,12 +5,14 @@
 
 mod fit;
 pub mod generator_cases;
+pub mod kinds;
 mod prepared;
 mod project_mesh;
 mod table;
 
 pub use crate::translate::layers::cache_score::{EXACT_STEPS, Score};
 pub use fit::{FitRecord, FitTally};
+use kinds::{KindTally, NativeKinds};
 pub use table::Verification;
 
 use crate::inspect::Corpus;
@@ -56,6 +58,7 @@ pub struct SetResult {
 struct ProjectVerification {
     sets: Vec<SetResult>,
     fits: Vec<FitRecord>,
+    kinds: KindTally,
 }
 
 /// Verifies every `.spp` below `root` (or `root` itself when it is a file), several projects at once on `pool`.
@@ -92,6 +95,7 @@ pub fn verify_path(
             Ok(project) => {
                 out.sets.extend(project.sets);
                 out.fits.add(project.fits);
+                out.kinds.merge(project.kinds);
             }
             Err(e) => out.failures.push((label_of(path), e)),
         }
@@ -114,7 +118,9 @@ fn verify_project(path: &Path, label: &str, options: &VerifyOptions) -> Result<P
             continue;
         };
         set.plan = options.plan.clone();
-        if options.plan != ProceduralPlan::default() {
+        let kinds = NativeKinds::of(painter, &set.channels);
+        let reads_baked = kinds.uses(kinds::COLOUR_SELECTION);
+        if options.plan != ProceduralPlan::default() || reads_baked {
             set.load_baked(&baked, &records);
         }
         let stack = set.import(&table, &images);
@@ -151,6 +157,7 @@ fn verify_project(path: &Path, label: &str, options: &VerifyOptions) -> Result<P
             agreement.disagreeing = off.collect();
         }
         let strategy = StackStrategy::choose(&stack.verdict, true, &agreement);
+        out.kinds.add(&kinds, &channels);
         out.sets.push(SetResult {
             project: label.to_string(),
             set: painter.name.clone(),

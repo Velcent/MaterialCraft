@@ -53,9 +53,10 @@ impl SetBuilder<'_> {
         };
         // Image loads inside the layer stack fail fast once cancelled; this check ends the import.
         self.cancel.check()?;
-        self.layers.build(&mut set, source, flattened, mesh, report);
-        self.cancel.check()?;
+        // baked maps first: effects of the layer stack read them (colour selection on the ID map)
         self.add_baked(source, &mut set, report, translated)?;
+        self.cancel.check()?;
+        self.layers.build(&mut set, source, flattened, mesh, report);
         Ok(set)
     }
 

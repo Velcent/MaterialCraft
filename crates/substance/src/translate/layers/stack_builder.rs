@@ -4,11 +4,13 @@
 //! decides which channels they reproduce. Blend entries go on every declared channel for folders, and on the
 //! channels their content writes for layers.
 
+use super::anchors::AnchorTable;
 use super::blend_table::{BlendTable, Holder};
 use super::blending::ResolvedBlend;
 use super::channels::SetChannels;
 use super::computability::Computability;
 use super::content::{ChannelContent, ContentEvaluator};
+use super::decal::geometry::SetGeometry;
 use super::effect_data::AnchorIds;
 use super::effect_map::ContentMapper;
 use super::images::ImageSource;
@@ -51,9 +53,29 @@ pub struct StackBuilder<'a> {
     pub images: &'a dyn ImageSource,
     pub plan: &'a ProceduralPlan,
     pub resolution: (u32, u32),
+    /// The set's mesh, for polygon-fill picks.
+    pub geometry: Option<&'a SetGeometry<'a>>,
+    /// What the set's anchors hold (see [`AnchorTable::measure`]).
+    pub anchors: &'a AnchorTable,
 }
 
 impl StackBuilder<'_> {
+    /// The anchors of `layers`, measured with this builder's evaluators.
+    pub fn anchor_table(&self, layers: &[PainterLayer]) -> AnchorTable {
+        AnchorTable::measure(layers, &self.evaluator(), &self.masks())
+    }
+
+    fn masks(&self) -> MaskEvaluator<'_> {
+        MaskEvaluator {
+            table: self.table,
+            images: self.images,
+            plan: self.plan,
+            resolution: self.resolution,
+            geometry: self.geometry,
+            anchors: self.anchors,
+        }
+    }
+
     pub fn build(&self, layers: &[PainterLayer]) -> ImportedStack {
         let mut verdict = StackVerdict::new(self.channels.all());
         let top = Context {
@@ -76,17 +98,15 @@ impl StackBuilder<'_> {
             true => l.name.clone(),
             false => format!("{} / {}", ctx.path, l.name),
         };
-        let masks = MaskEvaluator {
-            table: self.table,
-            images: self.images,
-            plan: self.plan,
-            resolution: self.resolution,
-        };
+        let masks = self.masks();
         let mask = masks.evaluate(l.mask.as_ref(), &mut ids.anchors);
         let visible = ctx.visible && l.visible;
         let mut note = mask.status.clone();
         let evaluator = self.evaluator();
-        let mapper = ContentMapper { evaluator: &evaluator };
+        let mapper = ContentMapper {
+            evaluator: &evaluator,
+            geometry: self.geometry,
+        };
         let (kind, effects, written) = match &l.kind {
             PainterKind::Group(children) => {
                 let mut inner = Context {
@@ -168,6 +188,8 @@ impl StackBuilder<'_> {
             table: self.table,
             images: self.images,
             resolution: self.resolution,
+            anchors: self.anchors,
+            plan: self.plan,
         }
     }
 

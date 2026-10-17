@@ -33,7 +33,10 @@ impl Compositor<'_> {
     /// Whether the compositor can evaluate the mask effect.
     pub(super) fn mask_effect_computable(&self, e: &MaskEffect) -> bool {
         match &e.kind {
-            EffectKind::Paint(_) | EffectKind::Fill(_) | EffectKind::Anchor(_) => true,
+            EffectKind::Paint(_) | EffectKind::Fill(_) | EffectKind::Anchor(_) | EffectKind::Levels(_) => true,
+            EffectKind::PolygonFill(_) => self.picks_computable(),
+            EffectKind::ColorSelection(s) => self.set.baked(&s.map).is_some(),
+            EffectKind::Reference(r) => self.reference_computable(r),
             EffectKind::Generator(p) => self.effects.generator(&p.id).is_some(),
             EffectKind::Filter(p) => self.effects.filter(&p.id).is_some(),
             _ => false,
@@ -73,6 +76,13 @@ impl Compositor<'_> {
                     grey.into_iter().map(|g| [g, g, g, 1.0]).collect()
                 })
             }
+            EffectKind::Levels(l) => Some(below.iter().map(|g| l.apply_grey(*g)).map(|g| [g, g, g, 1.0]).collect()),
+            EffectKind::PolygonFill(p) => {
+                let v = p.values;
+                Some(self.picked(&p.selection, r)?.into_iter().map(|k| [v, v, v, k]).collect())
+            }
+            EffectKind::ColorSelection(s) => self.color_selection_top(s, r),
+            EffectKind::Reference(rf) => self.reference_grey(rf, r),
             _ => None,
         }
     }

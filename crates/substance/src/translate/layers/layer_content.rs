@@ -45,7 +45,7 @@ pub fn core_content(
                         paint.set_image(c.channel, image);
                     }
                 }
-                ChannelValue::Nothing => {}
+                ChannelValue::Composited | ChannelValue::Nothing => {}
             }
         }
         return LayerKind::Paint(paint);
@@ -71,7 +71,7 @@ fn image_fill(content: &[ChannelContent], projection: Projection) -> Fill {
         match &c.value {
             ChannelValue::Image { image, .. } => images.set_image(c.channel, image.clone()),
             ChannelValue::Uniform { value, .. } => images.set_value(c.channel, [value[0], value[1], value[2], 1.0]),
-            ChannelValue::Nothing => {}
+            ChannelValue::Composited | ChannelValue::Nothing => {}
         }
     }
     Fill::new(FillSource::Image(images)).with_projection(projection)
@@ -83,7 +83,7 @@ pub fn is_flat_normal(value: &ChannelValue) -> bool {
         ChannelValue::Uniform { value: v, .. } => {
             (v[0] - 0.5).abs() < 1e-3 && (v[1] - 0.5).abs() < 1e-3 && (v[2] - 1.0).abs() < 1e-3
         }
-        ChannelValue::Image { .. } => false,
+        ChannelValue::Image { .. } | ChannelValue::Composited => false,
         ChannelValue::Nothing => true,
     }
 }

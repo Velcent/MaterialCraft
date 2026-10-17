@@ -8,9 +8,17 @@ use materialcraft::diag::Entry;
 use materialcraft::generators;
 use materialcraft::gpu3d::GpuMaps;
 use materialcraft::material_fill::MaterialFills;
+use materialcraft::mesh::{SurfaceKey, SurfaceMap};
 use materialcraft::paint::edit::LayerRef;
-use materialcraft::paint::{Document, FillContext, MaterialMaps, OutputOptions, diag_entries};
+use materialcraft::paint::{Document, FillContext, MaterialMaps, OutputOptions, TextureSet, diag_entries};
 use std::sync::Arc;
+
+/// The set's surface map (no gutter) for polygon fills; `None` when the view has no mesh for it.
+fn surface_map(doc: &Document, ts: &TextureSet) -> Option<SurfaceMap> {
+    let (width, height) = ts.resolution;
+    let key = SurfaceKey { material: ts.material_slot, uv_set: ts.uv_set, width, height, gutter: 0, mesh_revision: 0 };
+    SurfaceMap::build(&doc.mesh, key).ok()
+}
 
 /// The prepared maps of one texture set.
 pub struct SetMaps {
@@ -49,6 +57,11 @@ impl MapsWorker {
                     }
                     continue;
                 }
+                let surface = ts.uses_polygon_fill().then(|| surface_map(&doc, ts)).flatten();
+                let fills = match &surface {
+                    Some(s) => fills.with_surface(s, None),
+                    None => fills,
+                };
                 let maps = MaterialMaps::build_with(ts, &OutputOptions::for_document(&doc), generators::builtin(), &fills);
                 if cancel.is_cancelled() {
                     return;

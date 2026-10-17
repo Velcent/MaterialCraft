@@ -74,7 +74,7 @@ fn line(effect: &PainterEffect) -> String {
         PainterEffect::Levels(_) => "levels".into(),
         PainterEffect::ColorSelection(c) => format!("color selection, {} colours", c.colors.len()),
         PainterEffect::Anchor(h) => format!("anchor {:?}", h.label),
-        PainterEffect::PolygonFill(p) => format!("polygon fill, {} picks", p.hits),
+        PainterEffect::PolygonFill(p) => format!("polygon fill, {} picks", p.hits.len() + p.unread),
         PainterEffect::Other(raw) => format!("raw {}", raw.class),
     }
 }

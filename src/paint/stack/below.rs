@@ -46,6 +46,14 @@ impl StackContext for LayerStack<'_, '_> {
 }
 
 impl Compositor<'_> {
+    /// The composite of everything below `l` over the pass's rectangle (working space); the whole stack when `l`
+    /// is not in the set.
+    pub(super) fn stack_below(&self, l: &Layer, pass: &Pass) -> Vec<[f32; 4]> {
+        let mut acc = vec![pass.empty(); pass.r.area()];
+        self.apply_until(&self.set.layers, l, pass, &mut acc, 0, &mut Scratch::default());
+        acc
+    }
+
     /// Applies `layers` in order until `stop`; true if `stop` was reached.
     fn apply_until(&self, layers: &[Layer], stop: &Layer, pass: &Pass, acc: &mut [[f32; 4]], depth: usize, s: &mut Scratch) -> bool {
         for l in layers {

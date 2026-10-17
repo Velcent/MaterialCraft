@@ -6,6 +6,7 @@ use super::fill_eval::FillTop;
 use super::pass::{Pass, Scratch, stack_mix};
 use super::procedural::{FilterRun, generate};
 use crate::paint::blend::BlendMode;
+use crate::paint::channel::Channel;
 use crate::paint::effect::{ContentEffect, EffectKind, EvalTarget};
 use crate::paint::layer::{FillSource, Layer, LayerKind};
 use crate::paint::validate::MAX_GROUP_DEPTH;
@@ -25,7 +26,9 @@ impl Compositor<'_> {
     pub(super) fn content_effect_computable(&self, e: &ContentEffect) -> bool {
         match &e.kind {
             EffectKind::Fill(f) => self.fill_computable(f).is_ok(),
-            EffectKind::PolygonFill(_) => false,
+            EffectKind::PolygonFill(p) => self.picks_computable() && self.fill_computable(&p.values).is_ok(),
+            EffectKind::Reference(r) => self.reference_computable(r),
+            EffectKind::ColorSelection(_) => false,
             k if k.is_builtin() => true,
             EffectKind::Generator(p) => self.effects.generator(&p.id).is_some(),
             EffectKind::Filter(p) => self.effects.filter(&p.id).is_some(),
@@ -33,10 +36,27 @@ impl Compositor<'_> {
         }
     }
 
-    /// The content of `l` with its first `upto` effects over `pass.r`.
+    /// The content of `l` with its first `upto` effects over `pass.r`. An effect layer's content starts from the
+    /// composite below it ([`Self::stack_below`]), any other layer's from nothing.
     pub(super) fn content(&self, l: &Layer, upto: usize, pass: &Pass, depth: usize) -> Vec<[f32; 4]> {
-        let mut c = vec![pass.empty(); pass.r.area()];
-        self.base(l, pass, &mut c, depth);
+        let start = match is_effect_layer(l, pass.channel) {
+            true => self.stack_below(l, pass),
+            false => vec![pass.empty(); pass.r.area()],
+        };
+        self.content_over(l, upto, pass, depth, start)
+    }
+
+    /// The content of `l` with its first `upto` effects, starting from `c`.
+    pub(super) fn content_over(&self, l: &Layer, upto: usize, pass: &Pass, depth: usize, mut c: Vec<[f32; 4]>) -> Vec<[f32; 4]> {
+        if is_effect_layer(l, pass.channel) {
+            let mut base = vec![pass.empty(); pass.r.area()];
+            self.base(l, pass, &mut base, depth);
+            for (a, b) in c.iter_mut().zip(base) {
+                *a = BlendMode::Normal.mix(*a, b, 1.0);
+            }
+        } else {
+            self.base(l, pass, &mut c, depth);
+        }
         for (index, e) in l.effects.iter().enumerate().take(upto) {
             if self.content_effect_applies(e, pass) {
                 self.apply_content_effect(l, index, e, pass, &mut c, depth);
@@ -100,12 +120,27 @@ impl Compositor<'_> {
                     None => return,
                 }
             }
+            EffectKind::Levels(levels) => self.levels_top(levels, pass, c),
+            EffectKind::PolygonFill(p) => match self.polygon_fill_top(p, pass) {
+                Some(px) => px,
+                None => return,
+            },
+            EffectKind::Reference(r) => match self.reference_content(r, pass) {
+                Some(px) => px,
+                None => return,
+            },
             _ => return,
         };
         for (a, t) in c.iter_mut().zip(top) {
             *a = stack_mix(blend.mode, *a, t, blend.opacity);
         }
     }
+}
+
+/// True for a layer that is not a folder and blends `channel` with `Passthrough`: an effect layer, whose effects
+/// work on the composite below it.
+pub(super) fn is_effect_layer(l: &Layer, channel: Channel) -> bool {
+    !matches!(l.kind, LayerKind::Group(_)) && l.blend_for(channel).is_some_and(|b| b.mode == BlendMode::Passthrough)
 }
 
 /// Effects that leave the channel as it is: paint without an image for it, fills without a value for it,
@@ -118,6 +153,7 @@ fn is_noop(e: &ContentEffect, pass: &Pass) -> bool {
             FillSource::Material { .. } => false,
         },
         EffectKind::Anchor(_) => true,
+        EffectKind::Levels(l) => l.is_identity(),
         _ => false,
     }
 }
