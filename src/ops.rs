@@ -162,6 +162,9 @@ fn box_rows1(src: &[f32], w: usize, h: usize, r: i64) -> Vec<f32> {
 
 /// Vertical wrapping box blur of a single-channel image without transposing it: every thread owns a band of columns and
 /// slides a running sum down the rows, reading whole row segments (cache friendly).
+// Second documented exception to the workspace's `unsafe_code` lint (AGENTS.md): threads write disjoint column bands
+// of one buffer through a raw pointer; the SAFETY note on the block below states the invariant.
+#[allow(unsafe_code)]
 fn box_cols1(src: &[f32], w: usize, h: usize, r: i64) -> Vec<f32> {
     let mut dst = vec![0.0f32; w * h];
     let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).max(1);

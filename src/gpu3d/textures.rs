@@ -6,6 +6,8 @@ use glow::HasContext;
 const ANISO_PARAM: u32 = 0x84FE;
 const ANISO_MAX: u32 = 0x84FF;
 
+// SAFETY (whole file): GL calls on the current context (module invariant); uploaded slices are sized by their
+// callers for w * h texels of the given format, and textures are freed only by their owner.
 /// Highest anisotropic filtering level the driver offers (1 when the extension is missing).
 pub(super) unsafe fn max_aniso(gl: &glow::Context) -> f32 { unsafe {
     let ext = gl.supported_extensions();

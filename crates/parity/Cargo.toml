@@ -14,3 +14,6 @@ materialcraft-substance = { path = "../substance" }
 [[bin]]
 name = "mcparity"
 path = "src/main.rs"
+
+[lints]
+workspace = true

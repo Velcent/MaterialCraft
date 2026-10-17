@@ -25,6 +25,8 @@ pub(super) struct MaterialPass<'a> {
     flat_height: glow::Texture,
 }
 
+// SAFETY: GL calls on the current context (module invariant); the program, meshes and textures it binds are owned
+// by the renderer or scene and outlive the pass (its borrows enforce that).
 impl<'a> MaterialPass<'a> {
     /// Bind the program and set everything that is the same for all meshes of the frame.
     pub unsafe fn begin(gl: &'a glow::Context, prog: &'a Program, view: &'a View, cam: &CamOut, self_shadow: bool, flat_height: glow::Texture) -> Self { unsafe {

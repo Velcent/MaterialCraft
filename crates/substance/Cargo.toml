@@ -14,3 +14,6 @@ lz4_flex = { version = "0.11", default-features = false, features = ["std", "saf
 [[bin]]
 name = "mcsub"
 path = "src/bin/mcsub.rs"
+
+[lints]
+workspace = true

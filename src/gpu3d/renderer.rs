@@ -21,6 +21,8 @@ pub(super) struct Renderer {
     max_aniso: f32,
 }
 
+// SAFETY: GL calls on the current context (module invariant); the renderer owns every object it creates and
+// releases them in `free`, which consumes it.
 impl Renderer {
     pub unsafe fn new(gl: &glow::Context, maps: &GpuMaps, aniso_req: f32) -> Result<Renderer, String> { unsafe {
         let prog = Program::material(gl)?;

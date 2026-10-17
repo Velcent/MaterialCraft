@@ -9,6 +9,8 @@ pub(super) struct ShapeMesh {
     key: (u32, u32, u32),
 }
 
+// SAFETY: GL calls on the current context (module invariant); a replaced mesh is freed right after the swap and
+// never used again.
 impl ShapeMesh {
     /// The mesh for the view's shape, rebuilt first when it changed.
     pub unsafe fn update(&mut self, gl: &glow::Context, v: &View) -> Result<&GpuMesh, String> { unsafe {

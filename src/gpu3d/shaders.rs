@@ -19,6 +19,8 @@ pub(super) struct Program {
     locs: HashMap<&'static str, glow::UniformLocation>,
 }
 
+// SAFETY (Program and `compile`): GL calls on the current context (module invariant); a program is deleted only
+// in `free`.
 impl Program {
     /// The PBR material program (vertex displacement + GGX shading).
     pub unsafe fn material(gl: &glow::Context) -> Result<Program, String> { unsafe {

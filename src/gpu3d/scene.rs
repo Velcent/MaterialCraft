@@ -35,6 +35,8 @@ struct GpuPart {
     density: f32,
 }
 
+// SAFETY (GpuPart and Scene): GL calls on the current context (module invariant); parts are uploaded and freed
+// only by the scene that owns them.
 impl GpuPart {
     unsafe fn upload(gl: &glow::Context, p: &ScenePart, aniso: f32) -> Result<GpuPart, String> { unsafe {
         let mesh = GpuMesh::upload(gl, &p.mesh, &p.tangent_w)?;

@@ -8,6 +8,15 @@
 //! Files: `maps` prepares texture data on the CPU, `textures` / `mesh` hold GL objects, `shaders` the programs,
 //! `camera` the matrices, `shape` the built-in preview shape, `scene` custom multi-part models, `pass` the material draw
 //! calls and `renderer` ties them into a frame. This file is the public API shared between the UI and the paint callback.
+//!
+//! # Unsafe exception
+//! This module is the documented exception to the workspace's `unsafe_code` lint (see AGENTS.md): glow exposes every
+//! OpenGL call as an `unsafe fn` because it can't check that a context is current on the calling thread or that the
+//! object handles passed in are alive. The invariant every `unsafe` block here relies on: GL calls are made only from
+//! egui_glow paint callbacks (`paint`, `release`) and the functions they call, where egui has made the context
+//! current, and every GL object is created and freed by the `Renderer` / `Scene` that owns it, on that same context.
+#![allow(unsafe_code)]
+
 mod camera;
 mod maps;
 mod mesh;
@@ -95,11 +104,14 @@ impl Gpu {
 }
 
 /// Raw bytes of plain-old-data slices (f32, u32, [u32; 3]) for GL uploads.
+// SAFETY: callers pass only plain-old-data element types (f32, u32, [u32; 3]): no padding, every byte initialised;
+// the returned slice borrows `v` and covers exactly `size_of_val(v)` bytes of it.
 fn bytes_of<T>(v: &[T]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, std::mem::size_of_val(v)) }
 }
 
 /// Draw the viewport into the rectangle of the paint callback. Call from an `egui_glow::CallbackFn`.
+// SAFETY (every block in `paint`): it runs inside an egui_glow paint callback, so `painter.gl()` is current.
 pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Painter, view: &View) {
     let mut g = match shared.lock() {
         Ok(g) => g,
@@ -154,6 +166,7 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
 }
 
 /// Read the drawn viewport back: (width, height, RGBA8 rows from the top).
+// SAFETY: called from `paint` on its current context; `buf` holds exactly w * h RGBA8 pixels of the viewport.
 fn read_back(gl: &glow::Context, info: &PaintCallbackInfo) -> (usize, usize, Vec<u8>) {
     let vp_px = info.viewport_in_pixels();
     let (w, h) = (vp_px.width_px as usize, vp_px.height_px as usize);
@@ -170,6 +183,7 @@ fn read_back(gl: &glow::Context, info: &PaintCallbackInfo) -> (usize, usize, Vec
 }
 
 /// Free all GL objects (call when the viewer is closed or the GL context goes away).
+// SAFETY: the caller passes the context the objects were created on; `take()` keeps them from being freed twice.
 pub fn release(shared: &Shared, gl: &glow::Context) {
     if let Ok(mut g) = shared.lock() {
         if let Some(r) = g.res.take() {

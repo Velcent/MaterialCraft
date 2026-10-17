@@ -14,6 +14,7 @@ pub(super) struct GpuMesh {
     index_count: i32,
 }
 
+// SAFETY: GL calls on the current context (module invariant); buffer data comes from slices that outlive the call.
 impl GpuMesh {
     /// `tangent_w`: bitangent sign per vertex (-1 on mirrored uv islands); empty = all +1.
     pub unsafe fn upload(gl: &glow::Context, m: &Mesh, tangent_w: &[f32]) -> Result<GpuMesh, String> { unsafe {
