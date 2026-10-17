@@ -19,6 +19,7 @@ mod logo_data {
     include!(concat!(env!("OUT_DIR"), "/logo.rs"));
 }
 mod gui_assets;
+mod gui_color;
 mod gui_input;
 #[path = "gui_paint/mod.rs"]
 mod gui_paint;

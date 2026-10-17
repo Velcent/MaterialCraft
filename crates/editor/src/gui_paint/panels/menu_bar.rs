@@ -32,6 +32,11 @@ pub fn show(ui: &mut Ui, title: &str, has_document: bool, history: Option<&Paint
                 item(ui, shell, events, "Show the material", "paint.view.material", has_document, PanelEvent::ShowChannel(ChannelView::Material));
                 item(ui, shell, events, "Next channel", "paint.view.next_channel", has_document, PanelEvent::CycleChannel(1));
                 item(ui, shell, events, "Previous channel", "paint.view.previous_channel", has_document, PanelEvent::CycleChannel(-1));
+                ui.separator();
+                if ui.button("Colour picker").clicked() {
+                    crate::gui_color::open_unbound(ui.ctx());
+                    ui.close();
+                }
             });
             ui.menu_button("Window", |ui| {
                 for p in PaintPanel::ALL.iter().copied().filter(|p| !p.is_canvas()) {

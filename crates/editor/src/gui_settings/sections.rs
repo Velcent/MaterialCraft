@@ -138,9 +138,45 @@ pub struct LibrarySettings {
     pub tray: TraySettings,
 }
 
-/// The colour picker's swatches, linear RGBA.
+/// The colour picker's swatches (CP-11), sRGB-encoded RGBA, kept across sessions and projects.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SwatchSettings {
     pub colors: Vec<[f32; 4]>,
+}
+
+/// Which components the colour picker's sliders show (CP-08).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ColorSliders {
+    #[default]
+    Hsv,
+    Rgb,
+}
+
+/// How colour values are written, the same in every colour slider (CP-08).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ColorUnits {
+    /// 0–1 floats.
+    Float,
+    /// 0–255 for RGB, degrees for hue, percent for saturation and value.
+    #[default]
+    Natural,
+}
+
+/// The colour picker's view choices.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ColorPickerSettings {
+    pub sliders: ColorSliders,
+    pub units: ColorUnits,
+    /// Slider tracks tinted by the colour.
+    pub tinted: bool,
+}
+
+impl Default for ColorPickerSettings {
+    fn default() -> ColorPickerSettings {
+        ColorPickerSettings { sliders: ColorSliders::Hsv, units: ColorUnits::Natural, tinted: true }
+    }
 }

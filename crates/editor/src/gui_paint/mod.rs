@@ -5,7 +5,9 @@
 //! keeps the GPU scene in step with the document, [`viewport::Viewport`] draws it, the
 //! [`shell::Shell`] holds the docking workspace, shortcuts and settings, and the [`panels`] turn
 //! clicks and key presses into [`panels::PanelEvent`]s that are applied here ([`documents`]: opening and
-//! closing; [`editing`]: stack edits and history moves; [`tray_host`]: the asset tray's drops and settings).
+//! closing; [`editing`]: stack edits and history moves; [`tray_host`]: the asset tray's drops and settings). The
+//! colour picker ([`crate::gui_color::ColorPicker`]) floats above the screen; [`eyedrop`] answers its viewport
+//! eyedropper.
 
 mod bake_editor;
 mod bake_queue;
@@ -16,6 +18,7 @@ mod demo;
 mod document_state;
 mod documents;
 mod editing;
+mod eyedrop;
 mod geometry;
 mod isolate;
 mod job;
@@ -38,6 +41,7 @@ mod viewport;
 mod window;
 
 use crate::gui_assets::AssetTray;
+use crate::gui_color::ColorPicker;
 use crate::gui_settings::UserSettings;
 use baking::Baking;
 use channel_view::ChannelView;
@@ -108,6 +112,10 @@ pub struct PaintMode {
     picking: ViewPicking,
     check: Option<OcclusionCheck>,
     title: WindowTitle,
+    /// The floating colour picker and its eyedropper (step 21).
+    color: ColorPicker,
+    /// The viewport frame count when the eyedropper asked the GPU for a displayed colour.
+    color_read: Option<u64>,
 }
 
 impl PaintMode {
@@ -138,6 +146,8 @@ impl PaintMode {
             picking: ViewPicking::default(),
             check: launch.occlusion_check.map(OcclusionCheck::new),
             title: WindowTitle::default(),
+            color: ColorPicker::default(),
+            color_read: None,
         };
         match launch.open {
             Some(StartDocument::File(p)) => pm.open(p),
@@ -179,6 +189,8 @@ impl PaintMode {
                 action = PaintAction::Home;
             }
         }
+        self.color.frame(ctx, &mut self.shell.settings);
+        self.eyedrop(ctx);
         let name = self.document.as_ref().map(|d| d.name());
         self.title.update(ctx, name.as_deref());
         if self.loader.is_some() || self.scene.is_busy() || self.baking.is_busy() {
@@ -201,7 +213,6 @@ impl PaintMode {
     /// Screen ↔ mesh through this frame's 3D view, for the tools: screen positions in UI points from the view's
     /// top-left corner (`Viewport::rect`). `None` without a document, before the view was laid out, or while the
     /// scene is being built.
-    #[allow(dead_code)] // first used by the brush tools (roadmap step 20)
     fn view_projector(&self) -> Option<CpuViewProjector<'_>> {
         let doc = self.document.as_ref()?;
         self.picking.projector(doc.doc(), self.viewport.camera()?)

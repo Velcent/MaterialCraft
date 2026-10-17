@@ -76,8 +76,14 @@ impl SceneSync {
 
     fn start_maps(&mut self, doc: &OpenDocument, view: ChannelView, sets: Vec<usize>) {
         self.waiting.retain(|m| !sets.contains(&m.set));
-        let materials = MaterialFills::new(Arc::new(material_folders(doc, &self.library_folders)), self.materials.clone());
+        let materials = self.material_fills(doc);
         self.maps = Some(MapsWorker::start(doc.maps_view(&sets), sets, view, self.isolate.clone(), materials));
+    }
+
+    /// How material fills of `doc` are evaluated, as the maps the view shows evaluate them (the eyedropper's
+    /// stored-value pick composites through the same).
+    pub fn material_fills(&self, doc: &OpenDocument) -> MaterialFills {
+        MaterialFills::new(Arc::new(material_folders(doc, &self.library_folders)), self.materials.clone())
     }
 
     /// Shows `layer`'s mask alone in place of its set's material (`None`: the material again); recomposites.

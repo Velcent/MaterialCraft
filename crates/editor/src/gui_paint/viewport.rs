@@ -56,7 +56,6 @@ impl Viewport {
     }
 
     /// Where the view was laid out last frame, in UI points.
-    #[allow(dead_code)] // first used by the brush tools (roadmap step 20), to place pointer positions on the camera
     pub fn rect(&self) -> Option<egui::Rect> {
         self.rect
     }
