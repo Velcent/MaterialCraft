@@ -5,7 +5,7 @@
 //! outlines, including composite glyphs. Not supported: OpenType/CFF outlines (`.otf`), font collections, hinting,
 //! kerning and complex-script shaping.
 
-use crate::vector::{flatten, Poly, Seg, Xf, P};
+use crate::vector::{P, Poly, Seg, Xf, flatten};
 
 pub const GLYPHS: [[u8; 10]; 95] = [
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -151,11 +151,7 @@ impl Ttf {
         let table = |name: &[u8; 4]| -> Option<(usize, usize)> {
             (0..n).find_map(|i| {
                 let r = 12 + i * 16;
-                if data.get(r..r + 4)? == name {
-                    Some((u32_at(data, r + 8)? as usize, u32_at(data, r + 12)? as usize))
-                } else {
-                    None
-                }
+                if data.get(r..r + 4)? == name { Some((u32_at(data, r + 8)? as usize, u32_at(data, r + 12)? as usize)) } else { None }
             })
         };
         let (head, _) = table(b"head").ok_or("font has no head table")?;
@@ -458,7 +454,15 @@ impl Font {
                         if bits & (1 << (4 - c)) != 0 {
                             let x0 = pen + c as f32 * px * 1.0;
                             let y0 = (r as f32 - 8.0) * px;
-                            out.push(Poly { pts: vec![xf_after.apply([x0, y0]), xf_after.apply([x0 + px, y0]), xf_after.apply([x0 + px, y0 + px]), xf_after.apply([x0, y0 + px])], closed: true });
+                            out.push(Poly {
+                                pts: vec![
+                                    xf_after.apply([x0, y0]),
+                                    xf_after.apply([x0 + px, y0]),
+                                    xf_after.apply([x0 + px, y0 + px]),
+                                    xf_after.apply([x0, y0 + px]),
+                                ],
+                                closed: true,
+                            });
                         }
                     }
                 }

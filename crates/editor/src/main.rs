@@ -30,7 +30,6 @@ mod gui_widgets;
 mod gui_workspace;
 mod logging;
 
-
 // ---------------------------------------------------------------- layout constants
 const CARD: f32 = 92.0;
 const BAR: f32 = 16.0;

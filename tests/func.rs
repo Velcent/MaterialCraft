@@ -19,7 +19,9 @@ fn math_and_vectors() {
     assert_eq!(run("node 1 f_int v=7\nnode 2 f_int v=2\nnode 3 f_div a=@1 b=@2\nnode 4 f_out in=@3\n"), Value::int(3));
     assert_eq!(run("node 1 f_float v=7\nnode 2 f_float v=0\nnode 3 f_div a=@1 b=@2\nnode 4 f_out in=@3\n"), Value::float(0.0));
     // vector + scalar, swizzle
-    let v = run("node 1 f_float x=1 y=2 z=3\nnode 5 f_vec3 x=1 y=2 z=3\nnode 2 f_float v=10\nnode 3 f_add a=@5 b=@2\nnode 4 f_swizzle a=@3 mask=\"zy\"\nnode 6 f_out in=@4\n");
+    let v = run(
+        "node 1 f_float x=1 y=2 z=3\nnode 5 f_vec3 x=1 y=2 z=3\nnode 2 f_float v=10\nnode 3 f_add a=@5 b=@2\nnode 4 f_swizzle a=@3 mask=\"zy\"\nnode 6 f_out in=@4\n",
+    );
     assert_eq!(v, Value::vec(2, [13.0, 12.0, 0.0, 0.0]));
     // negative sqrt / log never give NaN
     assert_eq!(run("node 1 f_float v=-4\nnode 2 f_sqrt a=@1\nnode 3 f_out in=@2\n"), Value::float(0.0));
@@ -31,7 +33,9 @@ fn math_and_vectors() {
 #[test]
 fn logic_variables_and_position() {
     // if only runs the chosen branch; comparison gives a bool
-    let v = run("node 1 f_float v=1\nnode 2 f_float v=2\nnode 3 f_lt a=@1 b=@2\nnode 4 f_string v=\"yes\"\nnode 5 f_string v=\"no\"\nnode 6 f_if cond=@3 a=@4 b=@5\nnode 7 f_out in=@6\n");
+    let v = run(
+        "node 1 f_float v=1\nnode 2 f_float v=2\nnode 3 f_lt a=@1 b=@2\nnode 4 f_string v=\"yes\"\nnode 5 f_string v=\"no\"\nnode 6 f_if cond=@3 a=@4 b=@5\nnode 7 f_out in=@6\n",
+    );
     assert_eq!(v, Value::text("yes"));
     // variables: set 5, then read it back through a sequence
     let v = run("node 1 f_float v=5\nnode 2 f_set a=@1 name=\"k\"\nnode 3 f_get name=\"k\"\nnode 4 f_sequence a=@2 b=@3\nnode 5 f_out in=@4\n");

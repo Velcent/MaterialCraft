@@ -88,7 +88,11 @@ fn builtin_font_layout() {
 
 #[test]
 fn truetype_system_font_if_present() {
-    for path in ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf"] {
+    for path in [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    ] {
         if let Ok(bytes) = std::fs::read(path) {
             let f = Font::load(&bytes).unwrap();
             let polys = f.layout("Wo", 40.0, 1, 0.0, 1.0, &Xf::translate(50.0, 50.0));

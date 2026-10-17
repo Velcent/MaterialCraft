@@ -67,7 +67,6 @@ fn small_textures_stay_on_the_cpu_by_default() {
     gpu::set_min_pixels(0);
 }
 
-
 #[test]
 fn levels_matches_cpu() {
     let Some(_guard) = setup() else { return };

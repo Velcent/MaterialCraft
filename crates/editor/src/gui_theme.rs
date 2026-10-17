@@ -29,4 +29,3 @@ pub const STRIP_SELECTED: Color32 = Color32::from_gray(62);
 pub const ICON: Color32 = Color32::from_gray(200);
 /// Icons of a disabled strip.
 pub const ICON_DISABLED: Color32 = Color32::from_gray(85);
-

@@ -14,7 +14,7 @@
 
 use crate::graph::{Graph, Pin, Spec};
 use crate::noise::rnd;
-use crate::tex::{lum, Tex};
+use crate::tex::{Tex, lum};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
@@ -144,7 +144,13 @@ pub fn coerce(v: &Value, p: Pin) -> Value {
             let int = matches!(p, Pin::Int | Pin::Int2 | Pin::Int3 | Pin::Int4);
             let mut out = [0.0; 4];
             for (i, o) in out.iter_mut().enumerate().take(lanes as usize) {
-                let x = if n.lanes == 1 { n.v[0] } else if i < n.lanes as usize { n.v[i] } else { 0.0 };
+                let x = if n.lanes == 1 {
+                    n.v[0]
+                } else if i < n.lanes as usize {
+                    n.v[i]
+                } else {
+                    0.0
+                };
                 *o = if int { x.trunc() } else { x };
             }
             Value::Num(Num { lanes, int, v: out })
@@ -248,7 +254,12 @@ pub const FUNC_SPECS: &[Spec] = &[
     f!("f_index", [], [], "instance / iteration number (integer)"),
     f!("f_count", [], [], "number of instances / iterations (integer)"),
     f!("f_seed", [], [], "random seed of the caller (integer)"),
-    f!("f_input", [], [], "input of this function: name, type (0 float, 1 int, 2 bool, 3 float2, 4 float3, 5 float4, 6 int2, 7 int3, 8 int4, 9 string), default v / x y z w"),
+    f!(
+        "f_input",
+        [],
+        [],
+        "input of this function: name, type (0 float, 1 int, 2 bool, 3 float2, 4 float3, 5 float4, 6 int2, 7 int3, 8 int4, 9 string), default v / x y z w"
+    ),
     f!("f_graph_input", [], [], "value of an Input Value node of the graph the caller lives in: name, type, default v / x y z w"),
     f!("f_to_float", ["a"], [], "convert to float"),
     f!("f_to_int", ["a"], [], "convert to integer (drops the fraction)"),
@@ -454,11 +465,7 @@ fn op_of(kind: &str) -> Option<Op> {
 }
 
 fn clean(x: f64) -> f64 {
-    if x.is_finite() {
-        x
-    } else {
-        0.0
-    }
+    if x.is_finite() { x } else { 0.0 }
 }
 
 fn lanes_of(a: &Num, b: &Num) -> Result<u8, String> {
@@ -474,11 +481,7 @@ fn lanes_of(a: &Num, b: &Num) -> Result<u8, String> {
 }
 
 fn lane(n: &Num, i: usize) -> f64 {
-    if n.lanes == 1 {
-        n.v[0]
-    } else {
-        n.v[i]
-    }
+    if n.lanes == 1 { n.v[0] } else { n.v[i] }
 }
 
 fn map1(a: &Num, int_out: bool, f: impl Fn(f64) -> f64) -> Value {
@@ -512,7 +515,15 @@ fn unary(op: U, x: &Value) -> Result<Value, String> {
     Ok(match op {
         U::Neg => map1(&a, keep_int, |x| -x),
         U::Abs => map1(&a, keep_int, f64::abs),
-        U::Sign => map1(&a, keep_int, |x| if x > 0.0 { 1.0 } else if x < 0.0 { -1.0 } else { 0.0 }),
+        U::Sign => map1(&a, keep_int, |x| {
+            if x > 0.0 {
+                1.0
+            } else if x < 0.0 {
+                -1.0
+            } else {
+                0.0
+            }
+        }),
         U::Floor => map1(&a, keep_int, f64::floor),
         U::Ceil => map1(&a, keep_int, f64::ceil),
         U::Round => map1(&a, keep_int, f64::round),
@@ -536,11 +547,7 @@ fn unary(op: U, x: &Value) -> Result<Value, String> {
         }
         U::Normalize => {
             let s: f64 = (0..a.lanes as usize).map(|i| a.v[i] * a.v[i]).sum::<f64>().sqrt();
-            if s > 1e-12 {
-                map1(&Num { int: false, ..a }, false, |x| x / s)
-            } else {
-                map1(&Num { int: false, ..a }, false, |_| 0.0)
-            }
+            if s > 1e-12 { map1(&Num { int: false, ..a }, false, |x| x / s) } else { map1(&Num { int: false, ..a }, false, |_| 0.0) }
         }
         U::Not => unreachable!(),
     })
@@ -556,7 +563,7 @@ fn binary(op: B, x: &Value, y: &Value) -> Result<Value, String> {
                     _ => a != b,
                 })),
                 _ => Err("boolean operators need two booleans".into()),
-            }
+            };
         }
         B::Eq | B::Ne => {
             let same = match (x, y) {
@@ -579,15 +586,19 @@ fn binary(op: B, x: &Value, y: &Value) -> Result<Value, String> {
         B::Add => map2(&a, &b, both_int, |p, q| p + q),
         B::Sub => map2(&a, &b, both_int, |p, q| p - q),
         B::Mul => map2(&a, &b, both_int, |p, q| p * q),
-        B::Div => map2(&a, &b, both_int, |p, q| if q == 0.0 { 0.0 } else if both_int { (p / q).trunc() } else { p / q }),
+        B::Div => map2(&a, &b, both_int, |p, q| {
+            if q == 0.0 {
+                0.0
+            } else if both_int {
+                (p / q).trunc()
+            } else {
+                p / q
+            }
+        }),
         B::Mod => map2(&a, &b, both_int, |p, q| if q == 0.0 { 0.0 } else { p - q * (p / q).floor() }),
         B::Pow => map2(&a, &b, false, |p, q| {
             let r = p.powf(q);
-            if p < 0.0 && q.fract() != 0.0 {
-                0.0
-            } else {
-                r
-            }
+            if p < 0.0 && q.fract() != 0.0 { 0.0 } else { r }
         }),
         B::Min => map2(&a, &b, both_int, f64::min),
         B::Max => map2(&a, &b, both_int, f64::max),
@@ -871,7 +882,15 @@ impl Prog {
         Ok(prog)
     }
 
-    fn add(&mut self, g: &Graph, lib: &BTreeMap<String, Graph>, id: u32, depth: usize, index: &mut HashMap<u32, usize>, visiting: &mut HashSet<u32>) -> Result<usize, String> {
+    fn add(
+        &mut self,
+        g: &Graph,
+        lib: &BTreeMap<String, Graph>,
+        id: u32,
+        depth: usize,
+        index: &mut HashMap<u32, usize>,
+        visiting: &mut HashSet<u32>,
+    ) -> Result<usize, String> {
         if let Some(i) = index.get(&id) {
             return Ok(*i);
         }
@@ -1022,11 +1041,7 @@ impl Prog {
                 let slot = if n.name.is_empty() { "in" } else { n.name.as_str() };
                 let t = env.image(slot).ok_or_else(|| format!("no input image '{slot}' to sample"))?;
                 let c = t.sample(p.v[0] as f32, p.v[1] as f32);
-                if n.op == Op::SampleGray {
-                    Value::float(lum(c) as f64)
-                } else {
-                    Value::vec(4, [c[0] as f64, c[1] as f64, c[2] as f64, c[3] as f64])
-                }
+                if n.op == Op::SampleGray { Value::float(lum(c) as f64) } else { Value::vec(4, [c[0] as f64, c[1] as f64, c[2] as f64, c[3] as f64]) }
             }
             Op::Stat(k) => {
                 let slot = if n.name.is_empty() { "in" } else { n.name.as_str() };
@@ -1084,7 +1099,16 @@ impl Prog {
             },
             Op::Call => {
                 let callee = n.callee.as_ref().ok_or("call without a function")?;
-                let mut sub_env = FnEnv { size: env.size, index: env.index, count: env.count, seed: env.seed, images: env.images.clone(), graph_inputs: env.graph_inputs, args: BTreeMap::new(), stats: env.stats.clone() };
+                let mut sub_env = FnEnv {
+                    size: env.size,
+                    index: env.index,
+                    count: env.count,
+                    seed: env.seed,
+                    images: env.images.clone(),
+                    graph_inputs: env.graph_inputs,
+                    args: BTreeMap::new(),
+                    stats: env.stats.clone(),
+                };
                 for (k, (name, pin, _)) in callee.inputs.iter().enumerate().take(4) {
                     if let Some(v) = self.opt_arg(n, k, env, pos, st)? {
                         sub_env.args.insert(name.clone(), coerce(&v, *pin));

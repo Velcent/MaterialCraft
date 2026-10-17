@@ -228,11 +228,18 @@ mod imp {
             .ok()?;
             let max_bytes = lim.max_storage_buffer_binding_size.min(lim.max_buffer_size as u32) as u64;
             // the same 4096-angle gradient table the CPU noise uses, so both paths pick identical gradients
-            let tab: Vec<[f32; 2]> = (0..4096).map(|i| {
-                let a = i as f32 / 4096.0 * std::f32::consts::TAU;
-                [a.cos(), a.sin()]
-            }).collect();
-            let grad = dev.create_buffer(&wgpu::BufferDescriptor { label: Some("grad"), size: 4096 * 8, usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
+            let tab: Vec<[f32; 2]> = (0..4096)
+                .map(|i| {
+                    let a = i as f32 / 4096.0 * std::f32::consts::TAU;
+                    [a.cos(), a.sin()]
+                })
+                .collect();
+            let grad = dev.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("grad"),
+                size: 4096 * 8,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
             // SAFETY: [f32; 2] is plain old data
             let bytes = unsafe { std::slice::from_raw_parts(tab.as_ptr() as *const u8, tab.len() * 8) };
             queue.write_buffer(&grad, 0, bytes);
@@ -248,7 +255,9 @@ mod imp {
             if let Some(p) = m.get(name) {
                 return p.clone();
             }
-            let module = self.dev.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(name), source: wgpu::ShaderSource::Wgsl(Cow::Owned(src.to_string())) });
+            let module = self
+                .dev
+                .create_shader_module(wgpu::ShaderModuleDescriptor { label: Some(name), source: wgpu::ShaderSource::Wgsl(Cow::Owned(src.to_string())) });
             let p = std::sync::Arc::new(self.dev.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some(name),
                 layout: None,
@@ -318,14 +327,21 @@ mod imp {
                 return None;
             }
             let pipe = self.pipeline("noise", NOISE_WGSL);
-            let uni = self.uniform(&Uni::default().u(w as u32).u(h as u32).i(px.max(1)).i(py.max(1)).u(octaves).u(seed).u(mode).u(fractal as u32).f(gain).done());
+            let uni =
+                self.uniform(&Uni::default().u(w as u32).u(h as u32).i(px.max(1)).i(py.max(1)).u(octaves).u(seed).u(mode).u(fractal as u32).f(gain).done());
             let out = self.buf((w * h * 16) as u64, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC);
             let mut enc = self.dev.create_command_encoder(&Default::default());
-            self.dispatch(&mut enc, &pipe, &[
-                wgpu::BindGroupEntry { binding: 0, resource: uni.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: self.grad.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: out.as_entire_binding() },
-            ], w, h);
+            self.dispatch(
+                &mut enc,
+                &pipe,
+                &[
+                    wgpu::BindGroupEntry { binding: 0, resource: uni.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 1, resource: self.grad.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 2, resource: out.as_entire_binding() },
+                ],
+                w,
+                h,
+            );
             self.read(&out, w, h, enc)
         }
 
@@ -348,11 +364,17 @@ mod imp {
                 for dir in 0..2u32 {
                     let r = if dir == 0 { r0.min((w as i64 - 1) / 2) } else { r0.min((h as i64 - 1) / 2) };
                     let uni = self.uniform(&Uni::default().u(w as u32).u(h as u32).i(r as i32).u(dir).done());
-                    self.dispatch(&mut enc, &pipe, &[
-                        wgpu::BindGroupEntry { binding: 0, resource: uni.as_entire_binding() },
-                        wgpu::BindGroupEntry { binding: 1, resource: src.as_entire_binding() },
-                        wgpu::BindGroupEntry { binding: 2, resource: dst.as_entire_binding() },
-                    ], w, h);
+                    self.dispatch(
+                        &mut enc,
+                        &pipe,
+                        &[
+                            wgpu::BindGroupEntry { binding: 0, resource: uni.as_entire_binding() },
+                            wgpu::BindGroupEntry { binding: 1, resource: src.as_entire_binding() },
+                            wgpu::BindGroupEntry { binding: 2, resource: dst.as_entire_binding() },
+                        ],
+                        w,
+                        h,
+                    );
                     unis.push(uni);
                     std::mem::swap(&mut src, &mut dst);
                 }
@@ -375,11 +397,17 @@ mod imp {
             let k = strength * w as f32 * 0.05;
             let uni = self.uniform(&Uni::default().u(w as u32).u(h as u32).f(k).u(directx as u32).done());
             let mut enc = self.dev.create_command_encoder(&Default::default());
-            self.dispatch(&mut enc, &pipe, &[
-                wgpu::BindGroupEntry { binding: 0, resource: uni.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: inb.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: out.as_entire_binding() },
-            ], w, h);
+            self.dispatch(
+                &mut enc,
+                &pipe,
+                &[
+                    wgpu::BindGroupEntry { binding: 0, resource: uni.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 1, resource: inb.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 2, resource: out.as_entire_binding() },
+                ],
+                w,
+                h,
+            );
             self.read(&out, w, h, enc)
         }
     }

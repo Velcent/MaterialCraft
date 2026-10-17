@@ -678,7 +678,8 @@ fn parse_transform(s: &str) -> Xf {
     while let Some(open) = rest.find('(') {
         let name = rest[..open].trim().trim_start_matches(',').trim();
         let Some(close) = rest[open..].find(')') else { break };
-        let args: Vec<f32> = rest[open + 1..open + close].split(|c: char| c == ',' || c.is_whitespace()).filter(|t| !t.is_empty()).filter_map(|t| t.parse().ok()).collect();
+        let args: Vec<f32> =
+            rest[open + 1..open + close].split(|c: char| c == ',' || c.is_whitespace()).filter(|t| !t.is_empty()).filter_map(|t| t.parse().ok()).collect();
         let t = match (name, args.len()) {
             ("translate", 1) => Xf::translate(args[0], 0.0),
             ("translate", 2) => Xf::translate(args[0], args[1]),
@@ -790,7 +791,8 @@ fn shape_segs(t: &Tag) -> Vec<Seg> {
         }
         "line" => vec![Seg::Move([f("x1"), f("y1")]), Seg::Line([f("x2"), f("y2")])],
         "polyline" | "polygon" => {
-            let v: Vec<f32> = a("points").unwrap_or("").split(|c: char| c == ',' || c.is_whitespace()).filter(|t| !t.is_empty()).filter_map(|t| t.parse().ok()).collect();
+            let v: Vec<f32> =
+                a("points").unwrap_or("").split(|c: char| c == ',' || c.is_whitespace()).filter(|t| !t.is_empty()).filter_map(|t| t.parse().ok()).collect();
             let mut s = Vec::new();
             for (i, c) in v.chunks_exact(2).enumerate() {
                 s.push(if i == 0 { Seg::Move([c[0], c[1]]) } else { Seg::Line([c[0], c[1]]) });
@@ -811,7 +813,9 @@ pub fn render_svg(src: &str, w: usize, h: usize, fit: u32, scale: f32, dx: f32, 
     let ts = tags(src);
     let root = ts.iter().find(|t| t.name == "svg" && t.open).ok_or("not an SVG document (no <svg> element)")?;
     let a = |k: &str| root.attrs.iter().find(|(n, _)| n == k).map(|(_, v)| v.as_str());
-    let vb: Vec<f32> = a("viewBox").map(|v| v.split(|c: char| c == ',' || c.is_whitespace()).filter(|t| !t.is_empty()).filter_map(|t| t.parse().ok()).collect()).unwrap_or_default();
+    let vb: Vec<f32> = a("viewBox")
+        .map(|v| v.split(|c: char| c == ',' || c.is_whitespace()).filter(|t| !t.is_empty()).filter_map(|t| t.parse().ok()).collect())
+        .unwrap_or_default();
     let (vx, vy, vw, vh) = if vb.len() == 4 && vb[2] > 0.0 && vb[3] > 0.0 {
         (vb[0], vb[1], vb[2], vb[3])
     } else {
@@ -831,7 +835,23 @@ pub fn render_svg(src: &str, w: usize, h: usize, fit: u32, scale: f32, dx: f32, 
     let mut skip_depth = 0usize;
     let mut depth_names: Vec<bool> = Vec::new();
     for t in &ts {
-        let hidden = matches!(t.name.as_str(), "defs" | "clipPath" | "mask" | "symbol" | "marker" | "pattern" | "linearGradient" | "radialGradient" | "style" | "title" | "desc" | "metadata" | "text" | "filter");
+        let hidden = matches!(
+            t.name.as_str(),
+            "defs"
+                | "clipPath"
+                | "mask"
+                | "symbol"
+                | "marker"
+                | "pattern"
+                | "linearGradient"
+                | "radialGradient"
+                | "style"
+                | "title"
+                | "desc"
+                | "metadata"
+                | "text"
+                | "filter"
+        );
         if t.open && !t.close || t.open && t.close {
             if skip_depth > 0 {
                 if !t.close {

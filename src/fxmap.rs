@@ -9,7 +9,7 @@
 
 use crate::graph::{Graph, Node};
 use crate::noise::rnd;
-use crate::tex::{lum, Tex};
+use crate::tex::{Tex, lum};
 
 pub const MAX_MARKERS: usize = 500_000;
 
@@ -303,8 +303,23 @@ pub fn render(program: &Graph, w: usize, h: usize, background: [f32; 3], run: &R
 
 pub const FXM_SPECS: &[crate::graph::Spec] = &[
     crate::graph::Spec { kind: "fxm_out", req: &["in"], opt: &[], doc: "start of a pattern program" },
-    crate::graph::Spec { kind: "fxm_marker", req: &[], opt: &[], doc: "draw a shape: shape (0 circle 1 square 2 diamond 3 image) src x y w h rot value r g b softness rnd_pos rnd_scale rnd_rot rnd_val rnd_color" },
-    crate::graph::Spec { kind: "fxm_quadrant", req: &[], opt: &["q0", "q1", "q2", "q3"], doc: "split the cell in four: scale off_x off_y p0..p3 (chance) v0..v3 (value) r0..r3 (rotation) rnd_pos rnd_scale rnd_rot rnd_val" },
-    crate::graph::Spec { kind: "fxm_iterate", req: &[], opt: &["body"], doc: "repeat body: count dx dy dscale drot dval, or grid_x grid_y stagger; rnd_x rnd_y rnd_scale rnd_rot rnd_val" },
+    crate::graph::Spec {
+        kind: "fxm_marker",
+        req: &[],
+        opt: &[],
+        doc: "draw a shape: shape (0 circle 1 square 2 diamond 3 image) src x y w h rot value r g b softness rnd_pos rnd_scale rnd_rot rnd_val rnd_color",
+    },
+    crate::graph::Spec {
+        kind: "fxm_quadrant",
+        req: &[],
+        opt: &["q0", "q1", "q2", "q3"],
+        doc: "split the cell in four: scale off_x off_y p0..p3 (chance) v0..v3 (value) r0..r3 (rotation) rnd_pos rnd_scale rnd_rot rnd_val",
+    },
+    crate::graph::Spec {
+        kind: "fxm_iterate",
+        req: &[],
+        opt: &["body"],
+        doc: "repeat body: count dx dy dscale drot dval, or grid_x grid_y stagger; rnd_x rnd_y rnd_scale rnd_rot rnd_val",
+    },
     crate::graph::Spec { kind: "fxm_switch", req: &[], opt: &["a", "b", "c", "d"], doc: "run one branch: mode (0 index, 1 random) index w0..w3" },
 ];

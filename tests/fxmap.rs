@@ -39,7 +39,12 @@ fn switch_blend_and_errors() {
     assert!(t.px[32 * 64 + 32][0] > 0.9);
     // missing program and a program without output are errors
     assert!(Graph::parse("size 32\nnode 1 fx_map program=\"nope\"\noutput o 1\n").unwrap().evaluate(Some(32)).is_err());
-    assert!(Graph::parse("size 32\nsubgraph s\nmeta kind \"fxmap\"\nnode 1 fxm_marker\nend\nnode 1 fx_map program=\"s\"\noutput o 1\n").unwrap().evaluate(Some(32)).is_err());
+    assert!(
+        Graph::parse("size 32\nsubgraph s\nmeta kind \"fxmap\"\nnode 1 fxm_marker\nend\nnode 1 fx_map program=\"s\"\noutput o 1\n")
+            .unwrap()
+            .evaluate(Some(32))
+            .is_err()
+    );
     // runaway programs stop with an error instead of hanging
     let big = "size 32\nsubgraph s\nmeta kind \"fxmap\"\nnode 1 fxm_marker w=0.01 h=0.01\nnode 2 fxm_iterate body=@1 count=100000\nnode 3 fxm_iterate body=@2 count=100000\nnode 4 fxm_out in=@3\nend\nnode 1 fx_map program=\"s\"\noutput o 1\n";
     assert!(Graph::parse(big).unwrap().evaluate(Some(32)).is_err());
