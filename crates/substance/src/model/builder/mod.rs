@@ -3,6 +3,7 @@
 //! strokes.
 
 mod effect;
+mod fill_projection;
 mod layer;
 mod source;
 mod stroke;

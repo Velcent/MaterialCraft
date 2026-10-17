@@ -44,6 +44,7 @@ pub fn fill(sources: Vec<PainterSource>) -> PainterEffect {
         sources,
         projection: 0,
         filtering: 2,
+        placement: Default::default(),
         uv_transform: None,
     })
 }

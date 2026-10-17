@@ -16,6 +16,7 @@ mod channel;
 mod document;
 mod effect;
 mod fill;
+mod fill_projection;
 mod layer;
 mod mask;
 mod paint;
@@ -38,6 +39,7 @@ pub use effect::{
     PolygonFillEffect,
 };
 pub use fill::{FillEffect, UvTransform};
+pub use fill_projection::{FillPlacement, GridDeformation, GridVertex, UvSizing};
 pub use layer::{LayerKind, PainterLayer};
 pub use mask::{MaskInitial, PainterMask};
 pub use paint::{PaintEffect, PaintTool};

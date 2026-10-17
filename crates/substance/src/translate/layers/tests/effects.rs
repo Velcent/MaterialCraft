@@ -47,6 +47,7 @@ fn reference_fill(anchor_uid: u64) -> PainterEffect {
         sources: vec![reference],
         projection: 0,
         filtering: 2,
+        placement: Default::default(),
         uv_transform: None,
     })
 }
@@ -97,6 +98,7 @@ fn several_fills_composite_as_painter_does() {
         sources: vec![uniform(ROUGH, [0.5; 3])],
         projection: 0,
         filtering: 2,
+        placement: Default::default(),
         uv_transform: None,
     });
     let stack = import(vec![layer(
@@ -121,6 +123,7 @@ fn a_fill_below_full_strength_stays_an_effect() {
         sources: vec![uniform(ROUGH, [1.0; 3])],
         projection: 0,
         filtering: 2,
+        placement: Default::default(),
         uv_transform: None,
     });
     let base = layer(1, "Base", vec![fill(vec![uniform(ROUGH, [0.0; 3])])], vec![]);

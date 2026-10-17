@@ -25,6 +25,7 @@ pub mod effect_map;
 pub mod images;
 pub mod layer_content;
 pub mod mask;
+pub mod projection_map;
 pub mod report;
 pub mod stack_builder;
 pub mod strategy;

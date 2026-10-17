@@ -1,11 +1,12 @@
 //! Images for bitmap fills and bitmap masks: [`ImageSource`] loads the embedded resource a bitmap source
-//! names; [`fit`] brings it to the set's resolution and [`channel_pixels`] into a channel's encoding.
+//! names; [`channel_pixels`] brings it into a channel's encoding and [`resample`] onto the set's texels where a
+//! bitmap cannot stay an image fill.
 
-use super::computability::Computability;
 use crate::project::SppProject;
 use crate::translate::resources::{read_image, split_resource_url};
 use materialcraft::paint::working_space::linear_to_srgb;
 use materialcraft::paint::{ChannelSpec, ColorSpace, TiledImage};
+use materialcraft::projection::{ImageLevels, LevelChain, Prepared, Projection, Projector, SurfacePoint};
 
 /// A decoded image: straight values, rows top first.
 pub struct LoadedImage {
@@ -59,35 +60,41 @@ impl ImageSource for NoImages {
     }
 }
 
-/// `image` at `size`: as is when it matches, else resampled (nearest texel) and reported as approximated.
-pub fn fit(image: TiledImage, size: (u32, u32)) -> (TiledImage, Computability) {
-    if image.size() == size || image.width() == 0 || image.height() == 0 {
-        return (image, Computability::Exact);
+/// `image` laid onto a texture set of `size` through `projection`, sampled as the compositor samples an image
+/// fill, for where a bitmap cannot stay a fill (masks, layers whose channels are placed differently). Texels the
+/// image does not cover get alpha 0. `None` when the projection cannot be evaluated without the mesh.
+pub fn resample(image: &TiledImage, projection: &Projection, size: (u32, u32)) -> Option<TiledImage> {
+    let prepared = projection.prepare(None, false).ok()?;
+    let identity = prepared == Prepared::TextureSpace
+        || matches!(prepared, Prepared::Uv(p) if p == materialcraft::projection::UvPlacement::identity());
+    if identity && image.size() == size {
+        return Some(image.clone());
     }
-    let note = Computability::approximated(format!(
-        "bitmap is {}x{}, set is {}x{}; resampled",
-        image.width(),
-        image.height(),
-        size.0,
-        size.1
-    ));
-    let Ok(mut out) = TiledImage::new(size.0, size.1, image.format()) else {
-        return (image, note);
-    };
-    let (sw, sh) = (image.width() as u64, image.height() as u64);
+    let mut out = TiledImage::new(size.0, size.1, image.format().with_alpha()).ok()?;
+    let chain = LevelChain::build(image);
+    let levels = ImageLevels::new(image, &chain);
+    let (w, h) = (size.0.max(1) as f32, size.1.max(1) as f32);
+    let texel_len = 1.0 / w.max(h);
     let all = out.all_tiles();
     out.update_tiles(&all, |r, px| {
         for (i, p) in px.iter_mut().enumerate() {
-            let (x, y) = (
-                r.x as u64 + (i as u64 % r.w as u64),
-                r.y as u64 + (i as u64 / r.w as u64),
-            );
-            let sx = (x * sw / size.0 as u64).min(sw - 1) as u32;
-            let sy = (y * sh / size.1 as u64).min(sh - 1) as u32;
-            *p = image.get(sx, sy);
+            let (x, y) = (r.x as usize + i % r.w as usize, r.y as usize + i / r.w as usize);
+            let point = SurfacePoint {
+                uv: [(x as f32 + 0.5) / w, (y as f32 + 0.5) / h],
+                texel_len,
+                ..SurfacePoint::default()
+            };
+            let taps = prepared.project(&point);
+            *p = match taps.used().first() {
+                Some(t) => match levels.sample(t.uv, t.footprint, projection.filter, projection.repeat) {
+                    Some(v) => [v[0], v[1], v[2], v[3] * t.weight * taps.coverage],
+                    None => [0.0; 4],
+                },
+                None => [0.0; 4],
+            };
         }
     });
-    (out, note)
+    Some(out)
 }
 
 /// Layer pixels for a channel: the channel's layer format, values in its stored encoding (float images are
@@ -137,16 +144,22 @@ mod tests {
     }
 
     #[test]
-    fn fitting_keeps_matching_images_and_resamples_others() {
+    fn resampling_keeps_matching_images_and_filters_others() {
         let f = PixelFormat::new(PixelLayout::Rgba, SampleType::U8);
-        let (same, note) = fit(image(4, 4, f, [1.0; 4]), (4, 4));
-        assert!(note.is_exact() && same.size() == (4, 4));
-        let mut small = image(2, 2, f, [0.0, 0.0, 0.0, 1.0]);
-        small.set(1, 1, [1.0; 4]);
-        let (big, note) = fit(small, (4, 4));
-        assert!(!note.is_exact());
-        assert_eq!(big.get(3, 3), [1.0; 4]);
-        assert_eq!(big.get(1, 1)[0], 0.0);
+        let same = resample(&image(4, 4, f, [1.0; 4]), &Projection::default(), (4, 4)).unwrap();
+        assert_eq!(same.size(), (4, 4));
+        assert_eq!(same.get(2, 2), [1.0; 4]);
+        // 8 → 4: each texel averages a 2 × 2 block
+        let mut big = image(8, 8, f, [0.0, 0.0, 0.0, 1.0]);
+        big.set(0, 0, [1.0; 4]);
+        let small = resample(&big, &Projection::default(), (4, 4)).unwrap();
+        assert!((small.get(0, 0)[0] - 0.25).abs() < 0.01, "{:?}", small.get(0, 0));
+        assert_eq!(small.get(3, 3)[0], 0.0);
+        let planar = Projection {
+            mode: materialcraft::projection::ProjectionMode::default_of("planar").unwrap(),
+            ..Projection::default()
+        };
+        assert!(resample(&big, &planar, (4, 4)).is_none());
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 use super::channel::PainterChannel;
 use super::effect::EffectHeader;
+use super::fill_projection::FillPlacement;
 use super::source::PainterSource;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -16,6 +17,8 @@ pub struct FillEffect {
     pub filtering: u64,
     /// `uvTransformation0` (`uvTransformation` in a few newer files): placement of a UV-projected fill.
     pub uv_transform: Option<UvTransform>,
+    /// The other projection settings (repetition, volume, falloffs, warp grid, size modes).
+    pub placement: FillPlacement,
 }
 
 /// `Data2DTransformation`: scale (tiling), translation (offset) and rotation (radians) in UV space.

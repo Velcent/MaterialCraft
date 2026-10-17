@@ -6,16 +6,23 @@ use super::blend_table::{BlendTable, Holder};
 use super::blending::ResolvedBlend;
 use super::channels::SetChannels;
 use super::computability::Computability;
-use super::images::{ImageSource, channel_pixels, fit};
+use super::images::{ImageSource, channel_pixels};
+use super::projection_map::map_projection;
 use crate::model::{EffectHeader, FillEffect, PainterEffect, PainterSource};
 use materialcraft::paint::{BlendMode, Channel, TiledImage};
+use materialcraft::projection::Projection;
 
 /// The value one channel gets.
 pub enum ChannelValue {
     /// A constant in the channel's stored encoding, with the content's coverage (0..1).
     Uniform { value: [f32; 4], coverage: f32 },
-    /// Layer pixels (alpha = coverage) and an extra coverage factor.
-    Image { image: TiledImage, coverage: f32 },
+    /// A bitmap in the channel's layer format and encoding (alpha = coverage, any size), laid on by
+    /// `projection`, and an extra coverage factor.
+    Image {
+        image: TiledImage,
+        coverage: f32,
+        projection: Projection,
+    },
     /// Nothing that can be shown.
     Nothing,
 }
@@ -38,7 +45,7 @@ struct State {
 enum Acc {
     Empty,
     Uniform([f32; 4]),
-    Image(TiledImage, f32),
+    Image(TiledImage, f32, Projection),
     Opaque,
 }
 
@@ -73,7 +80,11 @@ impl ContentEvaluator<'_> {
                 value: self.channels.stored_value(channel, [v[0], v[1], v[2]]),
                 coverage: v[3],
             },
-            Acc::Image(image, coverage) => ChannelValue::Image { image, coverage },
+            Acc::Image(image, coverage, projection) => ChannelValue::Image {
+                image,
+                coverage,
+                projection,
+            },
             Acc::Empty | Acc::Opaque => ChannelValue::Nothing,
         };
         ChannelContent {
@@ -193,20 +204,10 @@ impl ContentEvaluator<'_> {
             Ok(l) => l,
             Err(e) => return opaque(state, e),
         };
-        if fill.projection != 0 {
-            state.status.and(&Computability::approximated(format!(
-                "bitmap projection {} imported as UV",
-                fill.projection
-            )));
-        }
-        if fill.uv_transform.is_some_and(|t| !t.is_identity()) {
-            state.status.and(&Computability::approximated(
-                "bitmap tiling/offset/rotation not applied",
-            ));
-        }
-        let (image, note) = fit(channel_pixels(&loaded, spec), self.resolution);
-        state.status.and(&note);
-        state.value = Acc::Image(image, coverage);
+        let mapped = map_projection(fill);
+        let image = channel_pixels(&loaded, spec);
+        state.status.and(&mapped.status_for(image.size(), self.resolution));
+        state.value = Acc::Image(image, coverage, mapped.projection);
     }
 }
 

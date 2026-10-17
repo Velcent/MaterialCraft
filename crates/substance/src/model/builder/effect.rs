@@ -86,6 +86,7 @@ impl ModelBuilder {
                 .object("uvTransformation0")
                 .or_else(|| e.object("uvTransformation"))
                 .map(|t| self.uv_transform(t)),
+            placement: self.fill_placement(e),
         }
     }
 

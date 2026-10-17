@@ -11,7 +11,8 @@ use super::blend_table::BlendTable;
 use super::blending::ResolvedBlend;
 use super::computability::Computability;
 use super::effect_data::{self as data, AnchorIds};
-use super::images::{ImageSource, fit, grey_values};
+use super::images::{ImageSource, grey_values, resample};
+use super::projection_map::map_projection;
 use super::strokes;
 use crate::model::{EffectHeader, MaskInitial, PainterEffect, PainterMask, PainterSource, PolygonFillEffect};
 use materialcraft::json::Value;
@@ -156,10 +157,15 @@ impl Walk<'_, '_> {
                     }
                     PainterSource::Bitmap(b) => match self.evaluator.images.load(&b.url) {
                         Ok(loaded) => {
-                            let (image, note) = fit(loaded.image, self.evaluator.resolution);
-                            self.note(counts, note);
+                            // Mask fills hold one grey value, so the bitmap is laid on here, as the compositor
+                            // would sample it.
+                            let mapped = map_projection(fill);
+                            let size = self.evaluator.resolution;
+                            let image = resample(&loaded.image, &mapped.projection, size);
+                            let image = image.unwrap_or_else(|| loaded.image.clone());
+                            self.note(counts, mapped.status_for(loaded.image.size(), size));
                             self.note(counts, resolved.status());
-                            EffectKind::Paint(MaskPixels::new(grey_image(&image, self.evaluator.resolution)))
+                            EffectKind::Paint(MaskPixels::new(grey_image(&image, size)))
                         }
                         Err(e) => {
                             self.stop(counts, format!("mask {e}"));
