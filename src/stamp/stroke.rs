@@ -21,7 +21,7 @@ use crate::camera::Camera;
 use crate::mesh::{SurfaceMap, Vec3};
 use crate::paint::brush::Placement;
 use crate::paint::{TILE_SIZE, TiledImage};
-use crate::projection::ViewProjector;
+use crate::projection::{ScreenPoint, ViewProjector};
 use crate::v3::{len, sub};
 use std::collections::BTreeMap;
 use std::fmt;
@@ -357,9 +357,14 @@ fn view_cell(surface: &SurfaceMap, view: ViewSpace, copy: CopyTransform, cx: usi
         let fade = ((facing - min_facing) / 0.05).clamp(0.0, 1.0);
         if let Some(depth) = view.depth {
             // two screen units of depth, more on steep surfaces, whose depth changes fast within one unit
-            let unit = 1.0 / camera.screen_scale(s.view_depth).max(1e-12);
-            let tolerance = 2.0 * unit / facing.max(0.15);
-            if !depth.visible(s.pos, s.view_depth, tolerance) {
+            let visible = |s: ScreenPoint| {
+                let unit = 1.0 / camera.screen_scale(s.view_depth).max(1e-12);
+                depth.visible(s.pos, s.view_depth, 2.0 * unit / facing.max(0.15))
+            };
+            // an edge or gutter texel's centre extends its triangle's plane, which can dip behind the neighbouring
+            // surface at a concave crease: the point on the triangle itself counts as well
+            let on_triangle = || surface.point_on_triangle_index(y * w + x).and_then(|q| view.projector.to_screen(copy.point(q)));
+            if !visible(s) && !on_triangle().is_some_and(visible) {
                 continue;
             }
         }

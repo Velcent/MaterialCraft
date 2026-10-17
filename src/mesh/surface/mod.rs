@@ -169,6 +169,20 @@ impl SurfaceMap {
         Some((lerp(tri.p), normal, texel.coverage))
     }
 
+    /// The point of texel `i`'s triangle nearest to its centre's surface point: the same as the position of
+    /// [`SurfaceMap::point_index`] inside the triangle, but for edge and gutter texels (whose centres extend the
+    /// triangle's plane beyond its edges) a point on the triangle itself. Visibility tests use it: an extended plane
+    /// can dip behind the neighbouring surface at a concave crease.
+    pub fn point_on_triangle_index(&self, i: usize) -> Option<Vec3> {
+        let texel = self.texels.get(i)?;
+        let tri = self.triangles.get(texel.tri as usize)?;
+        let [b1, b2] = texel.bary;
+        let b = [(1.0 - b1 - b2).max(0.0), b1.max(0.0), b2.max(0.0)];
+        let sum = b[0] + b[1] + b[2];
+        let b = if sum > 0.0 { b.map(|v| v / sum) } else { [1.0 / 3.0; 3] };
+        Some(add(add(mul(tri.p[0], b[0]), mul(tri.p[1], b[1])), mul(tri.p[2], b[2])))
+    }
+
     /// The covered share of every texel, row-major (0 in the gutter and outside).
     pub fn coverage(&self) -> Vec<f32> {
         self.texels.iter().map(|t| t.coverage).collect()
