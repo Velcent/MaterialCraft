@@ -10,8 +10,8 @@ pub fn table(results: &[CaseResult]) -> String {
     let mut out = String::new();
     let _ = writeln!(
         out,
-        "{:<20} {:<44} {:>9} {:>7} {:>6} {:>6} {:>7} {:>6} {:>13}",
-        "subject", "project / set", "size", "MAE", "max", "PSNR", "≤2/255", "SSIM", "fit gain/off"
+        "{:<20} {:<44} {:>9} {:>7} {:>6} {:>6} {:>7} {:>6} {:>13} {:>6} {:>6}",
+        "subject", "project / set", "size", "MAE", "max", "PSNR", "≤2/255", "SSIM", "fit gain/off", "hist", "spec"
     );
     for r in results {
         let Some(m) = r.measured() else { continue };
@@ -19,7 +19,7 @@ pub fn table(results: &[CaseResult]) -> String {
         let fit = m.metrics.components.first().map(|c| c.fit);
         let _ = writeln!(
             out,
-            "{:<20} {:<44} {:>9} {:>7.2} {:>6.0} {:>6.1} {:>6.1}% {:>6} {:>13}",
+            "{:<20} {:<44} {:>9} {:>7.2} {:>6.0} {:>6.1} {:>6.1}% {:>6} {:>13} {:>6.2} {:>6}",
             r.subject,
             clip(&r.label(), 44),
             format!("{}x{}", m.size.0, m.size.1),
@@ -29,6 +29,8 @@ pub fn table(results: &[CaseResult]) -> String {
             d.within,
             fmt_opt(m.metrics.ssim, 3),
             fit.map_or("–".into(), |f| format!("{:.2}/{:.2}", f.gain, f.offset)),
+            m.metrics.distribution.histogram,
+            fmt_opt(m.metrics.distribution.spectrum, 3),
         );
     }
     let reasons = reasons(results);
@@ -38,16 +40,25 @@ pub fn table(results: &[CaseResult]) -> String {
             let _ = writeln!(out, "  {subject:<20} {n:>4} × {kind}: {reason}");
         }
     }
-    let _ = writeln!(out, "\nsummary (MAE in 8-bit steps):");
+    let _ = writeln!(out, "\nsummary (MAE and histogram distance in 8-bit steps):");
     let _ = writeln!(
         out,
-        "  {:<20} {:>8} {:>7} {:>6} {:>9} {:>10} {:>7} {:>6}",
-        "subject", "measured", "skipped", "failed", "MAE mean", "MAE median", "≤2/255", "SSIM"
+        "  {:<20} {:>8} {:>7} {:>6} {:>9} {:>10} {:>7} {:>6} {:>11} {:>11}",
+        "subject",
+        "measured",
+        "skipped",
+        "failed",
+        "MAE mean",
+        "MAE median",
+        "≤2/255",
+        "SSIM",
+        "hist median",
+        "spec median"
     );
     for s in SubjectSummary::of(results) {
         let _ = writeln!(
             out,
-            "  {:<20} {:>8} {:>7} {:>6} {:>9} {:>10} {:>6}% {:>6}",
+            "  {:<20} {:>8} {:>7} {:>6} {:>9} {:>10} {:>6}% {:>6} {:>11} {:>11}",
             s.subject,
             s.measured,
             s.skipped,
@@ -56,6 +67,8 @@ pub fn table(results: &[CaseResult]) -> String {
             fmt_opt(s.mae_median, 2),
             fmt_opt(s.within_mean, 1),
             fmt_opt(s.ssim_mean, 3),
+            fmt_opt(s.histogram_median, 2),
+            fmt_opt(s.spectrum_median, 3),
         );
     }
     out

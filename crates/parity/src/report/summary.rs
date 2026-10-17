@@ -15,6 +15,9 @@ pub struct SubjectSummary {
     /// Share of texels within 2/255, mean over cases, in percent.
     pub within_mean: Option<f64>,
     pub ssim_mean: Option<f64>,
+    /// Texture statistics (look-alikes): median histogram distance (8-bit steps) and spectrum distance.
+    pub histogram_median: Option<f64>,
+    pub spectrum_median: Option<f64>,
 }
 
 impl SubjectSummary {
@@ -37,7 +40,16 @@ impl SubjectSummary {
         maes.sort_by(f64::total_cmp);
         let within: Vec<f64> = measured.iter().map(|m| m.metrics.overall.within).collect();
         let ssims: Vec<f64> = measured.iter().filter_map(|m| m.metrics.ssim).collect();
+        let mut histograms: Vec<f64> = measured.iter().map(|m| m.metrics.distribution.histogram).collect();
+        histograms.sort_by(f64::total_cmp);
+        let mut spectra: Vec<f64> = measured
+            .iter()
+            .filter_map(|m| m.metrics.distribution.spectrum)
+            .collect();
+        spectra.sort_by(f64::total_cmp);
         SubjectSummary {
+            histogram_median: median(&histograms),
+            spectrum_median: median(&spectra),
             subject,
             measured: measured.len(),
             skipped: count(|o| matches!(o, Outcome::Skipped(_))),

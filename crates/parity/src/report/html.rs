@@ -55,12 +55,12 @@ pub fn page(info: &RunInfo, entries: &[Entry]) -> String {
 
 fn summary(h: &mut String, results: &[CaseResult]) {
     h.push_str(
-        "<table><tr><th>subject<th>measured<th>skipped<th>failed<th>MAE mean<th>MAE median<th>≤2/255<th>SSIM</tr>",
+        "<table><tr><th>subject<th>measured<th>skipped<th>failed<th>MAE mean<th>MAE median<th>≤2/255<th>SSIM<th>hist median<th>spec median</tr>",
     );
     for s in SubjectSummary::of(results) {
         let _ = write!(
             h,
-            "<tr><td><a href=\"#{0}\">{0}</a><td>{1}<td>{2}<td>{3}<td>{4}<td>{5}<td>{6} %<td>{7}</tr>",
+            "<tr><td><a href=\"#{0}\">{0}</a><td>{1}<td>{2}<td>{3}<td>{4}<td>{5}<td>{6} %<td>{7}<td>{8}<td>{9}</tr>",
             esc(s.subject),
             s.measured,
             s.skipped,
@@ -68,7 +68,9 @@ fn summary(h: &mut String, results: &[CaseResult]) {
             fmt_opt(s.mae_mean, 2),
             fmt_opt(s.mae_median, 2),
             fmt_opt(s.within_mean, 1),
-            fmt_opt(s.ssim_mean, 3)
+            fmt_opt(s.ssim_mean, 3),
+            fmt_opt(s.histogram_median, 2),
+            fmt_opt(s.spectrum_median, 3)
         );
     }
     h.push_str("</table>");
@@ -79,7 +81,7 @@ fn case(h: &mut String, r: &CaseResult, m: &Measured, f: &CaseFiles) {
     let _ = write!(
         h,
         "<section class=case><h3>{label}</h3><p class=meta>{reference} ({rw}×{rh}) · compared at {w}×{h_} · high: {high} · \
-         settings {hash} · {secs:.1} s</p><table><tr><th><th>MAE<th>max<th>PSNR<th>≤2/255<th>SSIM<th>fit gain / offset</tr>\
+         settings {hash} · {secs:.1} s · histogram distance {hist:.2} steps · spectrum distance {spec}</p><table><tr><th><th>MAE<th>max<th>PSNR<th>≤2/255<th>SSIM<th>fit gain / offset</tr>\
          <tr><td>all<td>{mae:.2}<td>{max:.0}<td>{psnr:.1}<td>{within:.1} %<td>{ssim}<td></tr>",
         label = esc(&r.label()),
         reference = esc(&m.reference),
@@ -95,6 +97,8 @@ fn case(h: &mut String, r: &CaseResult, m: &Measured, f: &CaseFiles) {
         psnr = d.psnr.min(99.9),
         within = d.within,
         ssim = fmt_opt(m.metrics.ssim, 3),
+        hist = m.metrics.distribution.histogram,
+        spec = fmt_opt(m.metrics.distribution.spectrum, 3),
     );
     for c in &m.metrics.components {
         let _ = write!(

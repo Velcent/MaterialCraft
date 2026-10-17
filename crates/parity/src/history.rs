@@ -94,6 +94,11 @@ pub fn line(stamp: &RunStamp, r: &CaseResult) -> Value {
                 )
                 .with("within", round(d.within))
                 .with("ssim", m.metrics.ssim.map_or(Value::Null, |s| round(s).into()))
+                .with("histogram", round(m.metrics.distribution.histogram))
+                .with(
+                    "spectrum",
+                    m.metrics.distribution.spectrum.map_or(Value::Null, |s| round(s).into()),
+                )
                 .with("texels", d.texels)
                 .with("components", components)
                 .with("high", m.high.as_str())

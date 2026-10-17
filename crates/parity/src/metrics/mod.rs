@@ -1,9 +1,12 @@
 //! [`Metrics`]: ours against Painter's, inside the UV islands, overall and per component: mean absolute error,
 //! max, PSNR, share within 2/255 (the substance crate's [`Diff`]), SSIM, and a least-squares fit
-//! `theirs ≈ gain × ours + offset` that shows range and inversion differences.
+//! `theirs ≈ gain × ours + offset` that shows range and inversion differences; and the texture statistics
+//! ([`Distribution`]: histogram and power-spectrum distance) that judge look-alikes.
 
+mod distribution;
 mod ssim;
 
+pub use distribution::Distribution;
 pub use ssim::ssim;
 
 use crate::subject::Component;
@@ -25,6 +28,8 @@ pub struct Metrics {
     /// Mean of the components' SSIM.
     pub ssim: Option<f64>,
     pub components: Vec<ComponentMetrics>,
+    /// Histogram and spectrum distance of the first component.
+    pub distribution: Distribution,
 }
 
 impl Metrics {
@@ -45,7 +50,10 @@ impl Metrics {
             })
             .collect();
         let ssims: Vec<f64> = components.iter().filter_map(|c| c.ssim).collect();
+        let first = indices.first().copied().unwrap_or(0);
+        let distribution = Distribution::measure(ours, theirs, first, mask);
         let metrics = Metrics {
+            distribution,
             overall,
             ssim: (!ssims.is_empty()).then(|| ssims.iter().sum::<f64>() / ssims.len() as f64),
             components,
