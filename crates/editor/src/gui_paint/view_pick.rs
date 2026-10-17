@@ -5,6 +5,7 @@
 use super::document_state::OpenDocument;
 use super::job::Job;
 use materialcraft::camera::Camera;
+use materialcraft::mesh::Mesh;
 use materialcraft::paint::Document;
 use materialcraft::projection::{CpuViewProjector, ViewScene};
 use std::path::PathBuf;
@@ -72,7 +73,17 @@ impl ViewPicking {
 
     /// Screen ↔ mesh through `camera` for `doc` (the document polled last), or `None` while the scene is built.
     pub fn projector<'a>(&'a self, doc: &'a Document, camera: Camera) -> Option<CpuViewProjector<'a>> {
-        self.scene.as_ref()?.projector(&doc.mesh, camera)
+        self.projector_on(&doc.mesh, camera)
+    }
+
+    /// [`Self::projector`] given the document's mesh alone (a brush stroke holds the texture sets meanwhile).
+    pub fn projector_on<'a>(&'a self, mesh: &'a Mesh, camera: Camera) -> Option<CpuViewProjector<'a>> {
+        self.scene.as_ref()?.projector(mesh, camera)
+    }
+
+    /// False for mesh parts of hidden texture sets (they neither show nor hide anything).
+    pub fn is_shown(&self, part: usize) -> bool {
+        self.scene.as_ref().is_some_and(|s| s.is_shown(part))
     }
 }
 

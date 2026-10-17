@@ -8,12 +8,13 @@ use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
 use super::super::shell::panels::PaintPanel;
 use super::super::shell::tools::ToolState;
+use super::super::tools::BrushTools;
 use super::super::viewport::Viewport;
 use super::bakers::{BakeStatus, BakersPanel};
 use super::import_report::ReportPanel;
 use super::layers::LayerPanel;
 use super::log::LogPanel;
-use super::{PanelEvent, interface_settings, texture_sets, timeline, view_settings, viewport_toolbar};
+use super::{PanelEvent, brush_panel, interface_settings, texture_sets, timeline, view_settings, viewport_toolbar};
 use crate::gui_assets::AssetTray;
 use crate::gui_workspace::shortcuts::{ShortcutTable, ShortcutsPage};
 use materialcraft::diag::RingBuffer;
@@ -28,6 +29,8 @@ pub struct Bodies<'a> {
     pub shortcuts: &'a ShortcutTable,
     pub page: &'a mut ShortcutsPage,
     pub tools: &'a ToolState,
+    /// The brush tools' settings (brush panel, quick-access bar).
+    pub brush: &'a mut BrushTools,
     pub scale_draft: &'a mut f32,
     pub log: &'a mut LogPanel,
     pub tray: &'a mut AssetTray,
@@ -98,6 +101,10 @@ impl DockContent<PaintPanel> for Bodies<'_> {
                     self.events.extend(out.into_iter().map(PanelEvent::Assets));
                 });
             }
+            PaintPanel::Brush => {
+                let set = self.document.and_then(|d| self.layers.current_set(d.doc()));
+                margin.show(ui, |ui| brush_panel::show(ui, self.brush, self.tools.current, set));
+            }
         }
     }
 }
@@ -106,7 +113,7 @@ impl Bodies<'_> {
     fn viewport_body(&mut self, ui: &mut Ui) {
         let has_document = self.document.is_some();
         let paintable = self.document.is_some_and(|d| self.layers.paintable(d.doc()));
-        viewport_toolbar::show(ui, self.tools, self.shortcuts, self.display, has_document, paintable, self.events);
+        viewport_toolbar::show(ui, self.tools, self.brush, self.shortcuts, self.display, has_document, paintable, self.events);
         if let Some(doc) = self.document {
             timeline::show(ui, doc.history(), self.events);
         }

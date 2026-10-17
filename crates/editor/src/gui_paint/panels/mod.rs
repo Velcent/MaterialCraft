@@ -2,6 +2,7 @@
 //! for as [`PanelEvent`]s; `PaintMode` applies them.
 
 pub mod bakers;
+mod brush_panel;
 pub mod channel_bar;
 mod dock_content;
 pub mod import_report;
@@ -12,6 +13,7 @@ pub mod layout;
 pub mod log;
 pub mod menu_bar;
 mod panel_strip;
+mod quick_bar;
 pub mod status_bar;
 pub mod texture_sets;
 mod timeline;

@@ -11,6 +11,7 @@ publish = false
 materialcraft = { path = "../..", features = ["gui"] }
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
 materialcraft-substance = { path = "../substance" }
+materialcraft-brush = { path = "../brush" }
 log = "0.4"
 # The Craft suite's shared UI and settings crates, pinned (reuse level 1: depend, nothing goes upstream; ADR 0007).
 craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "15ed713b8fc622302a7f2920f710cec7d261fa9a" }

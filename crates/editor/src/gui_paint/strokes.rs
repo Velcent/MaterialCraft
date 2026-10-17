@@ -1,0 +1,55 @@
+//! The brush tools' part of a Paint-screen frame: the viewport's stroke gesture goes to [`tools::Painting`], and
+//! what it painted is recomposited.
+
+use super::PaintMode;
+use super::panels::PanelEvent;
+use super::tools::{PaintFrame, PaintReport};
+use eframe::egui;
+use materialcraft::diag::{Area, SinkExt};
+
+impl PaintMode {
+    /// Runs this frame's strokes. Call after the panels were drawn (the viewport recorded the gesture).
+    pub(super) fn paint_strokes(&mut self, ctx: &egui::Context) {
+        let input = self.viewport.take_stroke_input();
+        let Some(doc) = self.document.as_mut() else {
+            self.painting.forget_document();
+            return;
+        };
+        let target = self.layers.paint_target(doc.doc());
+        let frame = PaintFrame { doc, picking: &self.picking, camera: self.viewport.camera(), tool: self.shell.tools.current, target };
+        let report = self.painting.frame(input, frame);
+        self.after_painting(report);
+        if self.painting.is_stroking() || self.viewport.stroking() {
+            ctx.request_repaint();
+        }
+    }
+
+    /// Ends a stroke in progress before `ev` changes the document under it.
+    pub(super) fn end_stroke_before(&mut self, ev: &PanelEvent) {
+        let changes_document = matches!(
+            ev,
+            PanelEvent::Undo
+                | PanelEvent::Redo
+                | PanelEvent::JumpHistory(_)
+                | PanelEvent::Layers(_)
+                | PanelEvent::LayerAction(_)
+                | PanelEvent::Close
+                | PanelEvent::SetVisible(..)
+        );
+        if !(changes_document && self.painting.is_stroking()) {
+            return;
+        }
+        let Some(doc) = self.document.as_mut() else { return };
+        let report = self.painting.finish_stroke(doc, &self.picking);
+        self.after_painting(report);
+    }
+
+    pub(super) fn after_painting(&mut self, report: PaintReport) {
+        if let Some(msg) = report.message {
+            self.diag.warn(Area::General, msg);
+        }
+        if let (Some(set), Some(doc)) = (report.refresh, self.document.as_mut()) {
+            self.scene.refresh(doc, self.display, vec![set]);
+        }
+    }
+}

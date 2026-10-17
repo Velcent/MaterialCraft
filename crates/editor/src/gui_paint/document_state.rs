@@ -80,6 +80,20 @@ impl OpenDocument {
         Ok(out)
     }
 
+    /// The document for a brush stroke, which paints into its images directly and hands the inverses of what it
+    /// did to [`Self::record_stroke`] at pen up (one step per stroke, PT-54). Nothing else may use this.
+    pub fn doc_for_strokes(&mut self) -> &mut Document {
+        &mut self.doc
+    }
+
+    /// Records a finished stroke's inverses (in the order its edits were made) as one closed history step.
+    pub fn record_stroke(&mut self, label: &str, inverses: Vec<materialcraft::paint::edit::Edit>) {
+        if !inverses.is_empty() {
+            self.history.record_all(&self.doc, label, None, inverses);
+        }
+        self.history.close();
+    }
+
     /// Ends the open step (the end of a slider drag).
     pub fn close_step(&mut self) {
         self.history.close();

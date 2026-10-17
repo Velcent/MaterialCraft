@@ -95,6 +95,20 @@ impl LayerPanel {
         }
     }
 
+    /// What the brush tools paint into, with its texture set's index: the selection when [`Self::paintable`].
+    pub fn paint_target(&self, doc: &Document) -> Option<(materialcraft_brush::PaintTarget, usize)> {
+        if !self.paintable(doc) {
+            return None;
+        }
+        let set = self.current_set(doc)?;
+        let index = doc.texture_sets.iter().position(|s| s.id == set.id)?;
+        let part = match self.selection.part {
+            Part::Mask => materialcraft_brush::TargetPart::Mask,
+            Part::Content => materialcraft_brush::TargetPart::Content,
+        };
+        Some((materialcraft_brush::PaintTarget { layer: LayerRef::new(set.id.clone(), self.selection.focus()?), part }, index))
+    }
+
     /// Selects `ids` (new layers after an edit).
     pub fn select(&mut self, ids: Vec<String>) {
         self.selection.set(ids);

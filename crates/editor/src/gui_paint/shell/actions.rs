@@ -27,6 +27,8 @@ pub const ORBIT_SNAP: &str = "paint.nav.orbit_snap";
 pub const PAN: &str = "paint.nav.pan";
 pub const ZOOM: &str = "paint.nav.zoom";
 pub const LIGHT: &str = "paint.nav.light";
+/// The brush tools' stroke gesture.
+pub const STROKE: &str = "paint.stroke";
 
 const FILE: &str = "File";
 const EDIT: &str = "Edit";
@@ -72,6 +74,7 @@ pub const ACTIONS: &[ActionSpec] = &[
     // Asset tray (roadmap step 15).
     press("paint.window.assets", "Show or hide Assets", WINDOW, &[]),
     press("paint.window.bakers", "Show or hide Bakers", WINDOW, &[]),
+    press("paint.window.brush", "Show or hide Brush", WINDOW, &[]),
     press("paint.layout.painting", "Painting layout", WINDOW, &[]),
     press("paint.layout.baking", "Baking layout", WINDOW, &["F8"]),
     press("paint.layout.reset", "Reset the current layout", WINDOW, &[]),
@@ -82,7 +85,7 @@ pub const ACTIONS: &[ActionSpec] = &[
     press("paint.tool.smudge", "Smudge", TOOLS, &["5"]),
     press("paint.tool.clone", "Clone", TOOLS, &["6"]),
     press("paint.tool.material_picker", "Material picker", TOOLS, &["P"]),
-    gesture("paint.stroke", "Paint a stroke", TOOL_KEYS, &["LeftDrag"]),
+    gesture(STROKE, "Paint a stroke", TOOL_KEYS, &["LeftDrag"]),
     gesture("paint.stroke.line", "Straight line from the last stroke", TOOL_KEYS, &["Shift+LeftDrag"]),
     gesture("paint.stroke.line_snap", "Straight line in 5° steps", TOOL_KEYS, &["Mod+Shift+LeftDrag"]),
     hold("paint.tool.stencil", "Move, turn or scale the stencil or projection", TOOL_KEYS, &["S"]),
@@ -147,6 +150,7 @@ pub fn toggle_action(panel: PaintPanel) -> &'static str {
         PaintPanel::Log => "paint.window.log",
         PaintPanel::Assets => "paint.window.assets",
         PaintPanel::Bakers => "paint.window.bakers",
+        PaintPanel::Brush => "paint.window.brush",
     }
 }
 

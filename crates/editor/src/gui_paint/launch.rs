@@ -3,11 +3,13 @@
 //!     materialcraft-gui --paint <file.mcpaint|file.spp> [--channel <id>] [--shot <out.png>]
 //!     materialcraft-gui --paint-demo [--channel <id>] [--shot <out.png>]
 //!     materialcraft-gui --paint <file> --occlusion-check <map.png>
+//!     materialcraft-gui --paint <file> --stroke-test --shot <out.png>
 //!
 //! `--channel` takes a channel id (`base_color`, `roughness`, ...) or `material`; `--shot` saves the
 //! window once every map is on the GPU and then quits. `--occlusion-check` compares the CPU view projector
 //! with the GPU's depth buffer once the scene has settled, prints the agreement, saves a map of it and quits
-//! (use it without `--shot`).
+//! (use it without `--shot`). `--stroke-test` paints one stroke on a new paint layer once the document has
+//! settled (before `--shot` saves the window).
 
 use super::channel_view::ChannelView;
 use materialcraft::paint::Channel;
@@ -27,6 +29,7 @@ pub struct Launch {
     pub channel: Option<ChannelView>,
     pub shot: Option<PathBuf>,
     pub occlusion_check: Option<PathBuf>,
+    pub stroke_test: bool,
 }
 
 impl Launch {
@@ -40,6 +43,7 @@ impl Launch {
                 "--paint-demo" => launch.open = Some(StartDocument::Demo),
                 "--shot" => launch.shot = it.next().map(PathBuf::from),
                 "--occlusion-check" => launch.occlusion_check = it.next().map(PathBuf::from),
+                "--stroke-test" => launch.stroke_test = true,
                 "--channel" => launch.channel = it.next().and_then(|c| parse_channel(&c)),
                 _ => {}
             }

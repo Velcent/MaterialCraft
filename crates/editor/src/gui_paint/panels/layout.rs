@@ -4,6 +4,7 @@
 use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
 use super::super::shell::Shell;
+use super::super::tools::BrushTools;
 use super::super::viewport::Viewport;
 use super::bakers::BakersPanel;
 use super::dock_content::Bodies;
@@ -36,6 +37,7 @@ pub struct Screen<'a> {
     pub activity: Activity<'a>,
     pub bakers: &'a mut BakersPanel,
     pub shell: &'a mut Shell,
+    pub brush: &'a mut BrushTools,
 }
 
 /// Draws the screen and returns what the user asked for.
@@ -73,6 +75,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
             shortcuts: &shell.shortcuts,
             page: &mut shell.page,
             tools: &shell.tools,
+            brush: s.brush,
             scale_draft: &mut shell.scale_draft,
             log: s.log,
             tray: s.tray,

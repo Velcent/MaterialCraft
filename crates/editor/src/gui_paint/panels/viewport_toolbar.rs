@@ -5,14 +5,17 @@ use eframe::egui::{self, Id, RichText, Ui};
 
 use super::super::channel_view::ChannelView;
 use super::super::shell::tools::{self, ToolState};
-use super::{PanelEvent, channel_bar};
+use super::super::tools::BrushTools;
+use super::{PanelEvent, channel_bar, quick_bar};
 use crate::gui_theme;
 use crate::gui_widgets::toolbar::{self, Group, Side};
 use crate::gui_workspace::shortcuts::ShortcutTable;
 
+#[allow(clippy::too_many_arguments)] // the toolbar shows a little of everything; a struct would only repeat these names
 pub fn show(
     ui: &mut Ui,
     tool_state: &ToolState,
+    brush: &mut BrushTools,
     keys: &ShortcutTable,
     display: ChannelView,
     has_document: bool,
@@ -29,6 +32,11 @@ pub fn show(
             ui.label(RichText::new(tool.label()).strong().color(gui_theme::HEADER_TEXT));
             if let Some(why) = unavailable {
                 ui.label(RichText::new(why).color(gui_theme::ICON_DISABLED));
+            }
+        }),
+        Group::new(Side::Left, |ui: &mut Ui| {
+            if let Some(preset) = brush.preset_mut(tool).filter(|_| unavailable.is_none()) {
+                quick_bar::show(ui, preset);
             }
         }),
         Group::new(Side::Right, |ui: &mut Ui| {

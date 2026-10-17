@@ -4,6 +4,7 @@
 //! through the shared GPU renderer in an egui paint callback.
 
 use super::channel_view::ChannelView;
+use super::input::{PointerLog, StrokeInput};
 use super::navigation;
 use super::shell::actions;
 use crate::gui_workspace::shortcuts::ShortcutTable;
@@ -26,12 +27,21 @@ pub struct Viewport {
     diag: Arc<dyn Sink>,
     /// Where the view was laid out last frame (UI points).
     rect: Option<egui::Rect>,
+    /// The stroke gesture's input, for the brush tools.
+    pointer: PointerLog,
 }
 
 impl Viewport {
     pub fn new(diag: Arc<dyn Sink>) -> Viewport {
         // Painter shows height through the normal map; displacement stays opt-in.
-        Viewport { gpu: gpu3d::new_shared(), view: View { relief: RELIEF_NONE, ..View::default() }, snap: None, diag, rect: None }
+        Viewport {
+            gpu: gpu3d::new_shared(),
+            view: View { relief: RELIEF_NONE, ..View::default() },
+            snap: None,
+            diag,
+            rect: None,
+            pointer: PointerLog::default(),
+        }
     }
 
     pub fn gpu(&self) -> &Shared {
@@ -60,6 +70,16 @@ impl Viewport {
         self.rect
     }
 
+    /// The stroke gesture's input since the last call (positions relative to the view's top-left corner).
+    pub fn take_stroke_input(&mut self) -> Vec<StrokeInput> {
+        self.pointer.take()
+    }
+
+    /// True while the stroke gesture is held.
+    pub fn stroking(&self) -> bool {
+        self.pointer.is_down()
+    }
+
     pub fn reset_camera(&mut self) {
         let d = View::default();
         (self.view.yaw, self.view.pitch, self.view.dist) = (d.yaw, d.pitch, d.dist);
@@ -73,6 +93,7 @@ impl Viewport {
         self.rect = (rect.width() > 0.0 && rect.height() > 0.0).then_some(rect);
         ui.painter().rect_filled(rect, 0.0, BACKGROUND);
         self.camera_input(ui, &resp, keys);
+        self.stroke_input(ui, &resp, rect, keys);
         let error = self.gpu.lock().ok().and_then(|g| g.error.clone());
         match error {
             None => {
@@ -87,6 +108,17 @@ impl Viewport {
         }
         let corner = rect.left_bottom() + egui::vec2(6.0, -5.0);
         ui.painter().text(corner, Align2::LEFT_BOTTOM, hint(keys), FontId::proportional(10.0), Color32::from_gray(110));
+    }
+
+    /// Records the stroke gesture (by default a left drag, or a click for a single stamp).
+    fn stroke_input(&mut self, ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect, keys: &ShortcutTable) {
+        let mods = ui.input(|i| i.modifiers);
+        let is_stroke = keys.drag(mods, PointerButton::Primary) == Some(actions::STROKE);
+        let held = is_stroke && resp.dragged_by(PointerButton::Primary);
+        let clicked = is_stroke && resp.clicked_by(PointerButton::Primary);
+        let started = (is_stroke && resp.drag_started_by(PointerButton::Primary)) || clicked;
+        let stopped = resp.drag_stopped_by(PointerButton::Primary) || clicked;
+        ui.input(|i| self.pointer.record(i, rect, held, started, stopped));
     }
 
     fn camera_input(&mut self, ui: &egui::Ui, resp: &egui::Response, keys: &ShortcutTable) {

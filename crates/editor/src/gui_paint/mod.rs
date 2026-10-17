@@ -21,6 +21,7 @@ mod editing;
 mod eyedrop;
 mod geometry;
 mod import_review;
+mod input;
 mod isolate;
 mod job;
 mod launch;
@@ -35,6 +36,9 @@ pub mod shell;
 mod shot;
 mod spp_import;
 mod stack_editor;
+mod stroke_test;
+mod strokes;
+mod tools;
 mod tray_host;
 mod unlit;
 mod view_pick;
@@ -119,6 +123,10 @@ pub struct PaintMode {
     color: ColorPicker,
     /// The viewport frame count when the eyedropper asked the GPU for a displayed colour.
     color_read: Option<u64>,
+    /// The brush tools: settings, the stroke in progress, the painted set's surface.
+    painting: tools::Painting,
+    /// `--stroke-test`: paint one stroke once the document has settled.
+    stroke_test: Option<stroke_test::StrokeTest>,
 }
 
 impl PaintMode {
@@ -152,6 +160,8 @@ impl PaintMode {
             title: WindowTitle::default(),
             color: ColorPicker::default(),
             color_read: None,
+            painting: tools::Painting::default(),
+            stroke_test: launch.stroke_test.then_some(stroke_test::StrokeTest::Waiting),
         };
         match launch.open {
             Some(StartDocument::File(p)) => pm.open(p),
@@ -188,6 +198,7 @@ impl PaintMode {
         self.before_tray_frame();
         events.extend(self.draw(ui, history));
         events.extend(self.tray.end_frame(ctx).map(PanelEvent::Assets));
+        self.paint_strokes(ctx);
         let mut action = PaintAction::Stay;
         for ev in events {
             if self.apply(ev) == PaintAction::Home {
@@ -201,8 +212,10 @@ impl PaintMode {
         if self.loader.is_some() || self.scene.is_busy() || self.baking.is_busy() {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
+        let settled = self.loader.is_none() && self.document.is_some() && !self.scene.is_busy() && self.picking.is_ready();
+        let tested = self.run_stroke_test(settled);
         if let Some(shot) = &mut self.shot {
-            let settled = self.loader.is_none() && self.document.is_some() && !self.scene.is_busy();
+            let settled = tested && self.loader.is_none() && self.document.is_some() && !self.scene.is_busy();
             shot.update(ctx, settled, self.viewport.frames());
         }
         if let Some(check) = &mut self.check {
@@ -243,11 +256,13 @@ impl PaintMode {
             activity: Activity { loading: self.loader.as_ref().map(|l| l.progress()), maps: self.scene.progress(), bake: self.baking.progress() },
             bakers: &mut self.bakers,
             shell: &mut self.shell,
+            brush: &mut self.painting.brush,
         };
         panels::layout::show(ui, screen)
     }
 
     fn apply(&mut self, ev: PanelEvent) -> PaintAction {
+        self.end_stroke_before(&ev);
         let can_paint = self.document.as_ref().is_some_and(|d| self.layers.paintable(d.doc()));
         let Some(ev) = self.shell.apply(ev, can_paint) else {
             return PaintAction::Stay;

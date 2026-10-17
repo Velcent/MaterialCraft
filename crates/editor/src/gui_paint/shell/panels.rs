@@ -26,6 +26,8 @@ pub enum PaintPanel {
     Assets,
     /// The bakers panel (BK2-01).
     Bakers,
+    /// The brush tools' settings (PT-04 … PT-11).
+    Brush,
 }
 
 impl PanelKind for PaintPanel {
@@ -40,6 +42,7 @@ impl PanelKind for PaintPanel {
         PaintPanel::Log,
         PaintPanel::Assets,
         PaintPanel::Bakers,
+        PaintPanel::Brush,
     ];
 
     fn id(self) -> &'static str {
@@ -54,6 +57,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Log => "log",
             PaintPanel::Assets => "assets",
             PaintPanel::Bakers => "bakers",
+            PaintPanel::Brush => "brush",
         }
     }
 
@@ -69,6 +73,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Log => "Log",
             PaintPanel::Assets => "Assets",
             PaintPanel::Bakers => "Bakers",
+            PaintPanel::Brush => "Brush",
         }
     }
 
@@ -84,6 +89,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Log => Icon::Log,
             PaintPanel::Assets => Icon::Assets,
             PaintPanel::Bakers => Icon::Bake,
+            PaintPanel::Brush => Icon::Brush,
         }
     }
 
@@ -107,7 +113,7 @@ fn split(axis: SplitAxis, size: SplitSize, first: Node<PaintPanel>, second: Node
 }
 
 /// Texture sets above the asset tray (with the import report and the log) on the left (AS-08), the viewport,
-/// layers above display settings on the right.
+/// layers above the brush and display settings on the right.
 fn painting() -> Layout<PaintPanel> {
     let left = split(
         SplitAxis::Vertical,
@@ -115,7 +121,7 @@ fn painting() -> Layout<PaintPanel> {
         tabs(&[PaintPanel::TextureSets]),
         tabs(&[PaintPanel::Assets, PaintPanel::ImportReport, PaintPanel::Log]),
     );
-    let right = split(SplitAxis::Vertical, SplitSize::Ratio(0.6), tabs(&[PaintPanel::Layers]), tabs(&[PaintPanel::Display]));
+    let right = split(SplitAxis::Vertical, SplitSize::Ratio(0.6), tabs(&[PaintPanel::Layers]), tabs(&[PaintPanel::Brush, PaintPanel::Display]));
     let centre = split(SplitAxis::Horizontal, SplitSize::FixedSecond(320.0), tabs(&[PaintPanel::Viewport]), right);
     Layout { root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(280.0), left, centre)), floating: Vec::new() }
 }
