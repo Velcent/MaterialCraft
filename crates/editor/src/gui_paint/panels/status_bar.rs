@@ -1,4 +1,4 @@
-//! The status bar: the last message, load or import progress (with Cancel), bake and map progress.
+//! The status bar: the last message, load or import progress (with Cancel), save, bake and map progress.
 
 use super::PanelEvent;
 use eframe::egui::{self, Color32};
@@ -15,6 +15,8 @@ pub struct Activity<'a> {
     pub maps: Option<(usize, usize)>,
     /// (set name, sets done, total) of a running bake.
     pub bake: Option<(&'a str, usize, usize)>,
+    /// (bytes written, expected total if known) of a running save.
+    pub saving: Option<(u64, Option<u64>)>,
 }
 
 /// Draws the bar; `status` is the newest diagnostics entry of the session.
@@ -34,6 +36,17 @@ pub fn show(ui: &mut egui::Ui, status: Option<&Entry>, activity: &Activity, even
                     }
                     ui.add(egui::ProgressBar::new(f).desired_width(160.0).show_percentage());
                     ui.label(step);
+                } else if let Some((written, total)) = activity.saving {
+                    let mb = |n: u64| n as f64 / (1024.0 * 1024.0);
+                    match total {
+                        Some(t) => {
+                            ui.add(egui::ProgressBar::new((written as f64 / t.max(1) as f64).min(1.0) as f32).desired_width(120.0));
+                        }
+                        None => {
+                            ui.spinner();
+                        }
+                    }
+                    ui.label(format!("Saving ({:.0} MB written)", mb(written)));
                 } else if let Some((name, done, total)) = activity.bake {
                     ui.add(egui::ProgressBar::new(done as f32 / total.max(1) as f32).desired_width(120.0));
                     ui.label(format!("Baking {name} ({}/{total})", done + 1));

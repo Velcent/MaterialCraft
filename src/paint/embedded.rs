@@ -1,5 +1,5 @@
 //! Assets a document embeds so it opens on a machine without the library (AS-21, the "project" scope): the
-//! material graphs its fills name and the smart-material fragments its folders came from, each stored under the
+//! material graphs its fills name and the smart-material and smart-mask fragments its folders and masks came from, each stored under the
 //! library reference it is used by (`materials/rust.mca`, `smart-materials/worn-paint.mcfrag`).
 //!
 //! [`references`] lists what a layer stack uses; [`refresh`] brings a list of embedded assets in line with it,
@@ -31,11 +31,14 @@ pub fn is_embeddable(reference: &str) -> bool {
 }
 
 /// Every embeddable asset reference `layers` use (children included): material fills of layers and content
-/// effects, and the fragments folders came from.
+/// effects, and the fragments folders and masks came from.
 pub fn references(layers: &[Layer]) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for (_, l) in LayerWalk::new(layers) {
         if let Some(a) = &l.asset {
+            out.insert(a.clone());
+        }
+        if let Some(a) = l.mask.as_ref().and_then(|m| m.asset.as_ref()) {
             out.insert(a.clone());
         }
         if let LayerKind::Fill(f) = &l.kind

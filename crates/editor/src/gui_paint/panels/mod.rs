@@ -45,6 +45,10 @@ pub enum PanelEvent {
     /// Pick a Substance Painter project.
     Import,
     Close,
+    /// Save to the document's file (Save As if it has none).
+    Save,
+    /// Save under a new `.mcpaint` file.
+    SaveAs,
     Home,
     ResetCamera,
     ShowChannel(ChannelView),

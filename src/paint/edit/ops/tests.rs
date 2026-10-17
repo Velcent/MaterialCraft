@@ -226,13 +226,34 @@ fn an_effect_dropped_onto_a_layer_or_mask_joins_that_stack_and_ctrl_replaces() {
     assert_eq!(d.texture_sets[0].layer("b").unwrap().mask.as_ref().unwrap().effects.len(), 1);
 }
 
+fn smart_mask(effects: Vec<MaskEffect>) -> DropPayload {
+    DropPayload::SmartMask { effects, asset: None, embed: Vec::new() }
+}
+
+#[test]
+fn a_smart_mask_records_where_it_came_from_and_embeds_itself() {
+    use crate::paint::embedded::EmbeddedAsset;
+    let mut d = doc();
+    let effects = vec![MaskEffect::new(GreyBlend::default(), EffectKind::Fill(1.0))];
+    let reference = "smart-masks/edges.mcfrag";
+    let smart = DropPayload::SmartMask { effects, asset: Some(reference.into()), embed: vec![EmbeddedAsset::new(reference, vec![1, 2, 3])] };
+    let asset = |d: &Document, id: &str| d.texture_sets[0].layer(id).unwrap().mask.as_ref().unwrap().asset.clone();
+    step(&mut d, |tx| drop_onto(tx, &DropTarget::OntoLayer(lr("base")), &smart, false));
+    assert_eq!(asset(&d, "base").as_deref(), Some(reference), "a new mask");
+    assert_eq!(d.assets.iter().map(|a| a.reference.as_str()).collect::<Vec<_>>(), [reference]);
+    // Added on top of a mask with its own effects: the mask is not the smart mask's any more than before.
+    step(&mut d, |tx| add_mask(tx, &lr("b"), MaskStart::ColorSelection));
+    step(&mut d, |tx| drop_onto(tx, &DropTarget::OntoMask(lr("b")), &smart, false));
+    assert_eq!(asset(&d, "b"), None, "appended to a mask with effects");
+    step(&mut d, |tx| drop_onto(tx, &DropTarget::OntoMask(lr("b")), &smart, true));
+    assert_eq!(asset(&d, "b").as_deref(), Some(reference), "replaced");
+    assert_eq!(d.assets.len(), 1, "embedded once");
+}
+
 #[test]
 fn a_smart_mask_makes_a_black_mask_if_needed() {
     let mut d = doc();
-    let smart = DropPayload::SmartMask(vec![
-        MaskEffect::new(GreyBlend::default(), EffectKind::Fill(1.0)),
-        MaskEffect::new(GreyBlend::default(), EffectKind::Fill(0.5)),
-    ]);
+    let smart = smart_mask(vec![MaskEffect::new(GreyBlend::default(), EffectKind::Fill(1.0)), MaskEffect::new(GreyBlend::default(), EffectKind::Fill(0.5))]);
     step(&mut d, |tx| drop_onto(tx, &DropTarget::OntoLayer(lr("base")), &smart, false));
     let m = d.texture_sets[0].layer("base").unwrap().mask.clone().unwrap();
     assert_eq!((m.initial, m.effects.len()), (0.0, 2));
@@ -243,10 +264,7 @@ fn a_smart_mask_makes_a_black_mask_if_needed() {
     let between = DropTarget::Between { set: "s".into(), at: LayerSlot::top(0) };
     assert!(!accepts(&d, &between, &smart));
     assert!(matches!(refused(&mut d, |tx| drop_onto(tx, &between, &smart, false)), EditError::NotAccepted(_)));
-    assert!(matches!(
-        refused(&mut d, |tx| drop_onto(tx, &DropTarget::OntoLayer(lr("a")), &DropPayload::SmartMask(Vec::new()), false)),
-        EditError::NotAccepted(_)
-    ));
+    assert!(matches!(refused(&mut d, |tx| drop_onto(tx, &DropTarget::OntoLayer(lr("a")), &smart_mask(Vec::new()), false)), EditError::NotAccepted(_)));
 }
 
 #[test]
@@ -256,7 +274,7 @@ fn a_smart_mask_gets_fresh_anchor_ids_and_the_sets_resolution() {
     let mut d = doc();
     let mut pixels = TiledImage::new(16, 16, PixelFormat::from_id("graya8").unwrap()).unwrap();
     pixels.fill([1.0; 4]);
-    let smart = DropPayload::SmartMask(vec![
+    let smart = smart_mask(vec![
         MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels::new(pixels))),
         MaskEffect::new(GreyBlend::default(), EffectKind::Anchor(Anchor { id: "pin1".into() })),
         MaskEffect::new(GreyBlend::default(), EffectKind::Reference(Reference { anchor: "pin1".into() })),

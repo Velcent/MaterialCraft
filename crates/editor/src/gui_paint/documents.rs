@@ -1,8 +1,10 @@
-//! Opening, replacing and closing the document of the Paint screen.
+//! Opening, replacing and closing the document of the Paint screen (asking about unsaved changes first goes through
+//! [`super::unsaved`]).
 
 use super::document_state::OpenDocument;
 use super::import_review::{ImportReview, ReviewOutcome};
 use super::loader::{Loaded, Loader};
+use super::unsaved::Then;
 use super::{PaintMode, Pick};
 use eframe::egui;
 use materialcraft::diag::{Area, SinkExt};
@@ -10,8 +12,18 @@ use materialcraft::paint::diag_entries;
 use std::path::PathBuf;
 
 impl PaintMode {
-    /// Shows a file dialog and opens the chosen file. Returns false if the user cancelled.
+    /// Shows a file dialog and opens the chosen file. Returns false if the user cancelled. With unsaved changes it
+    /// first asks whether to save them (on the Paint screen, so it returns true: show that screen).
     pub fn pick(&mut self, pick: Pick) -> bool {
+        if self.is_saving() || self.document.as_ref().is_some_and(|d| d.is_dirty()) {
+            self.guard(Then::Open(pick));
+            return true;
+        }
+        self.pick_file(pick)
+    }
+
+    /// [`Self::pick`] without asking about unsaved changes.
+    pub(super) fn pick_file(&mut self, pick: Pick) -> bool {
         let dialog = match pick {
             Pick::Any => rfd::FileDialog::new()
                 .add_filter("Paint document or Substance Painter project", &["mcpaint", "spp"])

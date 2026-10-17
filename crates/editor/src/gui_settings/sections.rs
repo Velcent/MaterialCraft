@@ -180,3 +180,23 @@ impl Default for ColorPickerSettings {
         ColorPickerSettings { sliders: ColorSliders::Hsv, units: ColorUnits::Natural, tinted: true }
     }
 }
+
+/// What the Paint screen does when a dropped smart material or mask needs baked maps the texture set lacks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MissingMaps {
+    /// Ask each time (Bake now / Not now).
+    #[default]
+    Ask,
+    /// Bake them without asking.
+    Bake,
+    /// Only warn in the log.
+    Skip,
+}
+
+/// Questions the Paint screen asks, and the answers the user told it to remember ("Don't ask again").
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PromptSettings {
+    pub missing_maps: MissingMaps,
+}

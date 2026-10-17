@@ -17,8 +17,8 @@ use eframe::egui;
 use serde::{Deserialize, Serialize};
 
 pub use sections::{
-    ColorPickerSettings, ColorSliders, ColorUnits, InterfaceSettings, LibrarySettings, SavedLayout, SavedSearch, ShortcutSettings, Side, SwatchSettings,
-    ThumbSize, TrayLayout, TraySettings, WorkspaceSettings,
+    ColorPickerSettings, ColorSliders, ColorUnits, InterfaceSettings, LibrarySettings, MissingMaps, PromptSettings, SavedLayout, SavedSearch, ShortcutSettings,
+    Side, SwatchSettings, ThumbSize, TrayLayout, TraySettings, WorkspaceSettings,
 };
 
 /// Everything the editor remembers between runs. Each field is one `[section]` of the file.
@@ -31,6 +31,7 @@ pub struct EditorSettings {
     pub library: LibrarySettings,
     pub swatches: SwatchSettings,
     pub color_picker: ColorPickerSettings,
+    pub prompts: PromptSettings,
 }
 
 impl Settings for EditorSettings {
@@ -130,6 +131,7 @@ mod tests {
         want.library.tray = TraySettings { layout: TrayLayout::Narrow, thumbnails: ThumbSize::List, hide_empty: true };
         want.swatches.colors.push([0.5, 0.25, 0.0, 1.0]);
         want.color_picker = ColorPickerSettings { sliders: ColorSliders::Rgb, units: ColorUnits::Float, tinted: false };
+        want.prompts.missing_maps = MissingMaps::Skip;
         {
             let (mut s, problems) = UserSettings::open(Location::Dir(dir.clone()));
             assert!(problems.is_empty(), "{problems:?}");

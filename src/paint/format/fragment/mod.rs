@@ -73,6 +73,11 @@ pub fn save_path(f: &Fragment, path: &Path) -> Result<(), FormatError> {
     save_atomically(path, |out| save(f, out))
 }
 
+/// [`save_path`] with explicit options (e.g. a thumbnail of the viewport).
+pub fn save_path_with(f: &Fragment, path: &Path, options: &SaveOptions) -> Result<(), FormatError> {
+    save_atomically(path, |out| save_with(f, out, options))
+}
+
 /// Reads a fragment with default limits.
 pub fn load(input: impl Read + Seek) -> Result<Fragment, FormatError> {
     load_with(input, &LoadOptions::default())

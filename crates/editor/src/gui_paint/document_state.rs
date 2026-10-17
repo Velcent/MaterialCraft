@@ -2,8 +2,10 @@
 //! Paint screen. Every change to the document goes through [`OpenDocument::edit`], so it is one step on the
 //! history; undo, redo and jumps go through the history too (HI-01, HI-07).
 
+use super::save_point::SavePoint;
 use materialcraft::history::{CoalesceKey, PaintHistory};
 use materialcraft::paint::edit::{EditError, Transaction};
+use materialcraft::paint::embedded::{EmbedReport, embed_used};
 use materialcraft::paint::{Document, TextureSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -24,6 +26,13 @@ pub struct OpenDocument {
     /// One per open document; a new document comes with a new, empty history.
     history: PaintHistory,
     source: PathBuf,
+    /// The `.mcpaint` file Save writes to: the opened document or the last Save As; `None` for imports and the demo
+    /// (they are saved with Save As).
+    file: Option<PathBuf>,
+    /// The state last saved (or opened); the document is dirty when the history is elsewhere.
+    saved: SavePoint,
+    /// The state a running save writes, which becomes `saved` when it succeeds.
+    saving: Option<SavePoint>,
     /// Importer summary, if the document was imported.
     pub summary: Option<String>,
     pub sets: Vec<SetState>,
@@ -32,7 +41,10 @@ pub struct OpenDocument {
 impl OpenDocument {
     pub fn new(doc: Document, source: PathBuf, summary: Option<String>) -> OpenDocument {
         let sets = doc.texture_sets.iter().map(|_| SetState { visible: true, maps_ready: false, reported: false }).collect();
-        OpenDocument { doc, history: PaintHistory::default(), source, summary, sets }
+        let history = PaintHistory::default();
+        let file = source.extension().is_some_and(|e| e.eq_ignore_ascii_case("mcpaint")).then(|| source.clone());
+        let saved = SavePoint::of(&history);
+        OpenDocument { doc, history, source, file, saved, saving: None, summary, sets }
     }
 
     pub fn doc(&self) -> &Document {
@@ -75,7 +87,9 @@ impl OpenDocument {
         let out = op(&mut tx)?;
         let inverses = tx.commit();
         if !inverses.is_empty() {
+            let at = self.at_save_points();
             self.history.record_all(&self.doc, label, key, inverses);
+            self.recorded(at);
         }
         Ok(out)
     }
@@ -89,9 +103,63 @@ impl OpenDocument {
     /// Records a finished stroke's inverses (in the order its edits were made) as one closed history step.
     pub fn record_stroke(&mut self, label: &str, inverses: Vec<materialcraft::paint::edit::Edit>) {
         if !inverses.is_empty() {
+            let at = self.at_save_points();
             self.history.record_all(&self.doc, label, None, inverses);
+            self.recorded(at);
         }
         self.history.close();
+    }
+
+    /// Whether the history is at the saved state and at the state being saved, before a step is recorded.
+    fn at_save_points(&self) -> (bool, bool) {
+        (self.saved.is_current(&self.history), self.saving.is_some_and(|p| p.is_current(&self.history)))
+    }
+
+    /// After a step was recorded: it names the save points it leads away from.
+    fn recorded(&mut self, (saved, saving): (bool, bool)) {
+        self.saved.note_recorded(saved, &self.history);
+        if let Some(p) = &mut self.saving {
+            p.note_recorded(saving, &self.history);
+        }
+    }
+
+    /// True if the document has changes that are not in its file (the history is not at the saved state).
+    pub fn is_dirty(&self) -> bool {
+        !self.saved.is_current(&self.history)
+    }
+
+    /// The `.mcpaint` file Save writes to; `None` if the document has none yet (an import): use Save As.
+    pub fn file(&self) -> Option<&Path> {
+        self.file.as_deref()
+    }
+
+    /// Before a save: embeds the library assets the layers use and drops embedded ones nothing uses any more
+    /// (`lookup` reads a library reference). Not a history step: embedding changes no pixel, and an undo that
+    /// brings back a reference finds the asset in the library again or embeds it on the next save.
+    pub fn embed_assets(&mut self, lookup: impl FnMut(&str) -> Option<Vec<u8>>) -> EmbedReport {
+        embed_used(&mut self.doc, lookup)
+    }
+
+    /// Starts a save of the current state: ends the open step (a later edit must not join the saved one) and
+    /// returns the document to write (a cheap copy: images share their tiles).
+    pub fn begin_save(&mut self) -> Document {
+        self.history.close();
+        self.saving = Some(SavePoint::of(&self.history));
+        self.doc.clone()
+    }
+
+    /// The save started by [`Self::begin_save`] wrote `path`: that state is the saved one, and `path` the file.
+    pub fn saved_to(&mut self, path: PathBuf) {
+        if let Some(p) = self.saving.take() {
+            self.saved = p;
+        }
+        self.source = path.clone();
+        self.file = Some(path);
+    }
+
+    /// The save started by [`Self::begin_save`] failed: nothing changes.
+    pub fn save_failed(&mut self) {
+        self.saving = None;
     }
 
     /// Ends the open step (the end of a slider drag).
@@ -142,6 +210,11 @@ impl OpenDocument {
     /// File name for titles.
     pub fn name(&self) -> String {
         self.source.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
+    }
+
+    /// The name with a marker while there are unsaved changes, for the window title and the menu bar.
+    pub fn title(&self) -> String {
+        if self.is_dirty() { format!("{} \u{25CF}", self.name()) } else { self.name() }
     }
 
     /// Visibility of each texture set, by index.

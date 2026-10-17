@@ -38,6 +38,8 @@ impl PaintMode {
                 | PanelEvent::Layers(_)
                 | PanelEvent::LayerAction(_)
                 | PanelEvent::Close
+                | PanelEvent::Save
+                | PanelEvent::SaveAs
                 | PanelEvent::SetVisible(..)
         );
         if !(changes_document && self.painting.is_stroking()) {

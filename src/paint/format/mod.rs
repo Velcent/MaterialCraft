@@ -47,7 +47,7 @@ use std::io::{Read, Seek, Write};
 use std::path::Path;
 
 /// Version written by [`save`]: `major.minor`. Readers reject a newer major version.
-pub const FORMAT_VERSION: &str = "0.6";
+pub const FORMAT_VERSION: &str = "0.7";
 
 /// Writes `doc` as a `.mcpaint` archive with default options (including a thumbnail).
 /// Same document, same bytes.
@@ -64,6 +64,32 @@ pub fn save_with(doc: &Document, out: impl Write, options: &SaveOptions) -> Resu
 /// complete, so a failed save never leaves a half-written document behind.
 pub fn save_path(doc: &Document, path: &Path) -> Result<(), FormatError> {
     writer::save_atomically(path, |out| save(doc, out))
+}
+
+/// [`save_path`] that tells `written` the number of bytes written so far after each write (a progress display for
+/// large documents; the total is not known in advance).
+pub fn save_path_observed(doc: &Document, path: &Path, written: &mut dyn FnMut(u64)) -> Result<(), FormatError> {
+    writer::save_atomically(path, |out| save(doc, Counting { out, bytes: 0, written }))
+}
+
+/// A writer that reports how much went through it.
+struct Counting<'a, W: Write> {
+    out: W,
+    bytes: u64,
+    written: &'a mut dyn FnMut(u64),
+}
+
+impl<W: Write> Write for Counting<'_, W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.out.write(buf)?;
+        self.bytes += n as u64;
+        (self.written)(self.bytes);
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.out.flush()
+    }
 }
 
 /// Reads a `.mcpaint` archive with default limits.

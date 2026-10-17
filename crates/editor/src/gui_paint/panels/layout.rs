@@ -43,7 +43,7 @@ pub struct Screen<'a> {
 /// Draws the screen and returns what the user asked for.
 pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
     let mut events = Vec::new();
-    let title = s.document.map(|d| d.name()).unwrap_or_default();
+    let title = s.document.map(|d| d.title()).unwrap_or_default();
     let has_document = s.document.is_some();
     let paintable = s.document.is_some_and(|d| s.layers.paintable(d.doc()));
     menu_bar::show(ui, &title, has_document, s.document.map(|d| d.history()), s.shell, &mut events);

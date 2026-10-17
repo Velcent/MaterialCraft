@@ -1,4 +1,5 @@
-//! Masks: `{"kind": "stack", "enabled", "initial", "effects"}` since 0.3, and [`DomainCodec`] for their
+//! Masks: `{"kind": "stack", "enabled", "initial", "effects"}` since 0.3 (plus the optional provenance `"asset"`
+//! since 0.7), and [`DomainCodec`] for their
 //! effects: `"blend"` is one `{"mode", "opacity"}`, paint pixels are one `"image"` (written `linear`) and
 //! `"strokes"`, fill values one number `"value"`.
 //!
@@ -64,6 +65,9 @@ impl DomainCodec for Grey {
 pub fn write(m: &Mask, set: &SetScope, layer: &str, here: &str, ctx: &WriteCtx) -> Value {
     let effects = effect::write_all(&m.effects, set, layer, here, ctx);
     let mut v = Value::object().with("kind", "stack").with("enabled", m.enabled).with("initial", num(m.initial)).with("effects", effects);
+    if let Some(a) = &m.asset {
+        v.insert("asset", a.as_str());
+    }
     ctx.extras.inject(here, &mut v);
     v
 }
@@ -75,7 +79,8 @@ pub fn read(v: &Value, at: String, set: &SetScope, layer: &str, here: &str, ctx:
         "stack" => {
             let list = o.array("effects")?;
             let effects = effect::read_all(list, &o.path("effects"), set, layer, here, ctx)?;
-            Mask { enabled: o.bool_or("enabled", true)?, initial: o.f32_or("initial", 1.0)?, effects }
+            let asset = o.opt_str("asset")?.map(str::to_string);
+            Mask { enabled: o.bool_or("enabled", true)?, initial: o.f32_or("initial", 1.0)?, effects, asset }
         }
         "image" => {
             // 0.2: the image becomes paint effect 0; its unknown fields move with it.
