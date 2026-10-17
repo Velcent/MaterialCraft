@@ -21,6 +21,9 @@ mod logo_data {
 mod gui_input;
 #[path = "gui_paint/mod.rs"]
 mod gui_paint;
+mod gui_settings;
+mod gui_widgets;
+mod gui_workspace;
 mod gui_theme;
 mod logging;
 use gui_theme::panel_header;
