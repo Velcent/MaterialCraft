@@ -47,6 +47,7 @@ mod tray_host;
 mod unlit;
 mod unsaved;
 mod view_pick;
+mod view_thumbnail;
 mod viewport;
 mod window;
 
@@ -134,6 +135,8 @@ pub struct PaintMode {
     stroke_test: Option<stroke_test::StrokeTest>,
     /// The running save and the "Save changes?" question.
     saving: unsaved::Saving,
+    /// Naming a new smart material or mask; asking whether to bake the maps a dropped one needs.
+    smart: smart_assets::SmartAssets,
 }
 
 impl PaintMode {
@@ -170,6 +173,7 @@ impl PaintMode {
             painting: tools::Painting::default(),
             stroke_test: launch.stroke_test.then_some(stroke_test::StrokeTest::Waiting),
             saving: unsaved::Saving::default(),
+            smart: smart_assets::SmartAssets::default(),
         };
         if launch.stroke_test && launch.stroke_helpers {
             pm.painting.brush.helpers = stroke_test::helpers();
@@ -219,6 +223,7 @@ impl PaintMode {
         }
         self.color.frame(ctx, &mut self.shell.settings);
         self.eyedrop(ctx);
+        self.poll_smart_assets(ctx);
         self.poll_unsaved(ctx);
         let name = self.document.as_ref().map(|d| d.title());
         self.title.update(ctx, name.as_deref());
