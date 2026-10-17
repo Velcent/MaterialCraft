@@ -13,6 +13,7 @@ pub mod gpu3d;
 pub mod graph;
 pub mod grunge;
 pub mod half;
+pub mod history;
 pub mod jpeg;
 pub mod json;
 pub mod mesh;
