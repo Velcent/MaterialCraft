@@ -193,6 +193,13 @@ impl SurfaceMap {
     pub fn islands(&self) -> Vec<Option<u32>> {
         self.texels.iter().map(|t| if t.tri == NONE { None } else { self.triangles.get(t.tri as usize).map(|tri| tri.island) }).collect()
     }
+
+    /// The UV island of texel `i` (row-major), `None` outside the set and its gutter (or the image): one entry of
+    /// [`SurfaceMap::islands`], for filters that look at a tile's texels only.
+    pub fn island_index(&self, i: usize) -> Option<u32> {
+        let texel = self.texels.get(i)?;
+        if texel.tri == NONE { None } else { self.triangles.get(texel.tri as usize).map(|tri| tri.island) }
+    }
 }
 
 fn face_normal(t: &SurfaceTriangle) -> Vec3 {
