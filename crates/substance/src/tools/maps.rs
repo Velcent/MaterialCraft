@@ -1,7 +1,8 @@
 //! `mcsub maps`: the final maps of every texture set of an imported document, as PNGs for visual checks.
 
 use super::png_out::PngMap;
-use materialcraft::paint::{BakedKind, Channel, Document, MaterialMaps, OutputOptions};
+use materialcraft::generators;
+use materialcraft::paint::{BakedKind, Channel, Document, MaterialMaps, NO_FILL_CONTEXT, OutputOptions};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -24,7 +25,7 @@ pub fn write_maps(doc: &Document, dir: &Path, progress: &mut dyn FnMut(&str)) ->
     let mut written = Vec::new();
     for set in &doc.texture_sets {
         progress(&set.name);
-        let maps = MaterialMaps::build(set, &OutputOptions::default());
+        let maps = MaterialMaps::build_with(set, &OutputOptions::default(), generators::builtin(), &NO_FILL_CONTEXT);
         for (channel, png) in MAP_CHANNELS {
             let baked = match channel {
                 Channel::AmbientOcclusion => set.baked(&BakedKind::AmbientOcclusion).is_some(),

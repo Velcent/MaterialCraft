@@ -2,7 +2,8 @@
 
 use crate::inspect::Corpus;
 use crate::tools::parallel::CorpusPool;
-use crate::translate::{ImportError, import_spp};
+use crate::translate::replacements::ProceduralPlan;
+use crate::translate::{Cancel, ImportError, import_spp_with};
 use materialcraft::paint::format::{FormatError, save_path};
 use materialcraft::paint::{Document, Fidelity};
 use std::fmt;
@@ -88,13 +89,16 @@ impl fmt::Display for ConvertSummary {
     }
 }
 
+/// Imports `input` with the procedural replacements of `plan` and saves it as `output`.
 pub fn convert_one(
     input: &Path,
     output: &Path,
+    plan: &ProceduralPlan,
     progress: &mut dyn FnMut(f32, &str),
 ) -> Result<ConvertSummary, ConvertError> {
     let start = Instant::now();
-    let doc = import_spp(input, &mut |f, m| progress(f * IMPORT_SHARE, m)).map_err(ConvertError::Import)?;
+    let doc = import_spp_with(input, plan, &mut |f, m| progress(f * IMPORT_SHARE, m), Cancel::NEVER)
+        .map_err(ConvertError::Import)?;
     let imported = start.elapsed().as_secs_f64();
     progress(IMPORT_SHARE, "saving");
     save_path(&doc, output).map_err(ConvertError::Save)?;
@@ -115,6 +119,7 @@ pub struct ConvertTable {
 pub fn convert_all(
     root: &Path,
     out_dir: &Path,
+    plan: &ProceduralPlan,
     discard: bool,
     pool: CorpusPool,
     log: &(dyn Fn(&str) + Sync),
@@ -131,7 +136,7 @@ pub fn convert_all(
         |&(i, input)| {
             log(&format!("[{}/{}] {}", i + 1, files.len(), input.display()));
             let output = out_dir.join(format!("{i:03}.mcpaint"));
-            let result = convert_one(input, &output, &mut |_, _| {}).map_err(|e| e.to_string());
+            let result = convert_one(input, &output, plan, &mut |_, _| {}).map_err(|e| e.to_string());
             if discard {
                 let _ = std::fs::remove_file(&output);
             }

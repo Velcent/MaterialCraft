@@ -10,8 +10,10 @@ use crate::translate::channel_table::{channel_for_bit, channel_spec};
 use crate::translate::layers::cache_score::{Score, score};
 use crate::translate::layers::island_texels::IslandTexels;
 use crate::translate::layers::{BlendTable, ImageSource, ImportedStack, LayerImport, SetChannels};
+use crate::translate::replacements::ProceduralPlan;
 use crate::translate::set_layers::defaults_layer;
-use materialcraft::paint::{Channel, Compositor, TextureSet, TiledImage};
+use materialcraft::generators;
+use materialcraft::paint::{BakedMap, Channel, Compositor, TextureSet, TiledImage};
 use std::sync::OnceLock;
 
 pub struct PreparedSet<'a> {
@@ -23,6 +25,10 @@ pub struct PreparedSet<'a> {
     mesh: Option<&'a ProjectMesh>,
     /// The set's texels on the mesh at `resolution`, rasterised on the first score.
     islands: OnceLock<Option<IslandTexels>>,
+    /// Which Substance procedurals are replaced by MaterialCraft's generators (none by default).
+    pub plan: ProceduralPlan,
+    /// The set's baked mesh maps, which the generators read (empty unless loaded).
+    pub baked: Vec<BakedMap>,
 }
 
 impl<'a> PreparedSet<'a> {
@@ -59,11 +65,18 @@ impl<'a> PreparedSet<'a> {
             cache: Vec::new(),
             mesh,
             islands: OnceLock::new(),
+            plan: ProceduralPlan::default(),
+            baked: Vec::new(),
         })
     }
 
     pub fn import(&self, table: &BlendTable, images: &dyn ImageSource) -> ImportedStack {
-        LayerImport { table, images }.import(self.painter, &self.channels, self.resolution)
+        LayerImport {
+            table,
+            images,
+            plan: &self.plan,
+        }
+        .import(self.painter, &self.channels, self.resolution)
     }
 
     /// Reads the cache image of `channel` (once); false if there is none or it does not decode.
@@ -99,7 +112,8 @@ impl<'a> PreparedSet<'a> {
         set.channels = self.channels.specs().to_vec();
         set.layers.push(defaults_layer(&set));
         set.layers.extend(stack.layers.iter().cloned());
-        let (ours, _) = Compositor::new(&set).composite_tex(channel);
+        set.baked = self.baked.clone();
+        let (ours, _) = Compositor::with_effects(&set, generators::builtin()).composite_tex(channel);
         let islands = self.islands.get_or_init(|| {
             let uid = self.painter.material_uid?;
             self.mesh?.islands(uid, self.resolution)

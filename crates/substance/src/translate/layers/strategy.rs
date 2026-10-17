@@ -10,6 +10,10 @@
 //! - **Cache disagrees**: every layer is computable, but the composite differs from Painter's cache beyond
 //!   rounding ([`CacheAgreement`], e.g. a stale cache). Arranged like "Painter result on top", so an import
 //!   never looks worse than the flattened one.
+//! - **Replacements**: every channel is exact apart from Substance procedurals the user chose to replace with
+//!   MaterialCraft's generators. Arranged like the real stack (the layers are the result, editable; Painter's
+//!   flattened result is the hidden reference), but not compared with the cache: replacements are measured
+//!   approximations.
 //! - **Best effort**: not computable and no texture cache to fall back on; the layers are all there is.
 //!
 //! Layers Painter shows whose mask is not computable would cover the whole set without it: they are hidden,
@@ -29,6 +33,7 @@ pub const REFERENCE_NAME: &str = "Painter result (reference)";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StackStrategy {
     RealStack,
+    Replacements,
     PainterResultOnTop,
     CacheDisagrees,
     BestEffort,
@@ -37,6 +42,9 @@ pub enum StackStrategy {
 impl StackStrategy {
     /// `agreement` is the measurement of a fully computable stack against the cache (empty when not measured).
     pub fn choose(verdict: &StackVerdict, has_painter_result: bool, agreement: &CacheAgreement) -> StackStrategy {
+        if !verdict.all_exact() && verdict.all_exact_or_replaced() {
+            return StackStrategy::Replacements;
+        }
         match (verdict.all_exact(), has_painter_result) {
             (true, true) if !agreement.agrees() => StackStrategy::CacheDisagrees,
             (true, _) => StackStrategy::RealStack,
@@ -54,6 +62,9 @@ impl StackStrategy {
         match self {
             StackStrategy::RealStack => {
                 "layers reproduce Painter exactly and are the result; Painter's flattened result kept hidden as a reference"
+            }
+            StackStrategy::Replacements => {
+                "layers reproduce Painter with MaterialCraft's replacements for Substance procedurals and are the result; Painter's flattened result kept hidden as a reference"
             }
             StackStrategy::PainterResultOnTop => {
                 "not every layer is computable: Painter's flattened result is shown on top of the imported layers"
@@ -99,12 +110,14 @@ impl StackStrategy {
         let base = provides_base(&imported, channels);
         let mut out = Vec::new();
         match self {
-            StackStrategy::RealStack | StackStrategy::BestEffort => {
+            StackStrategy::RealStack | StackStrategy::Replacements | StackStrategy::BestEffort => {
                 if !base {
                     out.push(defaults);
                 }
                 out.extend(imported);
-                if let Some(mut result) = painter_result.filter(|_| self == StackStrategy::RealStack) {
+                if let Some(mut result) =
+                    painter_result.filter(|_| matches!(self, StackStrategy::RealStack | StackStrategy::Replacements))
+                {
                     result.name = REFERENCE_NAME.into();
                     result.visible = false;
                     out.push(result);

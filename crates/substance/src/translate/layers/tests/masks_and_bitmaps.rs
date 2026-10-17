@@ -77,6 +77,33 @@ fn generator_masks_are_not_computable() {
     assert_eq!(status.reasons(), ["mask generator \"mg_dirt\""]);
 }
 
+#[test]
+fn generator_masks_the_plan_replaces_become_ours() {
+    use crate::translate::layers::{BlendTable, LayerImport, NoImages, StackStrategy, cache_agreement::CacheAgreement};
+    use crate::translate::replacements::{Choice, ProceduralPlan};
+    let generator = mask_fill(procedural(0, "mg_dirt"), 2, 1.0);
+    let layers = base_and(top(mask(MaskInitial::Black, vec![generator])));
+    let table = BlendTable::painter();
+    let plan = ProceduralPlan::all(Choice::Replace);
+    let stack = LayerImport {
+        table: &table,
+        images: &NoImages,
+        plan: &plan,
+    }
+    .import(&set(layers), &channels(), SIZE);
+    let m = stack.layers[1].mask.as_ref().unwrap();
+    let EffectKind::Generator(p) = &m.effects[0].kind else {
+        panic!("{m:?}")
+    };
+    assert_eq!(p.id, "dirt");
+    assert_eq!(p.original.as_ref().map(|o| o.id.as_str()), Some("substance:mg_dirt"));
+    let status = stack.verdict.channel(Channel::Roughness);
+    assert!(status.is_exact_or_replaced() && !status.is_exact(), "{status:?}");
+    let strategy = StackStrategy::choose(&stack.verdict, true, &CacheAgreement::default());
+    assert_eq!(strategy, StackStrategy::Replacements);
+    assert!(!strategy.shows_painter_result());
+}
+
 /// One 8×8 RGBA8 image whose left half is white.
 struct HalfWhite;
 

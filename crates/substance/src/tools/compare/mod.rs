@@ -17,7 +17,8 @@ pub use uv_mask::UvMask;
 
 use crate::tools::maps::file_safe;
 use export_image::{flipped, load_export, resampled};
-use materialcraft::paint::{Document, MaterialMaps, OutputOptions, TextureSet};
+use materialcraft::generators;
+use materialcraft::paint::{Document, MaterialMaps, NO_FILL_CONTEXT, OutputOptions, TextureSet};
 use materialcraft::tex::Tex;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -81,7 +82,7 @@ fn compare_set(
     table: &mut CompareTable,
 ) -> std::io::Result<()> {
     let (w, h) = (set.resolution.0 as usize, set.resolution.1 as usize);
-    let maps = MaterialMaps::build(set, output);
+    let maps = MaterialMaps::build_with(set, output, generators::builtin(), &NO_FILL_CONTEXT);
     let mut mask = UvMask::rasterise(&doc.mesh, set.material_slot, set.uv_set, w, h);
     mask.shrink(BORDER);
     let mut errors = Vec::new();

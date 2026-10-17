@@ -105,7 +105,12 @@ pub fn set(layers: Vec<PainterLayer>) -> PainterTextureSet {
 
 pub fn import_with(layers: Vec<PainterLayer>, images: &dyn ImageSource) -> ImportedStack {
     let table = BlendTable::painter();
-    LayerImport { table: &table, images }.import(&set(layers), &channels(), SIZE)
+    LayerImport {
+        table: &table,
+        images,
+        plan: &crate::translate::replacements::ProceduralPlan::default(),
+    }
+    .import(&set(layers), &channels(), SIZE)
 }
 
 pub fn import(layers: Vec<PainterLayer>) -> ImportedStack {

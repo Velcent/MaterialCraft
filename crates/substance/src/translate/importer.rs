@@ -10,6 +10,7 @@ use super::foreign::ForeignFiles;
 use super::layers::strokes::{StrokeCount, report_unimported_strokes};
 use super::layers::{BlendTable, LayerImport, ProjectImages};
 use super::normal_conventions::NormalConventions;
+use super::replacements::ProceduralPlan;
 use super::report::Reporter;
 use super::set_builder::SetBuilder;
 use super::set_layers::SetLayers;
@@ -40,16 +41,36 @@ pub fn import_spp_cancellable(
     Importer::open(path)?.run(progress, cancel)
 }
 
+/// [`import_spp_cancellable`] with the user's choice of procedural replacements (see [`ProceduralPlan`]).
+pub fn import_spp_with(
+    path: &Path,
+    plan: &ProceduralPlan,
+    progress: &mut dyn FnMut(f32, &str),
+    cancel: Cancel<'_>,
+) -> Result<Document, ImportError> {
+    cancel.check()?;
+    Importer::open(path)?.with_plan(plan.clone()).run(progress, cancel)
+}
+
 /// One import in progress.
 pub struct Importer {
     project: SppProject,
+    /// Which Substance procedurals become MaterialCraft generators (none by default).
+    plan: ProceduralPlan,
 }
 
 impl Importer {
     pub fn open(path: &Path) -> Result<Importer, ImportError> {
         Ok(Importer {
             project: SppProject::open(path)?,
+            plan: ProceduralPlan::default(),
         })
+    }
+
+    /// Builder: the procedural replacements to make.
+    pub fn with_plan(mut self, plan: ProceduralPlan) -> Importer {
+        self.plan = plan;
+        self
     }
 
     /// Builds the document; `cancel` is asked between stages, per texture set and per image.
@@ -81,6 +102,7 @@ impl Importer {
         let import = LayerImport {
             table: &table,
             images: &images,
+            plan: &self.plan,
         };
         let layers = SetLayers {
             import: &import,

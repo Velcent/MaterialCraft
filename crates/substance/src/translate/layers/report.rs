@@ -95,6 +95,7 @@ pub fn report_hidden_masks(reporter: &mut Reporter, set: &str, failures: &[MaskF
 fn state(s: &Computability) -> &'static str {
     match s {
         Computability::Exact => "exact",
+        Computability::Replaced(_) => "replaced",
         Computability::Approximated(_) => "approximated",
         Computability::NotComputable(_) => "not computable",
     }

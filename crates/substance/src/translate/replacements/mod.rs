@@ -1,0 +1,78 @@
+//! The replacement table: Substance procedurals MaterialCraft can stand in for with its own generators
+//! ([`materialcraft::generators`]), one [`Replacement`] per entry, with the translation of Painter's parameter
+//! values into ours. This is the only place that knows Painter's procedural and parameter names.
+//!
+//! A replaced effect becomes our generator with the Painter procedural kept as its
+//! [`Procedural::original`], so a later, better entry here can convert the document again
+//! ([`reconvert`]). Which procedurals get replaced is the user's [`ProceduralPlan`].
+//!
+//! Our generators are written from scratch from the visible behaviour of these procedurals (parameter names
+//! and values, what they do on the user's projects) and calibrated only by black-box measurement against
+//! Painter's saved results (`mcparity run generator…`).
+
+mod params;
+pub mod plan;
+mod table;
+
+pub use plan::{Choice, ProceduralPlan};
+pub use table::TABLE;
+
+use super::layers::effect_data::SUBSTANCE_PREFIX;
+use materialcraft::paint::effect::Procedural;
+use params::Painter;
+
+/// One Substance procedural (by graph name) and the generator of ours that replaces it.
+#[derive(Debug)]
+pub struct Replacement {
+    /// Painter's graph names this entry covers (the same graph in different packages or versions).
+    pub painter: &'static [&'static str],
+    /// What the import review shows.
+    pub label: &'static str,
+    /// Our generator id ([`materialcraft::generators`]).
+    pub generator: &'static str,
+    /// What the replacement leaves out or approximates, for the review.
+    pub note: &'static str,
+    translate: fn(&Painter) -> Vec<(String, String)>,
+}
+
+impl Replacement {
+    /// Our generator for `original` (an imported `substance:<graph>` procedural), keeping it as the original.
+    pub fn convert(&self, original: &Procedural) -> Procedural {
+        let painter = Painter::new(&original.params);
+        Procedural::new(self.generator)
+            .with_params((self.translate)(&painter))
+            .replacing(original.clone())
+    }
+}
+
+/// The entry for Painter graph `name`, if MaterialCraft has a replacement.
+pub fn find(name: &str) -> Option<&'static Replacement> {
+    TABLE.iter().find(|r| r.painter.contains(&name))
+}
+
+/// The Painter graph name of an imported procedural id (`substance:mg_dirt` → `mg_dirt`).
+pub fn painter_name(id: &str) -> Option<&str> {
+    id.strip_prefix(SUBSTANCE_PREFIX)
+}
+
+/// The replacement of an imported procedural under `plan`, or `None` to keep it.
+pub fn replace(p: &Procedural, plan: &ProceduralPlan) -> Option<(&'static Replacement, Procedural)> {
+    let name = painter_name(&p.id)?;
+    let r = find(name).filter(|_| plan.choice(name) == Choice::Replace)?;
+    Some((r, r.convert(p)))
+}
+
+/// Converts a generator again from its kept original with today's table: a replaced procedural gets the
+/// current translation, a kept one is replaced if `plan` asks for it. Returns `None` when nothing changes.
+pub fn reconvert(p: &Procedural, plan: &ProceduralPlan) -> Option<Procedural> {
+    let original = p.original.as_deref().unwrap_or(p);
+    let name = painter_name(&original.id)?;
+    let next = match find(name) {
+        Some(r) if plan.choice(name) == Choice::Replace => r.convert(original),
+        _ => original.clone(),
+    };
+    (next != *p).then_some(next)
+}
+
+#[cfg(test)]
+mod tests;

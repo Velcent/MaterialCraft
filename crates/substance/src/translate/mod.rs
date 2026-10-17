@@ -1,6 +1,7 @@
 //! Stage 4 of the import pipeline: an opened `.spp` → [`materialcraft::paint::Document`] with an import report.
 //! The only part of the crate that knows both Painter's names and ours; the mapping tables live in
-//! [`channel_table`], [`source_format`], [`normal_conventions`] and [`bake_settings`].
+//! [`channel_table`], [`source_format`], [`normal_conventions`], [`bake_settings`] and [`replacements`]
+//! (Substance procedurals → MaterialCraft's generators).
 //!
 //! Each texture set gets Painter's layer stack ([`layers`], M5) and the flattened channels from the texture
 //! cache (M3) as one paint layer, either on top (when not every layer is computable) or as a hidden reference,
@@ -17,6 +18,7 @@ mod importer;
 pub mod layers;
 pub mod normal_conventions;
 mod pixel_convert;
+pub mod replacements;
 mod report;
 mod resources;
 mod set_builder;
@@ -28,7 +30,7 @@ pub use baked_maps::{BakedImage, BakedMaps, BakedSource};
 pub use cancel::Cancel;
 pub use error::{ImportError, PartError};
 pub use foreign::FOREIGN_ROOT;
-pub use importer::{Importer, import_spp, import_spp_cancellable};
+pub use importer::{Importer, import_spp, import_spp_cancellable, import_spp_with};
 pub use layers::{PAINTER_RESULT_NAME, REFERENCE_NAME};
 pub use set_layers::{DEFAULTS_LAYER_ID, DEFAULTS_LAYER_NAME, PAINTER_RESULT_ID};
 pub use texture_sets::{SetBinding, SetSource};

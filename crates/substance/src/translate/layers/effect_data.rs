@@ -4,8 +4,8 @@
 //! unknown effects, which load as not computable).
 
 use crate::model::{
-    ColorSelectionEffect, EffectHeader, Levels as PainterLevels, Procedural as PainterProcedural, RawEntry,
-    ReferenceSource, TweakValue,
+    ColorSelectionEffect, EffectHeader, Levels as PainterLevels, PainterSource, Procedural as PainterProcedural,
+    RawEntry, ReferenceSource, TweakValue,
 };
 use materialcraft::json::Value;
 use materialcraft::paint::BakedKind;
@@ -16,16 +16,38 @@ use std::collections::BTreeSet;
 /// a replacement table may map them to ours later).
 pub const SUBSTANCE_PREFIX: &str = "substance:";
 
-/// A generator or filter id plus parameters for a Painter procedural; `?` when the effect names none.
+/// Prefix of the parameters that record what feeds an image input (`input:texture` = `ratio_dirt_1`).
+pub const INPUT_PREFIX: &str = "input:";
+
+/// A generator or filter id plus parameters for a Painter procedural; `?` when the effect names none. The
+/// parameters are its tweaks, then one `input:<identifier>` per fed image input naming what feeds it (a
+/// procedural's graph name, `anchor`, `bitmap`, `uniform`), so replacements can follow the wiring.
 pub fn procedural(p: Option<&PainterProcedural>) -> Procedural {
     let Some(p) = p else {
         return Procedural::new(format!("{SUBSTANCE_PREFIX}?"));
     };
-    let params = p
+    let mut params: Vec<(String, String)> = p
         .tweaks
         .iter()
         .filter_map(|t| tweak_text(&t.value).map(|v| (t.identifier.clone(), v)))
         .collect();
+    for input in &p.inputs {
+        let Some(source) = input.source.as_deref() else {
+            continue;
+        };
+        let feeds = match source {
+            PainterSource::Procedural(inner) => {
+                inner.procedural.as_ref().map_or("procedural", |i| i.name()).to_string()
+            }
+            PainterSource::Reference(_) => "anchor".into(),
+            PainterSource::Bitmap(_) => "bitmap".into(),
+            PainterSource::Uniform(_) => "uniform".into(),
+            PainterSource::Other(raw) => raw.class.clone(),
+        };
+        for (identifier, _) in &input.identifiers {
+            params.push((format!("{INPUT_PREFIX}{identifier}"), feeds.clone()));
+        }
+    }
     Procedural::new(format!("{SUBSTANCE_PREFIX}{}", p.name())).with_params(params)
 }
 

@@ -118,6 +118,11 @@ impl StackVerdict {
     pub fn all_exact(&self) -> bool {
         self.channels().iter().all(|(_, s)| s.is_exact())
     }
+
+    /// True when every channel is exact apart from chosen replacements.
+    pub fn all_exact_or_replaced(&self) -> bool {
+        self.channels().iter().all(|(_, s)| s.is_exact_or_replaced())
+    }
 }
 
 #[cfg(test)]

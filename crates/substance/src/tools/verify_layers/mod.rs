@@ -15,18 +15,22 @@ pub use table::Verification;
 use crate::inspect::Corpus;
 use crate::project::SppProject;
 use crate::tools::parallel::CorpusPool;
+use crate::translate::BakedMaps;
 use crate::translate::cache_channels::CacheChannels;
 use crate::translate::layers::cache_agreement::{CacheAgreement, disagrees};
 use crate::translate::layers::{BlendTable, Computability, ProjectImages, StackStrategy};
+use crate::translate::replacements::ProceduralPlan;
 use materialcraft::paint::Channel;
 use prepared::PreparedSet;
 use project_mesh::ProjectMesh;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct VerifyOptions {
     /// Also fit guessed blend values.
     pub fit: bool,
+    /// Which Substance procedurals are replaced by MaterialCraft's generators before comparing.
+    pub plan: ProceduralPlan,
 }
 
 /// One channel of one set.
@@ -78,7 +82,7 @@ pub fn verify_path(
         |path| CorpusPool::estimate(path),
         |path| {
             progress(path);
-            verify_project(path, &label_of(path), options)
+            verify_project(path, &label_of(path), &options)
         },
     );
     let mut out = Verification::default();
@@ -94,7 +98,7 @@ pub fn verify_path(
     out
 }
 
-fn verify_project(path: &Path, label: &str, options: VerifyOptions) -> Result<ProjectVerification, String> {
+fn verify_project(path: &Path, label: &str, options: &VerifyOptions) -> Result<ProjectVerification, String> {
     let mut out = ProjectVerification::default();
     let project = SppProject::open(path).map_err(|e| e.to_string())?;
     let (document, _) = project.model().map_err(|e| e.to_string())?;
@@ -102,10 +106,25 @@ fn verify_project(path: &Path, label: &str, options: VerifyOptions) -> Result<Pr
     let images = ProjectImages::new(&project);
     let mesh = ProjectMesh::read(&project);
     let table = BlendTable::painter();
+    let baked = BakedMaps::new(&project);
+    let records = project.document_materials().unwrap_or_default();
     for painter in &document.texture_sets {
         let Some(mut set) = PreparedSet::new(painter, &cache, mesh.as_ref()) else {
             continue;
         };
+        set.plan = options.plan.clone();
+        if options.plan != ProceduralPlan::default() {
+            let refs = records
+                .iter()
+                .find(|r| r.name == painter.name)
+                .map(|r| r.baked.clone())
+                .unwrap_or_default();
+            set.baked = baked
+                .sources(&painter.name, &refs)
+                .iter()
+                .filter_map(|s| baked.read(s).ok().map(|i| i.map))
+                .collect();
+        }
         let stack = set.import(&table, &images);
         let mut channels = Vec::new();
         for (channel, status) in stack.verdict.channels() {

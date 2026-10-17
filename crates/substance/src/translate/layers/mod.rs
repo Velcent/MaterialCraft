@@ -45,12 +45,15 @@ pub use strategy::{PAINTER_RESULT_NAME, REFERENCE_NAME, StackParts, StackStrateg
 pub use verdict::StackVerdict;
 
 use crate::model::PainterTextureSet;
+use crate::translate::replacements::ProceduralPlan;
 use stack_builder::StackBuilder;
 
-/// Imports layer stacks with one blend table and one image source.
+/// Imports layer stacks with one blend table, one image source and the user's choice of procedural
+/// replacements.
 pub struct LayerImport<'a> {
     pub table: &'a BlendTable,
     pub images: &'a dyn ImageSource,
+    pub plan: &'a ProceduralPlan,
 }
 
 impl LayerImport<'_> {
@@ -60,6 +63,7 @@ impl LayerImport<'_> {
             channels,
             table: self.table,
             images: self.images,
+            plan: self.plan,
             resolution,
         }
         .build(&set.layers)

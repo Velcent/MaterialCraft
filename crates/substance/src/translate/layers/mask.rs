@@ -4,8 +4,9 @@
 //! Every Painter mask effect becomes one of ours: an effect group becomes a paint effect (its brush work)
 //! followed by its other entries, uniform fills grey fills, bitmap fills painted images, procedural fills
 //! generators, reference fills references; filters, levels, colour selection, polygon fill and anchors keep
-//! their kind. Only uniform and bitmap fills (and empty paint) are computable; the first effect that is not
-//! gives the reason (generators, filters, strokes, levels, references …).
+//! their kind. Only uniform and bitmap fills (and empty paint) are computable, plus the procedural fills the
+//! plan replaces with MaterialCraft's generators ([`crate::translate::replacements`], status "replaced"); the
+//! first effect that is not gives the reason (generators, filters, strokes, levels, references …).
 
 use super::blend_table::BlendTable;
 use super::blending::ResolvedBlend;
@@ -15,6 +16,7 @@ use super::images::{ImageSource, grey_values, resample};
 use super::projection_map::map_projection;
 use super::strokes;
 use crate::model::{EffectHeader, MaskInitial, PainterEffect, PainterMask, PainterSource, PolygonFillEffect};
+use crate::translate::replacements::{self, ProceduralPlan};
 use materialcraft::json::Value;
 use materialcraft::paint::effect::{Grey, PolygonFill, Selection};
 use materialcraft::paint::stroke::StrokeData;
@@ -36,6 +38,8 @@ pub struct MaskOutcome {
 pub struct MaskEvaluator<'a> {
     pub table: &'a BlendTable,
     pub images: &'a dyn ImageSource,
+    /// Which Substance procedurals become MaterialCraft generators.
+    pub plan: &'a ProceduralPlan,
     pub resolution: (u32, u32),
 }
 
@@ -175,8 +179,19 @@ impl Walk<'_, '_> {
                     },
                     PainterSource::Procedural(p) => {
                         let name = p.procedural.as_ref().map_or("?", |p| p.name());
-                        self.stop(counts, format!("mask generator \"{name}\""));
-                        EffectKind::Generator(data::procedural(p.procedural.as_ref()))
+                        let imported = data::procedural(p.procedural.as_ref());
+                        match replacements::replace(&imported, self.evaluator.plan) {
+                            Some((r, ours)) => {
+                                let why = format!("mask generator \"{name}\" replaced by {}", r.generator);
+                                self.note(counts, Computability::replaced(why));
+                                self.note(counts, resolved.status());
+                                EffectKind::Generator(ours)
+                            }
+                            None => {
+                                self.stop(counts, format!("mask generator \"{name}\""));
+                                EffectKind::Generator(imported)
+                            }
+                        }
                     }
                     PainterSource::Reference(r) => {
                         self.stop(counts, "mask reads an anchor".into());

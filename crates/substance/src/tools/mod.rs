@@ -2,6 +2,8 @@
 //! and text views of Painter's model.
 //! `mcsub` only parses arguments and calls into here.
 
+pub mod accuracy;
+pub mod analyze;
 pub mod compare;
 pub mod convert;
 pub mod maps;

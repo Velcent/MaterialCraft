@@ -16,6 +16,7 @@ use super::layer_content::is_flat_normal;
 use super::mask::MaskEvaluator;
 use super::verdict::{LayerNote, MaskFailure, StackVerdict};
 use crate::model::{LayerKind as PainterKind, PainterLayer};
+use crate::translate::replacements::ProceduralPlan;
 use materialcraft::paint::{Channel, Layer, LayerKind};
 use std::collections::BTreeSet;
 
@@ -48,6 +49,7 @@ pub struct StackBuilder<'a> {
     pub channels: &'a SetChannels,
     pub table: &'a BlendTable,
     pub images: &'a dyn ImageSource,
+    pub plan: &'a ProceduralPlan,
     pub resolution: (u32, u32),
 }
 
@@ -77,6 +79,7 @@ impl StackBuilder<'_> {
         let masks = MaskEvaluator {
             table: self.table,
             images: self.images,
+            plan: self.plan,
             resolution: self.resolution,
         };
         let mask = masks.evaluate(l.mask.as_ref(), &mut ids.anchors);

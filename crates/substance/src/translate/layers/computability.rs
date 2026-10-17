@@ -9,6 +9,9 @@ pub enum Computability {
     /// Reproduced as Painter computes it.
     #[default]
     Exact,
+    /// Exact apart from Substance procedurals the user chose to replace with MaterialCraft's own generators
+    /// (computable and editable, measured but not exact).
+    Replaced(Vec<String>),
     /// Reproduced with a stand-in (a guessed blend mode, a resampled bitmap, …).
     Approximated(Vec<String>),
     /// Needs something we cannot evaluate yet (procedurals, strokes, …).
@@ -24,6 +27,15 @@ impl Computability {
         Computability::NotComputable(vec![reason.into()])
     }
 
+    pub fn replaced(reason: impl Into<String>) -> Computability {
+        Computability::Replaced(vec![reason.into()])
+    }
+
+    /// Exact, or exact apart from chosen replacements.
+    pub fn is_exact_or_replaced(&self) -> bool {
+        matches!(self, Computability::Exact | Computability::Replaced(_))
+    }
+
     pub fn is_exact(&self) -> bool {
         matches!(self, Computability::Exact)
     }
@@ -36,15 +48,16 @@ impl Computability {
     pub fn reasons(&self) -> &[String] {
         match self {
             Computability::Exact => &[],
-            Computability::Approximated(r) | Computability::NotComputable(r) => r,
+            Computability::Replaced(r) | Computability::Approximated(r) | Computability::NotComputable(r) => r,
         }
     }
 
     fn rank(&self) -> u8 {
         match self {
             Computability::Exact => 0,
-            Computability::Approximated(_) => 1,
-            Computability::NotComputable(_) => 2,
+            Computability::Replaced(_) => 1,
+            Computability::Approximated(_) => 2,
+            Computability::NotComputable(_) => 3,
         }
     }
 
@@ -52,13 +65,14 @@ impl Computability {
     pub fn and(&mut self, other: &Computability) {
         if other.rank() > self.rank() {
             *self = match other {
+                Computability::Replaced(_) => Computability::Replaced(Vec::new()),
                 Computability::Approximated(_) => Computability::Approximated(Vec::new()),
                 Computability::NotComputable(_) => Computability::NotComputable(Vec::new()),
                 Computability::Exact => Computability::Exact,
             };
         }
         if other.rank() == self.rank()
-            && let Computability::Approximated(r) | Computability::NotComputable(r) = self
+            && let Computability::Replaced(r) | Computability::Approximated(r) | Computability::NotComputable(r) = self
         {
             for reason in other.reasons() {
                 if !r.contains(reason) && r.len() < MAX_REASONS {
@@ -87,5 +101,9 @@ mod tests {
         let mut e = Computability::Exact;
         e.and(&Computability::Exact);
         assert!(e.is_exact());
+        e.and(&Computability::replaced("dirt"));
+        assert!(e.is_exact_or_replaced() && e.is_computable() && !e.is_exact());
+        e.and(&Computability::approximated("guess"));
+        assert!(!e.is_exact_or_replaced() && e.reasons() == ["guess"]);
     }
 }

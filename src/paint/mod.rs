@@ -56,6 +56,6 @@ pub use mask::Mask;
 pub use output::{MaterialMaps, OutputOptions};
 pub use pixel::{PixelFormat, PixelLayout, SampleType};
 pub use report::{Fidelity, ImportReport, ReportEntry};
-pub use stack::{ChainedSources, CompositeWarning, Compositor, FillContext, FillRequest, FillSources, NoFillSources};
+pub use stack::{ChainedSources, CompositeWarning, Compositor, FillContext, FillRequest, FillSources, NO_FILL_CONTEXT, NoFillSources};
 pub use texture_set::{BakedKind, BakedMap, TextureSet};
 pub use validate::DocError;

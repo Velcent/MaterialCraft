@@ -21,6 +21,7 @@ pub struct Verification {
 fn strategy_name(s: StackStrategy) -> &'static str {
     match s {
         StackStrategy::RealStack => "real stack",
+        StackStrategy::Replacements => "real stack with replacements",
         StackStrategy::PainterResultOnTop => "Painter result on top",
         StackStrategy::CacheDisagrees => "Painter result on top (cache disagrees)",
         StackStrategy::BestEffort => "best effort",
@@ -30,6 +31,7 @@ fn strategy_name(s: StackStrategy) -> &'static str {
 fn status_name(s: &Computability) -> &'static str {
     match s {
         Computability::Exact => "exact",
+        Computability::Replaced(_) => "replaced",
         Computability::Approximated(_) => "approx",
         Computability::NotComputable(_) => "not computable",
     }
