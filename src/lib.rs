@@ -36,6 +36,7 @@ pub mod noise;
 pub mod ops;
 pub mod paint;
 pub mod png;
+pub mod polygon_pick;
 pub mod proc_textures;
 pub mod projection;
 pub mod render3d;
