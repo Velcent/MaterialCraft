@@ -1,4 +1,4 @@
-//! [`Params`]: a generator's parameter values (name → text, as stored in documents) read as numbers, with
+//! [`Params`]: a procedural's parameter values (name → text, as stored in documents) read as numbers, with
 //! defaults for missing or unreadable values.
 
 pub struct Params<'a> {

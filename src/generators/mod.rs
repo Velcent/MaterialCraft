@@ -23,7 +23,7 @@ mod height_combination;
 mod maps;
 mod mask_builder;
 mod mask_editor;
-mod params;
+use crate::paint::effect::params;
 mod parts;
 mod pyramid;
 mod texel;
