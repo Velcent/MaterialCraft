@@ -43,10 +43,26 @@ impl Field {
 /// How a term's value is compared.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Mode {
-    /// The field contains the value (plain words).
+    /// The field contains the value (plain words, `*word*`).
     Contains,
     /// The field equals the value (`!word`).
     Exact,
+    /// The field starts with the value (`word*`).
+    StartsWith,
+    /// The field ends with the value (`*word`).
+    EndsWith,
+}
+
+impl Mode {
+    /// True if `field` holds `value` in this mode (both lowercase already).
+    pub fn holds(self, field: &str, value: &str) -> bool {
+        match self {
+            Mode::Contains => field.contains(value),
+            Mode::Exact => field == value,
+            Mode::StartsWith => field.starts_with(value),
+            Mode::EndsWith => field.ends_with(value),
+        }
+    }
 }
 
 /// One search term. Values are stored lowercase; matching ignores case.

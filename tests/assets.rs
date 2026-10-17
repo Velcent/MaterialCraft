@@ -321,6 +321,18 @@ fn the_search_syntax_follows_the_settled_rules() {
     assert_eq!(terms("- ! , name: \"\""), []);
     assert_eq!(terms("\"unclosed phrase"), [(Any, Contains, s("unclosed phrase"), false)]);
     assert_eq!(terms("trailing\\"), [(Any, Contains, s("trailing"), false)]);
+    // Wildcards at either end (p4-asset-library-match-modes); literal stars are escaped, quoted or inside.
+    assert_eq!(terms("steel*"), [(Any, StartsWith, s("steel"), false)]);
+    assert_eq!(terms("*steel"), [(Any, EndsWith, s("steel"), false)]);
+    assert_eq!(terms("*steel*"), [(Any, Contains, s("steel"), false)]);
+    assert_eq!(terms("name:steel* -tag:*old"), [(Name, StartsWith, s("steel"), false), (Tag, EndsWith, s("old"), true)]);
+    assert_eq!(terms("!steel* name:!*x"), [(Any, StartsWith, s("steel"), false), (Name, EndsWith, s("x"), false)]);
+    assert_eq!(
+        terms(r#"steel\* \*steel "*a*" st*el"#),
+        [(Any, Contains, s("steel*"), false), (Any, Contains, s("*steel"), false), (Any, Contains, s("*a*"), false), (Any, Contains, s("st*el"), false)]
+    );
+    assert_eq!(terms(r#"steel\**"#), [(Any, StartsWith, s("steel*"), false)]);
+    assert_eq!(terms("* ** -*"), []);
 }
 
 #[test]
@@ -353,6 +365,16 @@ fn queries_match_name_location_tags_library_and_usage() {
     assert_eq!(names("path:materials"), ["Brushed steel", "old rust"]);
     assert_eq!(names("-path:materials"), ["moss"]);
     assert_eq!(names("moss.png"), ["moss"]); // file name
+    assert_eq!(names("brush*"), ["Brushed steel"]);
+    assert_eq!(names("steel*"), Vec::<String>::new()); // nothing starts with "steel"
+    assert_eq!(names("*steel"), ["Brushed steel"]);
+    assert_eq!(names("*rus*"), ["Brushed steel", "old rust"]);
+    assert_eq!(names("name:old* -tag:*rn"), Vec::<String>::new());
+    assert_eq!(names("name:old*"), ["old rust"]);
+    assert_eq!(names("*.png"), ["moss"]); // file name ends with
+    assert_eq!(names("path:nat*"), ["moss"]); // a folder name starts with
+    assert_eq!(names("usage:smart*"), ["old rust"]);
+    assert_eq!(names("tag:wor*"), ["old rust"]);
 
     let saved = SavedSearch {
         name: "Worn metals".into(),

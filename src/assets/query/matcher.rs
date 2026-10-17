@@ -18,14 +18,11 @@ impl RootKeys {
 pub(super) fn term_matches(t: &Term, a: &Asset, root: &RootKeys) -> bool {
     let k = &a.keys;
     let v = t.value.as_str();
-    let cmp = |s: &str| match t.mode {
-        Mode::Contains => s.contains(v),
-        Mode::Exact => s == v,
-    };
+    let cmp = |s: &str| t.mode.holds(s, v);
     let path = || match t.mode {
-        // Exact on a path matches the whole folder or any one folder name.
         Mode::Contains => k.folder.contains(v),
-        Mode::Exact => k.folder == v || k.folder.split('/').any(|s| s == v),
+        // Exact, starts and ends with on a path look at the whole folder or any one folder name.
+        m => m.holds(&k.folder, v) || k.folder.split('/').any(|s| m.holds(s, v)),
     };
     match t.field {
         Field::Name => cmp(&k.name),
@@ -33,14 +30,15 @@ pub(super) fn term_matches(t: &Term, a: &Asset, root: &RootKeys) -> bool {
         Field::Path => path(),
         Field::Library => cmp(&root.name) || cmp(root.kind),
         Field::Usage => match t.mode {
-            Mode::Contains => a.usage.keyword().contains(v),
             Mode::Exact => Usage::from_name(v) == Some(a.usage),
+            m => m.holds(a.usage.keyword(), v),
         },
         Field::Format => cmp(a.format.extension()),
         Field::Source => cmp(a.provenance.kind()),
         Field::Any => match t.mode {
-            Mode::Contains => k.name.contains(v) || k.file.contains(v) || k.tags.iter().any(|s| s.contains(v)) || path() || root.name.contains(v),
+            // The library's name counts for the loose modes only, as before for plain words.
             Mode::Exact => k.name == v || k.file == v || k.tags.iter().any(|s| s == v) || path(),
+            m => m.holds(&k.name, v) || m.holds(&k.file, v) || k.tags.iter().any(|s| m.holds(s, v)) || path() || m.holds(&root.name, v),
         },
     }
 }
