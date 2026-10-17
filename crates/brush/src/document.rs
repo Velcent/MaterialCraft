@@ -43,18 +43,42 @@ pub struct Ended {
 }
 
 impl DocumentStroke {
-    /// Makes `target` ready in `doc` for painting `setup.values`.
+    /// Makes `target` ready in `doc` for painting `values`. On error `doc` is as it was.
     pub fn prepare(doc: &mut Document, target: PaintTarget, values: &crate::target::PaintValues) -> Result<Prepared, BrushError> {
         let set = doc.texture_set(&target.layer.set).ok_or(BrushError::NotPaintable("the texture set is gone"))?;
         let mut inverses = Vec::new();
         if let Some(edit) = target.preparation(set)? {
             inverses.push(edit.apply(doc).map_err(BrushError::Edit)?);
         }
+        let ready = Self::resolve(doc, &target, values);
+        match ready {
+            Ok((resolved, captures)) => Ok(Prepared { target, resolved, inverses, captures }),
+            Err(e) => {
+                for inv in inverses.into_iter().rev() {
+                    // putting back what was just done; it applied a moment ago, so it applies now
+                    let _ = inv.apply(doc);
+                }
+                Err(e)
+            }
+        }
+    }
+
+    fn resolve(doc: &Document, target: &PaintTarget, values: &crate::target::PaintValues) -> Result<(Resolved, Vec<TileCapture>), BrushError> {
         let set = doc.texture_set(&target.layer.set).ok_or(BrushError::NotPaintable("the texture set is gone"))?;
         let resolved = target.resolve(set, values)?;
+        if resolved.images.is_empty() {
+            return Err(BrushError::NotPaintable("no channel the layer has is switched on"));
+        }
         let captures =
             resolved.images.iter().map(|i| TileCapture::begin(doc, i.image.clone())).collect::<Result<Vec<_>, EditError>>().map_err(BrushError::Edit)?;
-        Ok(Prepared { target, resolved, inverses, captures })
+        Ok((resolved, captures))
+    }
+
+    /// Gives up the stroke without painting more; [`Ended::record`] still records what was painted (without a
+    /// stroke record entry).
+    pub fn abandon(self) -> Ended {
+        let DocumentStroke { target, resolved, inverses, captures, .. } = self;
+        Ended { owner: resolved.owner, target, inverses, captures, finished: None }
     }
 
     /// Paints `points` (see [`StrokeSession::add`]); returns the changed tiles of the set's images.
