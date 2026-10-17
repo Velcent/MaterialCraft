@@ -1,5 +1,6 @@
 //! Mesh map baking: high-poly -> low-poly textures (normal, world normal, position, AO,
 //! curvature, thickness, ID). OBJ input, BVH ray tracing, multi-threaded.
+use crate::mesh::{Bvh, Hit, Triangles};
 use crate::noise::rnd;
 use crate::tex::{Tex, par_map};
 use crate::v3::*;
@@ -96,132 +97,14 @@ pub fn parse_obj(text: &str) -> Result<Mesh, String> {
     Ok(mesh)
 }
 
-// ---------------- BVH ----------------
-#[derive(Clone, Copy)]
-struct BNode {
-    min: V,
-    max: V,
-    a: u32, // leaf: start, inner: left
-    b: u32, // leaf: count (>0), inner: right (count==0 flagged by leaf=false)
-    leaf: bool,
-}
-
-pub struct Bvh {
-    nodes: Vec<BNode>,
-    idx: Vec<u32>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Hit {
-    pub t: f32,
-    pub tri: u32,
-    pub u: f32,
-    pub v: f32,
-}
-
-impl Bvh {
-    pub fn build(tris: &[Tri]) -> Bvh {
-        let cent: Vec<V> = tris.iter().map(|t| mul(add(add(t.p[0], t.p[1]), t.p[2]), 1.0 / 3.0)).collect();
-        let mut b = Bvh { nodes: Vec::new(), idx: (0..tris.len() as u32).collect() };
-        b.rec(tris, &cent, 0, tris.len());
-        b
+// The BVH lives in `mesh` (shared with picking and occlusion); it reads the baker's triangles through this.
+impl Triangles for [Tri] {
+    fn triangle_count(&self) -> usize {
+        self.len()
     }
 
-    fn rec(&mut self, tris: &[Tri], cent: &[V], lo: usize, hi: usize) -> u32 {
-        let (mut mn, mut mx) = ([f32::MAX; 3], [f32::MIN; 3]);
-        let (mut cmn, mut cmx) = ([f32::MAX; 3], [f32::MIN; 3]);
-        for &i in &self.idx[lo..hi] {
-            for p in &tris[i as usize].p {
-                for k in 0..3 {
-                    mn[k] = mn[k].min(p[k]);
-                    mx[k] = mx[k].max(p[k]);
-                }
-            }
-            for k in 0..3 {
-                cmn[k] = cmn[k].min(cent[i as usize][k]);
-                cmx[k] = cmx[k].max(cent[i as usize][k]);
-            }
-        }
-        let me = self.nodes.len() as u32;
-        self.nodes.push(BNode { min: mn, max: mx, a: lo as u32, b: (hi - lo) as u32, leaf: true });
-        if hi - lo <= 4 {
-            return me;
-        }
-        let ext = sub(cmx, cmn);
-        let axis = if ext[0] >= ext[1] && ext[0] >= ext[2] {
-            0
-        } else if ext[1] >= ext[2] {
-            1
-        } else {
-            2
-        };
-        self.idx[lo..hi].sort_by(|&a, &b| cent[a as usize][axis].partial_cmp(&cent[b as usize][axis]).unwrap_or(std::cmp::Ordering::Equal));
-        let mid = (lo + hi) / 2;
-        let l = self.rec(tris, cent, lo, mid);
-        let r = self.rec(tris, cent, mid, hi);
-        self.nodes[me as usize].leaf = false;
-        self.nodes[me as usize].a = l;
-        self.nodes[me as usize].b = r;
-        me
-    }
-
-    pub fn intersect(&self, tris: &[Tri], o: V, d: V, tmax: f32) -> Option<Hit> {
-        let inv = [
-            1.0 / if d[0].abs() < 1e-12 { 1e-12 } else { d[0] },
-            1.0 / if d[1].abs() < 1e-12 { 1e-12 } else { d[1] },
-            1.0 / if d[2].abs() < 1e-12 { 1e-12 } else { d[2] },
-        ];
-        let mut best: Option<Hit> = None;
-        let mut tm = tmax;
-        let mut stack = [0u32; 64];
-        let mut sp = 1;
-        while sp > 0 {
-            sp -= 1;
-            let n = self.nodes[stack[sp] as usize];
-            let (mut t0, mut t1) = (0.0f32, tm);
-            for k in 0..3 {
-                let a = (n.min[k] - o[k]) * inv[k];
-                let b = (n.max[k] - o[k]) * inv[k];
-                t0 = t0.max(a.min(b));
-                t1 = t1.min(a.max(b));
-            }
-            if t0 > t1 {
-                continue;
-            }
-            if n.leaf {
-                for &ti in &self.idx[n.a as usize..(n.a + n.b) as usize] {
-                    let t = &tris[ti as usize];
-                    let e1 = sub(t.p[1], t.p[0]);
-                    let e2 = sub(t.p[2], t.p[0]);
-                    let pv = cross(d, e2);
-                    let det = dot(e1, pv);
-                    if det.abs() < 1e-14 {
-                        continue;
-                    }
-                    let id = 1.0 / det;
-                    let tv = sub(o, t.p[0]);
-                    let u = dot(tv, pv) * id;
-                    if !(0.0..=1.0).contains(&u) {
-                        continue;
-                    }
-                    let q = cross(tv, e1);
-                    let v = dot(d, q) * id;
-                    if v < 0.0 || u + v > 1.0 {
-                        continue;
-                    }
-                    let tt = dot(e2, q) * id;
-                    if tt > 1e-6 && tt < tm {
-                        tm = tt;
-                        best = Some(Hit { t: tt, tri: ti, u, v });
-                    }
-                }
-            } else if sp + 2 <= 64 {
-                stack[sp] = n.a;
-                stack[sp + 1] = n.b;
-                sp += 2;
-            }
-        }
-        best
+    fn corners(&self, i: usize) -> [V; 3] {
+        self[i].p
     }
 }
 
@@ -279,7 +162,7 @@ pub fn bake(low: &Mesh, high: &Mesh, s: &BakeSettings) -> Result<BTreeMap<String
     if low.tris.iter().all(|t| t.uv.iter().all(|u| u[0] == 0.0 && u[1] == 0.0)) {
         return Err("the low-poly mesh has no UV coordinates".into());
     }
-    let bvh = Bvh::build(&high.tris);
+    let bvh = Bvh::build(high.tris.as_slice());
     // bounds of the high mesh (for the position map)
     let (mut bmin, mut bmax) = ([f32::MAX; 3], [f32::MIN; 3]);
     for t in &high.tris {
@@ -349,7 +232,7 @@ pub fn bake(low: &Mesh, high: &Mesh, s: &BakeSettings) -> Result<BTreeMap<String
             return HighInfo::default();
         }
         let o = add(tx.p, mul(tx.n, max_dist));
-        match bvh.intersect(&high.tris, o, mul(tx.n, -1.0), 2.0 * max_dist) {
+        match bvh.intersect(high.tris.as_slice(), o, mul(tx.n, -1.0), 2.0 * max_dist) {
             Some(h) => {
                 let tr = &high.tris[h.tri as usize];
                 let hp = add(o, mul(mul(tx.n, -1.0), h.t));
@@ -408,7 +291,7 @@ pub fn bake(low: &Mesh, high: &Mesh, s: &BakeSettings) -> Result<BTreeMap<String
             let ct = (1.0 - b).sqrt();
             let st = b.sqrt();
             let d = add(add(mul(tg, st * phi.cos()), mul(bt, st * phi.sin())), mul(n, ct));
-            if bvh.intersect(&high.tris, o, d, ao_dist).is_some() {
+            if bvh.intersect(high.tris.as_slice(), o, d, ao_dist).is_some() {
                 occ += 1.0;
             }
         }
@@ -424,7 +307,7 @@ pub fn bake(low: &Mesh, high: &Mesh, s: &BakeSettings) -> Result<BTreeMap<String
             return [1.0, 1.0, 1.0, 1.0];
         }
         let o = sub(h.h, mul(h.n, 1e-3 * diag));
-        let v = match bvh.intersect(&high.tris, o, mul(h.n, -1.0), ao_dist) {
+        let v = match bvh.intersect(high.tris.as_slice(), o, mul(h.n, -1.0), ao_dist) {
             Some(x) => (x.t / ao_dist).clamp(0.0, 1.0),
             None => 1.0,
         };

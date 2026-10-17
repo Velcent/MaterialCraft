@@ -6,6 +6,7 @@
 //! `bitangent = cross(normal, tangent.xyz) * w` pointing along -v.
 
 mod bounds;
+mod bvh;
 mod derivatives;
 mod error;
 pub mod gltf;
@@ -18,6 +19,7 @@ mod validate;
 mod viewer;
 
 pub use bounds::{Bounds, Fit, Sphere};
+pub use bvh::{Bvh, Hit, Triangles};
 pub use error::{Attribute, MeshError, MeshErrorKind};
 pub use viewer::ViewportPart;
 
