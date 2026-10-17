@@ -1,0 +1,21 @@
+# Marble: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 fbm scale=3 octaves=6 seed=4
+node 2 waveform count=3 angle=0.15 shape=0 seed=17
+node 3 warp in=@2 warp=@1 intensity=0.25
+node 4 levels in=@3 low=0.88 high=1
+node 5 fbm scale=6 octaves=5 mode=1 seed=23
+node 6 levels in=@5 low=0.9 high=1 out_high=0.5
+node 7 blend fg=@6 bg=@4 mode=6 opacity=1
+node 8 colorize in=@7 p0=0 r0=0.93 g0=0.92 b0=0.89 p1=1 r1=0.40 g1=0.40 b1=0.43
+node 9 levels in=@7 out_low=0.07 out_high=0.16
+node 90 color r=0.5 g=0.5 b=1
+node 91 color r=1 g=1 b=1
+node 92 color r=0.5 g=0.5 b=0.5
+node 93 color r=0 g=0 b=0
+output basecolor 8
+output normal 90
+output roughness 9
+output metallic 93
+output height 92
+output ambient_occlusion 91

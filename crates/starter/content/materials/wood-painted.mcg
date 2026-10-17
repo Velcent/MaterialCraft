@@ -1,0 +1,35 @@
+# Painted planks: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 bricks rows=6 cols=2 mortar=0.012 bevel=0.02 offset=0.5 lum_var=0.35 seed=5
+node 2 directional_noise scale=16 stretch=30 angle=0 seed=7
+node 3 fbm scale=4 octaves=4 seed=3
+node 4 stripes count=48 angle=0.25 softness=0.5 width=0.5
+node 5 warp in=@4 warp=@3 intensity=0.06
+node 6 blend fg=@2 bg=@5 mode=5 opacity=0.6
+node 7 blend fg=@1 bg=@6 mode=3 opacity=1
+node 8 colorize in=@7 p0=0 r0=0.20 g0=0.13 b0=0.07 p1=0.35 r1=0.55 g1=0.40 b1=0.24 p2=1 r2=0.80 g2=0.64 b2=0.44
+node 9 blend fg=@6 bg=@1 mode=3 opacity=0.15
+node 10 levels in=@6 out_low=0.75 out_high=0.58
+
+node 11 fbm scale=6 octaves=6 seed=23
+node 12 grunge_map map=4 seed=6
+node 13 blend fg=@12 bg=@11 mode=5 opacity=0.5
+node 14 levels in=@13 low=0.4 high=0.44
+node 15 blend fg=@1 bg=@14 mode=3 opacity=1
+node 16 levels in=@15 low=0.05 high=0.2
+node 17 colorize in=@11 p0=0 r0=0.20 g0=0.36 b0=0.50 p1=1 r1=0.32 g1=0.52 b1=0.66
+node 18 to_gray in=@8
+node 19 colorize in=@18 p0=0 r0=0.12 g0=0.11 b0=0.10 p1=1 r1=0.58 g1=0.54 b1=0.48
+node 20 blend fg=@17 bg=@19 mask=@16 mode=0
+node 21 levels in=@16 out_low=0.85 out_high=0.5
+node 22 levels in=@16 out_low=0 out_high=0.06
+node 23 blend fg=@22 bg=@9 mode=1 opacity=1
+node 90 normal in=@23 strength=3
+node 91 ao in=@23 radius=6 intensity=1.5
+node 93 color r=0 g=0 b=0
+output basecolor 20
+output normal 90
+output roughness 21
+output metallic 93
+output height 23
+output ambient_occlusion 91

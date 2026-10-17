@@ -1,0 +1,19 @@
+# Copper: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 fbm scale=3 octaves=6 seed=21
+node 2 clouds scale=6 seed=5
+node 3 blend fg=@2 bg=@1 mode=5 opacity=0.5
+node 4 levels in=@3 low=0.3 high=0.8
+node 5 colorize in=@4 p0=0 r0=0.45 g0=0.26 b0=0.18 p1=0.5 r1=0.82 g1=0.48 b1=0.34 p2=1 r2=0.96 g2=0.64 b2=0.52
+node 6 levels in=@4 out_low=0.5 out_high=0.22
+node 7 directional_noise scale=16 stretch=20 angle=0 seed=4
+node 8 levels in=@7 out_low=0.48 out_high=0.52
+node 90 normal in=@8 strength=1
+node 91 ao in=@8 radius=6 intensity=1.5
+node 93 color r=1 g=1 b=1
+output basecolor 5
+output normal 90
+output roughness 6
+output metallic 93
+output height 8
+output ambient_occlusion 91

@@ -1,0 +1,21 @@
+# Concrete: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 grunge variant=0 seed=6
+node 2 fbm scale=3 octaves=5 seed=14
+node 3 blend fg=@2 bg=@1 mode=5 opacity=0.5
+node 4 gaussian_noise scale=1 seed=2
+node 5 levels in=@4 low=0.86 high=0.95
+node 6 invert in=@5
+node 7 blend fg=@6 bg=@3 mode=3 opacity=0.6
+node 8 colorize in=@7 p0=0 r0=0.28 g0=0.28 b0=0.27 p1=0.5 r1=0.53 g1=0.52 b1=0.49 p2=1 r2=0.70 g2=0.69 b2=0.66
+node 9 levels in=@7 out_low=0.42 out_high=0.58
+node 10 levels in=@3 out_low=0.96 out_high=0.82
+node 90 normal in=@9 strength=2
+node 91 ao in=@9 radius=6 intensity=1.5
+node 93 color r=0 g=0 b=0
+output basecolor 8
+output normal 90
+output roughness 10
+output metallic 93
+output height 9
+output ambient_occlusion 91

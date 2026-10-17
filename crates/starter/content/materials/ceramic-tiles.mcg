@@ -1,0 +1,18 @@
+# Ceramic tiles: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 bricks rows=6 cols=6 offset=0 mortar=0.03 bevel=0.05 lum_var=0.04 seed=2
+node 2 fbm scale=8 octaves=4 seed=9
+node 3 colorize in=@2 p0=0 r0=0.86 g0=0.86 b0=0.84 p1=1 r1=0.93 g1=0.93 b1=0.91
+node 4 levels in=@1 low=0 high=0.08
+node 5 color r=0.52 g=0.50 b=0.47
+node 6 blend fg=@3 bg=@5 mask=@4 mode=0
+node 7 levels in=@4 out_low=0.9 out_high=0.07
+node 90 normal in=@1 strength=3
+node 91 ao in=@1 radius=6 intensity=1.5
+node 93 color r=0 g=0 b=0
+output basecolor 6
+output normal 90
+output roughness 7
+output metallic 93
+output height 1
+output ambient_occlusion 91

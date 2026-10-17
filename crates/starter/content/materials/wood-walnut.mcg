@@ -1,0 +1,19 @@
+# Walnut: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 fbm scale=3 octaves=4 seed=51
+node 2 stripes count=22 angle=0.25 softness=0.5 width=0.5
+node 3 warp in=@2 warp=@1 intensity=0.1
+node 4 directional_noise scale=32 stretch=24 angle=0 seed=52
+node 5 blend fg=@4 bg=@3 mode=5 opacity=0.7
+node 6 colorize in=@5 p0=0 r0=0.2 g0=0.12 b0=0.07 p1=1 r1=0.38 g1=0.24 b1=0.14
+node 7 levels in=@5 out_low=0.6 out_high=0.45
+node 8 levels in=@5 out_low=0.46 out_high=0.54
+node 90 normal in=@8 strength=1
+node 91 ao in=@8 radius=6 intensity=1.5
+node 93 color r=0 g=0 b=0
+output basecolor 6
+output normal 90
+output roughness 7
+output metallic 93
+output height 8
+output ambient_occlusion 91

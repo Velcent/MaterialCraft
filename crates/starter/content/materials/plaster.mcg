@@ -1,0 +1,17 @@
+# Plaster: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 fbm scale=6 octaves=7 seed=27
+node 2 clouds scale=2 seed=3
+node 3 blend fg=@2 bg=@1 mode=5 opacity=0.4
+node 4 colorize in=@3 p0=0 r0=0.74 g0=0.72 b0=0.68 p1=1 r1=0.90 g1=0.88 b1=0.84
+node 5 levels in=@1 out_low=0.92 out_high=0.82
+node 6 levels in=@1 out_low=0.4 out_high=0.6
+node 90 normal in=@6 strength=2
+node 91 ao in=@6 radius=6 intensity=1.5
+node 93 color r=0 g=0 b=0
+output basecolor 4
+output normal 90
+output roughness 5
+output metallic 93
+output height 6
+output ambient_occlusion 91

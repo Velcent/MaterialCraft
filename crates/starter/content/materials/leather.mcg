@@ -1,0 +1,19 @@
+# Leather: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 voronoi scale=40 jitter=1 mode=4 seed=21
+node 2 levels in=@1 low=0 high=0.3 gamma=1.6
+node 3 fbm scale=5 octaves=6 mode=1 seed=7
+node 4 blend fg=@3 bg=@2 mode=3 opacity=0.2
+node 5 fbm scale=3 octaves=4 seed=2
+node 6 blend fg=@5 bg=@4 mode=5 opacity=0.4
+node 7 colorize in=@6 p0=0 r0=0.12 g0=0.07 b0=0.04 p1=1 r1=0.27 g1=0.16 b1=0.09
+node 8 levels in=@4 out_low=0.7 out_high=0.45
+node 90 normal in=@4 strength=1
+node 91 ao in=@4 radius=6 intensity=1.5
+node 93 color r=0 g=0 b=0
+output basecolor 7
+output normal 90
+output roughness 8
+output metallic 93
+output height 4
+output ambient_occlusion 91

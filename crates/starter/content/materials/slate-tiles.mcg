@@ -1,0 +1,21 @@
+# Slate tiles: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 bricks rows=4 cols=4 offset=0 mortar=0.02 bevel=0.03 lum_var=0.25 seed=8
+node 2 directional_noise scale=8 stretch=10 angle=0.1 seed=5
+node 3 fbm scale=12 octaves=5 seed=2
+node 4 blend fg=@3 bg=@2 mode=5 opacity=0.5
+node 5 colorize in=@4 p0=0 r0=0.13 g0=0.14 b0=0.16 p1=1 r1=0.33 g1=0.34 b1=0.37
+node 6 levels in=@1 low=0 high=0.05
+node 7 color r=0.36 g=0.34 b=0.31
+node 8 blend fg=@5 bg=@7 mask=@6 mode=0
+node 9 blend fg=@4 bg=@1 mode=3 opacity=0.25
+node 10 levels in=@4 out_low=0.75 out_high=0.55
+node 90 normal in=@9 strength=3
+node 91 ao in=@9 radius=6 intensity=1.5
+node 93 color r=0 g=0 b=0
+output basecolor 8
+output normal 90
+output roughness 10
+output metallic 93
+output height 9
+output ambient_occlusion 91

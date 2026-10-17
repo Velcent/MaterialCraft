@@ -1,0 +1,20 @@
+[package]
+name = "materialcraft-starter"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Builds MaterialCraft's starter asset library from its own graphs, generators and procedural textures (mcstarter)"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+materialcraft = { path = "../.." }
+# PhotoCraft's procedural tips, as the brush crate hands them out (it pins photocraft-paint).
+materialcraft-brush = { path = "../brush" }
+
+[[bin]]
+name = "mcstarter"
+path = "src/main.rs"
+
+[lints]
+workspace = true

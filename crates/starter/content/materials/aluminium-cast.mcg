@@ -1,0 +1,18 @@
+# Cast aluminium: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 gaussian_noise scale=2 seed=4
+node 2 blur in=@1 radius=1.5
+node 3 fbm scale=6 octaves=5 seed=12
+node 4 blend fg=@3 bg=@2 mode=5 opacity=0.4
+node 5 levels in=@4 out_low=0.70 out_high=0.82
+node 6 levels in=@4 out_low=0.55 out_high=0.68
+node 7 levels in=@2 out_low=0.48 out_high=0.52
+node 90 normal in=@7 strength=1
+node 91 ao in=@7 radius=6 intensity=1.5
+node 93 color r=1 g=1 b=1
+output basecolor 5
+output normal 90
+output roughness 6
+output metallic 93
+output height 7
+output ambient_occlusion 91

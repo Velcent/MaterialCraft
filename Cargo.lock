@@ -1458,6 +1458,7 @@ dependencies = [
  "materialcraft",
  "materialcraft-brush",
  "materialcraft-parity",
+ "materialcraft-starter",
  "materialcraft-substance",
  "rfd",
  "serde",
@@ -1469,6 +1470,14 @@ version = "0.1.0"
 dependencies = [
  "materialcraft",
  "materialcraft-substance",
+]
+
+[[package]]
+name = "materialcraft-starter"
+version = "0.1.0"
+dependencies = [
+ "materialcraft",
+ "materialcraft-brush",
 ]
 
 [[package]]

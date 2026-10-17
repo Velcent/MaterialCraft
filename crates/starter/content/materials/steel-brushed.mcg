@@ -1,0 +1,18 @@
+# Brushed steel: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 directional_noise scale=24 stretch=48 angle=0 seed=3
+node 2 fbm scale=4 octaves=4 seed=8
+node 3 blend fg=@2 bg=@1 mode=5 opacity=0.3
+node 4 levels in=@3 out_low=0.66 out_high=0.78
+node 5 tint in=@4 r=0.98 g=0.99 b=1
+node 6 levels in=@3 out_low=0.38 out_high=0.24
+node 7 levels in=@1 out_low=0.47 out_high=0.53
+node 90 normal in=@7 strength=1
+node 91 ao in=@7 radius=6 intensity=1.5
+node 93 color r=1 g=1 b=1
+output basecolor 5
+output normal 90
+output roughness 6
+output metallic 93
+output height 7
+output ambient_occlusion 91

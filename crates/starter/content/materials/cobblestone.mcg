@@ -1,0 +1,22 @@
+# Cobblestones: a starter material (MaterialCraft's own graph, Metallic Roughness outputs)
+size 1024
+node 1 voronoi scale=6 jitter=0.9 mode=4 seed=3
+node 2 levels in=@1 low=0.02 high=0.4 gamma=2
+node 3 voronoi scale=6 jitter=0.9 mode=1 seed=3
+node 4 fbm scale=16 octaves=5 seed=9
+node 5 blend fg=@4 bg=@2 mode=5 opacity=0.25
+node 6 blend fg=@4 bg=@3 mode=5 opacity=0.4
+node 7 colorize in=@6 p0=0 r0=0.22 g0=0.21 b0=0.20 p1=0.5 r1=0.42 g1=0.39 b1=0.35 p2=1 r2=0.6 g2=0.56 b2=0.5
+node 8 levels in=@2 low=0 high=0.2
+node 9 color r=0.11 g=0.09 b=0.07
+node 10 blend fg=@7 bg=@9 mask=@8 mode=0
+node 11 levels in=@5 out_low=0.95 out_high=0.65
+node 90 normal in=@5 strength=4
+node 91 ao in=@5 radius=6 intensity=2.5
+node 93 color r=0 g=0 b=0
+output basecolor 10
+output normal 90
+output roughness 11
+output metallic 93
+output height 5
+output ambient_occlusion 91

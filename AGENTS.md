@@ -23,6 +23,7 @@ crates/editor             materialcraft-editor: the editor binary `materialcraft
   src/gui_theme.rs        the editor theme
 crates/substance          materialcraft-substance: reads .spp projects; `mcsub` (inspect, convert, maps, compare)
 crates/parity             materialcraft-parity: `mcparity`, measures our results against Painter's on local projects
+crates/starter            materialcraft-starter: `mcstarter`, builds the starter asset library (content/materials/*.mcg)
 ```
 
 ## Build and test
@@ -34,6 +35,7 @@ cargo clippy --workspace --all-targets --all-features
 cargo fmt --all
 cargo run --release -p materialcraft-editor
 cargo run --release -p materialcraft-substance --bin mcsub -- convert <in.spp> <out.mcpaint>
+cargo run --release -p materialcraft-starter -- <folder>   # the starter library; the editor also builds it on first run
 ```
 
 Toolchain: Rust 1.95 or newer, edition 2024. Formatting follows `rustfmt.toml` (wide lines, as in the other Craft apps).
