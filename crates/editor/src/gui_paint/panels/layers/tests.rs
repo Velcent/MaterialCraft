@@ -138,3 +138,38 @@ fn revealing_a_layer_selects_it_and_unfolds_its_folder() {
     panel.reveal(set, "nope");
     assert_eq!(panel.selection.ids(), ["p7_2"], "an unknown layer changes nothing");
 }
+
+fn right_click(at: egui::Pos2) -> Vec<Vec<Event>> {
+    vec![
+        vec![Event::PointerMoved(at)],
+        vec![Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed: true, modifiers: Default::default() }],
+        vec![Event::PointerButton { pos: at, button: PointerButton::Secondary, pressed: false, modifiers: Default::default() }],
+        Vec::new(),
+    ]
+}
+
+#[test]
+fn a_right_click_anywhere_on_a_row_opens_its_menu() {
+    let doc = big_document();
+    let blur = DropPayload::Effect(EffectAsset { name: "Blur".into(), kind: AssetEffect::Filter(Procedural::new("blur")) });
+    // The middle of the top row (the fill "f39", without a mask).
+    let row_y = |ctx: &egui::Context, panel: &mut LayerPanel| {
+        frame(ctx, panel, &doc, Vec::new());
+        frame(ctx, panel, &doc, Vec::new());
+        let top =
+            (0..SCREEN[1] as i32).map(|y| pos2(300.0, y as f32)).find(|p| matches!(panel.target_at(doc.doc(), *p, &blur), Some(DropTarget::OntoLayer(_))));
+        top.expect("a row").y + 12.0
+    };
+    // The eye, the content thumbnail, the name and the blend text on the right: the parts sit on top of the
+    // row and used to take the right-click, so the menu opened only on the bare background.
+    for x in [10.0, 50.0, 120.0, 405.0] {
+        let ctx = egui::Context::default();
+        let mut panel = LayerPanel::default();
+        let y = row_y(&ctx, &mut panel);
+        assert!(!egui::Popup::is_any_open(&ctx));
+        for events in right_click(pos2(x, y)) {
+            frame(&ctx, &mut panel, &doc, events);
+        }
+        assert!(egui::Popup::is_any_open(&ctx), "a right-click at x = {x} opens the row's menu");
+    }
+}

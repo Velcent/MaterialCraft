@@ -33,7 +33,9 @@ pub struct LayerRowOut {
     pub toggle_fold: bool,
     pub rename: bool,
     pub toggle_effects: bool,
-    /// The whole row, for drags and the context menu.
+    /// The whole row with every part in it (eye, thumbnails, name, effects toggle), for drags and the
+    /// context menu: a right-click anywhere on the row opens the menu, not only on the bare background
+    /// the parts leave free (the parts sit on top and take the click).
     pub response: Option<Response>,
 }
 
@@ -56,6 +58,7 @@ pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
     let mut out = LayerRowOut::default();
     let id = Id::new(("layer_row", &l.id));
     let row = ui.interact(rect, id, Sense::click_and_drag());
+    let mut whole = row.clone();
     let painter = ui.painter_at(rect);
     let bg = if look.selected {
         gui_theme::STRIP_SELECTED
@@ -73,7 +76,9 @@ pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
     if l.visible {
         painter.circle_filled(eye.center(), 2.0, eye_col);
     }
-    out.toggle_visible = eye_r.on_hover_text(if l.visible { "Hide" } else { "Show" }).clicked();
+    let eye_r = eye_r.on_hover_text(if l.visible { "Hide" } else { "Show" });
+    out.toggle_visible = eye_r.clicked();
+    whole |= eye_r;
     let mut x = rect.min.x + EYE + look.depth as f32 * INDENT;
     // Fold arrow for folders.
     if let LayerKind::Group(children) = &l.kind {
@@ -81,16 +86,20 @@ pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
         if !children.is_empty() {
             let arrow = if look.open_folder { "⏷" } else { "⏵" };
             painter.text(fold.center(), Align2::CENTER_CENTER, arrow, FontId::proportional(10.0), gui_theme::ICON);
-            out.toggle_fold = ui.interact(fold, id.with("fold"), Sense::click()).clicked();
+            let fold_r = ui.interact(fold, id.with("fold"), Sense::click());
+            out.toggle_fold = fold_r.clicked();
+            whole |= fold_r;
         }
     }
     x += FOLD;
     // Thumbnails.
     let content = Rect::from_min_size(pos2(x, rect.min.y + (LAYER_ROW - THUMB) / 2.0), vec2(THUMB, THUMB));
     thumb(ui, content, look.thumbs.content, look.focus == Some(Part::Content), kind_mark(l));
-    if ui.interact(content, id.with("content"), Sense::click()).clicked() {
+    let content_r = ui.interact(content, id.with("content"), Sense::click());
+    if content_r.clicked() {
         out.clicked = Some(Part::Content);
     }
+    whole |= content_r;
     x += THUMB + GAP;
     if let Some(mask) = &l.mask {
         let (m0, _) = mask_span(look.depth);
@@ -110,6 +119,7 @@ pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
                 out.clicked = Some(Part::Mask);
             }
         }
+        whole |= m;
         x += THUMB + GAP;
     }
     // Name, kind, effects toggle.
@@ -121,6 +131,7 @@ pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
     if name_r.clicked() {
         out.clicked = Some(Part::Content);
     }
+    whole |= name_r;
     let n_effects = l.effects.len() + l.mask.as_ref().map_or(0, |m| m.effects.len());
     let sub = pos2(x, rect.min.y + 32.0);
     painter.text(sub, Align2::LEFT_CENTER, kind_name(l), FontId::proportional(10.5), gui_theme::LABEL_TEXT);
@@ -128,7 +139,9 @@ pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
         let fx = Rect::from_min_size(pos2(x + 52.0, rect.min.y + 25.0), vec2(56.0, 14.0));
         let label = format!("{} {} fx", if look.effects_open { "⏷" } else { "⏵" }, n_effects);
         painter.text(fx.left_center(), Align2::LEFT_CENTER, label, FontId::proportional(10.5), gui_theme::ACCENT);
-        out.toggle_effects = ui.interact(fx, id.with("fx"), Sense::click()).on_hover_text("Show or hide the effects (MK-13)").clicked();
+        let fx_r = ui.interact(fx, id.with("fx"), Sense::click()).on_hover_text("Show or hide the effects (MK-13)");
+        out.toggle_effects = fx_r.clicked();
+        whole |= fx_r;
     }
     // The view channel's blend and opacity.
     let right = pos2(rect.max.x - 6.0, rect.center().y);
@@ -141,7 +154,7 @@ pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
     if row.clicked() && out.clicked.is_none() {
         out.clicked = Some(Part::Content);
     }
-    out.response = Some(row);
+    out.response = Some(whole);
     out
 }
 
