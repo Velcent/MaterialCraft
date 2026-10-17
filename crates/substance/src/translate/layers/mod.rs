@@ -13,6 +13,7 @@
 //! - [`strategy`]: the per-set decision between the real stack and Painter's flattened result.
 //! - [`strokes`]: Painter's brush strokes → stroke records next to the (empty) paint pixels.
 //! - [`decal`]: Painter's polygon-fill hits resolved on the set's mesh into picked triangles.
+//! - [`set_surface`]: the set's surface map and scene frame, for mask bitmaps projected from a volume.
 //! - [`anchors`]: how exactly what each anchor holds is computable, for the effects that read it.
 //! - [`report`]: the import report lines.
 
@@ -33,6 +34,7 @@ pub mod layer_content;
 pub mod mask;
 pub mod projection_map;
 pub mod report;
+pub mod set_surface;
 pub mod stack_builder;
 pub mod strategy;
 pub mod strokes;
@@ -45,6 +47,7 @@ pub use channels::SetChannels;
 pub use computability::Computability;
 pub use images::{ImageSource, NoImages, ProjectImages};
 pub use projection_map::{HardnessCurve, ProjectionTable, VolumeConvention};
+pub use set_surface::{LazySurface, SurfaceSource};
 pub use stack_builder::ImportedStack;
 pub use strategy::{PAINTER_RESULT_NAME, REFERENCE_NAME, StackParts, StackStrategy};
 pub use verdict::StackVerdict;
@@ -69,16 +72,18 @@ impl LayerImport<'_> {
     /// The set's layers for the declared `channels` at `resolution`, without the mesh (polygon fills are then
     /// not computable).
     pub fn import(&self, set: &PainterTextureSet, channels: &SetChannels, resolution: (u32, u32)) -> ImportedStack {
-        self.import_on(set, channels, resolution, None)
+        self.import_on(set, channels, resolution, None, None)
     }
 
-    /// [`Self::import`] with the set's mesh, which polygon-fill picks are resolved on.
+    /// [`Self::import`] with the set's mesh, which polygon-fill picks are resolved on, and its surface at
+    /// `resolution`, which mask bitmaps in a volume projection are laid on over (else in texture space).
     pub fn import_on(
         &self,
         set: &PainterTextureSet,
         channels: &SetChannels,
         resolution: (u32, u32),
         geometry: Option<&SetGeometry>,
+        surface: Option<&dyn SurfaceSource>,
     ) -> ImportedStack {
         let builder = |anchors| StackBuilder {
             channels,
@@ -88,6 +93,7 @@ impl LayerImport<'_> {
             plan: self.plan,
             resolution,
             geometry,
+            surface,
             anchors,
         };
         // anchors read through other anchors need a second pass

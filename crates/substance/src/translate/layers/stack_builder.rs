@@ -17,6 +17,7 @@ use super::images::ImageSource;
 use super::layer_content::is_flat_normal;
 use super::mask::MaskEvaluator;
 use super::projection_map::ProjectionTable;
+use super::set_surface::SurfaceSource;
 use super::verdict::{LayerNote, MaskFailure, StackVerdict};
 use crate::model::{LayerKind as PainterKind, PainterLayer};
 use crate::translate::replacements::ProceduralPlan;
@@ -57,6 +58,8 @@ pub struct StackBuilder<'a> {
     pub resolution: (u32, u32),
     /// The set's mesh, for polygon-fill picks.
     pub geometry: Option<&'a SetGeometry<'a>>,
+    /// The set's surface, for mask bitmaps projected from a volume.
+    pub surface: Option<&'a dyn SurfaceSource>,
     /// What the set's anchors hold (see [`AnchorTable::measure`]).
     pub anchors: &'a AnchorTable,
 }
@@ -75,6 +78,7 @@ impl StackBuilder<'_> {
             plan: self.plan,
             resolution: self.resolution,
             geometry: self.geometry,
+            surface: self.surface,
             anchors: self.anchors,
         }
     }

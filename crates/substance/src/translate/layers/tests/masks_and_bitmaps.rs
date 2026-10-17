@@ -2,6 +2,7 @@
 
 use super::fixtures::*;
 use crate::model::*;
+use crate::translate::layers::ImportedStack;
 use crate::translate::layers::images::{ImageSource, LoadedImage};
 use materialcraft::paint::{
     Channel, EffectKind, FillSource, LayerKind, PixelFormat, PixelLayout, SampleType, TiledImage,
@@ -195,4 +196,51 @@ fn placed_or_missing_bitmaps_are_reported() {
     placed.sources = vec![bitmap(BASE, "resource://shelf/x?version=1")];
     let stack = import(vec![layer(1, "Shelf", vec![PainterEffect::Fill(placed)], vec![])]);
     assert!(!stack.verdict.channel(Channel::BaseColor).is_computable());
+}
+
+/// The grey values of the first mask effect of layer `layer` (a painted image), row by row.
+fn mask_values(stack: &ImportedStack, layer: usize) -> Vec<f32> {
+    let m = stack.layers[layer].mask.as_ref().unwrap();
+    let EffectKind::Paint(p) = &m.effects[0].kind else {
+        panic!("{m:?}")
+    };
+    let (w, h) = p.image.size();
+    (0..h)
+        .flat_map(|y| (0..w).map(move |x| (x, y)))
+        .map(|(x, y)| p.image.get(x, y)[0])
+        .collect()
+}
+
+#[test]
+fn volume_mask_bitmaps_are_laid_on_over_the_surface() {
+    use crate::translate::layers::{BlendTable, LayerImport, LazySurface, ProjectionTable};
+    let mut fill = mask_fill(bitmap(0, "/Logo?version=abc"), 2, 1.0);
+    if let PainterEffect::Fill(f) = &mut fill {
+        f.projection = 1; // planar
+        f.placement.position = Some([0.25, 0.0, 0.0]);
+    }
+    let layers = base_and(top(mask(MaskInitial::Black, vec![fill])));
+    let mesh = super::native::quad();
+    let surface = LazySurface::new(&mesh, 0, 0, SIZE);
+    let table = BlendTable::painter();
+    let import = LayerImport {
+        table: &table,
+        projections: &ProjectionTable::painter(),
+        images: &HalfWhite,
+        plan: &Default::default(),
+    };
+    let on = import.import_on(&set(layers.clone()), &channels(), SIZE, None, Some(&surface));
+    let off = import.import(&set(layers), &channels(), SIZE);
+    let (on, off) = (mask_values(&on, 1), mask_values(&off, 1));
+    assert_eq!(
+        off.iter().filter(|v| **v > 0.99).count(),
+        32,
+        "without the mesh: in texture space"
+    );
+    assert_ne!(on, off, "the volume's offset moves the bitmap");
+    let mean = on.iter().sum::<f32>() / on.len() as f32;
+    assert!(
+        (mean - 0.5).abs() < 0.1,
+        "a repeating half-white bitmap stays half white: {on:?}"
+    );
 }

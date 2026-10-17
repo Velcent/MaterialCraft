@@ -18,6 +18,7 @@ use super::decal::{self, geometry::SetGeometry};
 use super::effect_data::{self as data, AnchorIds};
 use super::images::{ImageSource, grey_values, resample};
 use super::projection_map::ProjectionTable;
+use super::set_surface::{SurfaceSource, project_image};
 use super::strokes;
 use crate::model::{EffectHeader, MaskInitial, PainterEffect, PainterMask, PainterSource};
 use crate::translate::replacements::{self, ProceduralPlan};
@@ -48,6 +49,8 @@ pub struct MaskEvaluator<'a> {
     pub resolution: (u32, u32),
     /// The set's mesh, for polygon-fill picks.
     pub geometry: Option<&'a SetGeometry<'a>>,
+    /// The set's surface at `resolution`, which bitmaps projected from a volume are laid on over.
+    pub surface: Option<&'a dyn SurfaceSource>,
     /// What the set's anchors hold, for fills that read one.
     pub anchors: &'a AnchorTable,
 }
@@ -172,10 +175,21 @@ impl Walk<'_, '_> {
                     PainterSource::Bitmap(b) => match self.evaluator.images.load(&b.url) {
                         Ok(loaded) => {
                             // Mask fills hold one grey value, so the bitmap is laid on here, as the compositor
-                            // would sample it.
+                            // would sample it (over the set's surface in a volume mode; without it, in texture
+                            // space).
                             let mapped = self.evaluator.projections.map(fill);
                             let size = self.evaluator.resolution;
-                            let image = resample(&loaded.image, &mapped.projection, size);
+                            let surface = mapped
+                                .projection
+                                .mode
+                                .needs_mesh()
+                                .then(|| self.evaluator.surface?.surface())
+                                .flatten()
+                                .filter(|(m, _)| (m.width() as u32, m.height() as u32) == size);
+                            let image = match surface {
+                                Some(s) => project_image(&loaded.image, &mapped.projection, s),
+                                None => resample(&loaded.image, &mapped.projection, size),
+                            };
                             let image = image.unwrap_or_else(|| loaded.image.clone());
                             self.note(counts, mapped.status_for(loaded.image.size(), size));
                             self.note(counts, resolved.status());

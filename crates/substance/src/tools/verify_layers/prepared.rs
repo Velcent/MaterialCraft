@@ -12,12 +12,15 @@ use crate::translate::channel_table::{channel_for_bit, channel_spec};
 use crate::translate::layers::cache_score::{Score, score};
 use crate::translate::layers::decal::geometry::SetGeometry;
 use crate::translate::layers::island_texels::IslandTexels;
-use crate::translate::layers::{BlendTable, ImageSource, ImportedStack, LayerImport, ProjectionTable, SetChannels};
+use crate::translate::layers::{
+    BlendTable, ImageSource, ImportedStack, LayerImport, ProjectionTable, SetChannels, SurfaceSource,
+};
 use crate::translate::replacements::ProceduralPlan;
 use crate::translate::set_layers::defaults_layer;
 use materialcraft::generators;
 use materialcraft::mesh::SurfaceMap;
 use materialcraft::paint::{BakedMap, Channel, Compositor, FillContext, NoFillSources, TextureSet, TiledImage};
+use materialcraft::projection::SceneFrame;
 use materialcraft::tex::Tex;
 use std::sync::OnceLock;
 
@@ -98,7 +101,13 @@ impl<'a> PreparedSet<'a> {
             images,
             plan: &self.plan,
         }
-        .import_on(self.painter, &self.channels, self.resolution, self.geometry.as_ref())
+        .import_on(
+            self.painter,
+            &self.channels,
+            self.resolution,
+            self.geometry.as_ref(),
+            Some(self),
+        )
     }
 
     /// [`Self::import`] of another copy of this set's stack (e.g. with parts swapped), with this set's channels,
@@ -116,7 +125,13 @@ impl<'a> PreparedSet<'a> {
             images,
             plan,
         }
-        .import_on(painter, &self.channels, self.resolution, self.geometry.as_ref())
+        .import_on(
+            painter,
+            &self.channels,
+            self.resolution,
+            self.geometry.as_ref(),
+            Some(self),
+        )
     }
 
     /// Reads the cache image of `channel` (once); false if there is none or it does not decode.
@@ -190,19 +205,24 @@ impl<'a> PreparedSet<'a> {
         set.layers.push(defaults_layer(&set));
         set.layers.extend(stack.layers.iter().cloned());
         set.baked = self.baked.clone();
-        let surface = self.surface.get_or_init(|| {
-            let uid = self.painter.material_uid?;
-            self.mesh?.surface(uid, self.resolution)
-        });
-        let fills = match surface {
-            Some(s) => {
-                FillContext::with_sources(&NoFillSources).with_surface(s, self.mesh.and_then(ProjectMesh::frame))
-            }
+        let fills = match SurfaceSource::surface(self) {
+            Some((s, frame)) => FillContext::with_sources(&NoFillSources).with_surface(s, frame),
             None => FillContext::with_sources(&NoFillSources),
         };
         Compositor::with_effects(&set, generators::builtin())
             .with_fills(&fills)
             .composite_tex(channel)
             .0
+    }
+}
+
+impl SurfaceSource for PreparedSet<'_> {
+    /// The set's surface map at the compared resolution (first slot) and the scene frame.
+    fn surface(&self) -> Option<(&SurfaceMap, Option<SceneFrame>)> {
+        let map = self.surface.get_or_init(|| {
+            let uid = self.painter.material_uid?;
+            self.mesh?.surface(uid, self.resolution)
+        });
+        Some((map.as_ref()?, self.mesh.and_then(ProjectMesh::frame)))
     }
 }

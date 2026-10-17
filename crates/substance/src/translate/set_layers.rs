@@ -9,7 +9,7 @@ use super::layers::decal::geometry::SetGeometry;
 use super::layers::island_texels::IslandTexels;
 use super::layers::report::{report_cache_disagreement, report_hidden_masks, report_stack};
 use super::layers::strokes::{StrokeCount, report_strokes};
-use super::layers::{LayerImport, PAINTER_RESULT_NAME, SetChannels, StackParts, StackStrategy};
+use super::layers::{LayerImport, LazySurface, PAINTER_RESULT_NAME, SetChannels, StackParts, StackStrategy};
 use super::report::Reporter;
 use super::texture_sets::SetSource;
 use crate::model::{PainterDocument, PainterTextureSet};
@@ -53,9 +53,10 @@ impl SetLayers<'_> {
             Some(painter) => {
                 let channels = SetChannels::new(&set.channels);
                 let geometry = SetGeometry::new(mesh, self.faces, &[set.material_slot]);
+                let surface = LazySurface::new(mesh, set.material_slot, set.uv_set, set.resolution);
                 let stack = self
                     .import
-                    .import_on(painter, &channels, set.resolution, Some(&geometry));
+                    .import_on(painter, &channels, set.resolution, Some(&geometry), Some(&surface));
                 let defaults = defaults_layer(set);
                 let agreement = match (&flattened.layer, stack.verdict.all_exact()) {
                     (Some(result), true) => {

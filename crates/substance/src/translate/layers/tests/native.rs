@@ -182,7 +182,7 @@ fn colour_selection_selects_on_the_id_map() {
 }
 
 /// One quad over the whole UV square, two triangles (one source polygon).
-fn quad() -> Mesh {
+pub(super) fn quad() -> Mesh {
     Mesh {
         materials: vec!["m".into()],
         parts: vec![MeshPart {
@@ -231,7 +231,7 @@ fn polygon_fill_picks_are_resolved_on_the_mesh() {
         images: &NoImages,
         plan: &crate::translate::replacements::ProceduralPlan::default(),
     };
-    let stack = import.import_on(&set(layers.clone()), &channels(), SIZE, Some(&geometry));
+    let stack = import.import_on(&set(layers.clone()), &channels(), SIZE, Some(&geometry), None);
     assert!(stack.verdict.all_exact(), "{:?}", stack.verdict.channels());
     let without = import.import(&set(layers), &channels(), SIZE);
     assert!(
