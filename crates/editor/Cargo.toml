@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 description = "MaterialCraft's visual editor: node graphs, the 3D view and Paint mode"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
@@ -14,8 +14,8 @@ materialcraft-substance = { path = "../substance" }
 materialcraft-brush = { path = "../brush" }
 log = "0.4"
 # The Craft suite's shared UI and settings crates, pinned (reuse level 1: depend, nothing goes upstream; ADR 0007).
-craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "15ed713b8fc622302a7f2920f710cec7d261fa9a" }
-craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "15ed713b8fc622302a7f2920f710cec7d261fa9a", features = ["serde"] }
+craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "04e83f095ab080c5672243514f9a44ca6364b0e2" }
+craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "04e83f095ab080c5672243514f9a44ca6364b0e2", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 

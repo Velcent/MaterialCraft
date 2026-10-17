@@ -1,0 +1,6437 @@
+# MaterialCraft UX Map
+
+## Writing rules for this file
+
+- Write with low verbosity
+- Write simply
+- One fact per bullet
+- No paragraphs
+- Short words
+- Start from what the user sees or does
+- Nest by place: screen > panel > control > detail
+- Name controls exactly as the UI shows them
+- When the UI changes, change this file in the same edit
+- Never add third-party product names
+
+## How to read this file
+
+- `-` is one item
+- Indent = inside the parent item
+- `Key: value` = a fact about the item
+- `Click`, `Double-click`, `Right-click`, `Drag`, `Hover` = mouse actions
+- `Ctrl` means Cmd on macOS
+- Quoted text is shown on screen exactly
+- Backticks mark a file name, node kind or key name
+
+## 1. What the user wants to do
+
+- Make a new material
+  - Home > New graph
+  - Pick a template
+  - Name it, set the size, press Create
+  - Add nodes with Tab
+  - Link nodes by dragging sockets
+  - Click a node to see it in 2D and 3D
+  - Press Ctrl+S to save
+- Open an existing file
+  - Home > Open package
+  - Or File > Open package(s)...
+  - Or Ctrl+O
+  - Or click a card in Recent
+- Try an example
+  - Home > Brick wall example
+- Add a node
+  - Press Tab over the graph
+  - Type part of the name
+  - Press Enter
+  - Or drag from the Library
+  - Or right-click the graph > Add node...
+  - Or drag a link into empty space
+- Connect two nodes
+  - Drag from an output socket to an input socket
+- Disconnect a link
+  - Drag its end off the input socket
+  - Drop it in empty canvas, then close the search
+- Change a value
+  - Select the node
+  - Use the Properties panel
+- Look at a result
+  - Click the node
+  - See it in 2D VIEW
+  - See it on the shape in 3D VIEW
+- Change the graph size
+  - Toolbar > Parent Size
+  - Or Properties > GRAPH SETTINGS > Output Size
+- Make the graph non-square
+  - Click the link icon next to Width and Height
+  - Set Width and Height apart
+- Tile check
+  - 2D VIEW > Tile 2x2 preview
+- Group nodes
+  - Select them
+  - Press C for a comment frame
+- Reuse a group of nodes
+  - Select them
+  - Edit > Create subgraph from selection
+  - Double-click the subgraph to open it
+- Use a graph from another file
+  - Drag its graph from the Explorer onto the canvas
+  - Or File > Link package as node...
+- Let a user change a value without opening the graph
+  - Click `P` next to the parameter
+  - File > Publish package
+- Drive a value by logic
+  - Click `fn` next to the parameter
+  - Pick a function graph
+- Export textures
+  - Export window
+  - Pick folder, format, sizes and outputs
+  - Press Export
+- Bake maps from meshes
+  - Tools > Mesh map baker...
+  - Pick low-poly and high-poly OBJ
+  - Pick folder and settings
+  - Press Bake
+- Undo a mistake
+  - Ctrl+Z
+- Find a shortcut
+  - Help > Keyboard shortcuts
+- Reset the window layout
+  - Windows > Reset layout
+- Get back to the start screen
+  - File > Home screen
+- Run without a window
+  - Command line, see section 4
+
+## 2. Keyboard shortcuts
+
+### 2.1 Graph editing
+
+- `Tab`
+  - Open node search at the cursor
+  - Works when the cursor is over the graph
+- `Ctrl+Z`
+  - Undo
+- `Ctrl+Y`
+  - Redo
+- `Ctrl+Shift+Z`
+  - Redo
+- `Ctrl+C`
+  - Copy selected nodes
+  - Also writes text to the system clipboard
+- `Ctrl+X`
+  - Cut selected nodes
+- `Ctrl+V`
+  - Paste at the cursor
+  - Accepts nodes copied from another window
+- `Ctrl+D`
+  - Duplicate selected nodes
+- `Ctrl+A`
+  - Select all nodes
+- `Delete`
+  - Delete selected nodes
+- `Backspace`
+  - Delete selected nodes
+- `F`
+  - Frame all nodes in view
+- `C`
+  - Add a comment frame around the selection
+- `Ctrl+N`
+  - New material graph
+- `Ctrl+O`
+  - Open package(s)
+- `Ctrl+S`
+  - Save
+- `Enter` (in node search)
+  - Add the highlighted node
+- `Up` / `Down` (in node search)
+  - Move the highlight
+- `Esc` (in node search)
+  - Close search
+- `Page Up` / `Page Down` (in node search)
+  - Move the highlight by a page
+
+### 2.2 Selection
+
+- `Click` a node
+  - Select only it
+- `Shift+click` a node
+  - Toggle it in the selection
+- `Ctrl+click` a node
+  - Toggle it in the selection
+- Drag on empty background
+  - Rubber-band select
+- Click empty background
+  - Clear selection
+
+### 2.3 Navigation
+
+- `Wheel`
+  - Zoom at the cursor
+- `Middle-drag`
+  - Pan
+- `Alt+drag`
+  - Pan
+- `Space+drag`
+  - Pan
+- `F`
+  - Frame all
+
+### 2.4 Mouse in the graph
+
+- Click a node
+  - Select and view it
+- Drag a node card
+  - Move it and the other selected nodes
+- Drag from an output socket
+  - Start a link
+- Drag from an input socket
+  - Start a link from the input side
+- Drag a link into empty space
+  - Add a node and connect it
+- Double-click a subgraph
+  - Open it
+- Right-click a node
+  - Node menu
+- Right-click the background
+  - Graph menu
+- Drag on the background
+  - Rubber-band select
+- Hover a node with an error
+  - Tooltip with the reason
+- Hover an input socket
+  - Shows the socket name
+
+### 2.5 3D view
+
+- Drag
+  - Orbit the camera
+- `Alt+drag`
+  - Move the camera
+- Middle-drag
+  - Move the camera
+- `Shift+drag`
+  - Turn the light
+- `Wheel`
+  - Zoom
+
+### 2.6 2D view
+
+- `Wheel`
+  - Zoom
+- Drag
+  - Pan
+- Double-click
+  - Fit to view
+
+### 2.7 Text boxes
+
+- While a text box has focus, graph shortcuts are off
+- Graph keys do nothing while typing
+
+### 2.8 Dialogs
+
+- While the New dialog is open, graph shortcuts are off
+- Windows close with the cross in their title bar
+
+## 3. File formats
+
+### 3.1 Files the app opens
+
+- `.mcg`
+  - MaterialCraft graph
+  - Plain text
+  - One file holds one graph and its subgraphs
+  - Opens with File > Open package(s)...
+  - Opens with Ctrl+O
+  - Opens by dropping the file on the window
+  - Lines
+    - `size W [H]`
+    - `meta key "value"`
+    - `link`
+    - `subgraph name` ... `end`
+    - `node N kind key=value in=@id[.out]`
+    - `output name id[.pin]`
+    - `expose`
+    - `comment`
+    - `resource name base64`
+  - Function graph = subgraph with `meta kind "function"`
+  - Pattern program = subgraph with `meta kind "fxmap"`
+  - Version number is stored in the file
+  - A file from a newer version is refused
+  - Message says to update the app
+- `.mca`
+  - MaterialCraft published asset
+  - Plain text
+  - Flattened graph
+  - Bitmaps embedded
+  - Exposed parameters kept
+  - Made by File > Publish package
+  - Made by `materialcraft publish`
+  - Opens like `.mcg`
+- `.png`
+  - Import bitmap
+  - File > Import bitmap...
+  - Bitmap node Browse PNG...
+  - Reads 8-bit and 16-bit
+- `.svg`
+  - Vector image for the SVG node
+  - Subset of the format
+  - Paths, basic shapes, fills, strokes
+  - Browse SVG... in the node
+- `.ttf`
+  - Font for the Text node
+  - Browse TrueType font...
+  - Built-in font is used when none is set
+- `.obj`
+  - Wavefront mesh for the baker
+  - Low-poly mesh needs UVs
+  - High-poly mesh does not
+
+### 3.2 Files the app writes
+
+- `.mcg`
+  - File > Save
+  - File > Save as...
+- `.mca`
+  - File > Publish package
+- `.png`
+  - Export
+  - 8-bit or 16-bit
+- `.jpg`
+  - Export
+  - Quality 1 to 100
+  - 8-bit
+- `.tif`
+  - Export
+  - 8-bit, 16-bit or 32-bit float
+- `.exr`
+  - Export
+  - 16-bit half or 32-bit float
+- `.hdr`
+  - Export
+  - 32-bit RGBE
+- Baked map images
+  - Written to the chosen output folder
+  - Normal, world normal, position, ambient occlusion, thickness, curvature, ID
+
+### 3.3 App data files
+
+- `config.toml`
+  - Skip home screen choice
+  - Hide tip choice
+  - Favorite nodes
+  - Recent files (up to 20)
+  - Panel layout
+  - Saved a moment after each change, and on exit
+  - Written as a whole file or not at all
+  - `config.toml.bak` holds the previous version
+  - A damaged file is moved to `config.broken-<time>.toml` and defaults are used
+  - A file from a newer version is read but never overwritten
+- `recent.txt` and `settings.txt`
+  - Old files from earlier versions
+  - Read once on first start, then left alone
+- Folder
+  - Windows: under `%APPDATA%`
+  - Linux and macOS: under the user config folder
+
+### 3.4 Export names
+
+- Folder: the one you picked
+- One sub-folder per size when more than one size is ticked
+- File name = prefix + output identifier + extension
+- Prefix is empty by default
+
+### 3.5 Output names
+
+- `basecolor`
+- `normal`
+- `roughness`
+- `metallic`
+- `height`
+- `ambient_occlusion`
+- `opacity`
+- `emissive`
+- `diffuse`
+- `specular`
+- `glossiness`
+- `output` (generator templates)
+
+## 4. Command line
+
+- `materialcraft render <graph> <outdir>`
+  - `--size N`
+  - `--sizes 256,512`
+  - `--depth 8|16|32`
+  - `--param "Label=value"` (repeatable)
+  - `--variations N`
+  - `--preview`
+  - `--render3d`
+  - `--format png|jpg|tiff|exr|hdr`
+  - `--quality 1-100`
+  - `--only basecolor,normal`
+  - `--colorspace srgb|p3|wide|romm|rec2020|linear`
+- `materialcraft publish <in.mcg> <out.mca>`
+- `materialcraft params <graph>`
+  - Lists exposed parameters
+- `materialcraft check <graph.mcg>`
+  - Prints node, subgraph, output counts and size
+- `materialcraft bake <low.obj> <high.obj> <outdir>`
+  - `--size N`
+  - `--dist D`
+  - `--ao-rays N`
+  - `--ao-dist D`
+  - `--padding N`
+- `materialcraft testmesh <outdir>`
+  - Writes a demo low and high mesh
+- `materialcraft example <outdir>`
+  - Writes the brick wall example
+- `materialcraft nodes`
+  - Prints every node with inputs and parameters
+- `materialcraft-gui`
+  - Starts the editor
+
+## 5. Screens
+
+- Two screens
+  - Home
+  - Editor
+- Start-up opens Home
+  - Unless "Skip this screen on startup" is ticked
+  - Then it opens the Editor
+
+## 6. Home screen
+
+### 6.1 Top bar
+
+- Logo image
+- Text "MaterialCraft"
+- Tab "Start"
+  - Click to show the start page
+  - Selected: accent colour, underline
+- Tab "Learn"
+  - Click to show the learn page
+  - Selected: accent colour, underline
+- Version text at right, for example `v0.1.0`
+
+### 6.2 Start page
+
+- Title "What will you make today?"
+- Sub-title "Seamless materials, patterns and filters from nodes - every result tiles."
+- Action cards
+  - Card "New graph"
+    - Sub-text "Start from a template"
+    - Icon: new
+    - Click opens the New Material Graph dialog
+  - Card "Open package"
+    - Sub-text "Load a .mcg or .mca file"
+    - Icon: open
+    - Click opens a file picker
+  - Card "Brick wall example"
+    - Sub-text "Explore a finished material"
+    - Icon: layout
+    - Click opens the example in the Editor
+  - Card "Mesh map baker"
+    - Sub-text "Bake maps from OBJ meshes"
+    - Icon: sphere
+    - Click opens the Editor and the baker window
+  - Cards wrap to fewer columns on narrow windows
+  - Hover: card brightens, border turns accent
+- Tip strip
+  - Label "Tip"
+  - Text "Press Tab in the graph to add a node at the cursor, or drag a link into empty space to add one and connect it."
+  - Button "Hide"
+    - Hides the strip
+  - When hidden: button "Show tip"
+- Recent section
+  - Title "Recent"
+  - Search box
+    - Hint "Search recent files"
+    - Filters by file name
+  - File cards
+    - Swatch picture, colour from the file name
+    - File name
+    - Folder path
+    - Date and size, for example `2026-10-16 12:00  -  41 KB`
+    - Click opens the file
+    - Hover shows the full path
+    - Right-click > "Remove from recent"
+    - Missing file: dimmed, text "file not found", click does nothing
+  - Empty text "Nothing here yet - create a graph or open a package and it will show up here."
+  - No match text "No recent files match the search."
+
+### 6.3 Learn page
+
+- Title "Learn"
+- Heading "Getting started"
+- Tips list
+  - "Create a graph from the 'New graph...' button and pick a template (Metallic Roughness gives you all PBR outputs)."
+  - "Press Tab over the graph to add a node at the cursor, or drag a link into empty space to add one and connect it."
+  - "Drag nodes from the Library onto the graph. Right-click a library item to favorite it."
+  - "Select nodes and use Edit > Create subgraph to build reusable pieces. Double-click a subgraph to edit it."
+  - "Click the 'P' button next to a parameter to publish it, then use File > Publish package to produce a .mca asset."
+  - "Tools > Mesh map baker bakes normal, AO, curvature, thickness, position and ID maps from OBJ meshes."
+- Button "Open the brick wall example"
+- Button "Show keyboard shortcuts"
+
+### 6.4 Footer
+
+- Checkbox "Skip this screen on startup"
+  - Saves at once
+- Button "Keyboard shortcuts"
+  - Opens the shortcuts window
+- Button "Go to editor"
+  - Accent fill
+  - Opens the Editor with the current graph
+
+## 7. Editor screen
+
+### 7.1 Layout, top to bottom
+
+- Menu bar
+- Package tabs (only when a package is open)
+- Graph tabs (only when subgraphs are open)
+- Toolbar
+- Work area
+- Status bar
+
+### 7.2 Work area layout
+
+- Default layout
+  - Left: Explorer on top, Library below
+  - Centre: Graph on top, 3D View and 2D View side by side below
+  - Right: Properties
+- Every panel sits in a group with a tab at its top-left
+  - Tab text = panel name ("Explorer", "Library", "Graph", "3D View", "2D View", "Properties")
+  - Drag a tab onto another group's tab strip to share that group
+  - Drag a tab onto the edge of a group to split beside it
+  - A preview box shows where it will land
+  - Esc or losing focus cancels the drag
+  - Drag a tab out to float it as its own panel
+  - A floating panel can be moved by its grip and resized by its corner
+- Right-click or open the tab menu
+  - "Float panel"
+  - "Move to group"
+  - "Close panel"
+- Drag the thin bar between groups to resize
+- The "Graph" panel cannot be moved, floated or closed
+- The layout is saved and restored on the next start
+- A saved layout that is damaged is replaced by the default
+- Windows > Reset layout restores the default
+- Windows menu brings closed panels back to their old place
+
+### 7.3 Menu bar
+
+#### File
+
+- New >
+  - "Material Graph...   Ctrl+N"
+    - Opens the New Material Graph dialog
+  - "Empty Package..."
+    - Opens the New Package dialog
+- "Open package(s)...   Ctrl+O"
+  - Multi-select file picker
+  - Filter: MaterialCraft graph / package
+- "Save   Ctrl+S"
+  - Saves the active package
+  - Asks for a name when it has none
+- "Save as..."
+  - Filter: MaterialCraft graph
+  - Default name `material.mcg`
+- Separator
+- "Link package as node..."
+  - File picker for `.mcg` or `.mca`
+  - Asks "Link which graph?" when the file has several
+- "Refresh linked packages"
+  - Re-reads linked files
+- "Dependencies..."
+  - Opens the Package dependencies window
+- "Import bitmap..."
+  - PNG picker
+  - Adds a Bitmap node
+- "Export textures..."
+  - Opens the Export window
+- "Publish package"
+  - Saves a `.mca`
+  - Default name `material.mca`
+- Separator
+- "Home screen"
+  - Goes back to Home
+
+#### Edit
+
+- "Undo   Ctrl+Z"
+  - Disabled when nothing to undo
+- "Redo   Ctrl+Y"
+  - Disabled when nothing to redo
+- Separator
+- "Cut   Ctrl+X"
+  - Disabled with no selection
+- "Copy   Ctrl+C"
+  - Disabled with no selection
+- "Paste   Ctrl+V"
+  - Disabled when the clipboard is empty
+- "Duplicate   Ctrl+D"
+  - Disabled with no selection
+- "Delete   Del"
+- "Select all   Ctrl+A"
+- Separator
+- "Add node...   Tab"
+- "Comment frame   C"
+- "Create subgraph from selection"
+  - Disabled with no selection
+
+#### Tools
+
+- "Mesh map baker..."
+- "Frame all   F"
+- "Auto-layout"
+  - Places nodes in columns by link depth
+- Separator
+- Checkbox "GPU acceleration"
+  - Shown when a graphics adapter is found
+  - Tooltip names the adapter
+  - Tooltip says results match the CPU path within rounding
+  - Turning it on or off recomputes
+- Disabled item "GPU acceleration (no suitable adapter)"
+  - Shown when none is found
+
+#### Windows
+
+- Checkbox "Explorer"
+- Checkbox "Library"
+- Checkbox "3D View"
+- Checkbox "2D View"
+- Checkbox "Properties"
+- Separator
+- "Reset layout"
+  - Shows all five panels
+  - Puts them back in the default places
+
+#### Help
+
+- "Keyboard shortcuts"
+- Separator
+- Small text about the logo file
+
+### 7.4 Package tabs
+
+- One tab per open package
+- Tab text = package name
+- Star after the name = unsaved changes
+- Click a tab
+  - Switch to that package
+- Middle-click a tab
+  - Close it
+- "x" button on a tab
+  - Tooltip "Close package"
+  - Asks to save when changed
+- "+" button
+  - Tooltip "New empty package"
+- Tabs scroll sideways when many
+
+### 7.5 Graph tabs
+
+- Row under the package tabs
+- First tab "Main graph"
+- One tab per opened subgraph
+- Click a tab
+  - Switch to that graph
+- "x" on a subgraph tab
+  - Close the tab
+- Active tab text uses the accent colour
+
+### 7.6 Toolbar
+
+- Button New
+  - Tooltip "New material graph (Ctrl+N)"
+- Button Open
+  - Tooltip "Open (Ctrl+O)"
+- Button Save
+  - Tooltip "Save (Ctrl+S)"
+- Separator
+- Button Undo
+  - Tooltip "Undo (Ctrl+Z)"
+  - Greyed when nothing to undo
+- Button Redo
+  - Tooltip "Redo (Ctrl+Y)"
+  - Greyed when nothing to redo
+
+### 7.7 Status bar
+
+- Left: message
+  - Grey = ok
+  - Red = problem
+- Right: "MaterialCraft Engine: CPU (N threads)"
+  - Adds " + GPU compute: <adapter>" when GPU is on
+  - Adds "   computing..." while a job runs
+  - Ends with "Version: x.y.z"
+- Messages
+  - "Saved <path>"
+  - "Save failed: <reason>"
+  - "Opened package <path> - drag its graphs onto the canvas"
+  - "Open failed: <path>: <reason>"
+  - "<path> is already open"
+  - "Created graph '<name>' in <package>"
+  - "Copied N node(s)"
+  - "Created '<name>' - double-click it to edit its contents"
+  - "Connection rejected: it would create a cycle."
+  - "Connection rejected: <slot> input needs <type>, this output is <type>."
+  - "Linked '<name>' - it follows the file on disk. Every node that uses it is an instance."
+  - "Link '<name>' now points to <path>"
+  - "Link '<name>' removed"
+  - "Linked packages reloaded - changes applied"
+  - "Linked packages are up to date"
+  - "A linked package changed on disk - reloaded"
+  - "This package has no live links (File > Link package as node...)"
+  - "Links belong to the package: leave the nested graph first"
+  - "Drag graphs from another package onto this graph"
+  - "Added '<name>' as a node - drag from one of its output sockets to connect it"
+  - "Published <path> (N KB, N exposed parameters)"
+  - "Publish failed: <reason>"
+  - "Cannot publish: <reason>"
+  - "Cannot import <path>: <reason>"
+  - "Cannot link <path>: <reasons>"
+  - "Choose an export folder first."
+  - "Select at least one resolution."
+  - "Select at least one output to export."
+  - "Export failed: <reason>"
+  - "Export blocked: <reason>"
+  - "Exported N <format> file(s) to <folder>"
+  - "Evaluation failed unexpectedly."
+  - "Bake failed unexpectedly."
+
+## 8. Panels
+
+### 8.1 EXPLORER
+
+- Tab text "Explorer"
+- Empty area menu
+  - "New Package"
+  - "New Material Graph"
+  - "Open Package(s)..."
+- One entry per open package
+  - Name, or "Not saved yet"
+  - Right-click menu
+    - "New" > "Material Graph"
+    - "Save Package"
+    - "Close Package"
+  - Graph rows inside
+    - Main graph row shows the identifier
+    - Subgraph rows show their name
+    - "embedded" tag for embedded copies
+    - Click opens the graph
+    - Drag onto the canvas adds it as a node
+    - Tooltip "Click to open - drag onto the canvas to use it as a node"
+- Resources section
+  - Lists bitmaps and files
+  - Row types: "bitmap", "file"
+- Close package dialog
+  - Title "Close package"
+  - Buttons "Save", "Discard changes", "Cancel"
+  - Save asks for a path when the package has none
+
+### 8.2 LIBRARY
+
+- Tab text "Library"
+- Search box
+  - Hint "Search"
+  - Matches node names and descriptions
+  - "x" button clears the search
+  - A search ignores the folder choice
+- Folder tree (left)
+  - "Favorites"
+  - "Structure"
+  - "Core nodes"
+  - "Pattern builders"
+  - "Logic nodes"
+  - "Generators"
+    - "Noises"
+    - "Patterns"
+    - "Shapes"
+    - "SDF"
+  - "Filters"
+    - "Adjustments"
+    - "Blur and warp"
+    - "Transform"
+    - "Effects"
+    - "Masks and regions"
+  - "Material tools"
+  - "Mesh-driven"
+  - Click a folder to list it
+- Item grid (right)
+  - One tile per node
+  - Tile shows icon and name
+  - Hover shows the description
+  - Click adds the node at the view centre
+  - Drag onto the canvas adds it there
+  - Right-click > "Add to favorites"
+  - Right-click > "Remove from favorites"
+  - Star mark on favorites
+- Empty texts
+  - "Right-click a node to add it to favorites."
+  - "Nothing here."
+  - "Not available in this version."
+- Folder "Structure" holds
+  - Bitmap
+  - Input
+  - Output
+  - Dot
+  - Comment
+  - Frame
+  - Subgraph
+
+### 8.3 Graph canvas
+
+- Background grid
+- Nodes
+- Links
+- Comment frames
+- Mini toolbar (see 8.4)
+- Rubber-band box while dragging
+- Drop highlight when dragging from Explorer or Library
+- Back button "< Back" inside a subgraph
+
+#### Node card
+
+- Title bar
+  - Colour = node family
+  - Text = node name
+  - Subgraph: text = graph name
+  - Output node: text = usage name
+  - Long names use a smaller font
+- Thumbnail of the result
+  - Dark square until ready
+  - Red tint and "!" when the node has an error
+- Input sockets on the left edge
+- Output sockets on the right edge
+- Click the card
+  - Selects it
+  - Makes it the viewed node
+  - Result shows in 2D VIEW and 3D VIEW
+- Selected
+  - Teal outline
+- Viewed but not selected
+  - Grey outline
+- Error
+  - Hover shows the reason
+- Own size
+  - Small "WxH" text under the card when the node size differs from the graph
+- Drag the card
+  - Moves it and the other selected nodes
+- Double-click a subgraph card
+  - Opens it
+- Right-click an unselected card
+  - Selects it first
+
+#### Output node card
+
+- Globe badge at the top-left corner
+- Text "(identifier)" next to the badge
+- Text "WxH - C8" or "WxH - C16" under the card
+- One input socket, teal
+- No output socket
+
+#### Dot node
+
+- Small round point
+- One input, one output
+- Used to bend a link
+
+#### Linked-graph node
+
+- Read-only
+- Double-click shows a status message that it is a live link
+
+#### Subgraph node
+
+- Sockets follow the Input nodes inside
+- Several outputs show one socket each
+- Output socket names sit to the right of the card
+
+#### Sockets
+
+- Round dot
+- Output dot colour
+  - Light grey = grayscale
+  - Blue = colour
+  - Teal = has a link
+- Input dot colour
+  - Brighter = required
+  - Dimmer = optional
+  - Teal on Output nodes
+- Hover an input
+  - Socket name appears to the left
+- Drag from an output
+  - A teal link follows the cursor
+- Drag from a free input
+  - A link follows the cursor towards an output
+- Drag from a linked input
+  - Lifts the old link and keeps dragging it
+- Drop within a short distance of a socket
+  - Connects
+- Drop on a wrong type
+  - Rejected, message in status bar
+- Drop that makes a loop
+  - Rejected, message in status bar
+- Drop in empty canvas
+  - Node search opens there
+  - The chosen node connects to the link
+- Drop on a card body
+  - Nothing happens
+
+#### Links
+
+- Curved line from output to input
+- Grey normally
+- Teal when an end node is selected
+- Moves with the nodes
+- Remove by lifting the end off the input
+
+#### Comment frames
+
+- Coloured box under the nodes
+- Title bar with the title text
+- Click the title bar
+  - Selects the frame
+- Selected
+  - Teal outline
+- Drag the title bar
+  - Moves the frame and the nodes inside it
+- Drag the small corner square at bottom-right
+  - Resizes
+  - Minimum 80 by 50
+- Six colours
+  - Blue
+  - Amber
+  - Green
+  - Red
+  - Purple
+  - Grey
+- Properties show title, colour dots and "Delete frame"
+
+#### Node menu (right-click a node)
+
+- "Copy"
+- "Duplicate"
+- "Delete"
+- "Open subgraph" (subgraph nodes only)
+- "Create subgraph from selection"
+- "Add output node" >
+  - One item per output usage
+  - Adds an Output node linked to this node
+
+#### Graph menu (right-click background)
+
+- "Add node...   Tab"
+- "Paste"
+- "Add comment frame   C"
+- "Select all"
+- "Frame all   F"
+- "Auto-layout"
+
+#### Node search popup
+
+- Appears at the cursor
+- Text box
+  - Hint "Search nodes - Enter to add"
+  - Has focus on open
+- Result list
+  - Name
+  - Small description
+  - Selected row is highlighted
+- Footer "N nodes  -  scroll or use arrow keys"
+- Empty text "no matching nodes"
+- Enter adds the selected node
+- Click a row adds it
+- Click outside closes it
+
+### 8.4 Canvas toolbar
+
+- Button "Frame all (F)"
+- Button "Auto-layout"
+- Button "Comment frame (C)"
+- Button "Create subgraph from selection"
+- Label "Parent Size:"
+  - Width box
+  - Link icon between width and height
+    - Tooltip "Width and height are linked (click to unlink)"
+    - Tooltip "Width and height are unlinked (click to link)"
+  - Height box
+  - Values are powers of two
+- Button "< Back"
+  - Shown inside a subgraph
+  - Returns to the parent graph
+
+### 8.5 2D VIEW
+
+- Tab text "2D View"
+- Header text "<kind> #<id> - 2D VIEW" for a viewed node
+- Placeholder "select a node to view its result"
+- Image of the viewed node
+- Info line "W x H (RGBA, 8bpc)" or 16bpc
+- Pixel scale line, for example 100 percent
+- Button "Fit to view (double-click)"
+- Button "Tile 2x2 preview"
+  - Toggle
+  - Shows four copies side by side
+- Range readout
+  - Smallest and largest channel value
+  - Tooltip "Smallest and largest channel value of this result"
+  - Warning "Values outside 0..1 (HDR). The view clips them; exports keep them in float formats (EXR, HDR, 32-bit TIFF)."
+- Wheel zooms
+- Drag pans
+
+### 8.6 3D VIEW
+
+- Tab text "3D View"
+- Header text "<shape> - <GPU or CPU> - 3D VIEW"
+- Bottom strip
+  - Text "sRGB (default)"
+  - Dropdown `shape3d` at the right, same shapes as the Scene menu
+- Menu "Scene"
+  - Shape list (click to pick)
+    - Cube
+    - Cylinder
+    - Hollow box
+    - Inner box
+    - Plane
+    - Plane (hi-res)
+    - Sphere
+    - Cloth
+    - Mat ball
+    - Rounded cube
+    - Rounded cylinder
+    - Sphere 2 tiles
+    - Torus
+  - Separator after Cloth's group (before the 8th item)
+  - Slider "UV tiling"
+  - Slider "Mesh resolution (triangles per side)"
+  - Checkbox "Show wireframe"
+- Menu "Materials"
+  - Label "Maps used by the viewer:"
+  - Dropdown "Height display"
+    - "Normal map only"
+    - "Bump"
+    - "Parallax (outward)"
+    - "Displacement (real geometry)"
+  - Slider "Height scale"
+  - Slider "Bump strength"
+  - Slider "Neutral level (0 = all outward)"
+  - Slider "Normal map strength"
+  - Warning "No Height output - add an Output node with usage Height."
+- Menu "Lights"
+  - Checkbox "Light follows the camera"
+  - Slider "Intensity"
+  - Slider "Azimuth"
+  - Slider "Elevation"
+- Menu "Camera"
+  - Slider "Distance"
+  - Button "Reset camera"
+- Menu "Environment"
+  - Slider "Exposure"
+  - Slider "Ambient light"
+- Menu "Display"
+  - Choice "Tone mapping: ACES filmic"
+  - Choice "Tone mapping: filmic (Reinhard)"
+  - Label "Color space: sRGB"
+- Menu "Renderer"
+  - Choice "GPU rendering (OpenGL)"
+    - Tooltip "Real displacement, parallax relief, GGX PBR, mipmaps + anisotropic filtering, MSAA"
+  - Choice "CPU software PBR (GGX, normal mapping)"
+  - Text "Using the CPU software renderer."
+  - Checkbox "Height self-shadowing"
+- Hint line "drag: orbit   Alt+drag / middle: move   Shift+drag: light   wheel: zoom"
+- Badge "GPU" or "CPU"
+
+### 8.7 PROPERTIES
+
+- Tab text "Properties"
+- Header text "<node kind> - PROPERTIES" or "<graph> - PROPERTIES"
+- Nothing selected
+  - Shows GRAPH SETTINGS and DETAILS
+- One node selected
+  - Shows node properties
+- Comment frame selected
+  - Shows frame properties
+- Function graph open
+  - Shows FUNCTIONS AND PATTERN PROGRAMS
+- Always at the bottom
+  - PUBLISHED PARAMETERS
+
+#### GRAPH SETTINGS
+
+- Header "GRAPH SETTINGS"
+- "Output Size"
+  - "Width" slider, powers of two
+  - "Height" slider, powers of two
+  - Link icon
+    - Tooltip "Linked: height follows width (click to unlink)"
+    - Tooltip "Unlinked: click to make the graph square again"
+  - Text "{n} px"
+- "Output Format" (`output_format`)
+  - "8 Bits per Channel"
+  - "16 Bits per Channel"
+- "Node Precision" (`nodeprec`)
+  - "8 bits integer"
+  - "16 bits integer"
+  - "16 bits float"
+  - "32 bits float"
+  - Tooltip "Every node is rounded to this precision unless it sets its own Output Format"
+- "Tiling Mode"
+  - Greyed button "H and V Tiling"
+  - Cannot be changed
+- "Random Seed"
+  - Number box
+  - Changes every random node that follows the graph seed
+
+#### DETAILS
+
+- "Identifier"
+  - Text
+  - Letters, digits, underscore
+- "Label"
+  - Text
+- "Type"
+  - "Standard material"
+  - "Filter"
+  - "Generator"
+  - "Other"
+- "Physical size (cm)"
+  - X box
+  - Y box
+  - Z box
+- "Package"
+  - Text
+- "Exposed in package"
+  - Checkbox
+- "Show in library"
+  - Checkbox
+- "Yes" / "No" choices
+- "Description"
+  - Multi-line text
+- "Category"
+  - Text
+- "Author"
+  - Text
+- "Author URL"
+  - Text
+- "Tags"
+  - Text
+
+#### Node properties (every node)
+
+- Title with the node name
+- Identifier text box
+- INPUTS list
+  - One row per socket
+  - Text ", required" when a link is needed
+- PARAMETERS group
+  - One row per parameter
+  - Label
+  - Control: slider, int box, dropdown, checkbox, colour wheel, text, file picker or curve
+  - Button `fn` per parameter
+    - Tooltip "Drive this parameter by a function graph"
+    - Menu "(not driven)" and a list of function graphs
+    - Driven parameters appear under FUNCTION-DRIVEN PARAMETERS
+  - Button `P` per parameter
+    - Publishes the parameter
+    - Lit when published
+  - Group headers split long lists
+- OUTPUT SIZE group (`osize_mode`)
+  - "Size mode"
+    - "Relative to input"
+    - "Relative to parent"
+    - "Absolute"
+  - "Size" (absolute) or "Modifier" (relative)
+  - Tooltip "A lower size computes faster: give heavy nodes (AO, blurs, noises) a smaller size."
+- "Output format"
+  - "Graph default"
+  - "8 bits integer"
+  - "16 bits integer"
+  - "16 bits float"
+  - "32 bits float"
+- Checkbox "Square cells"
+  - On tile nodes and noises
+  - Tooltip "Keep the cells of this pattern square in a non-square graph (the vertical cell count follows the aspect ratio)"
+- Text "No adjustable parameters." when none
+
+#### Special node panels
+
+- Output node
+  - "Usage" dropdown
+    - basecolor
+    - normal
+    - roughness
+    - metallic
+    - height
+    - ambient_occlusion
+    - opacity
+    - emissive
+    - diffuse
+    - specular
+    - glossiness
+  - "Identifier" text
+- Input node
+  - Name, type, default
+- Bitmap node
+  - Button "Browse PNG..."
+  - File type "PNG image"
+- SVG node
+  - Text "(no file)" or the file name
+  - Button "Browse SVG..."
+  - File type "SVG image"
+  - "Fit": contain, stretch, cover
+- Text node
+  - "Text" box
+  - Label "Font: built-in" or the file name
+  - Button "Browse TrueType font..."
+  - File type "TrueType font"
+  - Choice "Built-in"
+  - Alignment: left, centre, right
+- Pixel Processor node
+  - "Function graph" dropdown
+  - Boxes `expr`, `expr_g`, `expr_b`, `expr_a`
+  - Hint "vars: u v x y w h r g b l   funcs: sin cos abs sqrt min max pow floor fract clamp mix step smoothstep noise rand tex atan2 exp log"
+  - Hint "The function runs once per pixel. Its position input is the pixel position; it can sample the inputs."
+- Value Processor node
+  - "Function graph" dropdown
+  - Hint "The function runs once. A float fills the image with grey, a float3 or float4 with colour. It can read image statistics."
+- Pattern Program Map node (`fx_map`)
+  - "Pattern program" dropdown
+  - Button "Open program"
+- Curve node
+  - Channel choice: Master, R, G, B, A
+  - Square graph area
+  - Drag on empty area adds a point and moves it
+  - Drag a point moves it
+  - Points keep their left-to-right order
+  - Double-click a point removes it (two points stay)
+- Gradient Map node
+  - Gradient bar with stop markers
+  - Click the bar adds a stop (up to 16)
+  - Click or drag a marker selects and moves it
+  - Colour wheel for the selected stop
+  - Button "Remove" (disabled with two stops)
+- Colour parameters
+  - Colour wheel (`cwheel`)
+  - Red, Green, Blue, Alpha sliders
+  - Mode: "Color" or "Grayscale"
+  - "Value" slider for gray
+- Subgraph node
+  - Button "Open subgraph"
+  - Exposed inputs list
+- Input Value node
+  - "Name" box
+  - "type" dropdown
+  - "Default text" (string type)
+  - Min, max, label
+- Function nodes with a name
+  - `f_get`, `f_set`: "Name"
+  - `f_input`, `f_graph_input`: "Name"
+  - `f_string`: "Text"
+  - `f_swizzle`: "Components", hint "xyzw or rgba, e.g. zyx"
+  - `f_call`: "Function"
+  - `f_sample_gray`, `f_sample_color`, `f_image_avg`, `f_image_min`, `f_image_max`: "Image input" slot
+
+#### Comment frame properties
+
+- Title text
+- Colour dots, six
+- Body text
+- Button "Delete frame"
+
+#### FUNCTIONS AND PATTERN PROGRAMS
+
+- Header "FUNCTIONS AND PATTERN PROGRAMS"
+- Text "A function graph computes values that can drive any parameter or a pixel processor. A pattern program is drawn by a Pattern Program Map node."
+- List of function graphs
+  - Row per function
+  - Button "Open"
+- List of pattern programs
+  - Row per program
+  - Button "Open"
+- Button "New function"
+  - Creates a graph with a Position, Swizzle and Output node
+- Button "New pattern program"
+  - Creates a graph with a Marker, Iterate and Output node
+
+#### PUBLISHED PARAMETERS
+
+- Header "PUBLISHED PARAMETERS"
+- Text "Click 'P' next to a parameter to publish it. Published parameters can be set when rendering a .mca package."
+- One row per published parameter
+  - Label
+  - Range
+  - Remove button
+
+## 9. Windows and dialogs
+
+### 9.1 New Material Graph
+
+- Title "New Material Graph"
+- Left: "TEMPLATES"
+  - List, click to choose
+  - "Empty"
+  - "Metallic Roughness"
+  - "Metallic Roughness - Emissive"
+  - "Metallic Roughness - Opacity"
+  - "Specular Glossiness"
+  - "Generator (grayscale)"
+  - "Generator (color)"
+- Right: "PROPERTIES"
+  - "Graph Name:" text
+  - "Create graph in package" dropdown
+    - "New package"
+    - Open packages
+  - "Parent size (initial working resolution)"
+    - Width box
+    - Link icon
+      - Tooltip "Linked: the graph is square (click to set a separate height)"
+      - Tooltip "Unlinked: click to make the graph square again"
+    - Height box
+    - Text "{n} px"
+  - "Output format"
+    - "8 bits per channel"
+    - "16 bits per channel"
+  - Text "Outputs: ..." lists the template outputs
+- Bottom: "Template details" text
+- Button "RESET"
+  - Restores default name, size and format
+- Button "CANCEL"
+- Button "OK"
+  - Blue
+  - Creates the graph
+- Double-click a template
+  - Selects it
+- Window title is "New Package" when no package is chosen as target
+
+### 9.2 New Package
+
+- Same dialog as 9.1, titled "New Package"
+- Pick a template, name, size and format
+- Buttons "RESET", "CANCEL" and "OK"
+
+### 9.3 Template contents
+
+- "Empty"
+  - Text "An empty graph with no nodes and no outputs."
+  - No outputs
+- "Metallic Roughness"
+  - Text "PBR metal/roughness workflow. Outputs: basecolor, normal, roughness, metallic, height, ambient_occlusion."
+  - 6 Output nodes
+- "Metallic Roughness - Emissive"
+  - Text "Metal/roughness plus an emissive output."
+  - 7 Output nodes
+- "Metallic Roughness - Opacity"
+  - Text "Metal/roughness plus an opacity output."
+  - 7 Output nodes
+- "Specular Glossiness"
+  - Text "Specular/glossiness workflow. Outputs: diffuse, specular, glossiness, normal, height, ambient_occlusion."
+  - 6 Output nodes
+- "Generator (grayscale)"
+  - Text "A single grayscale output called 'output'."
+  - 1 Output node
+- "Generator (color)"
+  - Text "A single color output called 'output'."
+  - 1 Output node
+
+### 9.4 Export textures
+
+- Title "Export textures"
+- Button "Choose folder..."
+  - Folder picker
+- Folder text, or "(none)"
+- "File prefix" text
+- "Format" dropdown
+  - PNG
+  - JPEG
+  - TIFF
+  - EXR
+  - HDR
+- Per format
+  - JPEG: slider "quality" 1 to 100
+  - HDR: label "32-bit RGBE"
+  - EXR: checkbox "32-bit float (otherwise 16-bit half)"
+  - PNG: checkbox "16-bit"
+  - TIFF: checkboxes "16-bit" and "32-bit float"
+- Row "Colour space" with a dropdown
+  - "sRGB (no conversion)" (default)
+  - "P3 (D65)"
+  - "Wide-gamut RGB (gamma 2.2)"
+  - "ROMM RGB (D50)"
+  - "Rec. 2020"
+  - "Linear sRGB"
+  - Alpha is kept
+- Small text "Applies to colour maps only (base colour, emissive, diffuse, specular, 'output'). Data maps are never converted."
+- Message "Colour conversion failed: <reason>" if it cannot convert
+- Label "Resolutions (one sub-folder each when several are selected):"
+  - Checkbox 256
+  - Checkbox 512 (default on)
+  - Checkbox 1024
+  - Checkbox 2048
+  - Checkbox 4096
+  - Checkbox 8192
+- "Outputs to export"
+  - Button "All"
+  - Button "None"
+  - One checkbox per Output node
+    - Text = identifier
+    - Small text (usage)
+- Button "Export"
+
+### 9.5 Mesh map baker
+
+- Title "Mesh map baker"
+- Button "Low-poly mesh (.obj, needs UVs)"
+  - OBJ picker
+  - Path text or "(none)"
+- Button "High-poly mesh (.obj)"
+  - OBJ picker
+  - Path text or "(none)"
+- Button "Output folder..."
+  - Folder picker
+  - Path text or "(none)"
+- Button "Use demo sphere meshes"
+  - Writes a demo pair to the temp folder
+  - Fills all three paths
+- Dropdown "Resolution"
+  - 256
+  - 512
+  - 1024
+  - 2048
+  - 4096
+- Slider "Max ray distance (x model size)" 0.005 to 0.5
+- Slider "AO / thickness rays" 4 to 256
+- Slider "AO / thickness distance" 0.02 to 1
+- Slider "Edge padding (px)" 0 to 32
+- Text "Bakes: normal, world normal, position, ambient occlusion, thickness, curvature, ID."
+- Button "Bake"
+  - Shows "Baking..." while busy
+- Result message line
+
+### 9.6 Package dependencies
+
+- Title "Package dependencies"
+- Text when inside a nested graph: "Links belong to the package: leave the nested graph to manage them."
+- Text when empty: "This package has no live links. Use File > Link package as node... to add one."
+- One block per link
+  - Name in bold
+  - Text "N instance(s)"
+  - Path text, with "> graph name"
+  - Text "read from <file>" when found elsewhere
+  - Button "Relink..."
+  - Button "Embed copy"
+    - Disabled when the file is not found
+    - Tooltip "Turn the link into a copy saved inside this package"
+  - Button "Remove"
+- "Search folders" box
+  - Text "When a linked file is not where the link says, these folders (relative to the package, separated by ;) are searched for a file with the same name."
+- Button "Refresh links"
+
+### 9.7 Link which graph?
+
+- Title "Link which graph?"
+- Text "<file> contains several graphs."
+- Button "Main graph"
+- One button per subgraph
+
+### 9.8 Keyboard shortcuts
+
+- Title "Keyboard shortcuts"
+- Rows
+  - "Tab" - add a node at the cursor (search)
+  - "Drag link to empty space" - add a node and auto-connect
+  - "Ctrl+Z / Ctrl+Y" - undo / redo
+  - "Ctrl+C / X / V / D" - copy / cut / paste / duplicate
+  - "Ctrl+A" - select all
+  - "Shift/Ctrl + click" - toggle selection
+  - "Drag background" - rubber-band select
+  - "Middle-drag, Alt+drag, Space+drag" - pan
+  - "Wheel" - zoom
+  - "F" - frame all
+  - "C" - comment frame around selection
+  - "Delete" - delete selection
+  - "Double-click subgraph" - open it
+  - "Ctrl+S / Ctrl+O" - save / open
+- Close with the window cross
+
+### 9.9 Native dialogs
+
+- Open file picker
+  - Filter: MaterialCraft graph / package (`mcg`, `mca`)
+- Save file picker
+  - Filter: MaterialCraft graph (`mcg`)
+- Publish picker
+  - Filter: MaterialCraft published asset (`mca`)
+- PNG picker
+  - Filter: PNG image
+- OBJ picker
+  - Filter: Wavefront OBJ
+- Folder picker
+- Look follows the operating system
+
+## 10. Behaviour the user notices
+
+- Edits recompute in the background
+  - Status shows "computing..."
+  - Thumbnails update when ready
+- Large images use all CPU threads
+- GPU speeds up large noises, blurs and normal maps
+- Undo keeps the last 100 steps
+- A link that would loop is refused
+- A link of the wrong type is refused
+- Window title is "MaterialCraft - <package>" with a star when unsaved
+- Star in the tab marks unsaved work
+- Closing a changed package asks first
+- Recent list holds the last files opened or saved
+- Missing recent files stay listed, dimmed
+- Layout and panel choices are saved and reset on request only
+- Files are saved safely: a crash during a save never leaves a half-written file
+- Every result tiles unless a node is set otherwise
+
+## 11. Node library, node by node
+
+- Every node has
+  - A card on the graph
+  - A Library tile
+  - A Properties page
+- Every texture node also has
+  - Identifier text
+  - OUTPUT SIZE group
+  - Output format dropdown
+- Every parameter also has
+  - `fn` button
+  - `P` button
+- Counts below come from `materialcraft nodes`
+
+### Generators nodes (43)
+
+- Color (`color`)
+  - Library: Generators > Patterns
+  - Tooltip: constant colour
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - R
+      - Control: number box
+    - G
+      - Control: number box
+    - B
+      - Control: number box
+    - A
+      - Control: number box
+- White Noise (`white_noise`)
+  - Library: Generators > Noises
+  - Tooltip: per-pixel random
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Gaussian Noise (`gaussian_noise`)
+  - Library: Generators > Noises
+  - Tooltip: gaussian-distributed per-pixel noise
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Scale (grain)
+      - Control: int
+      - Default: 1
+      - Range: 1..16
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Disorder speed
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Disorder anisotropy
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Disorder anisotropy angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Tile offset X
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+    - Tile offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+- Perlin (`perlin`)
+  - Library: Generators > Noises
+  - Tooltip: perlin noise
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Scale
+      - Control: int
+      - Default: 4
+      - Range: 1..64
+    - Disorder
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Disorder speed
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Tile offset X
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+    - Tile offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+- Fbm (`fbm`)
+  - Library: Generators > Noises
+  - Tooltip: fractal noise/clouds
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Scale
+      - Control: int
+      - Default: 4
+      - Range: 1..64
+    - Octaves
+      - Control: int
+      - Default: 5
+      - Range: 1..10
+    - Gain
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Disorder
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Mode
+      - Control: dropdown
+      - Default: fBm
+      - Choices: fBm / Ridged / Turbulence
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Disorder speed
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Disorder anisotropy
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Disorder anisotropy angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Tile offset X
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+    - Tile offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+- Voronoi (`voronoi`)
+  - Library: Generators > Noises
+  - Tooltip: cellular
+  - Inputs: none
+  - Outputs: output, cell_id, edge, distance
+    - output
+      - Right-edge socket
+    - cell_id
+      - Right-edge socket
+    - edge
+      - Right-edge socket
+    - distance
+      - Right-edge socket
+  - Properties:
+    - Scale
+      - Control: int
+      - Default: 6
+      - Range: 1..64
+    - Size Y / X
+      - Control: slider
+      - Default: 1
+      - Range: 0.25..4
+    - Offset X
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Offset Y
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Disorder
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Distortion intensity
+      - Control: slider
+      - Default: 0
+      - Range: 0..2
+    - Distortion scale
+      - Control: int
+      - Default: 3
+      - Range: 1..32
+    - Style
+      - Control: dropdown
+      - Default: F1 (distance)
+      - Choices: F1 (distance) / Random color / Edge / F2 / F2 - F1 / F1 * F2 / F1 / F2
+    - Edge thickness
+      - Control: slider
+      - Default: 0.25
+      - Range: 0.01..1
+    - Rounded curve
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Distance mode
+      - Control: dropdown
+      - Default: Euclidean
+      - Choices: Euclidean / Manhattan / Chebyshev / Minkowski
+    - Minkowski number
+      - Control: slider
+      - Default: 2
+      - Range: 0.25..16
+    - Distance scale
+      - Control: slider
+      - Default: 1
+      - Range: 0..8
+    - Random color seed mode
+      - Control: dropdown
+      - Default: Global (node seed)
+      - Choices: Global (node seed) / Manual
+    - Random color seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Min level
+      - Control: int
+      - Default: 0
+      - Range: 0..8
+    - Max level
+      - Control: int
+      - Default: 3
+      - Range: 0..8
+    - Roughness (Add)
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1.5
+    - Lacunarity
+      - Control: slider
+      - Default: 2
+      - Range: 1..4
+    - Global opacity
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Blend mode
+      - Control: dropdown
+      - Default: Add
+      - Choices: Add / Max / Min
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Voronoi Fractal (`voronoi_fractal`)
+  - Library: Generators > Noises
+  - Tooltip: layered voronoi
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Scale
+      - Control: int
+      - Default: 6
+      - Range: 1..64
+    - Size Y / X
+      - Control: slider
+      - Default: 1
+      - Range: 0.25..4
+    - Offset X
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Offset Y
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Disorder
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Distortion intensity
+      - Control: slider
+      - Default: 0
+      - Range: 0..2
+    - Distortion scale
+      - Control: int
+      - Default: 3
+      - Range: 1..32
+    - Style
+      - Control: dropdown
+      - Default: F1 (distance)
+      - Choices: F1 (distance) / Random color / Edge / F2 / F2 - F1 / F1 * F2 / F1 / F2
+    - Edge thickness
+      - Control: slider
+      - Default: 0.25
+      - Range: 0.01..1
+    - Rounded curve
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Distance mode
+      - Control: dropdown
+      - Default: Euclidean
+      - Choices: Euclidean / Manhattan / Chebyshev / Minkowski
+    - Minkowski number
+      - Control: slider
+      - Default: 2
+      - Range: 0.25..16
+    - Distance scale
+      - Control: slider
+      - Default: 1
+      - Range: 0..8
+    - Random color seed mode
+      - Control: dropdown
+      - Default: Global (node seed)
+      - Choices: Global (node seed) / Manual
+    - Random color seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Min level
+      - Control: int
+      - Default: 0
+      - Range: 0..8
+    - Max level
+      - Control: int
+      - Default: 3
+      - Range: 0..8
+    - Roughness (Add)
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1.5
+    - Lacunarity
+      - Control: slider
+      - Default: 2
+      - Range: 1..4
+    - Global opacity
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Blend mode
+      - Control: dropdown
+      - Default: Add
+      - Choices: Add / Max / Min
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Gradient (`gradient`)
+  - Library: Generators > Patterns
+  - Tooltip: gradient
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Type
+      - Control: dropdown
+      - Default: Linear
+      - Choices: Linear / Radial
+    - Angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Circle (`circle`)
+  - Library: Generators > Shapes
+  - Tooltip: radius softness
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Radius
+      - Control: slider
+      - Default: 0.4
+      - Range: 0..0.7
+    - Edge softness
+      - Control: slider
+      - Default: 0.01
+      - Range: 0..0.5
+- Rect (`rect`)
+  - Library: Generators > Shapes
+  - Tooltip: width height softness
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Width
+      - Control: slider
+      - Default: 0.6
+      - Range: 0..1
+    - Height
+      - Control: slider
+      - Default: 0.4
+      - Range: 0..1
+    - Edge softness
+      - Control: slider
+      - Default: 0.01
+      - Range: 0..0.5
+- Polygon (`polygon`)
+  - Library: Generators > Shapes
+  - Tooltip: sides radius softness rotation
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Sides
+      - Control: int
+      - Default: 5
+      - Range: 3..32
+    - Radius
+      - Control: slider
+      - Default: 0.4
+      - Range: 0..0.7
+    - Edge softness
+      - Control: slider
+      - Default: 0.01
+      - Range: 0..0.5
+    - Rotation
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Checker (`checker`)
+  - Library: Generators > Patterns
+  - Tooltip: tiles
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Tiles
+      - Control: int
+      - Default: 8
+      - Range: 1..64
+- Bricks (`bricks`)
+  - Library: Generators > Patterns
+  - Tooltip: rows cols mortar bevel offset lum_var seed
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Rows
+      - Control: int
+      - Default: 8
+      - Range: 1..32
+    - Columns
+      - Control: int
+      - Default: 4
+      - Range: 1..32
+    - Mortar
+      - Control: slider
+      - Default: 0.03
+      - Range: 0..0.2
+    - Bevel
+      - Control: slider
+      - Default: 0.05
+      - Range: 0.001..0.5
+    - Row offset
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Brick variation
+      - Control: slider
+      - Default: 0.3
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Fx Map (`fx_map`)
+  - Library: Filters > Adjustments
+  - Tooltip: run a pattern program
+  - Inputs: in, in2, in3, in4
+    - in
+      - Left-edge socket
+    - in2
+      - Left-edge socket
+    - in3
+      - Left-edge socket
+    - in4
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Recursion depth
+      - Control: int
+      - Default: 12
+      - Range: 0..32
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Blend
+      - Control: dropdown
+      - Default: Max
+      - Choices: Max / Add / Over / Min / Multiply
+    - Colour
+      - Control: checkbox
+      - Default: off
+    - Background
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Background R
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Background G
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Background B
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Svg (`svg`)
+  - Library: Filters > Adjustments
+  - Tooltip: vector image
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Fit
+      - Control: dropdown
+      - Default: Contain
+      - Choices: Contain / Stretch / Cover
+    - Scale
+      - Control: slider
+      - Default: 1
+      - Range: 0.05..8
+    - Offset X
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+- Text (`text`)
+  - Library: Filters > Adjustments
+  - Tooltip: text
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Size
+      - Control: slider
+      - Default: 0.2
+      - Range: 0.02..1.5
+    - Offset X
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Align
+      - Control: dropdown
+      - Default: Centre
+      - Choices: Left / Centre / Right
+    - Letter spacing
+      - Control: slider
+      - Default: 0
+      - Range: -0.3..1
+    - Line spacing
+      - Control: slider
+      - Default: 1
+      - Range: 0.3..3
+    - Rotation (deg)
+      - Control: slider
+      - Default: 0
+      - Range: -360..360
+    - Value
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+- Pixel Processor (`pixel_processor`)
+  - Library: Generators > Patterns
+  - Tooltip: per-pixel expr / expr_g / expr_b / expr_a (string params), or fn="function" to run a function graph per pixel
+  - Inputs: in, in2, in3, in4
+    - in
+      - Left-edge socket
+    - in2
+      - Left-edge socket
+    - in3
+      - Left-edge socket
+    - in4
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Seed (function)
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Value Processor (`value_processor`)
+  - Library: Filters > Adjustments
+  - Tooltip: run fn="function" once; the result (float, float3 or float4) fills the image. The function can read image statistics
+  - Inputs: in, in2, in3, in4
+    - in
+      - Left-edge socket
+    - in2
+      - Left-edge socket
+    - in3
+      - Left-edge socket
+    - in4
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Seed (function)
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Shape (`shape`)
+  - Library: Generators > Shapes
+  - Tooltip: procedural shape
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Shape
+      - Control: dropdown
+      - Default: Disc
+      - Choices: Square / Disc / Paraboloid / Gaussian / Diamond / Pyramid / Half sphere / Cone
+    - Width
+      - Control: slider
+      - Default: 0.6
+      - Range: 0..1.5
+    - Height
+      - Control: slider
+      - Default: 0.6
+      - Range: 0..1.5
+    - Rotation
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Position X
+      - Control: slider
+      - Default: 0
+      - Range: -0.5..0.5
+    - Position Y
+      - Control: slider
+      - Default: 0
+      - Range: -0.5..0.5
+    - Tiling
+      - Control: int
+      - Default: 1
+      - Range: 1..16
+    - Edge softness
+      - Control: slider
+      - Default: 0.02
+      - Range: 0..1
+- Tile Sampler (`tile_sampler`)
+  - Library: Generators > Patterns
+  - Tooltip: rn3,pattern4,pattern5,pattern6,mask,scale_map,rotation_map,displacement_map,color_map,distribution_map,background grid of pattern instances
+  - Inputs: pattern, pattern2, patte
+    - pattern
+      - Left-edge socket
+    - pattern2
+      - Left-edge socket
+    - patte
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - X amount
+      - Control: int
+      - Default: 8
+      - Range: 1..64
+    - Y amount
+      - Control: int
+      - Default: 8
+      - Range: 1..64
+- Tile Generator (`tile_generator`)
+  - Library: Generators > Patterns
+  - Tooltip: rn3,pattern4,pattern5,pattern6,mask,scale_map,rotation_map,displacement_map,color_map,distribution_map,background brick-style tiles
+  - Inputs: pattern, pattern2, patte
+    - pattern
+      - Left-edge socket
+    - pattern2
+      - Left-edge socket
+    - patte
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - X amount
+      - Control: int
+      - Default: 6
+      - Range: 1..64
+    - Y amount
+      - Control: int
+      - Default: 6
+      - Range: 1..64
+- Splatter (`splatter`)
+  - Library: Generators > Patterns
+  - Tooltip: rn3,pattern4,pattern5,pattern6 random scatter of a pattern
+  - Inputs: pattern, pattern2, patte
+    - pattern
+      - Left-edge socket
+    - pattern2
+      - Left-edge socket
+    - patte
+      - Left-edge socket
+  - Outputs: output, id, center, size, luminance
+    - output
+      - Right-edge socket
+    - id
+      - Right-edge socket
+    - center
+      - Right-edge socket
+    - size
+      - Right-edge socket
+    - luminance
+      - Right-edge socket
+  - Properties:
+    - Count
+      - Control: int
+      - Default: 40
+      - Range: 0..500
+    - Grid number (0 = random)
+      - Control: int
+      - Default: 0
+      - Range: 0..32
+    - Size
+      - Control: slider
+      - Default: 0.1
+      - Range: 0.01..0.5
+    - Size random
+      - Control: slider
+      - Default: 0.3
+      - Range: 0..1
+    - Pattern height / width
+      - Control: slider
+      - Default: 1
+      - Range: 0.1..4
+    - Rotation
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Rotation random
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Symmetry random
+      - Control: dropdown
+      - Default: None
+      - Choices: None / Horizontal / Vertical / Both
+    - Color random
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Disorder (grid jitter)
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Pan X
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Pan Y
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Gain
+      - Control: slider
+      - Default: 1
+      - Range: 0.1..4
+    - Output min
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Output max
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Background
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Blending mode
+      - Control: dropdown
+      - Default: Max
+      - Choices: Max / Add / Alpha blend / Add / Sub
+    - Global opacity
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Splatter Circular (`splatter_circular`)
+  - Library: Generators > Patterns
+  - Tooltip: rn3,pattern4,pattern5,pattern6 instances on one or more circles
+  - Inputs: pattern, pattern2, patte
+    - pattern
+      - Left-edge socket
+    - pattern2
+      - Left-edge socket
+    - patte
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Pattern amount
+      - Control: int
+      - Default: 12
+      - Range: 1..256
+    - Amount random
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Amount random min
+      - Control: int
+      - Default: 1
+      - Range: 1..256
+    - Ring amount
+      - Control: int
+      - Default: 1
+      - Range: 1..10
+    - Radius
+      - Control: slider
+      - Default: 0.3
+      - Range: 0..0.7
+    - Radius random
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Ring radius multiplier
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..2
+    - Angle random
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Spiral factor
+      - Control: slider
+      - Default: 0
+      - Range: -2..2
+    - Spread
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Size
+      - Control: slider
+      - Default: 0.1
+      - Range: 0.005..0.5
+    - Size random
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Scale by pattern number
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Invert pattern number
+      - Control: checkbox
+      - Default: off
+    - Scale by ring number
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Invert ring number
+      - Control: checkbox
+      - Default: off
+    - Pattern rotation
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Pattern rotation random
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Center orientation
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Ring rotation
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Ring rotation random
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Ring rotation offset
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Position random
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Symmetry random
+      - Control: dropdown
+      - Default: None
+      - Choices: None / Horizontal / Vertical / Both
+    - Color
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Luminance random
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Luminance by pattern number
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Luminance by ring number
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random mask
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Background
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Blending mode
+      - Control: dropdown
+      - Default: Max
+      - Choices: Max / Add / Alpha blend / Add / Sub
+    - Global opacity
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Clouds (`clouds`)
+  - Library: Generators > Noises
+  - Tooltip: soft cloud noise
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Scale
+      - Control: int
+      - Default: 3
+      - Range: 1..64
+    - Octaves
+      - Control: int
+      - Default: 6
+      - Range: 1..10
+    - Gain
+      - Control: slider
+      - Default: 0.6
+      - Range: 0..1
+    - Disorder
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Disorder speed
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Disorder anisotropy
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Disorder anisotropy angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Tile offset X
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+    - Tile offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+- Bnw Spots (`bnw_spots`)
+  - Library: Generators > Noises
+  - Tooltip: black and white spots
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Type
+      - Control: dropdown
+      - Default: Spots 1
+      - Choices: Spots 1 / Spots 2 / Spots 3
+    - Scale
+      - Control: int
+      - Default: 8
+      - Range: 1..64
+    - Disorder
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Disorder speed
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Disorder anisotropy
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Disorder anisotropy angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Tile offset X
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+    - Tile offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+- Crystal (`crystal`)
+  - Library: Generators > Noises
+  - Tooltip: faceted crystal cells
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Type
+      - Control: dropdown
+      - Default: Crystal 1
+      - Choices: Crystal 1 / Crystal 2
+    - Scale
+      - Control: int
+      - Default: 6
+      - Range: 1..64
+    - Disorder
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+- Directional Noise (`directional_noise`)
+  - Library: Generators > Noises
+  - Tooltip: streak noise, seamless at any angle
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Scale
+      - Control: slider
+      - Default: 6
+      - Range: 1..32
+    - Stretch
+      - Control: slider
+      - Default: 8
+      - Range: 1..32
+    - Angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Disorder speed
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Disorder anisotropy
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Disorder anisotropy angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Tile offset X
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+    - Tile offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+- Grunge (`grunge`)
+  - Library: Generators > Noises
+  - Tooltip: grunge masks
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Type
+      - Control: dropdown
+      - Default: Concrete
+      - Choices: Concrete / Scratches / Spots / Smudges
+    - Balance
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Large variation (Concrete)
+      - Control: slider
+      - Default: 0.55
+      - Range: 0..1
+    - Base noisiness (Concrete)
+      - Control: slider
+      - Default: 0.45
+      - Range: 0..1
+    - Dirt specks opacity (Concrete)
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Invert dirt (Concrete)
+      - Control: checkbox
+      - Default: off
+    - Scratches opacity (Concrete)
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Sharpen (Concrete)
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Scratch quantity (Scratches)
+      - Control: int
+      - Default: 3
+      - Range: 1..32
+    - Scratch width (Scratches)
+      - Control: slider
+      - Default: 0.4
+      - Range: 0.05..0.95
+    - Scratch length (Scratches)
+      - Control: slider
+      - Default: 0.45
+      - Range: 0..0.9
+    - Details (Spots)
+      - Control: int
+      - Default: 22
+      - Range: 2..128
+    - Coverage (Spots)
+      - Control: slider
+      - Default: 0.35
+      - Range: 0..0.9
+    - Coverage contrast (Spots)
+      - Control: slider
+      - Default: 0.25
+      - Range: 0.02..1
+    - Disorder
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+- Plasma (`plasma`)
+  - Library: Generators > Noises
+  - Tooltip: smooth plasma waves
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Scale
+      - Control: int
+      - Default: 3
+      - Range: 1..8
+    - Disorder
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+- Stripes (`stripes`)
+  - Library: Generators > Patterns
+  - Tooltip: stripes
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Count
+      - Control: int
+      - Default: 8
+      - Range: 1..64
+    - Angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Edge softness
+      - Control: slider
+      - Default: 0.1
+      - Range: 0.001..0.5
+    - Stripe width
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Angle mode
+      - Control: dropdown
+      - Default: Seamless (snap to tileable angle)
+      - Choices: Exact angle (may not tile) / Seamless (snap to tileable angle)
+- Weave (`weave`)
+  - Library: Generators > Patterns
+  - Tooltip: woven threads
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Count
+      - Control: int
+      - Default: 6
+      - Range: 1..32
+    - Thread width
+      - Control: slider
+      - Default: 0.8
+      - Range: 0.1..1
+- Star (`star`)
+  - Library: Generators > Shapes
+  - Tooltip: star shape
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Points
+      - Control: int
+      - Default: 5
+      - Range: 3..16
+    - Inner radius
+      - Control: slider
+      - Default: 0.45
+      - Range: 0..1
+    - Size
+      - Control: slider
+      - Default: 0.4
+      - Range: 0..0.7
+    - Edge softness
+      - Control: slider
+      - Default: 0.01
+      - Range: 0..0.5
+    - Rotation
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Gradient Axial (`gradient_axial`)
+  - Library: Generators > Patterns
+  - Tooltip: symmetric gradient
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Gradient Circular (`gradient_circular`)
+  - Library: Generators > Patterns
+  - Tooltip: angular gradient
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Offset
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Cells (`cells`)
+  - Library: Generators > Noises
+  - Tooltip: cellular noise
+  - Inputs: color
+    - color
+      - Left-edge socket
+  - Outputs: output, cell_id, distance, edge
+    - output
+      - Right-edge socket
+    - cell_id
+      - Right-edge socket
+    - distance
+      - Right-edge socket
+    - edge
+      - Right-edge socket
+  - Properties:
+    - Type
+      - Control: dropdown
+      - Default: Cells 1
+      - Choices: Cells 1 / Cells 2 / Cells 3 / Cells 4
+    - Scale
+      - Control: int
+      - Default: 8
+      - Range: 1..64
+    - Randomness
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Luminance random (Type 1)
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Color source (Type 2)
+      - Control: dropdown
+      - Default: Random
+      - Choices: Random / Pseudorandom / Image input
+    - Pseudorandom seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Edge width (Type 3)
+      - Control: slider
+      - Default: 0.25
+      - Range: 0.01..1
+    - Hardness (Type 4)
+      - Control: slider
+      - Default: 2
+      - Range: 0.1..16
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Disorder speed
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Disorder anisotropy
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Disorder anisotropy angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Tile offset X
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+    - Tile offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+- Fractal Sum (`fractal_sum`)
+  - Library: Generators > Noises
+  - Tooltip: sum of noise octaves
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Type
+      - Control: dropdown
+      - Default: Base
+      - Choices: Base / Turbulence / Creased
+    - Scale
+      - Control: int
+      - Default: 2
+      - Range: 1..32
+    - Min level
+      - Control: int
+      - Default: 0
+      - Range: 0..8
+    - Max level
+      - Control: int
+      - Default: 6
+      - Range: 0..8
+    - Roughness
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1.5
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Disorder speed
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+- Waveform (`waveform`)
+  - Library: Generators > Noises
+  - Tooltip: tileable wave pattern
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Waveform
+      - Control: dropdown
+      - Default: Sine
+      - Choices: Sine / Triangle / Saw / Square
+    - Count
+      - Control: int
+      - Default: 8
+      - Range: 1..64
+    - Angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Warp
+      - Control: slider
+      - Default: 0.3
+      - Range: 0..4
+    - Warp scale
+      - Control: int
+      - Default: 4
+      - Range: 1..32
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Disorder speed
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+- Gaussian Spots (`gaussian_spots`)
+  - Library: Generators > Noises
+  - Tooltip: soft gaussian spots
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Scale
+      - Control: int
+      - Default: 8
+      - Range: 1..64
+    - Size
+      - Control: slider
+      - Default: 0.5
+      - Range: 0.05..1
+    - Size variation
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Disorder speed
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Disorder anisotropy
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Disorder anisotropy angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Tile offset X
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+    - Tile offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -16..16
+- Triangle Grid (`triangle_grid`)
+  - Library: Generators > Patterns
+  - Tooltip: grid of triangles
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Style
+      - Control: dropdown
+      - Default: Squares (legacy)
+      - Choices: Squares (legacy) / Jittered mesh
+    - Count (legacy)
+      - Control: int
+      - Default: 8
+      - Range: 1..64
+    - Border (legacy)
+      - Control: slider
+      - Default: 0.06
+      - Range: 0..0.5
+    - Variation (legacy)
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - X amount
+      - Control: int
+      - Default: 16
+      - Range: 1..64
+    - Y amount
+      - Control: int
+      - Default: 16
+      - Range: 1..64
+    - Random position
+      - Control: slider
+      - Default: 1
+      - Range: 0..2
+    - Quincunx offset X
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Quincunx offset Y
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Triangulation
+      - Control: dropdown
+      - Default: Fixed
+      - Choices: Fixed / Alternate / Random
+    - Output
+      - Control: dropdown
+      - Default: Smooth heights
+      - Choices: Smooth heights / Flat triangles / Edge distance
+    - Height random
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Thin lines
+      - Control: checkbox
+      - Default: off
+    - Line thickness
+      - Control: slider
+      - Default: 0.025
+      - Range: 0..0.1
+    - Line colour
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Line background
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+- Grunge Map (`grunge_map`)
+  - Library: Generators > Noises
+  - Tooltip: grunge map 1-15
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Grunge map
+      - Control: int
+      - Default: 1
+      - Range: 1..15
+    - Balance
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Contrast
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Brush pattern
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Cracks (maps 11, 13)
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Disorder
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Weave Generator (`weave_generator`)
+  - Library: Generators > Patterns
+  - Tooltip: woven threads with gaps
+  - Inputs: none
+  - Outputs: height, mask_1, mask_2, opacity
+    - height
+      - Right-edge socket
+    - mask_1
+      - Right-edge socket
+    - mask_2
+      - Right-edge socket
+    - opacity
+      - Right-edge socket
+  - Properties:
+    - Tile X
+      - Control: int
+      - Default: 1
+      - Range: 1..20
+    - Tile Y
+      - Control: int
+      - Default: 1
+      - Range: 1..20
+    - Weave
+      - Control: int
+      - Default: 2
+      - Range: 1..10
+    - Shape
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Gap X
+      - Control: slider
+      - Default: 0.1
+      - Range: 0..0.9
+    - Gap Y
+      - Control: slider
+      - Default: 0.1
+      - Range: 0..0.9
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+- Starburst (`starburst`)
+  - Library: Generators > Patterns
+  - Tooltip: star-like rays
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Count
+      - Control: int
+      - Default: 3
+      - Range: 1..32
+    - Rays
+      - Control: int
+      - Default: 8
+      - Range: 2..64
+    - Sharpness
+      - Control: slider
+      - Default: 2
+      - Range: 0.1..16
+    - Size
+      - Control: slider
+      - Default: 1
+      - Range: 0.05..2
+    - Rotation
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Rotation random
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+- Gradient Reflected (`gradient_reflected`)
+  - Library: Generators > Patterns
+  - Tooltip: gradient that goes 0-1-0
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Count
+      - Control: int
+      - Default: 1
+      - Range: 1..16
+    - Angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Invert
+      - Control: checkbox
+      - Default: off
+
+### Filters nodes (69)
+
+- Curve (`curve`)
+  - Library: Filters > Adjustments
+  - Tooltip: tone curves
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Points
+      - Control: number box
+    - Points r
+      - Control: number box
+    - Points g
+      - Control: number box
+    - Points b
+      - Control: number box
+    - Points a
+      - Control: number box
+    - As
+      - Control: number box
+    - Lists
+      - Control: number box
+- Channel Shuffle (`channel_shuffle`)
+  - Library: Filters > Adjustments
+  - Tooltip: rebuild channels
+  - Inputs: in, in2
+    - in
+      - Left-edge socket
+    - in2
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Red from
+      - Control: dropdown
+      - Default: Input red
+      - Choices: Input red / Input green / Input blue / Input alpha / Second red / Second green / Second blue / Second alpha / Zero / One
+    - Green from
+      - Control: dropdown
+      - Default: Input green
+      - Choices: Input red / Input green / Input blue / Input alpha / Second red / Second green / Second blue / Second alpha / Zero / One
+    - Blue from
+      - Control: dropdown
+      - Default: Input blue
+      - Choices: Input red / Input green / Input blue / Input alpha / Second red / Second green / Second blue / Second alpha / Zero / One
+    - Alpha from
+      - Control: dropdown
+      - Default: Input alpha
+      - Choices: Input red / Input green / Input blue / Input alpha / Second red / Second green / Second blue / Second alpha / Zero / One
+    - Invert red
+      - Control: checkbox
+      - Default: off
+    - Invert green
+      - Control: checkbox
+      - Default: off
+    - Invert blue
+      - Control: checkbox
+      - Default: off
+    - Invert alpha
+      - Control: checkbox
+      - Default: off
+- Switch (`switch`)
+  - Library: Filters > Adjustments
+  - Tooltip: pass one of up to four inputs
+  - Inputs: a, b, c, d
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+    - c
+      - Left-edge socket
+    - d
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Index
+      - Control: int
+      - Default: 0
+      - Range: 0..3
+- Flood Fill (`flood_fill`)
+  - Library: Filters > Masks and regions
+  - Tooltip: label connected regions of a mask
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Threshold
+      - Control: slider
+      - Default: 0.05
+      - Range: 0..1
+- Flood Fill Random (`flood_fill_random`)
+  - Library: Filters > Masks and regions
+  - Tooltip: random grayscale per flood-fill region
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Minimum
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Maximum
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Flood Fill Color (`flood_fill_color`)
+  - Library: Filters > Masks and regions
+  - Tooltip: random color per flood-fill region
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Flood Fill To Index (`flood_fill_to_index`)
+  - Library: Filters > Adjustments
+  - Tooltip: region number of each flood-fill region as a gray level
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Flood Fill To Position (`flood_fill_to_position`)
+  - Library: Filters > Adjustments
+  - Tooltip: centre of each flood-fill region (outputs
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: position, x, y
+    - position
+      - Right-edge socket
+    - x
+      - Right-edge socket
+    - y
+      - Right-edge socket
+  - Properties:
+    - Position
+      - Control: number box
+    - X
+      - Control: number box
+- Flood Fill To Bbox Size (`flood_fill_to_bbox_size`)
+  - Library: Filters > Adjustments
+  - Tooltip: bounding-box size of each flood-fill region (outputs
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: size, width, height
+    - size
+      - Right-edge socket
+    - width
+      - Right-edge socket
+    - height
+      - Right-edge socket
+  - Properties:
+    - Size
+      - Control: number box
+    - Width
+      - Control: number box
+- Flood Fill Gradient (`flood_fill_gradient`)
+  - Library: Filters > Masks and regions
+  - Tooltip: gradient across each flood-fill region
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Angle variation
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Vector Warp (`vector_warp`)
+  - Library: Filters > Blur and warp
+  - Tooltip: displace by a vector map
+  - Inputs: in, vector
+    - in
+      - Left-edge socket
+    - vector
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Intensity
+      - Control: slider
+      - Default: 0.05
+      - Range: 0..0.5
+    - Vector format
+      - Control: dropdown
+      - Default: OpenGL
+      - Choices: OpenGL / DirectX
+- Slope Blur (`slope_blur`)
+  - Library: Filters > Blur and warp
+  - Tooltip: blur along a slope map
+  - Inputs: in, slope
+    - in
+      - Left-edge socket
+    - slope
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Samples
+      - Control: int
+      - Default: 16
+      - Range: 1..64
+    - Intensity
+      - Control: slider
+      - Default: 0.1
+      - Range: 0..1
+    - Mode
+      - Control: dropdown
+      - Default: Blur
+      - Choices: Blur / Min / Max
+- Blur Hq (`blur_hq`)
+  - Library: Filters > Blur and warp
+  - Tooltip: high quality blur
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Intensity
+      - Control: slider
+      - Default: 6
+      - Range: 0..64
+    - Quality
+      - Control: int
+      - Default: 1
+      - Range: 1..4
+- Histogram Range (`histogram_range`)
+  - Library: Filters > Adjustments
+  - Tooltip: select a range of values
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Position
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Range
+      - Control: slider
+      - Default: 0.2
+      - Range: 0..1
+    - Contrast
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Invert
+      - Control: checkbox
+      - Default: off
+- Bevel (`bevel`)
+  - Library: Filters > Masks and regions
+  - Tooltip: bevel a shape
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Distance
+      - Control: slider
+      - Default: 0.05
+      - Range: 0..0.5
+    - Smoothing
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Shape threshold
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Output as normal
+      - Control: checkbox
+      - Default: off
+    - Normal intensity
+      - Control: slider
+      - Default: 4
+      - Range: 0..50
+    - Corner type
+      - Control: dropdown
+      - Default: Angular
+      - Choices: Round / Angular
+    - Normal format
+      - Control: dropdown
+      - Default: OpenGL
+      - Choices: OpenGL / DirectX
+- Distance (`distance`)
+  - Library: Filters > Masks and regions
+  - Tooltip: distance field of a mask
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Distance range
+      - Control: slider
+      - Default: 0.1
+      - Range: 0..1
+    - Shape threshold
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Mode
+      - Control: dropdown
+      - Default: Inside
+      - Choices: Inside / Outside / Both
+- Color Match (`color_match`)
+  - Library: Filters > Adjustments
+  - Tooltip: ,target_color recolour
+  - Inputs: in, reference, src_color
+    - in
+      - Left-edge socket
+    - reference
+      - Left-edge socket
+    - src_color
+      - Left-edge socket
+  - Outputs: output, mask
+    - output
+      - Right-edge socket
+    - mask
+      - Right-edge socket
+  - Properties:
+    - Method
+      - Control: dropdown
+      - Default: Statistics transfer
+      - Choices: Statistics transfer / Colour swap
+    - Strength
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Source colour mode
+      - Control: dropdown
+      - Default: Average
+      - Choices: Average / Colour / Input
+    - Source red
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Source green
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Source blue
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Target colour mode
+      - Control: dropdown
+      - Default: Colour
+      - Choices: Colour / Input
+    - Target red
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Target green
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Target blue
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Custom colour variation
+      - Control: checkbox
+      - Default: off
+    - Hue
+      - Control: slider
+      - Default: 0
+      - Range: 0..360
+    - Chrominance
+      - Control: slider
+      - Default: 1
+      - Range: 0..2
+    - Luminance
+      - Control: slider
+      - Default: 1
+      - Range: 0..2
+    - Use mask
+      - Control: checkbox
+      - Default: on
+    - Mask hue range
+      - Control: slider
+      - Default: 30
+      - Range: 0..180
+    - Mask chroma range
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Mask luma range
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Mask smoothness
+      - Control: slider
+      - Default: 0.3
+      - Range: 0..2
+- Make It Tile Photo (`make_it_tile_photo`)
+  - Library: Filters > Transform
+  - Tooltip: make a photo tile
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Mask size H
+      - Control: slider
+      - Default: 0.6
+      - Range: 0.1..1
+    - Mask size V
+      - Control: slider
+      - Default: 0.6
+      - Range: 0.1..1
+- Make It Tile Patch (`make_it_tile_patch`)
+  - Library: Filters > Transform
+  - Tooltip: make an image tile with random patches
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Patches
+      - Control: int
+      - Default: 6
+      - Range: 2..32
+    - Softness
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Clamp (`clamp`)
+  - Library: Filters > Adjustments
+  - Tooltip: clamp values
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Min
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Max
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Apply to alpha
+      - Control: checkbox
+      - Default: off
+- Highpass (`highpass`)
+  - Library: Filters > Adjustments
+  - Tooltip: high-pass filter
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Radius
+      - Control: slider
+      - Default: 6
+      - Range: 0..64
+- Swirl (`swirl`)
+  - Library: Filters > Blur and warp
+  - Tooltip: swirl distortion
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Amount
+      - Control: slider
+      - Default: 0.3
+      - Range: -2..2
+    - Radius
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+- Blur (`blur`)
+  - Library: Filters > Blur and warp
+  - Tooltip: gaussian blur
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Intensity
+      - Control: slider
+      - Default: 4
+      - Range: 0..64
+- Directional Blur (`directional_blur`)
+  - Library: Filters > Blur and warp
+  - Tooltip: angle length
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Length
+      - Control: slider
+      - Default: 0.05
+      - Range: 0..0.3
+- Sharpen (`sharpen`)
+  - Library: Filters > Blur and warp
+  - Tooltip: radius amount
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Radius
+      - Control: slider
+      - Default: 2
+      - Range: 0..32
+    - Amount
+      - Control: slider
+      - Default: 1
+      - Range: 0..5
+- Levels (`levels`)
+  - Library: Filters > Adjustments
+  - Tooltip: low high gamma out_low out_high
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Auto levels
+      - Control: checkbox
+      - Default: off
+    - Input low
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Input high
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Gamma
+      - Control: slider
+      - Default: 1
+      - Range: 0.1..4
+    - Output low
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Output high
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+- Adjust (`adjust`)
+  - Library: Filters > Adjustments
+  - Tooltip: brightness contrast
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Brightness
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0..3
+- Invert (`invert`)
+  - Library: Filters > Adjustments
+  - Tooltip: invert colours
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Invert
+      - Control: checkbox
+      - Default: on
+- Threshold (`threshold`)
+  - Library: Filters > Adjustments
+  - Tooltip: binary threshold
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Threshold
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Mode
+      - Control: dropdown
+      - Default: Greater
+      - Choices: Greater / Greater or equal / Lower / Lower or equal
+    - Edge softness
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Histogram Scan (`histogram_scan`)
+  - Library: Filters > Adjustments
+  - Tooltip: position width
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Position
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Contrast
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Invert
+      - Control: checkbox
+      - Default: off
+- Quantize (`quantize`)
+  - Library: Filters > Adjustments
+  - Tooltip: steps
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Steps
+      - Control: int
+      - Default: 4
+      - Range: 2..32
+- To Gray (`to_gray`)
+  - Library: Filters > Adjustments
+  - Tooltip: luminance
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Channel (`channel`)
+  - Library: Filters > Adjustments
+  - Tooltip: ch(0 r,1 g,2 b,3 a)
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Channel
+      - Control: dropdown
+      - Default: Red
+      - Choices: Red / Green / Blue / Alpha
+- Merge (`merge`)
+  - Library: Filters > Adjustments
+  - Tooltip: combine channels
+  - Inputs: r, g, b, a
+    - r
+      - Left-edge socket
+    - g
+      - Left-edge socket
+    - b
+      - Left-edge socket
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Tint (`tint`)
+  - Library: Filters > Adjustments
+  - Tooltip: multiply by colour
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Red
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Green
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Blue
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+- Colorize (`colorize`)
+  - Library: Filters > Adjustments
+  - Tooltip: gradient map
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Interpolation
+      - Control: dropdown
+      - Default: Linear
+      - Choices: Linear / Smooth / Step / Smoother
+    - Smoothness
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Gradient addressing
+      - Control: dropdown
+      - Default: Clamp
+      - Choices: Clamp / Repeat
+    - Use gradient alpha
+      - Control: checkbox
+      - Default: off
+- Hsl (`hsl`)
+  - Library: Filters > Adjustments
+  - Tooltip: hue sat val
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Hue
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Saturation
+      - Control: slider
+      - Default: 1
+      - Range: 0..2
+    - Lightness
+      - Control: slider
+      - Default: 1
+      - Range: 0..2
+- Transform (`transform`)
+  - Library: Filters > Transform
+  - Tooltip: offset_x offset_y scale_x scale_y rotation(turns)
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Offset X
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Scale X
+      - Control: slider
+      - Default: 1
+      - Range: 0.1..4
+    - Scale Y
+      - Control: slider
+      - Default: 1
+      - Range: 0.1..4
+    - Rotation
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Tiling mode
+      - Control: dropdown
+      - Default: H and V tiling
+      - Choices: H and V tiling / No tiling
+- Mirror (`mirror`)
+  - Library: Filters > Transform
+  - Tooltip: mirror an image
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Mode
+      - Control: dropdown
+      - Default: Mirror axis X
+      - Choices: Mirror axis X / Mirror axis Y / Both axes / Mirror corner
+    - Axis X offset
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Axis Y offset
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Invert axis X
+      - Control: checkbox
+      - Default: off
+    - Invert axis Y
+      - Control: checkbox
+      - Default: off
+    - Corner type
+      - Control: dropdown
+      - Default: Top left
+      - Choices: Top left / Top right / Bottom left / Bottom right
+- Warp (`warp`)
+  - Library: Filters > Blur and warp
+  - Tooltip: slope warp
+  - Inputs: in, warp
+    - in
+      - Left-edge socket
+    - warp
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Intensity
+      - Control: slider
+      - Default: 0.05
+      - Range: 0..0.5
+    - Input filtering
+      - Control: dropdown
+      - Default: Bicubic
+      - Choices: Bilinear / Nearest / Bicubic
+- Directional Warp (`directional_warp`)
+  - Library: Filters > Blur and warp
+  - Tooltip: warp in one direction
+  - Inputs: in, warp
+    - in
+      - Left-edge socket
+    - warp
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Warp angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Intensity
+      - Control: slider
+      - Default: 0.1
+      - Range: 0..0.5
+    - Intensity map offset
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Input filtering
+      - Control: dropdown
+      - Default: Bicubic
+      - Choices: Bilinear / Nearest / Bicubic
+- Blend (`blend`)
+  - Library: Filters > Adjustments
+  - Tooltip: blend two images
+  - Inputs: fg, bg, mask
+    - fg
+      - Left-edge socket
+    - bg
+      - Left-edge socket
+    - mask
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Blending mode
+      - Control: dropdown
+      - Default: Copy
+      - Choices: Copy / Add / Subtract / Multiply / Screen / Overlay / Max / Min / Difference / Soft light / Color dodge / Color burn / Linear burn / Hard light / Exclusion / Divide / Linear light / Color / Luminosity / Dissolve
+    - Opacity
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Alpha blending
+      - Control: dropdown
+      - Default: Ignore alpha
+      - Choices: Use source alpha / Ignore alpha / Straight alpha blending / Premultiplied alpha blending
+    - Cropping left
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Cropping top
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Cropping right
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Cropping bottom
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+- Quantize Color (`quantize_color`)
+  - Library: Filters > Adjustments
+  - Tooltip: reduce to few colours (k-means)
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output, id, palette
+    - output
+      - Right-edge socket
+    - id
+      - Right-edge socket
+    - palette
+      - Right-edge socket
+  - Properties:
+    - Max. colour amount
+      - Control: int
+      - Default: 32
+      - Range: 1..128
+    - Contour smoothing
+      - Control: slider
+      - Default: 0
+      - Range: 0..8
+    - Dithering
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Dithering pattern
+      - Control: dropdown
+      - Default: Noise
+      - Choices: Noise / Bayer
+    - Ignore alpha
+      - Control: checkbox
+      - Default: off
+    - Distance colour space
+      - Control: dropdown
+      - Default: Lab
+      - Choices: Lab / RGB
+- Edge Detect (`edge_detect`)
+  - Library: Filters > Masks and regions
+  - Tooltip: edge lines
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Method
+      - Control: dropdown
+      - Default: Edge lines
+      - Choices: Edge lines / Sobel (legacy)
+    - Edge width
+      - Control: slider
+      - Default: 2
+      - Range: 1..16
+    - Edge roundness
+      - Control: slider
+      - Default: 4
+      - Range: 0..16
+    - Invert
+      - Control: checkbox
+      - Default: off
+    - Tolerance
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Intensity (Sobel)
+      - Control: slider
+      - Default: 2
+      - Range: 0..10
+- Emboss (`emboss`)
+  - Library: Filters > Masks and regions
+  - Tooltip: angle intensity
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Angle
+      - Control: slider
+      - Default: 0.125
+      - Range: 0..1
+    - Intensity
+      - Control: slider
+      - Default: 4
+      - Range: 0..10
+- Non Uniform Blur (`non_uniform_blur`)
+  - Library: Filters > Blur and warp
+  - Tooltip: blur by a mask
+  - Inputs: in, mask
+    - in
+      - Left-edge socket
+    - mask
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Intensity
+      - Control: slider
+      - Default: 8
+      - Range: 0..64
+- Radial Blur (`radial_blur`)
+  - Library: Filters > Blur and warp
+  - Tooltip: spin blur around a centre
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Blur type
+      - Control: dropdown
+      - Default: Spin
+      - Choices: Spin / Zoom (legacy)
+    - Samples
+      - Control: int
+      - Default: 64
+      - Range: 1..128
+    - Angle
+      - Control: slider
+      - Default: 0.125
+      - Range: 0..0.5
+    - Center X
+      - Control: slider
+      - Default: 0
+      - Range: -0.5..0.5
+    - Center Y
+      - Control: slider
+      - Default: 0
+      - Range: -0.5..0.5
+    - Zoom amount
+      - Control: slider
+      - Default: 0.1
+      - Range: 0..1
+    - Zoom radius
+      - Control: slider
+      - Default: 0.5
+      - Range: 0.01..0.5
+- Anisotropic Blur (`anisotropic_blur`)
+  - Library: Filters > Blur and warp
+  - Tooltip: blur stretched in one direction
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Intensity
+      - Control: slider
+      - Default: 8
+      - Range: 0..64
+    - Anisotropy
+      - Control: slider
+      - Default: 0.8
+      - Range: 0..1
+    - Angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Symmetry (`symmetry`)
+  - Library: Filters > Transform
+  - Tooltip: mirror the image around a line
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Symmetry mode
+      - Control: dropdown
+      - Default: Mirror X
+      - Choices: Mirror X / Mirror Y / Mirror X / Y / Diagonal left / Diagonal right / Eight-fold
+    - Transfer mode
+      - Control: dropdown
+      - Default: Copy
+      - Choices: Copy / Add / Subtract / Multiply / Add sub / Max / Min
+    - Offset
+      - Control: slider
+      - Default: 0
+      - Range: -0.5..0.5
+    - Flip side
+      - Control: checkbox
+      - Default: off
+- Skew (`skew`)
+  - Library: Filters > Transform
+  - Tooltip: shear that keeps tiling
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Skew X
+      - Control: int
+      - Default: 1
+      - Range: -8..8
+    - Skew Y
+      - Control: int
+      - Default: 0
+      - Range: -8..8
+    - Align
+      - Control: dropdown
+      - Default: Top left
+      - Choices: Center / Top left / Bottom right
+- Auto Levels (`auto_levels`)
+  - Library: Filters > Adjustments
+  - Tooltip: stretch values to the full range
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Per channel
+      - Control: checkbox
+      - Default: off
+- Channel Mixer (`channel_mixer`)
+  - Library: Filters > Adjustments
+  - Tooltip: mix colour channels
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Red from red
+      - Control: slider
+      - Default: 1
+      - Range: -2..2
+    - Red from green
+      - Control: slider
+      - Default: 0
+      - Range: -2..2
+    - Red from blue
+      - Control: slider
+      - Default: 0
+      - Range: -2..2
+    - Green from red
+      - Control: slider
+      - Default: 0
+      - Range: -2..2
+    - Green from green
+      - Control: slider
+      - Default: 1
+      - Range: -2..2
+    - Green from blue
+      - Control: slider
+      - Default: 0
+      - Range: -2..2
+    - Blue from red
+      - Control: slider
+      - Default: 0
+      - Range: -2..2
+    - Blue from green
+      - Control: slider
+      - Default: 0
+      - Range: -2..2
+    - Blue from blue
+      - Control: slider
+      - Default: 1
+      - Range: -2..2
+    - Monochrome
+      - Control: checkbox
+      - Default: off
+- Alpha Merge (`alpha_merge`)
+  - Library: Filters > Adjustments
+  - Tooltip: put a grayscale image into the alpha channel
+  - Inputs: rgb, alpha
+    - rgb
+      - Left-edge socket
+    - alpha
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Color To Mask (`color_to_mask`)
+  - Library: Filters > Adjustments
+  - Tooltip: mask of pixels close to a colour
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Red
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Green
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Blue
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Range
+      - Control: slider
+      - Default: 0.2
+      - Range: 0..1
+    - Softness
+      - Control: slider
+      - Default: 0.1
+      - Range: 0..1
+- Replace Color (`replace_color`)
+  - Library: Filters > Adjustments
+  - Tooltip: replace one colour with another
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Source red
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Source green
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Source blue
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Target red
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Target green
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Target blue
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Range
+      - Control: slider
+      - Default: 0.25
+      - Range: 0..1
+    - Softness
+      - Control: slider
+      - Default: 0.15
+      - Range: 0..1
+- Pow (`pow`)
+  - Library: Filters > Adjustments
+  - Tooltip: raise values to a power
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Exponent
+      - Control: slider
+      - Default: 2
+      - Range: 0..8
+- Histogram Shift (`histogram_shift`)
+  - Library: Filters > Adjustments
+  - Tooltip: shift all values
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Position
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+- Grayscale Conversion (`grayscale_conversion`)
+  - Library: Filters > Adjustments
+  - Tooltip: weighted grayscale
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Red weight
+      - Control: slider
+      - Default: 0.3
+      - Range: 0..1
+    - Green weight
+      - Control: slider
+      - Default: 0.59
+      - Range: 0..1
+    - Blue weight
+      - Control: slider
+      - Default: 0.11
+      - Range: 0..1
+- Sobel (`sobel`)
+  - Library: Filters > Effects
+  - Tooltip: sobel edge magnitude
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Intensity
+      - Control: slider
+      - Default: 1
+      - Range: 0..16
+- Glow (`glow`)
+  - Library: Filters > Effects
+  - Tooltip: glow around bright areas
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Glow size
+      - Control: slider
+      - Default: 8
+      - Range: 0..128
+    - Glow amount
+      - Control: slider
+      - Default: 1
+      - Range: 0..8
+    - Clear amount
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Glow color R
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Glow color G
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Glow color B
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+- Mosaic (`mosaic`)
+  - Library: Filters > Effects
+  - Tooltip: mosaic of the map regions (or a pixel grid without a map)
+  - Inputs: in, mosaic_map
+    - in
+      - Left-edge socket
+    - mosaic_map
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Intensity (with map)
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Cells per side (no map)
+      - Control: int
+      - Default: 16
+      - Range: 1..128
+- Non Uniform Directional Warp (`non_uniform_directional_warp`)
+  - Library: Filters > Blur and warp
+  - Tooltip: warp along a direction chosen per pixel
+  - Inputs: in, intensity, angle
+    - in
+      - Left-edge socket
+    - intensity
+      - Left-edge socket
+    - angle
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Intensity
+      - Control: slider
+      - Default: 0.1
+      - Range: -1..1
+    - Angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Multi Directional Warp (`multi_directional_warp`)
+  - Library: Filters > Blur and warp
+  - Tooltip: warp in several directions at once
+  - Inputs: in, warp
+    - in
+      - Left-edge socket
+    - warp
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Intensity
+      - Control: slider
+      - Default: 0.1
+      - Range: -1..1
+    - Directions
+      - Control: dropdown
+      - Default: 4
+      - Choices: 1 / 2 / 4
+    - Warp angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Mode
+      - Control: dropdown
+      - Default: Average
+      - Choices: Average / Max / Min / Chain
+- Rgba Split (`rgba_split`)
+  - Library: Filters > Adjustments
+  - Tooltip: split into R, G, B and A grayscale outputs
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: r, g, b, a
+    - r
+      - Right-edge socket
+    - g
+      - Right-edge socket
+    - b
+      - Right-edge socket
+    - a
+      - Right-edge socket
+  - Properties:
+    - none
+- Alpha Split (`alpha_split`)
+  - Library: Filters > Adjustments
+  - Tooltip: split into an RGB output and an alpha output
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: rgb, alpha
+    - rgb
+      - Right-edge socket
+    - alpha
+      - Right-edge socket
+  - Properties:
+    - none
+- Shape Stroke (`shape_stroke`)
+  - Library: Filters > Effects
+  - Tooltip: outline of a shape
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Width
+      - Control: slider
+      - Default: 8
+      - Range: 0.5..256
+    - Offset
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Softness
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Shape threshold
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Opacity
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Outline color R
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Outline color G
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Outline color B
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+- Shape Glow (`shape_glow`)
+  - Library: Filters > Effects
+  - Tooltip: glow around a shape
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Width
+      - Control: slider
+      - Default: 16
+      - Range: 0.5..256
+    - Softness
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Intensity
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Shape threshold
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Spread
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Opacity
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Glow color R
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Glow color G
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Glow color B
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+- Chrominance Extract (`chrominance_extract`)
+  - Library: Filters > Adjustments
+  - Tooltip: colour without brightness
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Shape Drop Shadow (`shape_drop_shadow`)
+  - Library: Filters > Effects
+  - Tooltip: drop shadow of a mask
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Angle
+      - Control: slider
+      - Default: 0.125
+      - Range: 0..1
+    - Distance
+      - Control: slider
+      - Default: 0.03
+      - Range: 0..0.5
+    - Blur
+      - Control: slider
+      - Default: 6
+      - Range: 0..128
+    - Opacity
+      - Control: slider
+      - Default: 0.8
+      - Range: 0..1
+    - Spread
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+
+### Material nodes (14)
+
+- Curvature Smooth (`curvature_smooth`)
+  - Library: Material tools
+  - Tooltip: smooth curvature from a normal map
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Smoothing
+      - Control: slider
+      - Default: 2
+      - Range: 0..32
+    - Intensity
+      - Control: slider
+      - Default: 6
+      - Range: 0..20
+- Height Blend (`height_blend`)
+  - Library: Material tools
+  - Tooltip: blend two height maps
+  - Inputs: bg, fg, mask
+    - bg
+      - Left-edge socket
+    - fg
+      - Left-edge socket
+    - mask
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Opacity
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Height transition
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..2
+    - Output
+      - Control: dropdown
+      - Default: Height
+      - Choices: Height / Blend mask
+- Edge Wear (`edge_wear`)
+  - Library: Mesh-driven
+  - Tooltip: edge wear mask from a height map
+  - Inputs: in, noise
+    - in
+      - Left-edge socket
+    - noise
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Amount
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Edge width
+      - Control: slider
+      - Default: 2
+      - Range: 0..16
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0.1..4
+- Dirt (`dirt`)
+  - Library: Mesh-driven
+  - Tooltip: dirt mask from an ambient occlusion map
+  - Inputs: in, noise
+    - in
+      - Left-edge socket
+    - noise
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Amount
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0.1..4
+- Dust (`dust`)
+  - Library: Mesh-driven
+  - Tooltip: dust mask from a normal map
+  - Inputs: in, noise
+    - in
+      - Left-edge socket
+    - noise
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Amount
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Contrast
+      - Control: slider
+      - Default: 1
+      - Range: 0.1..4
+- Normal (`normal`)
+  - Library: Material tools
+  - Tooltip: height->normal (OpenGL +Y)
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Intensity
+      - Control: slider
+      - Default: 2
+      - Range: 0..10
+    - DirectX format
+      - Control: checkbox
+      - Default: off
+    - Fill alpha with input
+      - Control: checkbox
+      - Default: off
+- Normal Blend (`normal_blend`)
+  - Library: Material tools
+  - Tooltip: blend normal maps (a = background, b = foreground)
+  - Inputs: a, b, mask
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+    - mask
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Opacity
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+- Ao (`ao`)
+  - Library: Material tools
+  - Tooltip: ambient occlusion
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Method
+      - Control: dropdown
+      - Default: Blur (legacy)
+      - Choices: Blur (legacy) / Horizon (HBAO)
+    - Spread (legacy)
+      - Control: slider
+      - Default: 6
+      - Range: 0..64
+    - Height depth (legacy)
+      - Control: slider
+      - Default: 2
+      - Range: 0..10
+    - Radius
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Intensity
+      - Control: slider
+      - Default: 1
+      - Range: 0..2
+    - Quality
+      - Control: dropdown
+      - Default: 8 samples
+      - Choices: 4 samples / 8 samples / 16 samples
+    - Use world units
+      - Control: checkbox
+      - Default: off
+    - Height depth (screen)
+      - Control: slider
+      - Default: 0.1
+      - Range: 0..1
+    - Surface size (cm)
+      - Control: slider
+      - Default: 300
+      - Range: 1..1000
+    - Height depth (cm)
+      - Control: slider
+      - Default: 30
+      - Range: 0..1000
+- Curvature (`curvature`)
+  - Library: Material tools
+  - Tooltip: curvature of a normal map
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Input
+      - Control: dropdown
+      - Default: Normal map
+      - Choices: Normal map / Height map (legacy)
+    - Normal format
+      - Control: dropdown
+      - Default: OpenGL
+      - Choices: OpenGL / DirectX
+    - Intensity
+      - Control: slider
+      - Default: 4
+      - Range: 0..10
+    - Radius (height input)
+      - Control: slider
+      - Default: 3
+      - Range: 0..64
+- Normal Invert (`normal_invert`)
+  - Library: Material tools
+  - Tooltip: flip normal map channels
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Invert red (X)
+      - Control: checkbox
+      - Default: off
+    - Invert green (Y)
+      - Control: checkbox
+      - Default: on
+    - Invert blue (Z)
+      - Control: checkbox
+      - Default: off
+    - Invert alpha
+      - Control: checkbox
+      - Default: off
+- Normal Normalize (`normal_normalize`)
+  - Library: Material tools
+  - Tooltip: renormalise a normal map
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Normal Vector Rotation (`normal_vector_rotation`)
+  - Library: Material tools
+  - Tooltip: rotate normal vectors
+  - Inputs: in, rotation
+    - in
+      - Left-edge socket
+    - rotation
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Rotation angle
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Normal format
+      - Control: dropdown
+      - Default: OpenGL
+      - Choices: OpenGL / DirectX
+- Normal To Height (`normal_to_height`)
+  - Library: Material tools
+  - Tooltip: integrate a normal map into a height map
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Relief balance
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..1
+    - Normal format
+      - Control: dropdown
+      - Default: OpenGL
+      - Choices: OpenGL / DirectX
+    - Global opacity
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+- Normal Combine (`normal_combine`)
+  - Library: Material tools
+  - Tooltip: combine two normal maps
+  - Inputs: base, detail
+    - base
+      - Left-edge socket
+    - detail
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Technique
+      - Control: dropdown
+      - Default: Detail oriented
+      - Choices: Whiteout / Channel mixer / Detail oriented
+
+### SDF nodes (4)
+
+- Sdf Shape (`sdf_shape`)
+  - Library: Generators > SDF
+  - Tooltip: 2D signed distance shape
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Shape
+      - Control: dropdown
+      - Default: Circle
+      - Choices: Circle / Box / Polygon / Ring
+    - Size
+      - Control: slider
+      - Default: 0.25
+      - Range: 0..0.5
+    - Aspect
+      - Control: slider
+      - Default: 1
+      - Range: 0.1..3
+    - Sides
+      - Control: int
+      - Default: 5
+      - Range: 3..12
+    - Rotation
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Corner rounding
+      - Control: slider
+      - Default: 0
+      - Range: 0..0.3
+    - Position X
+      - Control: slider
+      - Default: 0
+      - Range: -0.5..0.5
+    - Position Y
+      - Control: slider
+      - Default: 0
+      - Range: -0.5..0.5
+    - Distance range
+      - Control: slider
+      - Default: 0.25
+      - Range: 0.02..1
+- Sdf Op (`sdf_op`)
+  - Library: Generators > SDF
+  - Tooltip: combine SDFs
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Operation
+      - Control: dropdown
+      - Default: Union
+      - Choices: Union / Subtract / Intersect
+    - Smoothing
+      - Control: slider
+      - Default: 0
+      - Range: 0..0.3
+    - Distance range
+      - Control: slider
+      - Default: 0.25
+      - Range: 0.02..1
+- Sdf Mask (`sdf_mask`)
+  - Library: Generators > SDF
+  - Tooltip: SDF -> mask
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Offset
+      - Control: slider
+      - Default: 0
+      - Range: -0.5..0.5
+    - Edge softness
+      - Control: slider
+      - Default: 0.02
+      - Range: 0..0.5
+- Sdf Form (`sdf_form`)
+  - Library: Generators > SDF
+  - Tooltip: procedural 3D SDF form as height
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Shape
+      - Control: dropdown
+      - Default: Sphere
+      - Choices: Sphere / Box / Torus / Cylinder
+    - Size
+      - Control: slider
+      - Default: 0.3
+      - Range: 0.05..0.5
+    - Repeat
+      - Control: int
+      - Default: 3
+      - Range: 1..16
+    - Rounding
+      - Control: slider
+      - Default: 0.05
+      - Range: 0..0.3
+    - Size variation
+      - Control: slider
+      - Default: 0.3
+      - Range: 0..1
+    - Height
+      - Control: slider
+      - Default: 1.5
+      - Range: 0.1..4
+    - Random seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+
+### Utility nodes (6)
+
+- Input Value (`input_value`)
+  - Library: Filters > Adjustments
+  - Tooltip: graph parameter read by functions
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Type
+      - Control: dropdown
+      - Default: Float
+      - Choices: Float / Integer / Boolean / Float2 / Float3 / Float4 / Integer2 / Integer3 / Integer4 / String
+    - Default
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default X
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default Y
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default Z
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default W
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Minimum
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Maximum
+      - Control: slider
+      - Default: 1
+      - Range: -1000..1000
+- Bitmap (`bitmap`)
+  - Library: Structure
+  - Tooltip: flip_x flip_y gray; imported PNG bitmap
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Flip horizontally
+      - Control: checkbox
+      - Default: off
+    - Flip vertically
+      - Control: checkbox
+      - Default: off
+    - Convert to grayscale
+      - Control: checkbox
+      - Default: off
+- Input (`input`)
+  - Library: Structure
+  - Tooltip: subgraph input
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Input index
+      - Control: int
+      - Default: 0
+      - Range: 0..3
+    - Grayscale
+      - Control: checkbox
+      - Default: off
+- Subgraph (`subgraph`)
+  - Library: Structure
+  - Tooltip: instance of a reusable subgraph
+  - Inputs: in0, in1, in2, in3
+    - in0
+      - Left-edge socket
+    - in1
+      - Left-edge socket
+    - in2
+      - Left-edge socket
+    - in3
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Graph
+      - Control: number box
+- Output (`output`)
+  - Library: Structure
+  - Tooltip: graph output
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Usage
+      - Control: number box
+    - Identifier
+      - Control: number box
+- Dot (`dot`)
+  - Library: Structure
+  - Tooltip: re-route a link
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+
+### Function graph nodes (84)
+
+- Out (`f_out`)
+  - Tooltip: result of the function
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Pin (`f_pin`)
+  - Tooltip: re-route a value link
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Float (`f_float`)
+  - Tooltip: constant float
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Value
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+- Int (`f_int`)
+  - Tooltip: constant integer
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Value
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+- Bool (`f_bool`)
+  - Tooltip: constant boolean
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Value
+      - Control: checkbox
+      - Default: off
+- String (`f_string`)
+  - Tooltip: constant string
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - none
+- Vec2 (`f_vec2`)
+  - Tooltip: float2 from parts (x y, linked parts win over the typed values)
+  - Inputs: x, y
+    - x
+      - Left-edge socket
+    - y
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - X
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Y
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+- Vec3 (`f_vec3`)
+  - Tooltip: float3 from parts
+  - Inputs: x, y, z
+    - x
+      - Left-edge socket
+    - y
+      - Left-edge socket
+    - z
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - X
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Y
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Z
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+- Vec4 (`f_vec4`)
+  - Tooltip: float4 from parts
+  - Inputs: x, y, z, w
+    - x
+      - Left-edge socket
+    - y
+      - Left-edge socket
+    - z
+      - Left-edge socket
+    - w
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - X
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Y
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Z
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - W
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+- Ivec2 (`f_ivec2`)
+  - Tooltip: integer2 from parts
+  - Inputs: x, y
+    - x
+      - Left-edge socket
+    - y
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - X
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Y
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+- Ivec3 (`f_ivec3`)
+  - Tooltip: integer3 from parts
+  - Inputs: x, y, z
+    - x
+      - Left-edge socket
+    - y
+      - Left-edge socket
+    - z
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - X
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Y
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Z
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+- Ivec4 (`f_ivec4`)
+  - Tooltip: integer4 from parts
+  - Inputs: x, y, z, w
+    - x
+      - Left-edge socket
+    - y
+      - Left-edge socket
+    - z
+      - Left-edge socket
+    - w
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - X
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Y
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Z
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - W
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+- Swizzle (`f_swizzle`)
+  - Tooltip: pick or reorder components
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Neg (`f_neg`)
+  - Tooltip: negate
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Abs (`f_abs`)
+  - Tooltip: absolute value
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Sqrt (`f_sqrt`)
+  - Tooltip: square root (0 for negative input)
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Exp (`f_exp`)
+  - Tooltip: e to the power a
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Log (`f_log`)
+  - Tooltip: natural logarithm (0 for input <= 0)
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Log2 (`f_log2`)
+  - Tooltip: base-2 logarithm (0 for input <= 0)
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Sin (`f_sin`)
+  - Tooltip: sine (radians)
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Cos (`f_cos`)
+  - Tooltip: cosine (radians)
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Tan (`f_tan`)
+  - Tooltip: tangent (radians)
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Asin (`f_asin`)
+  - Tooltip: inverse sine (input clamped to -1..1)
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Acos (`f_acos`)
+  - Tooltip: inverse cosine (input clamped to -1..1)
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Atan (`f_atan`)
+  - Tooltip: inverse tangent
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Radians (`f_radians`)
+  - Tooltip: degrees to radians
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Degrees (`f_degrees`)
+  - Tooltip: radians to degrees
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Floor (`f_floor`)
+  - Tooltip: round down
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Ceil (`f_ceil`)
+  - Tooltip: round up
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Round (`f_round`)
+  - Tooltip: round to nearest
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Fract (`f_fract`)
+  - Tooltip: fractional part
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Sign (`f_sign`)
+  - Tooltip: -1, 0 or 1
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Saturate (`f_saturate`)
+  - Tooltip: clamp to 0..1
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Not (`f_not`)
+  - Tooltip: boolean not
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Length (`f_length`)
+  - Tooltip: length of a vector
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Normalize (`f_normalize`)
+  - Tooltip: vector of length 1 (zero stays zero)
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Add (`f_add`)
+  - Tooltip: a + b
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Sub (`f_sub`)
+  - Tooltip: a - b
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Mul (`f_mul`)
+  - Tooltip: a * b
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Div (`f_div`)
+  - Tooltip: a / b (0 when b is 0; integer division truncates)
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Mod (`f_mod`)
+  - Tooltip: remainder of a / b with the sign of b (0 when b is 0)
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Pow (`f_pow`)
+  - Tooltip: a to the power b
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Min (`f_min`)
+  - Tooltip: smaller value
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Max (`f_max`)
+  - Tooltip: larger value
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Atan2 (`f_atan2`)
+  - Tooltip: angle of the point (b, a)
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Step (`f_step`)
+  - Tooltip: 0 when b < a, else 1
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Dot (`f_dot`)
+  - Tooltip: dot product
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Cross (`f_cross`)
+  - Tooltip: cross product of two float3
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Distance (`f_distance`)
+  - Tooltip: distance between two points
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Clamp (`f_clamp`)
+  - Tooltip: clamp a between b (low) and c (high)
+  - Inputs: a, b, c
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+    - c
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Lerp (`f_lerp`)
+  - Tooltip: a + (b - a) * c
+  - Inputs: a, b, c
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+    - c
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Smoothstep (`f_smoothstep`)
+  - Tooltip: smooth 0..1 ramp of c between edges a and b
+  - Inputs: a, b, c
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+    - c
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Eq (`f_eq`)
+  - Tooltip: a == b
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Ne (`f_ne`)
+  - Tooltip: a != b
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Lt (`f_lt`)
+  - Tooltip: a < b
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Le (`f_le`)
+  - Tooltip: a <= b
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Gt (`f_gt`)
+  - Tooltip: a > b
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Ge (`f_ge`)
+  - Tooltip: a >= b
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- And (`f_and`)
+  - Tooltip: boolean and
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Or (`f_or`)
+  - Tooltip: boolean or
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Xor (`f_xor`)
+  - Tooltip: boolean exclusive or
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- If (`f_if`)
+  - Tooltip: a when cond is true, else b (only the chosen branch runs)
+  - Inputs: cond, a, b
+    - cond
+      - Left-edge socket
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Sequence (`f_sequence`)
+  - Tooltip: run a, then b; returns b
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Set (`f_set`)
+  - Tooltip: store a in the variable `name`; returns a
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Get (`f_get`)
+  - Tooltip: read the variable `name` (0 until it is set)
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - none
+- Random (`f_random`)
+  - Tooltip: random float between a (default 0) and b (default 1); `seed` shifts the sequence
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Seed
+      - Control: int
+      - Default: 0
+      - Range: 0..9999
+- Sample Gray (`f_sample_gray`)
+  - Tooltip: brightness of input image `slot` (default in) at the position a (float2, 0..1)
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Sample Color (`f_sample_color`)
+  - Tooltip: colour (float4) of input image `slot` at the position a
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Image Avg (`f_image_avg`)
+  - Tooltip: average colour (float4) of input image `slot`
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - none
+- Image Min (`f_image_min`)
+  - Tooltip: smallest channel values (float4) of input image `slot`
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - none
+- Image Max (`f_image_max`)
+  - Tooltip: largest channel values (float4) of input image `slot`
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - none
+- Pos (`f_pos`)
+  - Tooltip: position being evaluated (float2, 0..1)
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - none
+- Size (`f_size`)
+  - Tooltip: output size in pixels (float2)
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - none
+- Index (`f_index`)
+  - Tooltip: instance / iteration number (integer)
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - none
+- Count (`f_count`)
+  - Tooltip: number of instances / iterations (integer)
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - none
+- Seed (`f_seed`)
+  - Tooltip: random seed of the caller (integer)
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - none
+- Input (`f_input`)
+  - Tooltip: input of this function
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Type
+      - Control: dropdown
+      - Default: Float
+      - Choices: Float / Integer / Boolean / Float2 / Float3 / Float4 / Integer2 / Integer3 / Integer4 / String
+    - Default
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default X
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default Y
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default Z
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default W
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Minimum
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Maximum
+      - Control: slider
+      - Default: 1
+      - Range: -1000..1000
+- Graph Input (`f_graph_input`)
+  - Tooltip: value of an Input Value node of the graph the caller lives in
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Type
+      - Control: dropdown
+      - Default: Float
+      - Choices: Float / Integer / Boolean / Float2 / Float3 / Float4 / Integer2 / Integer3 / Integer4 / String
+    - Default
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default X
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default Y
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default Z
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Default W
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Minimum
+      - Control: slider
+      - Default: 0
+      - Range: -1000..1000
+    - Maximum
+      - Control: slider
+      - Default: 1
+      - Range: -1000..1000
+- To Float (`f_to_float`)
+  - Tooltip: convert to float
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- To Int (`f_to_int`)
+  - Tooltip: convert to integer (drops the fraction)
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- To Bool (`f_to_bool`)
+  - Tooltip: non-zero is true
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- To String (`f_to_string`)
+  - Tooltip: text of a value
+  - Inputs: a
+    - a
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Concat (`f_concat`)
+  - Tooltip: join two strings
+  - Inputs: a, b
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Call (`f_call`)
+  - Tooltip: run another function (`fn`); a b c d fill its inputs in the order of their node numbers
+  - Inputs: a, b, c, d
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+    - c
+      - Left-edge socket
+    - d
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+
+### Pattern program nodes (5)
+
+- Fxm Out (`fxm_out`)
+  - Tooltip: start of a pattern program
+  - Inputs: in
+    - in
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - none
+- Fxm Marker (`fxm_marker`)
+  - Tooltip: draw a shape
+  - Inputs: none
+  - Outputs: output
+  - Properties:
+    - Shape
+      - Control: dropdown
+      - Default: Circle
+      - Choices: Circle / Square / Diamond / Image
+    - Image input
+      - Control: int
+      - Default: 0
+      - Range: 0..3
+    - Offset X
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Width
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Height
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Rotation (deg)
+      - Control: slider
+      - Default: 0
+      - Range: -360..360
+    - Value
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Softness
+      - Control: slider
+      - Default: 0.02
+      - Range: 0..1
+    - Colour R
+      - Control: slider
+      - Default: 1
+      - Range: 0..2
+    - Colour G
+      - Control: slider
+      - Default: 1
+      - Range: 0..2
+    - Colour B
+      - Control: slider
+      - Default: 1
+      - Range: 0..2
+    - Random position
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random scale
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random rotation (deg)
+      - Control: slider
+      - Default: 0
+      - Range: 0..180
+    - Random value
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random colour
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Fxm Quadrant (`fxm_quadrant`)
+  - Tooltip: split the cell in four
+  - Inputs: q0, q1, q2, q3
+    - q0
+      - Left-edge socket
+    - q1
+      - Left-edge socket
+    - q2
+      - Left-edge socket
+    - q3
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Child scale
+      - Control: slider
+      - Default: 0.5
+      - Range: 0..2
+    - Offset X
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Offset Y
+      - Control: slider
+      - Default: 0
+      - Range: -1..1
+    - Chance 1
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Chance 2
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Chance 3
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Chance 4
+      - Control: slider
+      - Default: 1
+      - Range: 0..1
+    - Value 1
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Value 2
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Value 3
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Value 4
+      - Control: slider
+      - Default: 1
+      - Range: 0..4
+    - Rotation 1 (deg)
+      - Control: slider
+      - Default: 0
+      - Range: -360..360
+    - Rotation 2 (deg)
+      - Control: slider
+      - Default: 0
+      - Range: -360..360
+    - Rotation 3 (deg)
+      - Control: slider
+      - Default: 0
+      - Range: -360..360
+    - Rotation 4 (deg)
+      - Control: slider
+      - Default: 0
+      - Range: -360..360
+    - Random position
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random scale
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random rotation (deg)
+      - Control: slider
+      - Default: 0
+      - Range: 0..180
+    - Random value
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Fxm Iterate (`fxm_iterate`)
+  - Tooltip: repeat body
+  - Inputs: body
+    - body
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Count
+      - Control: int
+      - Default: 4
+      - Range: 0..1000
+    - Grid X (0 = off)
+      - Control: int
+      - Default: 0
+      - Range: 0..64
+    - Grid Y
+      - Control: int
+      - Default: 0
+      - Range: 0..64
+    - Stagger odd rows
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Step X
+      - Control: slider
+      - Default: 0
+      - Range: -2..2
+    - Step Y
+      - Control: slider
+      - Default: 0
+      - Range: -2..2
+    - Step scale
+      - Control: slider
+      - Default: 1
+      - Range: 0..2
+    - Step rotation (deg)
+      - Control: slider
+      - Default: 0
+      - Range: -360..360
+    - Step value
+      - Control: slider
+      - Default: 1
+      - Range: 0..2
+    - Random X
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random Y
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random scale
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+    - Random rotation (deg)
+      - Control: slider
+      - Default: 0
+      - Range: 0..180
+    - Random value
+      - Control: slider
+      - Default: 0
+      - Range: 0..1
+- Fxm Switch (`fxm_switch`)
+  - Tooltip: run one branch
+  - Inputs: a, b, c, d
+    - a
+      - Left-edge socket
+    - b
+      - Left-edge socket
+    - c
+      - Left-edge socket
+    - d
+      - Left-edge socket
+  - Outputs: output
+  - Properties:
+    - Mode
+      - Control: dropdown
+      - Default: By index
+      - Choices: By index / Random
+    - Index
+      - Control: int
+      - Default: 0
+      - Range: 0..3
+    - Weight A
+      - Control: slider
+      - Default: 1
+      - Range: 0..10
+    - Weight B
+      - Control: slider
+      - Default: 1
+      - Range: 0..10
+    - Weight C
+      - Control: slider
+      - Default: 1
+      - Range: 0..10
+    - Weight D
+      - Control: slider
+      - Default: 1
+      - Range: 0..10

@@ -16,6 +16,7 @@ src/                      materialcraft: std-only core library + the `materialcr
   paint/                  Paint mode document model: tiled images, channels, layers, compositing, .mcpaint format
   mesh/ bake render3d     meshes (OBJ/glTF), baking, CPU 3D preview
   gpu3d/                  OpenGL viewport through glow (feature "gui" only; used by the editor and examples)
+  gpu.rs                  GPU compute for node evaluation through wgpu (feature "gpu"; CPU code stays the reference)
 crates/editor             materialcraft-editor: the editor binary `materialcraft-gui`
   src/main.rs             node editor; include!s gui_params/gui_ui/gui_home.rs
   src/gui_paint/          Paint mode screen
@@ -57,13 +58,15 @@ Toolchain: Rust 1.95 or newer, edition 2024. Formatting follows `rustfmt.toml` (
    `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]`
    (`clippy.toml` allows them in tests). Existing code isn't converted wholesale; tighten it when you touch it, in
    its own commit.
-6. **No `unsafe`.** The workspace sets `unsafe_code = "forbid"`. The root package uses `deny` instead because of one
-   documented exception with a module-level `allow` and `SAFETY:` notes:
+6. **No `unsafe`.** The workspace sets `unsafe_code = "forbid"`. The root package uses `deny` instead because of two
+   documented exceptions with a module-level `allow`:
    - `src/gpu3d`: glow exposes every OpenGL call as `unsafe fn`; the module's doc states the invariant (calls only
      inside egui_glow paint callbacks, objects freed by their owner).
+   - `src/gpu` (from main, feature `gpu`): byte views of plain f32/u64 buffers for wgpu uploads and read-back
+     (allowed in `src/lib.rs`).
 
    Don't add `unsafe` anywhere else.
-7. **Attribution.** Code copied from another Craft app (PhotoCraft is MIT OR Apache-2.0) keeps its licence notice in
-   the file and gets a row in `ATTRIBUTION.md` in the same commit. Don't change the licence or add licence files: the
-   licence is decided when Paint mode merges to main.
+7. **Licence and attribution.** MaterialCraft is `MIT OR Apache-2.0` (`LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`).
+   Code copied from another Craft app (PhotoCraft is MIT OR Apache-2.0) keeps its licence notice in the file and gets
+   a row in `ATTRIBUTION.md` in the same commit; third-party crates are listed in `THIRD_PARTY_LICENSES.md`.
 8. **Commits** explain why, build on their own, and keep mechanical changes (formatting, renames) apart from logic.

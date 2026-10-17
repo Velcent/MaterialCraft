@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 use std::{env, fs, path::PathBuf};
 
 /// Embeds assets/MaterialCraftLogo.png (or one in the project root) when it exists.

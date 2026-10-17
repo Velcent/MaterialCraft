@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Software PBR renderer for the 3D viewer. Every shape (sphere, cube, plane) is a real tessellated triangle mesh that is
 //! rasterised with a depth buffer, so height maps can displace actual geometry (true displacement), not just fake it.
 //! GGX specular, hemisphere environment lighting, tangent-space normal mapping, bump, outward parallax relief, wireframe.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 use materialcraft::render3d::{SHAPES, build_mesh, shape_culls};
 use materialcraft::v3::*;
 

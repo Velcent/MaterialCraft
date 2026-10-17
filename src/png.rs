@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Dependency-free PNG codec: 8/16-bit gray, gray+alpha, RGB and RGBA encoding with filtering and DEFLATE
 //! compression; decoding of all standard formats to float RGBA (`decode`) or losslessly to raw samples (`decode_raw`).
 use crate::checksum::Crc32;

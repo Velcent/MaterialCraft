@@ -10,7 +10,9 @@ copied from. Third-party material must be permissively licensed and keep its lic
 Nothing proprietary is ever listed here, because nothing proprietary may be copied in (see the clean-room rule in
 `AGENTS.md`).
 
-This file doesn't change MaterialCraft's own licence (the `license` field in `Cargo.toml`).
+This file lists only code and assets copied into the repository. MaterialCraft's own licence is in `LICENSE-MIT`,
+`LICENSE-APACHE` and `NOTICE`; libraries the build links (crates, including craft-libs) are listed in
+`THIRD_PARTY_LICENSES.md`, not here.
 
 ## Copied code
 

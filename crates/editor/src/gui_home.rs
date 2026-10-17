@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 // ======================================================================= Home screen, dialogs, panels (included into gui.rs)
 
 #[derive(PartialEq, Clone, Copy)]
@@ -12,6 +13,8 @@ struct NewDlg {
     sel: usize,
     name: String,
     size: usize,
+    /// 0 = linked to the width (square), otherwise the separate height
+    height: usize,
     depth16: bool,
     /// Package the graph is added to; None = a new package.
     dest: Option<usize>,
@@ -66,8 +69,8 @@ const TEMPLATES: &[Template] = &[
     Template { name: "Generator (color)", desc: "A single color output called 'output'.", outs: &[("output", [0.6, 0.4, 0.3])] },
 ];
 
-fn template_graph(t: &Template, name: &str, size: usize, depth16: bool) -> Graph {
-    let mut g = Graph { size, ..Default::default() };
+fn template_graph(t: &Template, name: &str, size: usize, height: usize, depth16: bool) -> Graph {
+    let mut g = Graph { size, height: if height == size { 0 } else { height }, ..Default::default() };
     g.meta.insert("identifier".into(), name.to_string());
     g.meta.insert("output_format".into(), if depth16 { "16" } else { "8" }.into());
     for (i, (out, _)) in t.outs.iter().enumerate() {
@@ -98,11 +101,35 @@ fn read_lines(name: &str) -> Vec<String> {
     std::fs::read_to_string(config_dir().join(name)).map(|t| t.lines().map(String::from).filter(|l| !l.is_empty()).collect()).unwrap_or_default()
 }
 
-fn write_lines(name: &str, lines: &[String]) {
-    let d = config_dir();
-    if std::fs::create_dir_all(&d).is_ok() {
-        let _ = std::fs::write(d.join(name), lines.join("\n"));
+/// Accent colour of the interface (selection, active tabs, primary buttons).
+const ACCENT: Color32 = Color32::from_rgb(60, 200, 170);
+
+/// A small abstract picture generated from a file name (no two names look alike, the same name always does).
+fn swatch(p: &egui::Painter, r: Rect, name: &str, alive: bool) {
+    let mut h: u32 = 2166136261;
+    for b in name.bytes() {
+        h = (h ^ b as u32).wrapping_mul(16777619);
     }
+    let mut next = || {
+        h ^= h << 13;
+        h ^= h >> 17;
+        h ^= h << 5;
+        (h & 0xffff) as f32 / 65535.0
+    };
+    let hue = |v: f32, s: f32, l: f32| {
+        let c = egui::ecolor::Hsva::new(v, s, l, 1.0);
+        let [r, g, b, _] = c.to_srgba_unmultiplied();
+        Color32::from_rgb(r, g, b)
+    };
+    let (h0, h1) = (next(), next());
+    let dimf = if alive { 1.0 } else { 0.35 };
+    p.rect_filled(r, 8.0, hue(h0, 0.45 * dimf, 0.32));
+    for _ in 0..4 {
+        let c = pos2(r.min.x + next() * r.width(), r.min.y + next() * r.height());
+        p.circle_filled(c, 6.0 + next() * 18.0, hue((h1 + next() * 0.2).fract(), 0.5 * dimf, 0.45 + next() * 0.25).gamma_multiply(0.85));
+    }
+    let y = r.min.y + r.height() * (0.3 + next() * 0.5);
+    p.rect_filled(Rect::from_min_max(pos2(r.min.x, y), pos2(r.max.x, y + 5.0)), 0.0, hue(h1, 0.3 * dimf, 0.78).gamma_multiply(0.5));
 }
 
 fn fmt_time(t: std::time::SystemTime) -> String {
@@ -129,11 +156,12 @@ fn spawn_banner() -> Receiver<ColorImage> {
     let (tx, rx) = channel();
     std::thread::spawn(move || {
         let src = "size 512\nnode 1 fbm scale=3 octaves=6 gain=0.55 seed=11\nnode 2 fbm scale=9 octaves=5 seed=4\nnode 3 warp in=@1 warp=@2 intensity=0.14\nnode 4 voronoi scale=6 jitter=0.9 seed=5 mode=2\nnode 5 blend fg=@4 bg=@3 mode=5 opacity=0.4\nnode 6 colorize in=@5 p0=0 r0=0.25 g0=0.17 b0=0.12 p1=0.5 r1=0.62 g1=0.45 b1=0.32 p2=1 r2=0.92 g2=0.78 b2=0.6\noutput o 6\n";
-        if let Ok(g) = Graph::parse(src)
-            && let Ok(m) = g.evaluate(Some(512))
-            && let Some(t) = m.get("o")
-        {
-            let _ = tx.send(qimg(t));
+        if let Ok(g) = Graph::parse(src) {
+            if let Ok(m) = g.evaluate(Some(512)) {
+                if let Some(t) = m.get("o") {
+                    let _ = tx.send(qimg(t));
+                }
+            }
         }
     });
     rx
@@ -144,12 +172,14 @@ fn spawn_library_thumbs() -> Receiver<HashMap<String, ColorImage>> {
     std::thread::spawn(move || {
         let mut out = HashMap::new();
         for s in SPECS {
-            if let Some(text) = materialcraft::graph::demo_graph_for(s.kind)
-                && let Ok(g) = Graph::parse(&text)
-                && let Ok(m) = g.evaluate(Some(64))
-                && let Some(tex) = m.get("o")
-            {
-                out.insert(s.kind.to_string(), qimg(tex));
+            if let Some(text) = materialcraft::graph::demo_graph_for(s.kind) {
+                if let Ok(g) = Graph::parse(&text) {
+                    if let Ok(m) = g.evaluate(Some(64)) {
+                        if let Some(tex) = m.get("o") {
+                            out.insert(s.kind.to_string(), qimg(tex));
+                        }
+                    }
+                }
             }
         }
         let _ = tx.send(out);
@@ -185,20 +215,20 @@ fn draw_icon(p: &egui::Painter, c: Pos2, ic: Ic, col: Color32) {
     let l = |a: (f32, f32), b: (f32, f32)| p.line_segment([pos2(c.x + a.0, c.y + a.1), pos2(c.x + b.0, c.y + b.1)], st);
     match ic {
         Ic::New => {
-            p.rect_stroke(r(-5.0, -7.0, 10.0, 14.0), 1.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-5.0, -7.0, 10.0, 14.0), 1.0, st, egui::StrokeKind::Inside);
             l((-2.0, 0.0), (2.0, 0.0));
             l((0.0, -2.0), (0.0, 2.0));
         }
         Ic::Open => {
-            p.rect_stroke(r(-7.0, -4.0, 14.0, 10.0), 1.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-7.0, -4.0, 14.0, 10.0), 1.0, st, egui::StrokeKind::Inside);
             l((-7.0, -4.0), (-7.0, -7.0));
             l((-7.0, -7.0), (-2.0, -7.0));
             l((-2.0, -7.0), (0.0, -4.0));
         }
         Ic::Save => {
-            p.rect_stroke(r(-6.0, -6.0, 12.0, 12.0), 1.0, st, egui::StrokeKind::Outside);
-            p.rect_stroke(r(-3.5, -6.0, 7.0, 4.0), 0.0, st, egui::StrokeKind::Outside);
-            p.rect_stroke(r(-3.5, 1.0, 7.0, 5.0), 0.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-6.0, -6.0, 12.0, 12.0), 1.0, st, egui::StrokeKind::Inside);
+            p.rect_stroke(r(-3.5, -6.0, 7.0, 4.0), 0.0, st, egui::StrokeKind::Inside);
+            p.rect_stroke(r(-3.5, 1.0, 7.0, 5.0), 0.0, st, egui::StrokeKind::Inside);
         }
         Ic::Undo | Ic::Redo => {
             let s = if matches!(ic, Ic::Undo) { 1.0 } else { -1.0 };
@@ -219,24 +249,24 @@ fn draw_icon(p: &egui::Painter, c: Pos2, ic: Ic, col: Color32) {
             }
         }
         Ic::Layout => {
-            p.rect_stroke(r(-7.0, -6.0, 4.0, 4.0), 0.0, st, egui::StrokeKind::Outside);
-            p.rect_stroke(r(-7.0, 2.0, 4.0, 4.0), 0.0, st, egui::StrokeKind::Outside);
-            p.rect_stroke(r(3.0, -2.0, 4.0, 4.0), 0.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-7.0, -6.0, 4.0, 4.0), 0.0, st, egui::StrokeKind::Inside);
+            p.rect_stroke(r(-7.0, 2.0, 4.0, 4.0), 0.0, st, egui::StrokeKind::Inside);
+            p.rect_stroke(r(3.0, -2.0, 4.0, 4.0), 0.0, st, egui::StrokeKind::Inside);
             l((-3.0, -4.0), (0.0, 0.0));
             l((-3.0, 4.0), (0.0, 0.0));
             l((0.0, 0.0), (3.0, 0.0));
         }
         Ic::Comment => {
-            p.rect_stroke(r(-7.0, -6.0, 14.0, 12.0), 1.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-7.0, -6.0, 14.0, 12.0), 1.0, st, egui::StrokeKind::Inside);
             l((-7.0, -2.5), (7.0, -2.5));
         }
         Ic::Subgraph => {
-            p.rect_stroke(r(-7.0, -7.0, 14.0, 14.0), 1.0, st, egui::StrokeKind::Outside);
-            p.rect_stroke(r(-3.0, -3.0, 6.0, 6.0), 0.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-7.0, -7.0, 14.0, 14.0), 1.0, st, egui::StrokeKind::Inside);
+            p.rect_stroke(r(-3.0, -3.0, 6.0, 6.0), 0.0, st, egui::StrokeKind::Inside);
         }
         Ic::Link => {
-            p.rect_stroke(r(-8.0, -3.0, 9.0, 6.0), 3.0, st, egui::StrokeKind::Outside);
-            p.rect_stroke(r(-1.0, -3.0, 9.0, 6.0), 3.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-8.0, -3.0, 9.0, 6.0), 3.0, st, egui::StrokeKind::Inside);
+            p.rect_stroke(r(-1.0, -3.0, 9.0, 6.0), 3.0, st, egui::StrokeKind::Inside);
         }
         Ic::Grid => {
             for k in [-3.0f32, 3.0] {
@@ -259,7 +289,7 @@ fn draw_icon(p: &egui::Painter, c: Pos2, ic: Ic, col: Color32) {
             p.circle_filled(c, 1.8, col);
         }
         Ic::Input => {
-            p.rect_stroke(r(-2.0, -6.0, 8.0, 12.0), 1.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-2.0, -6.0, 8.0, 12.0), 1.0, st, egui::StrokeKind::Inside);
             l((-8.0, 0.0), (1.0, 0.0));
             l((-3.5, -3.5), (1.0, 0.0));
             l((-3.5, 3.5), (1.0, 0.0));
@@ -274,9 +304,9 @@ fn draw_icon(p: &egui::Painter, c: Pos2, ic: Ic, col: Color32) {
             l((6.5, 3.5), (0.0, 7.0));
         }
         Ic::GraphIcon => {
-            p.rect_stroke(r(-7.0, -6.0, 5.0, 4.0), 1.0, st, egui::StrokeKind::Outside);
-            p.rect_stroke(r(-7.0, 2.0, 5.0, 4.0), 1.0, st, egui::StrokeKind::Outside);
-            p.rect_stroke(r(3.0, -2.0, 5.0, 4.0), 1.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-7.0, -6.0, 5.0, 4.0), 1.0, st, egui::StrokeKind::Inside);
+            p.rect_stroke(r(-7.0, 2.0, 5.0, 4.0), 1.0, st, egui::StrokeKind::Inside);
+            p.rect_stroke(r(3.0, -2.0, 5.0, 4.0), 1.0, st, egui::StrokeKind::Inside);
             l((-2.0, -4.0), (0.5, 0.0));
             l((-2.0, 4.0), (0.5, 0.0));
             l((0.5, 0.0), (3.0, 0.0));
@@ -351,37 +381,26 @@ fn icon_btn(ui: &mut egui::Ui, ic: Ic, tip: &str, enabled: bool) -> egui::Respon
 }
 
 /// Dockable-panel style header. Returns true when the close button was clicked.
-/// Draggable panel edge. edge: 0 = right edge of a left panel, 1 = left edge of a right panel, 2 = top edge of a bottom panel.
-/// Returns the size change requested this frame.
-fn size_handle(ui: &mut egui::Ui, id: &str, panel: Rect, edge: u8) -> f32 {
-    let t = 6.0;
-    let r = match edge {
-        0 => Rect::from_min_max(pos2(panel.right() - t, panel.top()), panel.right_bottom()),
-        1 => Rect::from_min_max(panel.left_top(), pos2(panel.left() + t, panel.bottom())),
-        _ => Rect::from_min_max(panel.left_top(), pos2(panel.right(), panel.top() + t)),
-    };
-    let resp = ui.interact(r, Id::new(("size_handle", id)), Sense::drag());
-    if resp.hovered() || resp.dragged() {
-        ui.ctx().set_cursor_icon(if edge == 2 { egui::CursorIcon::ResizeVertical } else { egui::CursorIcon::ResizeHorizontal });
-        ui.painter().rect_filled(r, 0.0, Color32::from_rgba_unmultiplied(235, 130, 20, 120));
+fn panel_header(ui: &mut egui::Ui, title: &str, _closable: bool) -> bool {
+    // closing and moving panels is done from the tab's panel menu (see the dock area); the tab already names these panels
+    if matches!(title, "EXPLORER" | "LIBRARY" | "2D VIEW") {
+        return false;
     }
-    let d = resp.drag_delta();
-    match edge {
-        0 => d.x,
-        1 => -d.x,
-        _ => -d.y,
-    }
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
+    ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(30, 30, 30));
+    ui.painter().text(rect.left_center() + vec2(8.0, 0.0), Align2::LEFT_CENTER, title, FontId::proportional(12.0), Color32::from_gray(225));
+    false
 }
 
 fn lib_group(kind: &str) -> (&'static str, &'static str) {
     match kind {
         "white_noise" | "gaussian_noise" | "perlin" | "fbm" | "clouds" | "voronoi" | "voronoi_fractal" | "bnw_spots" | "crystal" | "directional_noise"
-        | "grunge" | "grunge_map" | "plasma" | "cells" | "fractal_sum" | "waveform" | "gaussian_spots" => ("Texture generators", "Noises"),
-        "triangle_grid" | "starburst" | "gradient_reflected" => ("Texture generators", "Patterns"),
+        | "grunge" | "grunge_map" | "plasma" | "cells" | "fractal_sum" | "waveform" | "gaussian_spots" => ("Generators", "Noises"),
+        "triangle_grid" | "starburst" | "gradient_reflected" => ("Generators", "Patterns"),
         "color" | "gradient" | "gradient_axial" | "gradient_circular" | "checker" | "bricks" | "stripes" | "weave" | "weave_generator" | "tile_sampler"
-        | "tile_generator" | "splatter" | "splatter_circular" | "pixel_processor" => ("Texture generators", "Patterns"),
-        "shape" | "circle" | "rect" | "polygon" | "star" => ("Texture generators", "Shapes"),
-        "sdf_shape" | "sdf_op" | "sdf_mask" | "sdf_form" => ("Texture generators", "SDF"),
+        | "tile_generator" | "splatter" | "splatter_circular" | "pixel_processor" => ("Generators", "Patterns"),
+        "shape" | "circle" | "rect" | "polygon" | "star" => ("Generators", "Shapes"),
+        "sdf_shape" | "sdf_op" | "sdf_mask" | "sdf_form" => ("Generators", "SDF"),
         "levels"
         | "adjust"
         | "invert"
@@ -395,6 +414,8 @@ fn lib_group(kind: &str) -> (&'static str, &'static str) {
         | "colorize"
         | "tint"
         | "to_gray"
+        | "rgba_split"
+        | "alpha_split"
         | "channel"
         | "merge"
         | "switch"
@@ -438,23 +459,23 @@ fn lib_group(kind: &str) -> (&'static str, &'static str) {
         | "ao"
         | "curvature"
         | "curvature_smooth"
-        | "height_blend" => ("Material filters", ""),
-        "edge_wear" | "dirt" | "dust" => ("Mesh-based generators", ""),
-        "bitmap" | "input" | "subgraph" | "comment" | "frame" | "dot" | "output" => ("Graph items", ""),
+        | "height_blend" => ("Material tools", ""),
+        "edge_wear" | "dirt" | "dust" => ("Mesh-driven", ""),
+        "bitmap" | "input" | "subgraph" | "comment" | "frame" | "dot" | "output" => ("Structure", ""),
         _ => ("Filters", "Adjustments"),
     }
 }
 
 const LIB_TREE: &[(&str, &[&str])] = &[
     ("Favorites", &[]),
-    ("Graph items", &[]),
-    ("Atomic nodes", &[]),
-    ("FxMap nodes", &[]),
-    ("Function nodes", &[]),
-    ("Texture generators", &["Noises", "Patterns", "Shapes", "SDF"]),
+    ("Structure", &[]),
+    ("Core nodes", &[]),
+    ("Pattern builders", &[]),
+    ("Logic nodes", &[]),
+    ("Generators", &["Noises", "Patterns", "Shapes", "SDF"]),
     ("Filters", &["Adjustments", "Blur and warp", "Transform", "Effects", "Masks and regions"]),
-    ("Material filters", &[]),
-    ("Mesh-based generators", &[]),
+    ("Material tools", &[]),
+    ("Mesh-driven", &[]),
 ];
 
 fn meta_field(ui: &mut egui::Ui, meta: &mut BTreeMap<String, String>, label: &str, key: &str, multi: bool) {
@@ -501,23 +522,26 @@ impl App {
         self.recent.retain(|r| r != p);
         self.recent.insert(0, p.to_path_buf());
         self.recent.truncate(20);
-        let lines: Vec<String> = self.recent.iter().map(|r| r.to_string_lossy().to_string()).collect();
-        write_lines("recent.txt", &lines);
+        let files: Vec<String> = self.recent.iter().map(|r| r.to_string_lossy().to_string()).collect();
+        self.prefs.update(|v| v.recent.files = files);
     }
 
-    fn save_settings(&self) {
-        let mut l = Vec::new();
-        if self.skip_home {
-            l.push("skip_home=1".to_string());
-        }
-        l.push(format!("favorites={}", self.favorites.iter().cloned().collect::<Vec<_>>().join(",")));
-        write_lines("settings.txt", &l);
+    fn save_settings(&mut self) {
+        let (skip, tip, fav) = (self.skip_home, self.hide_suggestions, self.favorites.iter().cloned().collect::<Vec<_>>());
+        self.prefs.update(|v| {
+            v.general.skip_home = skip;
+            v.general.hide_tip = tip;
+            v.library.favorites = fav;
+        });
     }
 
     fn open_path(&mut self, p: PathBuf) {
+        let link_note: String;
         match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|t| Graph::parse_unchecked(&t).map_err(|e| e.to_string())) {
             Ok(mut g) => {
                 g.migrate_outputs();
+                let issues = g.resolve_links(p.parent().unwrap_or_else(|| std::path::Path::new(".")));
+                link_note = if issues.is_empty() { String::new() } else { format!("  -  {}", issues.join("; ")) };
                 auto_layout_if_unplaced(&mut g);
                 if !g.meta.contains_key("identifier") {
                     g.meta.insert("identifier".into(), p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "graph".into()));
@@ -533,7 +557,8 @@ impl App {
                 self.modified = false;
                 self.screen = Screen::Editor;
                 self.fit_view();
-                self.status(format!("Opened {}", p.display()), true);
+                let ok = link_note.is_empty();
+                self.status(format!("Opened {}{link_note}", p.display()), ok);
             }
             Err(e) => self.status(format!("Open failed: {e}"), false),
         }
@@ -552,13 +577,13 @@ impl App {
         if name.is_empty() {
             name = if self.new_dlg.dest.is_some() { "Material_Graph".into() } else { "Graph".into() };
         }
-        let g = template_graph(t, &name, self.new_dlg.size, self.new_dlg.depth16);
+        let g = template_graph(t, &name, self.new_dlg.size, self.new_dlg.height, self.new_dlg.depth16);
         self.new_dlg.open = false;
         match self.new_dlg.dest.filter(|_| self.screen == Screen::Editor) {
             Some(dest) => self.add_graph_to_pkg(dest, g, &name),
             None => {
                 let unsaved = if self.screen == Screen::Editor { self.unique_unsaved_name() } else { "Unsaved Package".to_string() };
-                self.add_pkg_active(Pkg { path: None, name: unsaved, g, modified: true });
+                self.add_pkg_active(Pkg { path: None, name: unsaved, g, modified: true, tabs: Vec::new() });
                 self.need_fit = true;
                 self.status(format!("Created package with '{name}' from template '{}'", t.name), true);
             }
@@ -584,216 +609,226 @@ impl App {
     }
 
     // ------------------------------------------------------------ home screen
-    fn home_ui(&mut self, ui: &mut egui::Ui) {
-        let bg = Color32::from_rgb(26, 26, 26);
-        egui::Panel::top("home_top").exact_size(58.0).frame(egui::Frame::NONE.fill(Color32::from_rgb(45, 45, 45))).show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
-                ui.add_space(22.0);
-                if let Some(t) = &self.logo {
-                    let sz = t.size_vec2();
-                    let hgt = 38.0;
-                    ui.add(egui::Image::new((t.id(), vec2(hgt * sz.x / sz.y.max(1.0), hgt))));
-                }
-                ui.add_space(8.0);
-                ui.label(egui::RichText::new("MaterialCraft").size(15.0).color(Color32::from_gray(210)));
-            });
-        });
-        egui::Panel::left("home_left").exact_size(200.0).frame(egui::Frame::NONE.fill(bg).inner_margin(egui::Margin::symmetric(18, 0))).show(ui, |ui| {
-            ui.add_space(38.0);
-            let w = ui.available_width();
-            if ui
-                .add(
-                    egui::Button::new(egui::RichText::new("New graph...").color(Color32::WHITE).strong())
-                        .fill(Color32::from_rgb(20, 115, 230))
-                        .corner_radius(16)
-                        .min_size(vec2(w, 32.0)),
-                )
-                .clicked()
-            {
-                self.new_dlg.open = true;
-            }
-            ui.add_space(6.0);
-            if ui.add(egui::Button::new(egui::RichText::new("Open package...").strong()).frame(false).min_size(vec2(w, 30.0))).clicked() {
-                self.open_file();
-            }
-            ui.add_space(6.0);
-            ui.separator();
-            ui.add_space(6.0);
-            if ui.add(egui::Button::new(egui::RichText::new("Open example").strong()).frame(false).min_size(vec2(w, 28.0))).clicked() {
-                self.open_example();
-            }
-            if ui.add(egui::Button::new(egui::RichText::new("Mesh map baker...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked() {
-                self.screen = Screen::Editor;
-                self.bake.open = true;
-            }
-            if ui.add(egui::Button::new(egui::RichText::new("Open in Paint mode...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked()
-                && self.paint.pick(gui_paint::Pick::Any)
-            {
-                self.screen = Screen::Paint;
-            }
-            if ui.add(egui::Button::new(egui::RichText::new("Import Painter project...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked()
-                && self.paint.pick(gui_paint::Pick::Substance)
-            {
-                self.screen = Screen::Paint;
-            }
-            ui.add_space(6.0);
-            ui.separator();
-            ui.add_space(6.0);
-            for (i, label) in ["Home", "Learn"].iter().enumerate() {
-                let sel = self.home_page == i as u8;
-                if ui
-                    .add(
-                        egui::Button::new(egui::RichText::new(*label).size(13.0))
-                            .fill(if sel { Color32::from_rgb(52, 52, 52) } else { Color32::TRANSPARENT })
-                            .min_size(vec2(w, 32.0)),
-                    )
-                    .clicked()
-                {
-                    self.home_page = i as u8;
-                }
-            }
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                ui.add_space(14.0);
-                if ui.checkbox(&mut self.skip_home, "Do not show on startup").changed() {
-                    self.save_settings();
-                }
-                ui.add_space(6.0);
-                if ui.add(egui::Button::new("Close home screen").corner_radius(14).min_size(vec2(w - 20.0, 30.0))).clicked() {
-                    self.screen = Screen::Editor;
-                }
-                ui.add_space(14.0);
-                if ui.add(egui::Button::new("Keyboard shortcuts").frame(false)).clicked() {
-                    self.show_about = true;
-                }
-                ui.add_space(2.0);
-                ui.label(
-                    egui::RichText::new(format!("MaterialCraft {}  -  pure Rust CPU engine", env!("CARGO_PKG_VERSION")))
-                        .size(11.0)
-                        .color(Color32::from_gray(130)),
-                );
-            });
-        });
-        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(bg).inner_margin(egui::Margin::symmetric(26, 0))).show(ui, |ui| {
-            ui.add_space(26.0);
-            if self.home_page == 1 {
-                self.learn_page(ui);
-                return;
-            }
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Welcome to MaterialCraft").size(19.0).strong().color(Color32::from_gray(235)));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.add(egui::Button::new(if self.hide_suggestions { "Show suggestions" } else { "Hide suggestions" }).frame(false)).clicked() {
-                        self.hide_suggestions = !self.hide_suggestions;
+    /// Start screen: a centred launch pad (big action cards, then recent files as a card grid) with a slim top bar
+    /// and a footer strip. Recent files get a small generated swatch derived from their name.
+    fn home_ui(&mut self, root: &mut egui::Ui) {
+        let bg = Color32::from_rgb(21, 23, 26);
+        let card = Color32::from_rgb(31, 34, 39);
+        let card_hot = Color32::from_rgb(40, 45, 52);
+        let dim = Color32::from_gray(140);
+        egui::Panel::top("home_top")
+            .exact_size(46.0)
+            .frame(egui::Frame::NONE.fill(Color32::from_rgb(26, 28, 32)).inner_margin(egui::Margin::symmetric(18, 0)))
+            .show(root, |ui| {
+                ui.horizontal_centered(|ui| {
+                    if let Some(t) = &self.logo {
+                        let sz = t.size_vec2();
+                        let hgt = 28.0;
+                        ui.add(egui::Image::new((t.id(), vec2(hgt * sz.x / sz.y.max(1.0), hgt))));
                     }
+                    ui.add_space(6.0);
+                    ui.label(egui::RichText::new("MaterialCraft").size(15.0).strong().color(Color32::from_gray(225)));
+                    ui.add_space(24.0);
+                    for (i, label) in ["Start", "Learn"].iter().enumerate() {
+                        let sel = self.home_page == i as u8;
+                        let txt = egui::RichText::new(*label).size(13.0).color(if sel { ACCENT } else { Color32::from_gray(170) });
+                        let r = ui.add(egui::Button::new(txt).frame(false).min_size(vec2(56.0, 30.0)));
+                        if sel {
+                            let y = r.rect.bottom() - 1.0;
+                            ui.painter().line_segment([pos2(r.rect.left() + 8.0, y), pos2(r.rect.right() - 8.0, y)], Stroke::new(2.0_f32, ACCENT));
+                        }
+                        if r.clicked() {
+                            self.home_page = i as u8;
+                        }
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION"))).size(11.0).color(Color32::from_gray(110)));
+                    });
                 });
             });
-            ui.add_space(6.0);
-            ui.separator();
-            ui.add_space(12.0);
-            if !self.hide_suggestions {
-                let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 250.0), Sense::hover());
-                let p = ui.painter_at(rect);
-                p.rect_filled(rect, 0.0, Color32::from_rgb(90, 66, 48));
-                if let Some(t) = &self.banner {
-                    let aspect = rect.width() / rect.height();
-                    p.image(t.id(), rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(aspect * 0.5, 0.5)), Color32::WHITE);
-                }
-                {
-                    let gw = rect.width() * 0.64;
-                    let mut mesh = egui::Mesh::default();
-                    let (l, r) = (Color32::from_black_alpha(185), Color32::from_black_alpha(0));
-                    let (x0, x1, y0, y1) = (rect.min.x, rect.min.x + gw, rect.min.y, rect.max.y);
-                    mesh.colored_vertex(pos2(x0, y0), l);
-                    mesh.colored_vertex(pos2(x1, y0), r);
-                    mesh.colored_vertex(pos2(x1, y1), r);
-                    mesh.colored_vertex(pos2(x0, y1), l);
-                    mesh.add_triangle(0, 1, 2);
-                    mesh.add_triangle(0, 2, 3);
-                    p.add(egui::Shape::mesh(mesh));
-                }
-                p.text(rect.left_top() + vec2(40.0, 52.0), Align2::LEFT_TOP, "Unlock the power of procedural creation.", FontId::proportional(18.0), Color32::WHITE);
-                p.text(
-                    rect.left_top() + vec2(40.0, 96.0),
-                    Align2::LEFT_TOP,
-                    "Create seamless materials, patterns and image filters with infinite variations\nthanks to node-based authoring. Publish parametric packages (.mca) and bake\nmesh maps - all in a dependency-free Rust engine.",
-                    FontId::proportional(12.5),
-                    Color32::from_gray(235),
-                );
-                let br = Rect::from_min_size(rect.left_top() + vec2(40.0, 170.0), vec2(92.0, 32.0));
-                let resp = ui.interact(br, Id::new("go_learn"), Sense::click());
-                p.rect_stroke(br, 16.0, Stroke::new(2.0_f32, Color32::WHITE), egui::StrokeKind::Outside);
-                if resp.hovered() {
-                    p.rect_filled(br, 16.0, Color32::from_white_alpha(30));
-                }
-                p.text(br.center(), Align2::CENTER_CENTER, "Go to learn", FontId::proportional(12.5), Color32::WHITE);
-                if resp.clicked() {
-                    self.home_page = 1;
-                }
-                ui.add_space(26.0);
-            }
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Recent").size(17.0).strong().color(Color32::from_gray(235)));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.home_filter).hint_text("Filter recent files").desired_width(220.0));
-                    ui.label("Filter");
-                });
-            });
-            ui.add_space(10.0);
-            let (hdr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
-            let hc = Color32::from_gray(150);
-            ui.painter().text(hdr.left_center() + vec2(8.0, 0.0), Align2::LEFT_CENTER, "NAME", FontId::proportional(10.5), hc);
-            ui.painter().text(pos2(hdr.min.x + hdr.width() * 0.62, hdr.center().y), Align2::LEFT_CENTER, "LAST MODIFIED (UTC)", FontId::proportional(10.5), hc);
-            ui.painter().text(hdr.right_center() - vec2(14.0, 0.0), Align2::RIGHT_CENTER, "SIZE", FontId::proportional(10.5), hc);
-            let f = self.home_filter.to_lowercase();
-            let mut open: Option<PathBuf> = None;
-            let mut remove: Option<PathBuf> = None;
-            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                let mut shown = 0;
-                for p in &self.recent {
-                    let name = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-                    if !f.is_empty() && !name.to_lowercase().contains(&f) {
-                        continue;
+        egui::Panel::bottom("home_foot")
+            .exact_size(38.0)
+            .frame(egui::Frame::NONE.fill(Color32::from_rgb(26, 28, 32)).inner_margin(egui::Margin::symmetric(18, 0)))
+            .show(root, |ui| {
+                ui.horizontal_centered(|ui| {
+                    if ui.checkbox(&mut self.skip_home, "Skip this screen on startup").changed() {
+                        self.save_settings();
                     }
-                    shown += 1;
-                    let meta = std::fs::metadata(p).ok();
-                    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 46.0), Sense::click());
-                    if resp.hovered() {
-                        ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(38, 38, 38));
+                    ui.add_space(10.0);
+                    if ui.add(egui::Button::new("Keyboard shortcuts").frame(false)).clicked() {
+                        self.show_about = true;
                     }
-                    ui.painter().line_segment([rect.left_top(), rect.right_top()], Stroke::new(1.0_f32, Color32::from_rgb(44, 44, 44)));
-                    let col = if meta.is_some() { Color32::from_gray(225) } else { Color32::from_gray(110) };
-                    ui.painter().text(rect.left_center() + vec2(8.0, 0.0), Align2::LEFT_CENTER, &name, FontId::proportional(12.5), col);
-                    if let Some(m) = &meta {
-                        let mt = m.modified().map(fmt_time).unwrap_or_default();
-                        ui.painter().text(pos2(rect.min.x + rect.width() * 0.62, rect.center().y), Align2::LEFT_CENTER, mt, FontId::proportional(12.0), col);
-                        ui.painter().text(rect.right_center() - vec2(14.0, 0.0), Align2::RIGHT_CENTER, fmt_size(m.len()), FontId::proportional(12.0), col);
-                    } else {
-                        ui.painter().text(pos2(rect.min.x + rect.width() * 0.62, rect.center().y), Align2::LEFT_CENTER, "file not found", FontId::proportional(12.0), col);
-                    }
-                    let resp = resp.on_hover_text(p.display().to_string());
-                    if resp.clicked() && meta.is_some() {
-                        open = Some(p.clone());
-                    }
-                    resp.context_menu(|ui| {
-                        if ui.button("Remove from recent").clicked() {
-                            remove = Some(p.clone());
-                            ui.close();
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add(
+                                egui::Button::new(egui::RichText::new("Go to editor").color(Color32::BLACK).strong())
+                                    .fill(ACCENT)
+                                    .corner_radius(6.0)
+                                    .min_size(vec2(110.0, 24.0)),
+                            )
+                            .clicked()
+                        {
+                            self.screen = Screen::Editor;
                         }
                     });
-                }
-                if shown == 0 {
-                    ui.add_space(18.0);
-                    ui.label(egui::RichText::new(if self.recent.is_empty() { "No recent files yet - create a new graph or open a package." } else { "No files match the filter." }).color(Color32::from_gray(130)));
-                }
+                });
             });
-            if let Some(p) = remove {
-                self.recent.retain(|r| *r != p);
-                let lines: Vec<String> = self.recent.iter().map(|r| r.to_string_lossy().to_string()).collect();
-                write_lines("recent.txt", &lines);
-            }
-            if let Some(p) = open {
-                self.open_path(p);
-            }
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(bg).inner_margin(egui::Margin::symmetric(24, 0))).show(root, |ui| {
+            egui::ScrollArea::vertical().id_salt("home_scroll").auto_shrink([false, false]).show(ui, |ui| {
+                let full = ui.available_width();
+                let col_w = full.min(1020.0);
+                ui.add_space(30.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(((full - col_w) * 0.5).max(0.0));
+                    ui.vertical(|ui| {
+                        ui.set_width(col_w);
+                        if self.home_page == 1 {
+                            self.learn_page(ui);
+                            return;
+                        }
+                        ui.label(egui::RichText::new("What will you make today?").size(28.0).strong().color(Color32::from_gray(238)));
+                        ui.add_space(2.0);
+                        ui.label(egui::RichText::new("Seamless materials, patterns and filters from nodes - every result tiles.").size(13.5).color(dim));
+                        ui.add_space(22.0);
+
+                        // ---- action cards
+                        let actions: [(&str, &str, Ic); 6] = [
+                            ("New graph", "Start from a template", Ic::New),
+                            ("Open package", "Load a .mcg or .mca file", Ic::Open),
+                            ("Brick wall example", "Explore a finished material", Ic::Layout),
+                            ("Mesh map baker", "Bake maps from OBJ meshes", Ic::Sphere),
+                            ("Open in Paint mode", "Paint a .mcpaint document or a mesh", Ic::Package),
+                            ("Import Painter project", "Convert a Substance 3D Painter .spp", Ic::Input),
+                        ];
+                        let gap = 14.0;
+                        let per_row = (((col_w + gap) / (230.0 + gap)).floor() as usize).clamp(1, 4);
+                        let cw = (col_w - gap * (per_row as f32 - 1.0)) / per_row as f32;
+                        let mut chosen: Option<usize> = None;
+                        for row in actions.chunks(per_row).enumerate() {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = gap;
+                                for (k, (title, sub, ic)) in row.1.iter().enumerate() {
+                                    let (rect, resp) = ui.allocate_exact_size(vec2(cw, 84.0), Sense::click());
+                                    let hot = resp.hovered();
+                                    let pr = ui.painter();
+                                    pr.rect_filled(rect, 10.0, if hot { card_hot } else { card });
+                                    pr.rect_stroke(rect, 10.0, Stroke::new(if hot { 1.5_f32 } else { 1.0_f32 }, if hot { ACCENT } else { Color32::from_rgb(48, 52, 59) }), egui::StrokeKind::Inside);
+                                    let badge = Rect::from_min_size(rect.left_top() + vec2(16.0, 18.0), vec2(48.0, 48.0));
+                                    pr.rect_filled(badge, 12.0, ACCENT.gamma_multiply(if hot { 0.34 } else { 0.2 }));
+                                    draw_icon(pr, badge.center(), *ic, ACCENT);
+                                    pr.text(rect.left_top() + vec2(78.0, 24.0), Align2::LEFT_TOP, *title, FontId::proportional(14.5), Color32::from_gray(238));
+                                    pr.text(rect.left_top() + vec2(78.0, 46.0), Align2::LEFT_TOP, *sub, FontId::proportional(11.5), dim);
+                                    if resp.clicked() {
+                                        chosen = Some(row.0 * per_row + k);
+                                    }
+                                }
+                            });
+                            ui.add_space(gap);
+                        }
+                        match chosen {
+                            Some(0) => self.new_dlg.open = true,
+                            Some(1) => self.open_file(),
+                            Some(2) => self.open_example(),
+                            Some(3) => {
+                                self.screen = Screen::Editor;
+                                self.bake.open = true;
+                            }
+                            Some(4) if self.paint.pick(gui_paint::Pick::Any) => self.screen = Screen::Paint,
+                            Some(5) if self.paint.pick(gui_paint::Pick::Substance) => self.screen = Screen::Paint,
+                            _ => {}
+                        }
+
+                        // ---- tip strip
+                        if !self.hide_suggestions {
+                            ui.add_space(4.0);
+                            egui::Frame::NONE.fill(Color32::from_rgb(27, 36, 38)).stroke(Stroke::new(1.0_f32, Color32::from_rgb(40, 66, 66))).corner_radius(8.0).inner_margin(egui::Margin::symmetric(14, 9)).show(ui, |ui| {
+                                ui.set_width(col_w - 30.0);
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Tip").strong().color(ACCENT));
+                                    ui.label(egui::RichText::new("Press Tab in the graph to add a node at the cursor, or drag a link into empty space to add one and connect it.").color(Color32::from_gray(200)));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        if ui.add(egui::Button::new("Hide").frame(false)).clicked() {
+                                            self.hide_suggestions = true;
+                                            self.save_settings();
+                                        }
+                                    });
+                                });
+                            });
+                        } else if ui.add(egui::Button::new(egui::RichText::new("Show tip").color(dim)).frame(false)).clicked() {
+                            self.hide_suggestions = false;
+                            self.save_settings();
+                        }
+                        ui.add_space(20.0);
+
+                        // ---- recent files
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Recent").size(18.0).strong().color(Color32::from_gray(235)));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.add(egui::TextEdit::singleline(&mut self.home_filter).hint_text("Search recent files").desired_width(230.0));
+                            });
+                        });
+                        ui.add_space(10.0);
+                        let f = self.home_filter.to_lowercase();
+                        let mut open: Option<PathBuf> = None;
+                        let mut remove: Option<PathBuf> = None;
+                        let files: Vec<PathBuf> = self.recent.iter().filter(|p| f.is_empty() || p.file_name().map(|s| s.to_string_lossy().to_lowercase().contains(&f)).unwrap_or(false)).cloned().collect();
+                        if files.is_empty() {
+                            ui.add_space(8.0);
+                            ui.label(egui::RichText::new(if self.recent.is_empty() { "Nothing here yet - create a graph or open a package and it will show up here." } else { "No recent files match the search." }).color(dim));
+                        }
+                        let rw = 330.0;
+                        let rcols = (((col_w + gap) / (rw + gap)).floor() as usize).clamp(1, 6);
+                        let rcw = (col_w - gap * (rcols as f32 - 1.0)) / rcols as f32;
+                        for chunk in files.chunks(rcols) {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = gap;
+                                for p in chunk {
+                                    let name = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                                    let folder = p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
+                                    let meta = std::fs::metadata(p).ok();
+                                    let (rect, resp) = ui.allocate_exact_size(vec2(rcw, 76.0), Sense::click());
+                                    let hot = resp.hovered();
+                                    let pr = ui.painter();
+                                    pr.rect_filled(rect, 10.0, if hot { card_hot } else { card });
+                                    pr.rect_stroke(rect, 10.0, Stroke::new(1.0_f32, if hot && meta.is_some() { ACCENT } else { Color32::from_rgb(44, 48, 55) }), egui::StrokeKind::Inside);
+                                    let sw = Rect::from_min_size(rect.left_top() + vec2(10.0, 10.0), vec2(56.0, 56.0));
+                                    swatch(&pr.with_clip_rect(sw), sw, &name, meta.is_some());
+                                    let col = if meta.is_some() { Color32::from_gray(228) } else { Color32::from_gray(110) };
+                                    let tx = rect.min.x + 78.0;
+                                    let clipped = pr.with_clip_rect(Rect::from_min_max(pos2(tx, rect.min.y), pos2(rect.max.x - 8.0, rect.max.y)));
+                                    clipped.text(pos2(tx, rect.min.y + 12.0), Align2::LEFT_TOP, &name, FontId::proportional(13.5), col);
+                                    clipped.text(pos2(tx, rect.min.y + 32.0), Align2::LEFT_TOP, &folder, FontId::proportional(10.5), Color32::from_gray(110));
+                                    let line = match &meta {
+                                        Some(m) => format!("{}  -  {}", m.modified().map(fmt_time).unwrap_or_default(), fmt_size(m.len())),
+                                        None => "file not found".to_string(),
+                                    };
+                                    clipped.text(pos2(tx, rect.min.y + 50.0), Align2::LEFT_TOP, line, FontId::proportional(10.5), dim);
+                                    let resp = resp.on_hover_text(p.display().to_string());
+                                    if resp.clicked() && meta.is_some() {
+                                        open = Some(p.clone());
+                                    }
+                                    resp.context_menu(|ui| {
+                                        if ui.button("Remove from recent").clicked() {
+                                            remove = Some(p.clone());
+                                            ui.close();
+                                        }
+                                    });
+                                }
+                            });
+                            ui.add_space(gap);
+                        }
+                        if let Some(p) = remove {
+                            self.recent.retain(|r| *r != p);
+                            let files: Vec<String> = self.recent.iter().map(|r| r.to_string_lossy().to_string()).collect();
+                            self.prefs.update(|v| v.recent.files = files);
+                        }
+                        if let Some(p) = open {
+                            self.open_path(p);
+                        }
+                    });
+                });
+                ui.add_space(24.0);
+            });
         });
     }
 
@@ -851,7 +886,7 @@ impl App {
                                     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 21.0), Sense::click());
                                     if sel {
                                         ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(40, 62, 100));
-                                        ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(60, 120, 230)), egui::StrokeKind::Outside);
+                                        ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(60, 120, 230)), egui::StrokeKind::Inside);
                                     } else if resp.hovered() {
                                         ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(44, 44, 44));
                                     }
@@ -888,11 +923,28 @@ impl App {
                                     ui.selectable_value(&mut self.new_dlg.size, s, format!("{s} px"));
                                 }
                             });
-                            let (r, resp) = ui.allocate_exact_size(vec2(26.0, 24.0), Sense::hover());
+                            let linked = self.new_dlg.height == 0;
+                            let (r, resp) = ui.allocate_exact_size(vec2(26.0, 24.0), Sense::click());
                             ui.painter().rect_filled(r, 3.0, Color32::from_rgb(60, 60, 60));
-                            draw_icon(ui.painter(), r.center(), Ic::Link, Color32::WHITE);
-                            resp.on_hover_text("Width and height are linked (non-square graphs are not supported yet)");
-                            ui.add_enabled(false, egui::Button::new(format!("{} px", self.new_dlg.size)).min_size(vec2(150.0, 20.0)));
+                            draw_icon(ui.painter(), r.center(), Ic::Link, if linked { Color32::WHITE } else { Color32::from_gray(110) });
+                            if resp
+                                .on_hover_text(if linked {
+                                    "Linked: the graph is square (click to set a separate height)"
+                                } else {
+                                    "Unlinked: click to make the graph square again"
+                                })
+                                .clicked()
+                            {
+                                self.new_dlg.height = if linked { self.new_dlg.size } else { 0 };
+                            }
+                            let shown = if linked { self.new_dlg.size } else { self.new_dlg.height };
+                            ui.add_enabled_ui(!linked, |ui| {
+                                egui::ComboBox::from_id_salt("nd_h").width(150.0).selected_text(format!("{shown} px")).show_ui(ui, |ui| {
+                                    for s in [128usize, 256, 512, 1024, 2048, 4096, 8192] {
+                                        ui.selectable_value(&mut self.new_dlg.height, s, format!("{s} px"));
+                                    }
+                                });
+                            });
                         });
                         ui.add_space(8.0);
                         ui.strong("Output format");
@@ -1144,7 +1196,7 @@ impl App {
                 let (m, sub) = lib_group(&e.kind);
                 match cat.as_str() {
                     "Favorites" => self.favorites.contains(&e.label),
-                    "Atomic nodes" => !matches!(e.kind.as_str(), "subgraph" | "comment" | "frame"),
+                    "Core nodes" => !matches!(e.kind.as_str(), "subgraph" | "comment" | "frame"),
                     c => match c.split_once('/') {
                         Some((cm, cs)) => m == cm && sub == cs,
                         None => m == c,
@@ -1208,7 +1260,7 @@ impl App {
                         ui.add_space(10.0);
                         ui.label(
                             egui::RichText::new(match self.lib_cat.as_str() {
-                                "FxMap nodes" | "Function nodes" => "Not available in this version.",
+                                "Pattern builders" | "Logic nodes" => "Not available in this version.",
                                 "Favorites" => "Right-click a node to add it to favorites.",
                                 _ => "Nothing here.",
                             })
@@ -1234,7 +1286,7 @@ impl App {
                                 }
                             }
                             if self.favorites.contains(&e.label) {
-                                draw_icon(p, tr.right_top() + vec2(-8.0, 8.0), Ic::Star, Color32::from_rgb(255, 190, 40));
+                                draw_icon(p, tr.right_top() + vec2(-8.0, 8.0), Ic::Star, Color32::from_rgb(90, 220, 190));
                             }
                             let (l1, l2) = two_lines(&e.label);
                             p.text(pos2(rect.center().x, rect.min.y + 70.0), Align2::CENTER_TOP, l1, FontId::proportional(11.0), Color32::from_gray(225));
@@ -1302,7 +1354,10 @@ impl App {
             self.pan2d = Vec2::ZERO;
         }
         let side = fit * self.z2d;
-        let img = Rect::from_center_size(rect.center() + self.pan2d, vec2(side, side));
+        // the image keeps the texture's own aspect ratio; `side` is its longer edge
+        let aspect = if self.tex2d_size.0 > 0 && self.tex2d_size.1 > 0 { self.tex2d_size.1 as f32 / self.tex2d_size.0 as f32 } else { 1.0 };
+        let img_size = if aspect <= 1.0 { vec2(side, side * aspect) } else { vec2(side / aspect, side) };
+        let img = Rect::from_center_size(rect.center() + self.pan2d, img_size);
         if let Some(t) = &self.tex2d {
             let uv = if self.tile_preview { Rect::from_min_max(pos2(-0.5, -0.5), pos2(1.5, 1.5)) } else { Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)) };
             if self.tile_preview {
@@ -1311,7 +1366,7 @@ impl App {
             } else {
                 painter.image(t.id(), img, uv, Color32::WHITE);
             }
-            painter.rect_stroke(img, 0.0, Stroke::new(1.0_f32, Color32::from_gray(70)), egui::StrokeKind::Outside);
+            painter.rect_stroke(img, 0.0, Stroke::new(1.0_f32, Color32::from_gray(70)), egui::StrokeKind::Inside);
         } else {
             painter.text(rect.center(), Align2::CENTER_CENTER, "select a node to view its result", FontId::proportional(12.5), Color32::from_gray(120));
         }
@@ -1323,9 +1378,24 @@ impl App {
                 self.tex2d_size.1,
                 if self.g.meta.get("output_format").map(|s| s == "16").unwrap_or(false) { 16 } else { 8 }
             ));
+            if let Some((lo, hi)) = self.tex2d_range {
+                if lo <= hi {
+                    let hdr = hi > 1.0001 || lo < -0.0001;
+                    let txt = egui::RichText::new(format!("range {lo:.3} .. {hi:.3}")).small().color(if hdr {
+                        Color32::from_rgb(255, 190, 90)
+                    } else {
+                        Color32::from_gray(150)
+                    });
+                    ui.label(txt).on_hover_text(if hdr {
+                        "Values outside 0..1 (HDR). The view clips them; exports keep them in float formats (EXR, HDR, 32-bit TIFF)."
+                    } else {
+                        "Smallest and largest channel value of this result"
+                    });
+                }
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(6.0);
-                let px = if self.tex2d_size.0 > 0 { side / self.tex2d_size.0 as f32 * 100.0 } else { 100.0 };
+                let px = if self.tex2d_size.0 > 0 { img_size.x / self.tex2d_size.0 as f32 * 100.0 } else { 100.0 };
                 ui.small(format!("{px:.2}%"));
                 if icon_btn(ui, Ic::Frame, "Fit to view (double-click)", true).clicked() {
                     self.z2d = 1.0;
@@ -1456,10 +1526,10 @@ impl App {
                         ui.small(format!("GPU: {name}"));
                     }
                     ui.small("Real displacement, parallax relief, GGX PBR, mipmaps + anisotropic filtering, MSAA");
-                    if let Ok(mut g) = self.gpu.lock()
-                        && ui.checkbox(&mut g.opts.self_shadow, "Height self-shadowing").changed()
-                    {
-                        ch = true;
+                    if let Ok(mut g) = self.gpu.lock() {
+                        if ui.checkbox(&mut g.opts.self_shadow, "Height self-shadowing").changed() {
+                            ch = true;
+                        }
                     }
                 }
                 if !self.gpu_on {
@@ -1547,22 +1617,34 @@ impl App {
     fn graph_props(&mut self, ui: &mut egui::Ui) {
         let mut meta = self.g.meta.clone();
         let mut size = self.g.size;
+        let mut height = self.g.height;
         let mut seed = self.g.seed_offset;
-        egui::CollapsingHeader::new(egui::RichText::new("BASE PARAMETERS").strong()).default_open(true).show(ui, |ui| {
+        egui::CollapsingHeader::new(egui::RichText::new("GRAPH SETTINGS").strong()).default_open(true).show(ui, |ui| {
             ui.strong("Output Size");
             let mut e = (size as f32).log2().round() as i32;
             ui.horizontal(|ui| {
                 ui.label("Width");
                 ui.add(egui::Slider::new(&mut e, 4..=12).custom_formatter(|v, _| format!("{} px", 1u32 << (v as u32))).show_value(true));
             });
+            let mut linked = height == 0;
+            let mut eh = if linked { e } else { (height as f32).log2().round() as i32 };
             ui.horizontal(|ui| {
                 ui.label("Height");
-                ui.add_enabled(false, egui::Slider::new(&mut e.clone(), 4..=12).custom_formatter(|v, _| format!("{} px", 1u32 << (v as u32))));
-                let (r, resp) = ui.allocate_exact_size(vec2(22.0, 20.0), Sense::hover());
-                draw_icon(ui.painter(), r.center(), Ic::Link, Color32::from_gray(200));
-                resp.on_hover_text("Linked: graphs are square");
+                ui.add_enabled(!linked, egui::Slider::new(&mut eh, 4..=12).custom_formatter(|v, _| format!("{} px", 1u32 << (v as u32))));
+                let (r, resp) = ui.allocate_exact_size(vec2(22.0, 20.0), Sense::click());
+                draw_icon(ui.painter(), r.center(), Ic::Link, if linked { Color32::WHITE } else { Color32::from_gray(110) });
+                if resp
+                    .on_hover_text(if linked { "Linked: height follows width (click to unlink)" } else { "Unlinked: click to make the graph square again" })
+                    .clicked()
+                {
+                    linked = !linked;
+                    if !linked {
+                        eh = e;
+                    }
+                }
             });
             size = 1usize << e.clamp(4, 12);
+            height = if linked { 0 } else { 1usize << eh.clamp(4, 12) };
             ui.add_space(6.0);
             ui.strong("Output Format");
             let cur = meta.get("output_format").cloned().unwrap_or_else(|| "8".into());
@@ -1578,13 +1660,32 @@ impl App {
                 },
             );
             ui.add_space(6.0);
+            ui.strong("Node Precision");
+            let prec = meta.get("ofmt").and_then(|s| s.parse::<usize>().ok()).unwrap_or(0).min(3);
+            let pnames = ["32 bits float", "8 bits integer", "16 bits integer", "16 bits float"];
+            egui::ComboBox::from_id_salt("nodeprec").width(220.0).selected_text(pnames[prec]).show_ui(ui, |ui| {
+                for (i, n) in pnames.iter().enumerate() {
+                    if ui
+                        .selectable_label(prec == i, *n)
+                        .on_hover_text("Every node is rounded to this precision unless it sets its own Output Format")
+                        .clicked()
+                    {
+                        if i == 0 {
+                            meta.remove("ofmt");
+                        } else {
+                            meta.insert("ofmt".into(), i.to_string());
+                        }
+                    }
+                }
+            });
+            ui.add_space(6.0);
             ui.strong("Tiling Mode");
             ui.add_enabled(false, egui::Button::new("H and V Tiling").min_size(vec2(220.0, 20.0)));
             ui.add_space(6.0);
             ui.strong("Random Seed");
             ui.add(egui::Slider::new(&mut seed, 0..=9999));
         });
-        egui::CollapsingHeader::new(egui::RichText::new("ATTRIBUTES").strong()).default_open(true).show(ui, |ui| {
+        egui::CollapsingHeader::new(egui::RichText::new("DETAILS").strong()).default_open(true).show(ui, |ui| {
             meta_field(ui, &mut meta, "Identifier", "identifier", false);
             meta_field(ui, &mut meta, "Label", "label", false);
             ui.strong("Type");
@@ -1628,29 +1729,30 @@ impl App {
             meta_field(ui, &mut meta, "Author URL", "author_url", false);
             meta_field(ui, &mut meta, "Tags", "tags", false);
         });
-        if meta != self.g.meta || size != self.g.size || seed != self.g.seed_offset {
+        if meta != self.g.meta || size != self.g.size || height != self.g.height || seed != self.g.seed_offset {
             if !self.edit_open {
                 self.snap();
                 self.edit_open = true;
             }
-            if size != self.g.size || seed != self.g.seed_offset {
+            if size != self.g.size || height != self.g.height || seed != self.g.seed_offset {
                 self.dirty = true;
             }
             self.g.meta = meta;
             self.g.size = size;
+            self.g.height = height;
             self.g.seed_offset = seed;
         }
     }
 
     // ------------------------------------------------------------ editor layout
-    fn editor_ui(&mut self, ui: &mut egui::Ui) {
-        let ctx = &ui.ctx().clone();
+    fn editor_ui(&mut self, root: &mut egui::Ui) {
+        let ctx = &root.ctx().clone();
         let mut acts: Vec<Act> = Vec::new();
         let in_sub = !self.parents.is_empty();
         let (can_undo, can_redo, has_sel, has_clip) = (!self.undo.is_empty(), !self.redo.is_empty(), !self.sel.is_empty(), !self.clip.is_empty());
         let panel_fill = Color32::from_rgb(40, 40, 40);
 
-        egui::Panel::top("menu").frame(egui::Frame::NONE.fill(Color32::from_rgb(34, 34, 34)).inner_margin(egui::Margin::symmetric(6, 2))).show(ui, |ui| {
+        egui::Panel::top("menu").frame(egui::Frame::NONE.fill(Color32::from_rgb(34, 34, 34)).inner_margin(egui::Margin::symmetric(6, 2))).show(root, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     ui.menu_button("New", |ui| {
@@ -1670,9 +1772,14 @@ impl App {
                         }
                     }
                     ui.separator();
-                    for (label, a) in
-                        [("Import bitmap...", Act::ImportBitmap), ("Export textures...", Act::Export), ("Publish package (.mca)...", Act::Publish)]
-                    {
+                    for (label, a) in [
+                        ("Link package as node...", Act::LinkPackage),
+                        ("Refresh linked packages", Act::RefreshLinks),
+                        ("Dependencies...", Act::ToggleDeps),
+                        ("Import bitmap...", Act::ImportBitmap),
+                        ("Export textures...", Act::Export),
+                        ("Publish package (.mca)...", Act::Publish),
+                    ] {
                         if ui.button(label).clicked() {
                             acts.push(a);
                             ui.close();
@@ -1734,6 +1841,22 @@ impl App {
                         acts.push(Act::AutoLayout);
                         ui.close();
                     }
+                    ui.separator();
+                    match materialcraft::gpu::adapter_name() {
+                        Some(name) => {
+                            if ui
+                                .checkbox(&mut self.gpu_eval, "GPU acceleration")
+                                .on_hover_text(format!("Large noises, blurs and normal maps run on {name}. Results match the CPU path within rounding."))
+                                .changed()
+                            {
+                                materialcraft::gpu::set_enabled(self.gpu_eval);
+                                self.dirty = true;
+                            }
+                        }
+                        None => {
+                            ui.add_enabled(false, egui::Button::new("GPU acceleration (no suitable adapter)"));
+                        }
+                    }
                 });
                 ui.menu_button("Windows", |ui| {
                     for (i, n) in ["Explorer", "Library", "3D View", "2D View", "Properties"].iter().enumerate() {
@@ -1742,7 +1865,8 @@ impl App {
                     ui.separator();
                     if ui.button("Reset layout").clicked() {
                         self.show = [true; 5];
-                        self.left_split = 0.33;
+                        self.dock = default_dock();
+                        self.dock_closed.clear();
                         ui.close();
                     }
                 });
@@ -1756,7 +1880,77 @@ impl App {
                 });
             });
         });
-        egui::Panel::top("toolbar").frame(egui::Frame::NONE.fill(Color32::from_rgb(38, 38, 38)).inner_margin(egui::Margin::symmetric(6, 1))).show(ui, |ui| {
+        // one tab per open package; clicking switches the editor to it, the cross closes it
+        if self.pkgs.len() > 0 {
+            egui::Panel::top("tabs").frame(egui::Frame::NONE.fill(Color32::from_rgb(30, 30, 30)).inner_margin(egui::Margin::symmetric(4, 2))).show(
+                root,
+                |ui| {
+                    egui::ScrollArea::horizontal().id_salt("tabs_scroll").auto_shrink([false, true]).show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 2.0;
+                            for i in 0..self.pkgs.len() {
+                                let active = i == self.pkg_active;
+                                let title = format!("{}{}", self.pkg_title(i), if self.pkg_modified(i) { "*" } else { "" });
+                                let fill = if active { Color32::from_rgb(58, 58, 58) } else { Color32::from_rgb(40, 40, 40) };
+                                let txt = egui::RichText::new(title).color(if active { Color32::WHITE } else { Color32::from_gray(170) });
+                                let r = ui.add(egui::Button::new(txt).fill(fill).min_size(vec2(90.0, 20.0)));
+                                if r.clicked() && !active {
+                                    acts.push(Act::SwitchPkg(i));
+                                }
+                                if r.middle_clicked() {
+                                    acts.push(Act::ClosePkg(i));
+                                }
+                                if ui
+                                    .add(egui::Button::new(egui::RichText::new("x").color(Color32::from_gray(150))).fill(fill).min_size(vec2(18.0, 20.0)))
+                                    .on_hover_text("Close package")
+                                    .clicked()
+                                {
+                                    acts.push(Act::ClosePkg(i));
+                                }
+                                ui.add_space(4.0);
+                            }
+                            if ui.add(egui::Button::new("+").min_size(vec2(22.0, 20.0))).on_hover_text("New empty package").clicked() {
+                                acts.push(Act::NewPackage);
+                            }
+                        });
+                    });
+                    // one tab per open graph of the active package: the main graph first, then every graph opened from it
+                    let root_names: BTreeSet<String> = self.parents.first().map(|p| &p.0).unwrap_or(&self.g).subgraphs.keys().cloned().collect();
+                    let open: Vec<String> = self.graph_tabs.iter().filter(|n| root_names.contains(*n)).cloned().collect();
+                    if !open.is_empty() {
+                        let current = self.parents.last().map(|(_, n)| n.clone()).unwrap_or_default();
+                        egui::ScrollArea::horizontal().id_salt("gtabs_scroll").auto_shrink([false, true]).show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 2.0;
+                                for name in std::iter::once(String::new()).chain(open.iter().cloned()) {
+                                    let active = current == name;
+                                    let fill = if active { Color32::from_rgb(50, 62, 60) } else { Color32::from_rgb(36, 36, 36) };
+                                    let label = if name.is_empty() { "Main graph".to_string() } else { name.clone() };
+                                    let txt = egui::RichText::new(label).small().color(if active { ACCENT } else { Color32::from_gray(160) });
+                                    if ui.add(egui::Button::new(txt).fill(fill).min_size(vec2(70.0, 18.0))).clicked() && !active {
+                                        acts.push(Act::OpenGraphTab(name.clone()));
+                                    }
+                                    if !name.is_empty()
+                                        && ui
+                                            .add(
+                                                egui::Button::new(egui::RichText::new("x").small().color(Color32::from_gray(140)))
+                                                    .fill(fill)
+                                                    .min_size(vec2(16.0, 18.0)),
+                                            )
+                                            .on_hover_text("Close graph tab")
+                                            .clicked()
+                                    {
+                                        acts.push(Act::CloseGraphTab(name.clone()));
+                                    }
+                                    ui.add_space(3.0);
+                                }
+                            });
+                        });
+                    }
+                },
+            );
+        }
+        egui::Panel::top("toolbar").frame(egui::Frame::NONE.fill(Color32::from_rgb(38, 38, 38)).inner_margin(egui::Margin::symmetric(6, 1))).show(root, |ui| {
             ui.horizontal(|ui| {
                 for (ic, tip, a, en) in [
                     (Ic::New, "New material graph (Ctrl+N)", Act::NewGraph, true),
@@ -1776,204 +1970,236 @@ impl App {
                 }
             });
         });
-        egui::Panel::bottom("status").frame(egui::Frame::NONE.fill(Color32::from_rgb(30, 30, 30)).inner_margin(egui::Margin::symmetric(8, 2))).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                let (msg, ok) = &self.status;
-                ui.colored_label(if *ok { Color32::from_gray(170) } else { Color32::from_rgb(255, 120, 110) }, msg);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
-                    ui.label(format!(
-                        "MaterialCraft Engine: CPU ({threads} threads){}    Version: {}",
-                        if self.job.is_some() { "   computing..." } else { "" },
-                        env!("CARGO_PKG_VERSION")
-                    ));
+        egui::Panel::bottom("status").frame(egui::Frame::NONE.fill(Color32::from_rgb(30, 30, 30)).inner_margin(egui::Margin::symmetric(8, 2))).show(
+            root,
+            |ui| {
+                ui.horizontal(|ui| {
+                    let (msg, ok) = &self.status;
+                    ui.colored_label(if *ok { Color32::from_gray(170) } else { Color32::from_rgb(255, 120, 110) }, msg);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+                        let engine = match materialcraft::gpu::adapter_name().filter(|_| self.gpu_eval) {
+                            Some(a) => format!("CPU ({threads} threads) + GPU compute: {a}"),
+                            None => format!("CPU ({threads} threads)"),
+                        };
+                        ui.label(format!(
+                            "MaterialCraft Engine: {engine}{}    Version: {}",
+                            if self.job.is_some() { "   computing..." } else { "" },
+                            env!("CARGO_PKG_VERSION")
+                        ));
+                    });
                 });
-            });
-        });
+            },
+        );
 
-        let (mut d_props, mut d_left, mut d_views, mut d_split) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
-        if self.show[4] {
-            egui::Panel::right("props").resizable(false).exact_size(self.w_props).frame(egui::Frame::NONE.fill(panel_fill)).show(ui, |ui| {
-                let prect = ui.max_rect();
-                let title = match self.active.filter(|a| self.sel.contains(a)).and_then(|a| self.g.nodes.get(&a).map(|n| n.kind.replace('_', " "))) {
-                    Some(k) => format!("{} - PROPERTIES", k.to_uppercase()),
-                    None => format!("{} - PROPERTIES", self.gname()),
+        // keep the panel layout and the Windows menu in step
+        for pn in Pn::ALL {
+            let Some(i) = pn.show_index() else { continue };
+            let present = self.dock.contains(&pn);
+            if !self.show[i] && present {
+                if let Ok(loc) = self.dock.location(&pn) {
+                    self.dock_closed.insert(pn, loc);
+                }
+                let _ = self.dock.apply(craft_ui::docking::Action::Close { panel: pn });
+            } else if self.show[i] && !present {
+                let restored = match self.dock_closed.get(&pn).cloned() {
+                    Some(loc) => self.dock.restore(pn, &loc).is_ok(),
+                    None => false,
                 };
-                if panel_header(ui, &title, true) {
-                    self.show[4] = false;
-                }
-                egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                    ui.add_space(4.0);
-                    egui::Frame::NONE.inner_margin(egui::Margin::symmetric(8, 0)).show(ui, |ui| self.inspector(ui));
-                });
-                d_props = size_handle(ui, "h_props", prect, 1);
-            });
-        }
-
-        if self.show[0] || self.show[1] {
-            egui::Panel::left("left").resizable(false).exact_size(self.w_left).frame(egui::Frame::NONE.fill(panel_fill)).show(ui, |ui| {
-                let lrect = ui.max_rect();
-                let total = ui.available_height();
-                let w = ui.available_width();
-                let both = self.show[0] && self.show[1];
-                if self.show[0] {
-                    let h = if both { total * self.left_split } else { total };
-                    ui.allocate_ui(vec2(w, h), |ui| {
-                        ui.set_min_height(h);
-                        self.explorer_ui(ui);
+                if !restored {
+                    let _ = self.dock.apply(craft_ui::docking::Action::OpenAt {
+                        panel: pn,
+                        anchor: Pn::Graph,
+                        placement: craft_ui::docking::Placement::Split(craft_ui::docking::Zone::Right),
                     });
                 }
-                if both {
-                    let (r, resp) = ui.allocate_exact_size(vec2(w, 5.0), Sense::drag());
-                    ui.painter().rect_filled(r, 0.0, Color32::from_rgb(24, 24, 24));
-                    if resp.dragged() {
-                        self.left_split = (self.left_split + resp.drag_delta().y / total).clamp(0.12, 0.8);
-                    }
-                    resp.on_hover_cursor(egui::CursorIcon::ResizeVertical);
-                }
-                if self.show[1] {
-                    let mut s = std::mem::take(&mut self.lib_search);
-                    self.library_ui(ui, &mut s);
-                    self.lib_search = s;
-                }
-                d_left = size_handle(ui, "h_left", lrect, 0);
-            });
-        }
-
-        if self.show[2] || self.show[3] {
-            egui::Panel::bottom("views").resizable(false).exact_size(self.h_views).frame(egui::Frame::NONE.fill(panel_fill)).show(ui, |ui| {
-                let vrect = ui.max_rect();
-                let both = self.show[2] && self.show[3];
-                let (total, hh) = (ui.available_width(), ui.available_height());
-                if both {
-                    let w1 = (total * self.view_split).clamp(180.0, (total - 180.0).max(180.0));
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.horizontal_top(|ui| {
-                        ui.allocate_ui_with_layout(vec2(w1 - 3.0, hh), egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                            ui.set_min_size(vec2(w1 - 3.0, hh));
-                            self.view3d_panel(ui);
-                        });
-                        let (hr, hresp) = ui.allocate_exact_size(vec2(6.0, hh), Sense::drag());
-                        ui.painter().rect_filled(hr, 0.0, Color32::from_rgb(24, 24, 24));
-                        if hresp.hovered() || hresp.dragged() {
-                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-                            ui.painter().rect_filled(hr, 0.0, Color32::from_rgba_unmultiplied(235, 130, 20, 120));
-                        }
-                        d_split = hresp.drag_delta().x / total.max(1.0);
-                        ui.allocate_ui_with_layout(vec2((total - w1 - 3.0).max(60.0), hh), egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                            ui.set_min_size(vec2((total - w1 - 3.0).max(60.0), hh));
-                            self.view2d_panel(ui);
-                        });
-                    });
-                } else if self.show[2] {
-                    self.view3d_panel(ui);
-                } else if self.show[3] {
-                    self.view2d_panel(ui);
-                }
-                d_views = size_handle(ui, "h_views", vrect, 2);
-            });
-        }
-
-        {
-            let sw = ctx.content_rect().width();
-            let sh = ctx.content_rect().height();
-            self.w_props = (self.w_props + d_props).clamp(240.0, (sw * 0.45).max(260.0));
-            self.w_left = (self.w_left + d_left).clamp(240.0, (sw * 0.5).max(260.0));
-            self.h_views = (self.h_views + d_views).clamp(140.0, (sh * 0.7).max(160.0));
-            self.view_split = (self.view_split + d_split).clamp(0.2, 0.8);
-        }
-        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(panel_fill)).show(ui, |ui| {
-            panel_header(ui, &format!("{} - GRAPH", self.gname()), false);
-            ui.horizontal(|ui| {
-                ui.add_space(4.0);
-                for (ic, tip, a, en) in [
-                    (Ic::Frame, "Frame all (F)", Act::FrameAll, true),
-                    (Ic::Layout, "Auto-layout", Act::AutoLayout, true),
-                    (Ic::Comment, "Comment frame (C)", Act::Comment, true),
-                    (Ic::Subgraph, "Create subgraph from selection", Act::Subgraph, has_sel),
-                ] {
-                    if icon_btn(ui, ic, tip, en).clicked() {
-                        acts.push(a);
-                    }
-                }
-                ui.separator();
-                ui.label("Parent Size:");
-                let before = self.g.size;
-                egui::ComboBox::from_id_salt("tb_size").width(70.0).selected_text(format!("{}", self.g.size)).show_ui(ui, |ui| {
-                    for s in [128usize, 256, 512, 1024, 2048, 4096, 8192] {
-                        ui.selectable_value(&mut self.g.size, s, format!("{s}"));
-                    }
-                });
-                if before != self.g.size {
-                    self.dirty = true;
-                    self.modified = true;
-                }
-                let (r, resp) = ui.allocate_exact_size(vec2(24.0, 22.0), Sense::hover());
-                ui.painter().rect_filled(r, 3.0, Color32::from_rgb(70, 70, 70));
-                draw_icon(ui.painter(), r.center(), Ic::Link, Color32::WHITE);
-                resp.on_hover_text("Width and height are linked");
-                ui.add_enabled(false, egui::Button::new(format!("{}", self.g.size)).min_size(vec2(70.0, 20.0)));
-                ui.separator();
-                if in_sub && ui.button("< Back").clicked() {
-                    acts.push(Act::ExitSub);
-                }
-                let mut path = String::new();
-                for (_, n) in &self.parents {
-                    path.push_str(&format!(" > {n}"));
-                }
-                if !path.is_empty() {
-                    ui.strong(path);
-                }
-                if has_sel {
-                    ui.small(format!("{} selected", self.sel.len()));
-                }
-            });
-            self.canvas(ui);
-            if self.need_fit {
-                self.need_fit = false;
-                self.fit_view();
             }
+        }
+        let mut layout = std::mem::take(&mut self.dock);
+        let before = layout.clone();
+        let mut dock_actions: Vec<craft_ui::docking::Action<Pn>> = Vec::new();
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(panel_fill)).show(root, |ui| {
+            let mut style = craft_ui::docking::DockStyle::from_ui(ui);
+            style.tab_height = 22.0;
+            style.gap = 3.0;
+            style.background = Color32::from_rgb(24, 24, 24);
+            style.tab_background = Color32::from_rgb(30, 30, 30);
+            style.active_background = Color32::from_rgb(52, 52, 52);
+            style.accent = ACCENT;
+            style.text = Color32::from_gray(230);
+            style.inactive_text = Color32::from_gray(150);
+            let out = craft_ui::docking::DockArea::new(Id::new("editor_dock")).show_with_limits(
+                ui,
+                &layout,
+                &style,
+                |p| p.label().to_string(),
+                |p| if *p == Pn::Graph { craft_ui::docking::Permissions::PROTECTED } else { craft_ui::docking::Permissions::default() },
+                |p| match p {
+                    Pn::Graph => craft_ui::docking::PanelLimits { min: vec2(240.0, 160.0), ..Default::default() },
+                    _ => craft_ui::docking::PanelLimits { min: vec2(120.0, 80.0), ..Default::default() },
+                },
+                |ui, p| match p {
+                    Pn::Explorer => self.explorer_ui(ui),
+                    Pn::Library => {
+                        let mut s = std::mem::take(&mut self.lib_search);
+                        self.library_ui(ui, &mut s);
+                        self.lib_search = s;
+                    }
+                    Pn::View3d => self.view3d_panel(ui),
+                    Pn::View2d => self.view2d_panel(ui),
+                    Pn::Props => {
+                        let title = match self.active.filter(|a| self.sel.contains(a)).and_then(|a| self.g.nodes.get(&a).map(|n| n.kind.replace('_', " "))) {
+                            Some(k) => format!("{} - PROPERTIES", k.to_uppercase()),
+                            None => format!("{} - PROPERTIES", self.gname()),
+                        };
+                        panel_header(ui, &title, false);
+                        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                            ui.add_space(4.0);
+                            egui::Frame::NONE.inner_margin(egui::Margin::symmetric(8, 0)).show(ui, |ui| self.inspector(ui));
+                        });
+                    }
+                    Pn::Graph => {
+                        panel_header(ui, &format!("{} - GRAPH", self.gname()), false);
+                        ui.horizontal(|ui| {
+                            ui.add_space(4.0);
+                            for (ic, tip, a, en) in [
+                                (Ic::Frame, "Frame all (F)", Act::FrameAll, true),
+                                (Ic::Layout, "Auto-layout", Act::AutoLayout, true),
+                                (Ic::Comment, "Comment frame (C)", Act::Comment, true),
+                                (Ic::Subgraph, "Create subgraph from selection", Act::Subgraph, has_sel),
+                            ] {
+                                if icon_btn(ui, ic, tip, en).clicked() {
+                                    acts.push(a);
+                                }
+                            }
+                            ui.separator();
+                            ui.label("Parent Size:");
+                            let before = self.g.size;
+                            egui::ComboBox::from_id_salt("tb_size").width(70.0).selected_text(format!("{}", self.g.size)).show_ui(ui, |ui| {
+                                for s in [128usize, 256, 512, 1024, 2048, 4096, 8192] {
+                                    ui.selectable_value(&mut self.g.size, s, format!("{s}"));
+                                }
+                            });
+                            if before != self.g.size {
+                                self.dirty = true;
+                                self.modified = true;
+                            }
+                            let linked = self.g.height == 0;
+                            let (r, resp) = ui.allocate_exact_size(vec2(24.0, 22.0), Sense::click());
+                            ui.painter().rect_filled(r, 3.0, if linked { Color32::from_rgb(70, 70, 70) } else { Color32::from_rgb(50, 50, 50) });
+                            draw_icon(ui.painter(), r.center(), Ic::Link, if linked { Color32::WHITE } else { Color32::from_gray(110) });
+                            if resp
+                                .on_hover_text(if linked {
+                                    "Width and height are linked (click to unlink)"
+                                } else {
+                                    "Width and height are unlinked (click to link)"
+                                })
+                                .clicked()
+                            {
+                                // unlinking keeps the current square size; the height is then edited on its own
+                                self.g.height = if linked { self.g.size } else { 0 };
+                                self.dirty = true;
+                                self.modified = true;
+                            }
+                            if linked {
+                                ui.add_enabled(false, egui::Button::new(format!("{}", self.g.size)).min_size(vec2(70.0, 20.0)));
+                            } else {
+                                let hbefore = self.g.height;
+                                egui::ComboBox::from_id_salt("tb_height").width(70.0).selected_text(format!("{}", self.g.height)).show_ui(ui, |ui| {
+                                    for s in [128usize, 256, 512, 1024, 2048, 4096, 8192] {
+                                        ui.selectable_value(&mut self.g.height, s, format!("{s}"));
+                                    }
+                                });
+                                if hbefore != self.g.height {
+                                    self.dirty = true;
+                                    self.modified = true;
+                                }
+                            }
+                            ui.separator();
+                            if in_sub && ui.button("< Back").clicked() {
+                                acts.push(Act::ExitSub);
+                            }
+                            let mut path = String::new();
+                            for (_, n) in &self.parents {
+                                path.push_str(&format!(" > {n}"));
+                            }
+                            if !path.is_empty() {
+                                ui.strong(path);
+                            }
+                            if has_sel {
+                                ui.small(format!("{} selected", self.sel.len()));
+                            }
+                        });
+                        self.canvas(ui);
+                        if self.need_fit {
+                            self.need_fit = false;
+                            self.fit_view();
+                        }
+                    }
+                },
+            );
+            dock_actions = out.actions;
         });
+        for a in dock_actions {
+            if let craft_ui::docking::Action::Close { panel } = &a {
+                if let Some(i) = panel.show_index() {
+                    self.show[i] = false;
+                }
+                if let Ok(loc) = layout.location(panel) {
+                    self.dock_closed.insert(*panel, loc);
+                }
+            }
+            let _ = layout.apply_with_permissions(a, |p| {
+                if *p == Pn::Graph { craft_ui::docking::Permissions::PROTECTED } else { craft_ui::docking::Permissions::default() }
+            });
+        }
+        self.dock = layout;
+        if self.dock != before {
+            let l = self.dock.clone();
+            self.prefs.update(|v| v.layout.dock = Some(l));
+        }
 
         self.windows(ctx);
         self.search_ui(ctx);
         self.acts.extend(acts);
 
-        if let Some(p) = egui::DragAndDrop::payload::<GraphDrag>(ctx)
-            && let Some(pos) = ctx.input(|i| i.pointer.hover_pos())
-        {
-            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, Id::new("dnd_ghost_graph")));
-            let text = format!("{} (graph)", p.1);
-            let r = painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, text.clone(), FontId::proportional(12.0), Color32::WHITE);
-            painter.rect_filled(r.expand(4.0), 3.0, Color32::from_rgba_unmultiplied(20, 20, 20, 200));
-            painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, text, FontId::proportional(12.0), Color32::WHITE);
+        if let Some(p) = egui::DragAndDrop::payload::<GraphDrag>(ctx) {
+            if let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) {
+                let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, Id::new("dnd_ghost_graph")));
+                let text = format!("{} (graph)", p.1);
+                let r = painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, text.clone(), FontId::proportional(12.0), Color32::WHITE);
+                painter.rect_filled(r.expand(4.0), 3.0, Color32::from_rgba_unmultiplied(20, 20, 20, 200));
+                painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, text, FontId::proportional(12.0), Color32::WHITE);
+            }
         }
-        if let Some(p) = egui::DragAndDrop::payload::<String>(ctx)
-            && let Some(pos) = ctx.input(|i| i.pointer.hover_pos())
-        {
-            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, Id::new("dnd_ghost")));
-            let r = painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, (*p).clone(), FontId::proportional(12.0), Color32::WHITE);
-            painter.rect_filled(r.expand(4.0), 3.0, Color32::from_rgba_unmultiplied(20, 20, 20, 200));
-            painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, (*p).clone(), FontId::proportional(12.0), Color32::WHITE);
+        if let Some(p) = egui::DragAndDrop::payload::<String>(ctx) {
+            if let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) {
+                let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, Id::new("dnd_ghost")));
+                let r = painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, (*p).clone(), FontId::proportional(12.0), Color32::WHITE);
+                painter.rect_filled(r.expand(4.0), 3.0, Color32::from_rgba_unmultiplied(20, 20, 20, 200));
+                painter.text(pos + vec2(14.0, 14.0), Align2::LEFT_TOP, (*p).clone(), FontId::proportional(12.0), Color32::WHITE);
+            }
         }
     }
 }
 
 impl eframe::App for App {
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        self.paint.flush();
-    }
-
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let ctx = &ui.ctx().clone();
+    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = &root.ctx().clone();
         self.diag.drain();
         if self.screen == Screen::Paint {
-            if self.paint.ui(ui, self.diag.history()) == gui_paint::PaintAction::Home {
+            if self.paint.ui(root, self.diag.history()) == gui_paint::PaintAction::Home {
                 self.screen = Screen::Home;
                 self.last_title.clear();
             }
             return;
         }
+        // coming back to the window: pick up edits made to linked package files in the meantime
+        let focused = ctx.input(|i| i.focused);
+        if focused && !self.was_focused && self.screen == Screen::Editor && self.parents.is_empty() && !self.g.links.is_empty() {
+            self.acts.push(Act::RefreshLinks);
+        }
+        self.was_focused = focused;
         // graph files dropped from the OS onto the window: import as a node (editor) or open (home screen)
         let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
         for p in dropped {
@@ -1988,21 +2214,21 @@ impl eframe::App for App {
             }
         }
         // background asset results
-        if let Some(rx) = &self.banner_rx
-            && let Ok(img) = rx.try_recv()
-        {
-            let mut o = egui::TextureOptions::LINEAR;
-            o.wrap_mode = egui::TextureWrapMode::Repeat;
-            self.banner = Some(ctx.load_texture("banner", img, o));
-            self.banner_rx = None;
-        }
-        if let Some(rx) = &self.lib_rx
-            && let Ok(m) = rx.try_recv()
-        {
-            for (k, img) in m {
-                self.lib_thumbs.insert(k.clone(), ctx.load_texture(format!("lib_{k}"), img, egui::TextureOptions::LINEAR));
+        if let Some(rx) = &self.banner_rx {
+            if let Ok(img) = rx.try_recv() {
+                let mut o = egui::TextureOptions::LINEAR;
+                o.wrap_mode = egui::TextureWrapMode::Repeat;
+                self.banner = Some(ctx.load_texture("banner", img, o));
+                self.banner_rx = None;
             }
-            self.lib_rx = None;
+        }
+        if let Some(rx) = &self.lib_rx {
+            if let Ok(m) = rx.try_recv() {
+                for (k, img) in m {
+                    self.lib_thumbs.insert(k.clone(), ctx.load_texture(format!("lib_{k}"), img, egui::TextureOptions::LINEAR));
+                }
+                self.lib_rx = None;
+            }
         }
         if self.banner_rx.is_some() || self.lib_rx.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(60));
@@ -2015,7 +2241,7 @@ impl eframe::App for App {
         }
 
         if self.screen == Screen::Home {
-            self.home_ui(ui);
+            self.home_ui(root);
             self.new_dialog(ctx);
             self.windows(ctx);
             if self.screen == Screen::Editor {
@@ -2091,12 +2317,13 @@ impl eframe::App for App {
                 (redo, undo, copy, cut, paste, dup, all, save, open, del, frame, com, newg, pasted)
             });
             let w = pointer.map(|p| self.screen_to_world(p));
-            if let Some(text) = &k.13
-                && let Some(body) = text.strip_prefix("MaterialCraft nodes\n")
-                && let Ok(g) = Graph::parse_unchecked(body)
-            {
-                self.clip = g.nodes.into_iter().collect();
-                self.acts.push(Act::Paste(w));
+            if let Some(text) = &k.13 {
+                if let Some(body) = text.strip_prefix("MaterialCraft nodes\n") {
+                    if let Ok(g) = Graph::parse_unchecked(body) {
+                        self.clip = g.nodes.into_iter().collect();
+                        self.acts.push(Act::Paste(w));
+                    }
+                }
             }
             for (on, a) in [
                 (k.0, Act::Redo),
@@ -2119,7 +2346,7 @@ impl eframe::App for App {
             }
         }
 
-        self.editor_ui(ui);
+        self.editor_ui(root);
         self.new_dialog(ctx);
         self.confirm_close_ui(ctx);
         if let Some(t) = self.copy_out.take() {
@@ -2145,6 +2372,16 @@ impl eframe::App for App {
             ctx.request_repaint_after(std::time::Duration::from_millis(30));
         }
         self.text_focus = ctx.egui_wants_keyboard_input();
+        // save changed settings shortly after the last change
+        let tick = self.prefs.tick(std::time::Instant::now());
+        if let Some(deadline) = tick.next_deadline {
+            ctx.request_repaint_after(deadline.saturating_duration_since(std::time::Instant::now()));
+        }
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.paint.flush();
+        let _ = self.prefs.flush();
     }
 }
 
@@ -2159,11 +2396,11 @@ fn load_logo() -> (Tex, String) {
     let mut bytes: Option<(Vec<u8>, String)> = logo_data::LOGO_PNG.map(|b| (b.to_vec(), "embedded".to_string()));
     if bytes.is_none() {
         let mut dirs: Vec<PathBuf> = Vec::new();
-        if let Ok(exe) = std::env::current_exe()
-            && let Some(d) = exe.parent()
-        {
-            dirs.push(d.join("assets"));
-            dirs.push(d.to_path_buf());
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(d) = exe.parent() {
+                dirs.push(d.join("assets"));
+                dirs.push(d.to_path_buf());
+            }
         }
         if let Ok(c) = std::env::current_dir() {
             dirs.push(c.join("assets"));
@@ -2173,12 +2410,11 @@ fn load_logo() -> (Tex, String) {
             if let Ok(rd) = std::fs::read_dir(&d) {
                 for e in rd.flatten() {
                     let n = e.file_name().to_string_lossy().to_lowercase();
-                    if n.starts_with("materialcraftlogo")
-                        && n.ends_with(".png")
-                        && let Ok(b) = std::fs::read(e.path())
-                    {
-                        bytes = Some((b, e.path().display().to_string()));
-                        break 'outer;
+                    if n.starts_with("materialcraftlogo") && n.ends_with(".png") {
+                        if let Ok(b) = std::fs::read(e.path()) {
+                            bytes = Some((b, e.path().display().to_string()));
+                            break 'outer;
+                        }
                     }
                 }
             }

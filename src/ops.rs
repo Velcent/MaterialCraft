@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Image-processing operators used by graph nodes. All are wrap-around (tileable).
 use crate::tex::{Tex, lum};
 use std::f32::consts::{PI, TAU};
@@ -61,7 +62,7 @@ pub fn seamless_blend(t: &Tex) -> Tex {
 
 // ---------- blur / sharpen ----------
 /// Widths (odd) of three successive box blurs whose combination approximates a gaussian of the given sigma.
-fn gauss_boxes(sigma: f32) -> [i64; 3] {
+pub(crate) fn gauss_boxes(sigma: f32) -> [i64; 3] {
     let n = 3.0f32;
     let w_ideal = (12.0 * sigma * sigma / n + 1.0).sqrt();
     let mut wl = w_ideal.floor() as i64;
@@ -328,7 +329,8 @@ pub fn sharpen(t: &Tex, radius: f32, amount: f32) -> Tex {
     let mut o = t.clone();
     for (i, p) in o.px.iter_mut().enumerate() {
         for c in 0..3 {
-            p[c] = (t.px[i][c] + (t.px[i][c] - b.px[i][c]) * amount).clamp(0.0, 1.0);
+            // no clamp: values above 1 (HDR) and the small undershoot next to edges are kept
+            p[c] = t.px[i][c] + (t.px[i][c] - b.px[i][c]) * amount;
         }
     }
     o
@@ -356,7 +358,7 @@ pub fn adjust(t: &Tex, brightness: f32, contrast: f32) -> Tex {
     t.map(|p| {
         let mut o = p;
         for c in 0..3 {
-            o[c] = ((p[c] - 0.5) * contrast + 0.5 + brightness).clamp(0.0, 1.0);
+            o[c] = (p[c] - 0.5) * contrast + 0.5 + brightness;
         }
         o
     })
@@ -381,7 +383,7 @@ pub fn threshold(t: &Tex, th: f32, soft: f32) -> Tex {
     })
 }
 
-/// Designer's Threshold: mode 0 greater, 1 greater or equal, 2 lower, 3 lower or equal. With softness > 0 the
+/// Threshold: mode 0 greater, 1 greater or equal, 2 lower, 3 lower or equal. With softness > 0 the
 /// edge is smoothed and the comparison direction is all that remains of the mode.
 pub fn threshold_mode(t: &Tex, th: f32, soft: f32, mode: u32) -> Tex {
     t.map(move |p| {
@@ -465,7 +467,7 @@ pub fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {
 pub fn hsl_adjust(t: &Tex, hue: f32, sat: f32, val: f32) -> Tex {
     t.map(|p| {
         let (h, s, v) = rgb_to_hsv(p[0], p[1], p[2]);
-        let (r, g, b) = hsv_to_rgb(h + hue, (s * sat).clamp(0.0, 1.0), (v * val).clamp(0.0, 1.0));
+        let (r, g, b) = hsv_to_rgb(h + hue, (s * sat).clamp(0.0, 1.0), (v * val).max(0.0));
         [r, g, b, p[3]]
     })
 }
@@ -561,7 +563,7 @@ pub fn blend(fg: &Tex, bg: &Tex, mask: Option<&Tex>, mode: u32, opacity: f32) ->
     blend_ex(fg, bg, mask, mode, opacity, 1, [0.0, 0.0, 1.0, 1.0])
 }
 
-/// Blend with Designer's alpha handling and cropping area. `alpha_mode`: 0 use source alpha, 1 ignore alpha, 2 straight alpha
+/// Blend with alpha handling and cropping area. `alpha_mode`: 0 use source alpha, 1 ignore alpha, 2 straight alpha
 /// blending, 3 premultiplied alpha blending. `crop` = [x0, y0, x1, y1] in 0..1; outside it only the background shows.
 pub fn blend_ex(fg: &Tex, bg: &Tex, mask: Option<&Tex>, mode: u32, opacity: f32, alpha_mode: u32, crop: [f32; 4]) -> Tex {
     let mut out = bg.clone();
@@ -654,7 +656,7 @@ pub fn mirror(t: &Tex, axis: u32) -> Tex {
     o
 }
 
-/// Designer's Mirror: `axis` 0 mirrors across a vertical axis, 1 across a horizontal axis, 2 both, 3 corner.
+/// Mirror: `axis` 0 mirrors across a vertical axis, 1 across a horizontal axis, 2 both, 3 corner.
 /// `ox`/`oy` are the axis positions (0..1); `inv_*` copy the other side; `corner` 0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right.
 pub fn mirror_ex(t: &Tex, axis: u32, ox: f32, oy: f32, inv_x: bool, inv_y: bool, corner: u32) -> Tex {
     let (w, h) = (t.w as i64, t.h as i64);
@@ -771,7 +773,7 @@ pub fn normal_blend(a: &Tex, b: &Tex) -> Tex {
     o
 }
 
-/// Normal Blend with Designer's Opacity and optional Mask: `a` is the background, `b` the foreground.
+/// Normal Blend with Opacity and optional Mask: `a` is the background, `b` the foreground.
 pub fn normal_blend_ex(a: &Tex, b: &Tex, opacity: f32, mask: Option<&Tex>) -> Tex {
     let full = normal_blend(a, b);
     let mut o = full.clone();
@@ -844,7 +846,7 @@ pub fn dilate(t: &Tex, r: i64) -> Tex {
     })
 }
 
-/// Edge Detect as in Designer: white lines of `width` pixels where the image changes by more than `tolerance`;
+/// Edge Detect: white lines of `width` pixels where the image changes by more than `tolerance`;
 /// `roundness` (pixels) rounds the corners of the lines; `invert` flips the result.
 pub fn edge_detect_ex(t: &Tex, width: f32, roundness: f32, invert: bool, tolerance: f32) -> Tex {
     let g = to_gray(t);
@@ -1337,6 +1339,94 @@ fn region_id(p: [f32; 4]) -> Option<i32> {
     if p[0] == 0.0 && p[1] == 0.0 && p[2] == 0.0 { None } else { Some((p[0] * 100_000.0) as i32) }
 }
 
+/// Per-region geometry of a flood-fill result (regions are 4-connected pixels with the same region id; they may
+/// wrap around the tile border). Returns the region index of every pixel (0 = none) and, per region, the centre in
+/// uv (wrapped into 0..1), the bounding-box size in uv, and the pixel count. Index 0 of the vector is the background.
+pub fn flood_regions(t: &Tex) -> (Vec<u32>, Vec<([f32; 2], [f32; 2], u32)>) {
+    let (w, h) = (t.w, t.h);
+    let n = w * h;
+    let ids: Vec<Option<i32>> = t.px.iter().map(|p| region_id(*p)).collect();
+    let mut label = vec![0u32; n];
+    let mut stats = vec![([0.0f32; 2], [0.0f32; 2], 0u32)];
+    let mut stack = Vec::new();
+    for s in 0..n {
+        if ids[s].is_none() || label[s] != 0 {
+            continue;
+        }
+        let k = stats.len() as u32;
+        label[s] = k;
+        stack.push((s, 0i32, 0i32));
+        let (mut x0, mut x1, mut y0, mut y1, mut count) = (0i32, 0i32, 0i32, 0i32, 0u32);
+        let (mut sx, mut sy) = (0i64, 0i64);
+        while let Some((i, rx, ry)) = stack.pop() {
+            count += 1;
+            x0 = x0.min(rx);
+            x1 = x1.max(rx);
+            y0 = y0.min(ry);
+            y1 = y1.max(ry);
+            sx += rx as i64;
+            sy += ry as i64;
+            let (x, y) = (i % w, i / w);
+            for (dx, dy) in [(1i64, 0i64), (-1, 0), (0, 1), (0, -1)] {
+                let j = (y as i64 + dy).rem_euclid(h as i64) as usize * w + (x as i64 + dx).rem_euclid(w as i64) as usize;
+                if label[j] == 0 && ids[j] == ids[s] {
+                    label[j] = k;
+                    stack.push((j, rx + dx as i32, ry + dy as i32));
+                }
+            }
+        }
+        // centre of the bounding box relative to the first pixel, moved back into the tile
+        let _ = (sx, sy);
+        let cx = ((s % w) as f32 + 0.5 + (x0 + x1) as f32 * 0.5).rem_euclid(w as f32) / w as f32;
+        let cy = ((s / w) as f32 + 0.5 + (y0 + y1) as f32 * 0.5).rem_euclid(h as f32) / h as f32;
+        stats.push(([cx, cy], [(x1 - x0 + 1) as f32 / w as f32, (y1 - y0 + 1) as f32 / h as f32], count));
+    }
+    (label, stats)
+}
+
+/// Flood Fill to Index: every region gets its running number as a gray level (index / region count).
+pub fn flood_fill_to_index(t: &Tex) -> Tex {
+    let (label, stats) = flood_regions(t);
+    let div = (stats.len().max(2) - 1) as f32;
+    Tex {
+        w: t.w,
+        h: t.h,
+        px: label
+            .iter()
+            .map(|&l| {
+                if l == 0 {
+                    [0.0, 0.0, 0.0, 1.0]
+                } else {
+                    let v = l as f32 / div;
+                    [v, v, v, 1.0]
+                }
+            })
+            .collect(),
+    }
+}
+
+/// Flood Fill to Position (`size == false`) or to Bounding Box Size (`size == true`): the region's centre or extent
+/// in uv as red/green.
+pub fn flood_fill_to_geometry(t: &Tex, size: bool) -> Tex {
+    let (label, stats) = flood_regions(t);
+    Tex {
+        w: t.w,
+        h: t.h,
+        px: label
+            .iter()
+            .map(|&l| {
+                if l == 0 {
+                    [0.0, 0.0, 0.0, 1.0]
+                } else {
+                    let s = &stats[l as usize];
+                    let v = if size { s.1 } else { s.0 };
+                    [v[0], v[1], 0.0, 1.0]
+                }
+            })
+            .collect(),
+    }
+}
+
 pub fn flood_fill_random(t: &Tex, seed: u32, lo: f32, hi: f32) -> Tex {
     t.map(|p| match region_id(p) {
         None => [0.0, 0.0, 0.0, 1.0],
@@ -1447,7 +1537,7 @@ pub fn vector_warp(t: &Tex, vecmap: &Tex, intensity: f32) -> Tex {
     })
 }
 
-/// Vector Warp with Designer's Vector Format: `directx` reads the green channel as pointing down.
+/// Vector Warp with a Vector Format option: `directx` reads the green channel as pointing down.
 pub fn vector_warp_ex(t: &Tex, vecmap: &Tex, intensity: f32, directx: bool) -> Tex {
     let gs = if directx { -1.0 } else { 1.0 };
     Tex::from_fn(t.w, t.h, |u, v| {
@@ -1643,7 +1733,7 @@ pub fn make_tile_photo(t: &Tex, width: f32) -> Tex {
     make_tile_photo_ex(t, width, width)
 }
 
-/// Separate horizontal and vertical transition reach (Designer's Mask Size H / V).
+/// Separate horizontal and vertical transition reach (Mask Size H / V).
 pub fn make_tile_photo_ex(t: &Tex, width_h: f32, width_v: f32) -> Tex {
     let (wh, wv) = (width_h.clamp(0.1, 1.0), width_v.clamp(0.1, 1.0));
     let a = |x: f32, w: f32| sm(0.0, w, 1.0 - (2.0 * x - 1.0).abs());
@@ -1716,15 +1806,20 @@ pub fn tileable_wave(count: f32, angle_turns: f32) -> (i32, i32) {
 /// Resample a texture to `size` x `size` (wrapped). Shrinking by a whole factor averages the covered texels exactly
 /// (no aliasing); anything else is bilinear.
 pub fn resize(t: &Tex, size: usize) -> Tex {
-    let size = size.max(1);
-    if t.w == size && t.h == size {
+    resize_to(t, size, size)
+}
+
+/// Resample to `w` x `h`: exact box averaging for whole-number reductions, bilinear (wrapped) otherwise.
+pub fn resize_to(t: &Tex, w: usize, h: usize) -> Tex {
+    let (w, h) = (w.max(1), h.max(1));
+    if t.w == w && t.h == h {
         return t.clone();
     }
-    if t.w > size && t.h > size && t.w % size == 0 && t.h % size == 0 {
-        let (fx, fy) = (t.w / size, t.h / size);
+    if t.w >= w && t.h >= h && t.w % w == 0 && t.h % h == 0 {
+        let (fx, fy) = (t.w / w, t.h / h);
         let inv = 1.0 / (fx * fy) as f32;
-        return Tex::from_fn(size, size, |u, v| {
-            let (x0, y0) = (((u * size as f32) as usize).min(size - 1) * fx, ((v * size as f32) as usize).min(size - 1) * fy);
+        return Tex::from_fn(w, h, |u, v| {
+            let (x0, y0) = (((u * w as f32) as usize).min(w - 1) * fx, ((v * h as f32) as usize).min(h - 1) * fy);
             let mut a = [0.0f32; 4];
             for y in y0..y0 + fy {
                 for x in x0..x0 + fx {
@@ -1737,7 +1832,7 @@ pub fn resize(t: &Tex, size: usize) -> Tex {
             [a[0] * inv, a[1] * inv, a[2] * inv, a[3] * inv]
         });
     }
-    Tex::from_fn(size, size, |u, v| t.sample(u, v))
+    Tex::from_fn(w, h, |u, v| t.sample(u, v))
 }
 
 // ---------- gradient map with alpha, addressing and smoothness ----------
@@ -1925,6 +2020,11 @@ fn oklab(c: [f32; 3]) -> [f32; 3] {
 /// first (pixels) so contours between colour regions are smoother; `dither` (0..1) adds an ordered pattern
 /// (`bayer`) or a hash noise before choosing the nearest colour; `lab` measures distance in OKLab instead of RGB.
 pub fn quantize_color(t: &Tex, k: usize, smoothing: f32, dither: f32, bayer: bool, lab: bool, ignore_alpha: bool) -> Tex {
+    quantize_color_full(t, k, smoothing, dither, bayer, lab, ignore_alpha).0
+}
+
+/// Like `quantize_color`, also returning the palette index of every pixel and the palette (RGB).
+pub fn quantize_color_full(t: &Tex, k: usize, smoothing: f32, dither: f32, bayer: bool, lab: bool, ignore_alpha: bool) -> (Tex, Vec<u32>, Vec<[f32; 3]>) {
     let src = if smoothing > 0.0 { blur(t, smoothing) } else { t.clone() };
     let k = k.clamp(1, 128);
     let space = |p: [f32; 4]| if lab { oklab([p[0], p[1], p[2]]) } else { [p[0], p[1], p[2]] };
@@ -1948,7 +2048,7 @@ pub fn quantize_color(t: &Tex, k: usize, smoothing: f32, dither: f32, bayer: boo
         .collect();
     bins.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal).then(a.0.cmp(&b.0))); // deterministic
     if bins.is_empty() {
-        return t.clone();
+        return (t.clone(), vec![0; t.px.len()], vec![[0.0; 3]]);
     }
     let d2 = |a: [f32; 3], b: [f32; 3]| (a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2);
     // farthest-point initialisation starting from the most common colour
@@ -2005,6 +2105,7 @@ pub fn quantize_color(t: &Tex, k: usize, smoothing: f32, dither: f32, bayer: boo
     let spread = dither * 0.6 / (cent.len() as f32).cbrt();
     let w = src.w;
     let mut out = src.clone();
+    let mut ids = vec![0u32; src.px.len()];
     for (i, p) in src.px.iter().enumerate() {
         let (x, y) = (i % w, i / w);
         let off = if dither > 0.0 {
@@ -2016,6 +2117,31 @@ pub fn quantize_color(t: &Tex, k: usize, smoothing: f32, dither: f32, bayer: boo
         let q = space([p[0] + off, p[1] + off, p[2] + off, p[3]]);
         let j = (0..cent.len()).min_by(|&a, &b| d2(cent[a], q).partial_cmp(&d2(cent[b], q)).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(0);
         out.px[i] = [pal[j][0], pal[j][1], pal[j][2], if ignore_alpha { 1.0 } else { p[3] }];
+        ids[i] = j as u32;
     }
-    out
+    (out, ids, pal)
+}
+
+/// Per-node output precision (the node Output Format): 1 = 8 bit integer, 2 = 16 bit integer (both clamp to
+/// 0..1 and quantise), 3 = 16 bit float (rounds to half precision, keeps values above 1), anything else = 32 bit float
+/// (untouched). Alpha is treated like the colour channels.
+pub fn apply_format(t: &mut Tex, fmt: u32) {
+    match fmt {
+        1 | 2 => {
+            let k = if fmt == 1 { 255.0 } else { 65535.0 };
+            for p in t.px.iter_mut() {
+                for c in p.iter_mut() {
+                    *c = (c.clamp(0.0, 1.0) * k).round() / k;
+                }
+            }
+        }
+        3 => {
+            for p in t.px.iter_mut() {
+                for c in p.iter_mut() {
+                    *c = crate::exr::half_to_f32(crate::exr::f32_to_half(*c));
+                }
+            }
+        }
+        _ => {}
+    }
 }

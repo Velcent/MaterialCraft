@@ -1,4 +1,5 @@
-//! Second set of nodes (Designer parity batch 1). `compute` returns Ok(None) for kinds it does not know, so the
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Second set of nodes (batch 1). `compute` returns Ok(None) for kinds it does not know, so the
 //! main evaluator can fall back to it. Every node here is tileable and independent of the output resolution:
 //! pixel-sized parameters are given for a 512 px texture and scaled by `size / 512`.
 use crate::graph::{Error, Node};
@@ -122,11 +123,11 @@ fn normal_to_height(nm: &Tex, directx: bool, relief: f32, opacity: f32) -> Tex {
             })
             .collect(),
     };
-    if nm.w == n && nm.h == n { out } else { ops::resize(&out, nm.w) }
+    if nm.w == n && nm.h == n { out } else { ops::resize_to(&out, nm.w, nm.h) }
 }
 
 /// Run a node of this module. Ok(None) = not one of ours.
-pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s: usize, seed: u32) -> Result<Option<Tex>, Error> {
+pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s: usize, hs: usize, seed: u32) -> Result<Option<Tex>, Error> {
     let f = |k: &str, d: f32| n.nums.get(k).copied().unwrap_or(d);
     let need = |slot: &str| -> Result<&Tex, Error> { ins.get(slot).map(|r| r.as_ref()).ok_or_else(|| Error::MissingInput(id, slot.to_string())) };
     let opt = |slot: &str| -> Option<&Tex> { ins.get(slot).map(|r| r.as_ref()) };
@@ -171,7 +172,7 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
                     a
                 })
             } else {
-                // Designer: spin blur, `samples` taps along an arc of `angle` turns around the centre
+                // spin blur, `samples` taps along an arc of `angle` turns around the centre
                 let n = f("samples", 64.0).round().clamp(1.0, 128.0) as usize;
                 let arc = f("angle", 0.125).clamp(0.0, 0.5) * TAU;
                 Tex::from_fn(t.w, t.h, |u, v| {
@@ -354,9 +355,11 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
                 (f("luminance_random", 0.0).clamp(0.0, 1.0), f("edge_width", 0.25).clamp(0.01, 1.0), f("hardness", 2.0).clamp(0.1, 16.0));
             let (src, pseed) = (f("color_source", 0.0) as u32, f("pseudorandom_seed", 0.0) as u32);
             let img = if src == 2 { opt("color") } else { None };
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            let extra = f("_out", 0.0).round() as i32;
+            let py = if f("square_cells", 0.0) > 0.5 { ((p as f32 * hs as f32 / s as f32).round().max(1.0)) as i32 } else { p };
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (u, v) = dz.warp(u, v);
-                let vr = noise::voronoi_ext(u, v, p, p, seed, jitter);
+                let vr = noise::voronoi_ext(u, v, p, py, seed, jitter);
                 // cell value of Cells 4: random, pseudorandom (re-rolled with its own seed) or the input image at the cell centre
                 let cell_val = || match (src, img) {
                     (2, Some(t)) => lum(t.sample(u + vr.dx / p as f32, v + vr.dy / p as f32)),
@@ -367,6 +370,12 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
                     ),
                     _ => vr.id1,
                 };
+                match extra {
+                    1 => return vr.id1,
+                    2 => return vr.f1,
+                    3 => return smooth(0.0, edge_w, vr.f2 - vr.f1),
+                    _ => {}
+                }
                 match var {
                     0 => (1.0 - vr.f1) * (1.0 - lum_rand * vr.id1),
                     1 => cell_val(),
@@ -387,7 +396,7 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
                 })
                 .collect();
             let norm: f32 = grids.iter().map(|g| g.1).sum::<f32>().max(1e-6);
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (u, v) = dz.warp(u, v);
                 let mut acc = 0.0;
                 for (g, a) in &grids {
@@ -405,7 +414,7 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
             let (a, b) = ops::tileable_wave(f("count", 8.0), f("angle", 0.0));
             let (warp, w) = (f("warp", 0.3).clamp(0.0, 4.0), per("warp_scale", 4.0));
             let shape = f("shape", 0.0) as u32;
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (u, v) = dz.warp(u, v);
                 let ph = (a as f32 * u + b as f32 * v) + (noise::perlin(u, v, w, w, seed) - 0.5) * warp;
                 let x = ph - ph.floor();
@@ -426,7 +435,7 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
         "gaussian_spots" => {
             let p = per("scale", 8.0);
             let (size, var) = (f("size", 0.5).clamp(0.05, 1.0), f("size_variation", 0.5).clamp(0.0, 1.0));
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (u, v) = dz.warp(u, v);
                 // spots() blends smoothly from 1 to 0 between the inner and outer radius, i.e. a gaussian-like bump
                 noise::spots(
@@ -542,7 +551,7 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
         "multi_directional_warp" => {
             let (t, m) = (need("in")?, need("warp")?);
             let (k, a0) = (f("intensity", 0.1).clamp(-2.0, 2.0), f("angle", 0.0));
-            // Directions as in Designer: 0 = 1 (the angle and its opposite), 1 = 2 (plus the perpendicular axis), 2 = 4 (plus the 45 degree
+            // Directions: 0 = 1 (the angle and its opposite), 1 = 2 (plus the perpendicular axis), 2 = 4 (plus the 45 degree
             // steps). Larger values from older graphs keep meaning "that many samples".
             let dv = f("directions", 2.0).round().max(0.0) as usize;
             let n = if dv <= 2 { 2 * [1usize, 2, 4][dv] } else { dv.min(16) };
@@ -616,7 +625,7 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
             let lines = f("thin_lines", 0.0) > 0.5;
             let rot = f("rotation", 0.0).clamp(0.0, 1.0);
             let rd = f("rotation_disorder", 0.5).clamp(0.0, 1.0);
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (x, y) = (u * nx as f32, v * ny as f32);
                 let (ci, cj) = (x.floor() as i32, y.floor() as i32);
                 // jittered lattice point (i, j) in grid units; indices wrap so the pattern tiles
@@ -695,7 +704,7 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
         "triangle_grid" => {
             let (c, bw) = (per("count", 8.0), f("border", 0.06).clamp(0.0, 0.5));
             let var = f("variation", 1.0).clamp(0.0, 1.0);
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (x, y) = (u * c as f32, v * c as f32);
                 let (ix, iy) = (x.floor(), y.floor());
                 let (fx, fy) = (x - ix, y - iy);
@@ -712,13 +721,22 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
             let shape = f("shape", 0.5).clamp(0.0, 1.0);
             let (gx, gy) = (f("gap_x", 0.1).clamp(0.0, 0.9), f("gap_y", 0.1).clamp(0.0, 0.9));
             let (nxi, nyi) = (nx as i32, ny as i32);
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            let which = f("_out", 0.0).round() as i32;
+            let t = Tex::gray_fn(s, hs, move |u, v| {
                 let (x, y) = (u * nx, v * ny);
                 let (i, j) = (x.floor() as i32, y.floor() as i32);
                 let (fx, fy) = (x - i as f32, y - j as f32);
                 let (i, j) = (i.rem_euclid(nxi), j.rem_euclid(nyi));
                 let in_gx = fx < gx * 0.5 || fx > 1.0 - gx * 0.5;
                 let in_gy = fy < gy * 0.5 || fy > 1.0 - gy * 0.5;
+                let thread = !in_gx && !in_gy;
+                let horizontal = (i + j) & 1 == 0;
+                match which {
+                    1 => return (thread && horizontal) as u32 as f32,
+                    2 => return (thread && !horizontal) as u32 as f32,
+                    3 => return thread as u32 as f32,
+                    _ => {}
+                }
                 if in_gx && in_gy {
                     return 0.0;
                 }
@@ -726,17 +744,17 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
                     return 0.5;
                 }
                 // a thread runs along the slot; it dips towards both ends where it passes under its neighbour
-                let along = if (i + j) & 1 == 0 { fx } else { fy };
+                let along = if horizontal { fx } else { fy };
                 let e = (along - 0.5).abs() * 2.0;
-                let dip = if shape <= 0.0 { 1.0 } else { 1.0 - 0.5 * smooth(1.0 - shape, 1.0, e) };
-                dip
-            }))
+                if shape <= 0.0 { 1.0 } else { 1.0 - 0.5 * smooth(1.0 - shape, 1.0, e) }
+            });
+            if which == 0 { fin(t) } else { t }
         }
         "starburst" => {
             let (c, rays) = (per("count", 3.0), f("rays", 8.0).round().clamp(2.0, 64.0));
             let (sharp, size, rot) = (f("sharpness", 2.0).clamp(0.1, 16.0), f("size", 1.0).clamp(0.05, 2.0), f("rotation", 0.0));
             let rr = f("rotation_random", 0.0).clamp(0.0, 1.0);
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (x, y) = (u * c as f32, v * c as f32);
                 let (ix, iy) = (x.floor(), y.floor());
                 let (dx, dy) = (x - ix - 0.5, y - iy - 0.5);
@@ -749,7 +767,7 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
         }
         "gradient_reflected" => {
             let (a, b) = ops::tileable_wave(f("count", 1.0), f("angle", 0.0));
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let ph = a as f32 * u + b as f32 * v;
                 1.0 - (2.0 * (ph - ph.floor()) - 1.0).abs()
             }))

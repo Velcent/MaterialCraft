@@ -1,4 +1,5 @@
-//! Scatter nodes with the Designer property set: Tile Sampler, Tile Generator, Splatter, Splatter Circular.
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! Scatter nodes: Tile Sampler, Tile Generator, Splatter, Splatter Circular.
 //! Every new property defaults to the previous behaviour, so graphs saved before this module render unchanged.
 use crate::noise::rnd;
 use crate::tex::{Tex, lum};
@@ -497,19 +498,34 @@ fn finish(acc: f32, gain: f32, lo: f32, hi: f32) -> [f32; 4] {
 
 /// Random scatter of a pattern (Splatter). `grid > 0` places `grid * grid` instances on a jittered grid instead
 /// (`disorder` is the jitter).
-pub fn splatter(w: usize, h: usize, pats: &Patterns, p: &SplatterP) -> Tex {
-    struct S {
-        cx: f32,
-        cy: f32,
-        sx: f32,
-        sy: f32,
-        sn: f32,
-        cs: f32,
-        l: f32,
-        fx: bool,
-        fy: bool,
-        pat: usize,
-    }
+struct SplatInst {
+    cx: f32,
+    cy: f32,
+    sx: f32,
+    sy: f32,
+    sn: f32,
+    cs: f32,
+    l: f32,
+    fx: bool,
+    fy: bool,
+    pat: usize,
+}
+
+/// Which per-instance value `splatter_data` writes.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SplatData {
+    /// a stable random gray level per instance (0 = background)
+    Id,
+    /// the instance centre in uv as red / green
+    Center,
+    /// the instance width / height in uv as red / green
+    Size,
+    /// the instance's brightness factor as gray
+    Luminance,
+}
+
+fn splat_instances(pats: &Patterns, p: &SplatterP) -> Vec<SplatInst> {
+    type S = SplatInst;
     let seed = p.seed;
     let n = if p.grid > 0 { p.grid * p.grid } else { p.count.min(2000) };
     let inst: Vec<S> = (0..n)
@@ -547,6 +563,47 @@ pub fn splatter(w: usize, h: usize, pats: &Patterns, p: &SplatterP) -> Tex {
             }
         })
         .collect();
+    inst
+}
+
+/// Data of the top-most instance under every pixel (the same coverage test the pattern itself uses).
+pub fn splatter_data(w: usize, h: usize, pats: &Patterns, p: &SplatterP, what: SplatData) -> Tex {
+    let inst = splat_instances(pats, p);
+    Tex::from_fn(w, h, |u, v| {
+        let mut hit: Option<usize> = None;
+        for (k, it) in inst.iter().enumerate() {
+            let dx = (u - it.cx + 0.5).rem_euclid(1.0) - 0.5;
+            let dy = (v - it.cy + 0.5).rem_euclid(1.0) - 0.5;
+            let lx = (it.cs * dx + it.sn * dy) / it.sx + 0.5;
+            let ly = (-it.sn * dx + it.cs * dy) / it.sy + 0.5;
+            if !(0.0..=1.0).contains(&lx) || !(0.0..=1.0).contains(&ly) {
+                continue;
+            }
+            let (lx, ly) = (if it.fx { 1.0 - lx } else { lx }, if it.fy { 1.0 - ly } else { ly });
+            if pats.value(it.pat, lx, ly, p.pattern_specific) * p.opacity > 1e-3 {
+                hit = Some(k);
+            }
+        }
+        match hit {
+            None => [0.0, 0.0, 0.0, 1.0],
+            Some(k) => {
+                let it = &inst[k];
+                match what {
+                    SplatData::Id => {
+                        let g = 0.1 + 0.9 * rnd(k as i32, 31, p.seed);
+                        [g, g, g, 1.0]
+                    }
+                    SplatData::Center => [it.cx.rem_euclid(1.0), it.cy.rem_euclid(1.0), 0.0, 1.0],
+                    SplatData::Size => [it.sx.min(1.0), it.sy.min(1.0), 0.0, 1.0],
+                    SplatData::Luminance => [it.l, it.l, it.l, 1.0],
+                }
+            }
+        }
+    })
+}
+
+pub fn splatter(w: usize, h: usize, pats: &Patterns, p: &SplatterP) -> Tex {
+    let inst = splat_instances(pats, p);
     Tex::from_fn(w, h, |u, v| {
         let mut acc = p.background;
         for it in &inst {

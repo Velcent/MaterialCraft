@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 //! MaterialCraft visual editor. Run: cargo run --release -p materialcraft-editor
 use eframe::egui::{
@@ -28,7 +29,7 @@ mod gui_theme;
 mod gui_widgets;
 mod gui_workspace;
 mod logging;
-use gui_theme::panel_header;
+
 
 // ---------------------------------------------------------------- layout constants
 const CARD: f32 = 92.0;
@@ -39,6 +40,111 @@ const CARD_H: f32 = BAR + CARD;
 fn card_body(n_slots: usize, n_outs: usize) -> f32 {
     CARD.max(15.0 * (n_slots as f32 + 1.0)).max(if n_outs >= 2 { 20.0 * n_outs as f32 } else { 0.0 })
 }
+/// Persistent user settings, stored as `config.toml` by `craft-settings` (atomic saves, backup, damaged-file recovery).
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, PartialEq)]
+#[serde(default)]
+struct Prefs {
+    general: PrefsGeneral,
+    library: PrefsLibrary,
+    recent: PrefsRecent,
+    layout: PrefsLayout,
+}
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, PartialEq)]
+#[serde(default)]
+struct PrefsLayout {
+    dock: Option<craft_ui::docking::Layout<Pn>>,
+}
+
+/// The panels of the editor window. `Graph` is the canvas and cannot be closed, moved or floated.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+enum Pn {
+    Explorer,
+    Library,
+    Graph,
+    View3d,
+    View2d,
+    Props,
+}
+
+impl Pn {
+    const ALL: [Pn; 6] = [Pn::Explorer, Pn::Library, Pn::Graph, Pn::View3d, Pn::View2d, Pn::Props];
+    fn label(self) -> &'static str {
+        match self {
+            Pn::Explorer => "Explorer",
+            Pn::Library => "Library",
+            Pn::Graph => "Graph",
+            Pn::View3d => "3D View",
+            Pn::View2d => "2D View",
+            Pn::Props => "Properties",
+        }
+    }
+    /// Index into `App::show` (the canvas has none: it is always visible).
+    fn show_index(self) -> Option<usize> {
+        match self {
+            Pn::Explorer => Some(0),
+            Pn::Library => Some(1),
+            Pn::View3d => Some(2),
+            Pn::View2d => Some(3),
+            Pn::Props => Some(4),
+            Pn::Graph => None,
+        }
+    }
+}
+
+fn dock_tabs(p: Pn) -> craft_ui::docking::Node<Pn> {
+    craft_ui::docking::Node::Tabs { panels: vec![p], active: 0 }
+}
+
+fn dock_split(
+    axis: craft_ui::layout::SplitAxis,
+    size: craft_ui::layout::SplitSize,
+    a: craft_ui::docking::Node<Pn>,
+    b: craft_ui::docking::Node<Pn>,
+) -> craft_ui::docking::Node<Pn> {
+    craft_ui::docking::Node::Split { axis, size, first: Box::new(a), second: Box::new(b) }
+}
+
+/// Explorer and Library on the left, the graph in the middle with the 3D and 2D views under it, Properties on the right.
+fn default_dock() -> craft_ui::docking::Layout<Pn> {
+    use craft_ui::layout::{SplitAxis::*, SplitSize::*};
+    let views = dock_split(Horizontal, Ratio(0.5), dock_tabs(Pn::View3d), dock_tabs(Pn::View2d));
+    let centre = dock_split(Vertical, FixedSecond(330.0), dock_tabs(Pn::Graph), views);
+    let left = dock_split(Vertical, Ratio(0.33), dock_tabs(Pn::Explorer), dock_tabs(Pn::Library));
+    let right = dock_split(Horizontal, FixedSecond(330.0), centre, dock_tabs(Pn::Props));
+    craft_ui::docking::Layout { root: Some(dock_split(Horizontal, FixedFirst(380.0), left, right)), floating: Vec::new() }
+}
+
+/// A saved layout is used only when it is valid and holds exactly the panels this build knows.
+fn checked_dock(l: Option<craft_ui::docking::Layout<Pn>>) -> craft_ui::docking::Layout<Pn> {
+    match l {
+        Some(l) if l.validate().is_ok() && l.contains(&Pn::Graph) && l.panels().iter().all(|p| Pn::ALL.contains(p)) => l,
+        _ => default_dock(),
+    }
+}
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, PartialEq)]
+#[serde(default)]
+struct PrefsGeneral {
+    skip_home: bool,
+    hide_tip: bool,
+}
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, PartialEq)]
+#[serde(default)]
+struct PrefsLibrary {
+    favorites: Vec<String>,
+}
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, PartialEq)]
+#[serde(default)]
+struct PrefsRecent {
+    files: Vec<String>,
+}
+impl craft_settings::Settings for Prefs {
+    const APP_ID: &'static str = "materialcraft";
+    const SCHEMA_VERSION: u32 = 1;
+    fn migrate(_from: u32, _doc: &mut craft_settings::DocumentMut) -> Result<(), craft_settings::MigrateError> {
+        Ok(())
+    }
+}
+
 const OUTPUT_NAMES: [&str; 11] =
     ["basecolor", "normal", "roughness", "metallic", "height", "ambient_occlusion", "opacity", "emissive", "diffuse", "specular", "glossiness"];
 const COMMENT_COLORS: [[u8; 3]; 6] = [[90, 140, 200], [200, 160, 60], [90, 180, 110], [190, 90, 90], [150, 100, 200], [150, 150, 150]];
@@ -124,8 +230,15 @@ enum Act {
     NewPackage,
     NewGraphIn(usize),
     SwitchPkg(usize),
+    OpenGraphTab(String),
+    CloseGraphTab(String),
+    ToggleDeps,
     SavePkg(usize),
     ClosePkg(usize),
+    /// Pick a package file and use one of its graphs as a live-linked node.
+    LinkPackage,
+    /// Re-read every live link of the current graph from disk.
+    RefreshLinks,
 }
 
 /// Drag payload: a graph of an open package (package index, graph label, graph name or None for the main graph).
@@ -138,17 +251,27 @@ struct Pkg {
     name: String,
     g: Graph,
     modified: bool,
+    /// graph tabs that were open in this package (subgraph names)
+    tabs: Vec<String>,
 }
 
 fn read_pkg(path: &std::path::Path) -> Result<Pkg, String> {
     let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     let mut g = Graph::parse_unchecked(&text).map_err(|e| e.to_string())?;
     g.migrate_outputs();
+    // live links are read now (problems show up when the package is edited or evaluated)
+    let _ = g.resolve_links(path.parent().unwrap_or_else(|| std::path::Path::new(".")));
     auto_layout_if_unplaced(&mut g);
     if !g.meta.get("identifier").map(|s| !s.is_empty()).unwrap_or(false) {
         g.meta.insert("identifier".into(), path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "graph".into()));
     }
-    Ok(Pkg { path: Some(path.to_path_buf()), name: path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(), g, modified: false })
+    Ok(Pkg {
+        path: Some(path.to_path_buf()),
+        name: path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
+        g,
+        modified: false,
+        tabs: Vec::new(),
+    })
 }
 
 struct EvalResult {
@@ -179,9 +302,12 @@ struct ExportUi {
     prefix: String,
     sizes: [bool; 6],
     depth16: bool,
+    depth32: bool,
     fmt: Format,
     quality: u8,
     skip: BTreeSet<String>,
+    /// output colour space for colour maps (index into `colorspace::SPACES`)
+    space: usize,
 }
 
 struct BakeUi {
@@ -195,6 +321,13 @@ struct BakeUi {
 }
 
 struct App {
+    was_focused: bool,
+    gpu_eval: bool,
+    /// graphs of the open package that have a tab (the main graph always has one)
+    graph_tabs: Vec<String>,
+    show_deps: bool,
+    /// smallest / largest channel value of the node shown in the 2D view (HDR range readout)
+    tex2d_range: Option<(f32, f32)>,
     g: Graph,
     parents: Vec<(Graph, String)>,
     undo: Vec<Graph>,
@@ -258,6 +391,7 @@ struct App {
     export: ExportUi,
     bake: BakeUi,
     show_about: bool,
+    link_pick: Option<(PathBuf, Vec<String>)>,
     screen: Screen,
     new_dlg: NewDlg,
     recent: Vec<PathBuf>,
@@ -265,6 +399,9 @@ struct App {
     home_page: u8,
     skip_home: bool,
     hide_suggestions: bool,
+    prefs: craft_settings::SettingsStore<Prefs>,
+    dock: craft_ui::docking::Layout<Pn>,
+    dock_closed: HashMap<Pn, craft_ui::docking::Location<Pn>>,
     banner: Option<egui::TextureHandle>,
     banner_rx: Option<Receiver<ColorImage>>,
     lib_thumbs: HashMap<String, egui::TextureHandle>,
@@ -276,12 +413,7 @@ struct App {
     last_title: String,
     z2d: f32,
     pan2d: Vec2,
-    left_split: f32,
     need_fit: bool,
-    w_left: f32,
-    w_props: f32,
-    h_views: f32,
-    view_split: f32,
     connecting_in: Option<(u32, String)>,
     copy_out: Option<String>,
     logo: Option<egui::TextureHandle>,
@@ -300,17 +432,31 @@ impl App {
         let mut g = Graph::default();
         g.meta.insert("identifier".into(), "Graph".into());
         let active: Option<u32> = None;
-        let settings = read_lines("settings.txt");
-        let skip_home = settings.iter().any(|l| l == "skip_home=1");
-        let favorites: BTreeSet<String> = settings
-            .iter()
-            .find_map(|l| l.strip_prefix("favorites="))
-            .map(|v| v.split(',').filter(|x| !x.is_empty()).map(String::from).collect())
-            .unwrap_or_default();
-        let recent: Vec<PathBuf> = read_lines("recent.txt").into_iter().map(PathBuf::from).collect();
+        let (mut prefs, _prefs_report) = craft_settings::SettingsStore::<Prefs>::open(craft_settings::Location::Auto);
+        if prefs.path().map(|p| !p.exists()).unwrap_or(false) {
+            // first run with the new store: carry over the old plain-text settings
+            let old = read_lines("settings.txt");
+            let mut v = Prefs::default();
+            v.general.skip_home = old.iter().any(|l| l == "skip_home=1");
+            v.library.favorites = old
+                .iter()
+                .find_map(|l| l.strip_prefix("favorites="))
+                .map(|f| f.split(',').filter(|x| !x.is_empty()).map(String::from).collect())
+                .unwrap_or_default();
+            v.recent.files = read_lines("recent.txt");
+            prefs.set(v);
+        }
+        let skip_home = prefs.get().general.skip_home;
+        let favorites: BTreeSet<String> = prefs.get().library.favorites.iter().cloned().collect();
+        let recent: Vec<PathBuf> = prefs.get().recent.files.iter().map(PathBuf::from).collect();
         let paint = gui_paint::PaintMode::from_args(diag.sink(), user_settings);
         cc.egui_ctx.set_zoom_factor(paint.ui_scale());
         App {
+            was_focused: true,
+            gpu_eval: true,
+            graph_tabs: Vec::new(),
+            show_deps: false,
+            tex2d_range: None,
             parents: Vec::new(),
             undo: Vec::new(),
             redo: Vec::new(),
@@ -368,12 +514,15 @@ impl App {
                 prefix: String::new(),
                 sizes: [false, true, false, false, false, false],
                 depth16: false,
+                depth32: false,
                 fmt: Format::Png,
                 quality: 92,
                 skip: BTreeSet::new(),
+                space: 0,
             },
             bake: BakeUi { open: false, low: None, high: None, out: None, s: BakeSettings { size: 512, ..Default::default() }, job: None, msg: String::new() },
             show_about: false,
+            link_pick: None,
             screen: if paint.wants_screen() {
                 Screen::Paint
             } else if skip_home {
@@ -381,29 +530,27 @@ impl App {
             } else {
                 Screen::Home
             },
-            new_dlg: NewDlg { open: false, sel: 1, name: "Graph".into(), size: 2048, depth16: false, dest: None },
+            new_dlg: NewDlg { open: false, sel: 1, name: "Graph".into(), size: 2048, height: 0, depth16: false, dest: None },
             recent,
             home_filter: String::new(),
             home_page: 0,
             skip_home,
-            hide_suggestions: false,
+            hide_suggestions: prefs.get().general.hide_tip,
+            dock: checked_dock(prefs.get().layout.dock.clone()),
+            dock_closed: HashMap::new(),
+            prefs,
             banner: None,
             banner_rx: Some(spawn_banner()),
             lib_thumbs: HashMap::new(),
             lib_rx: Some(spawn_library_thumbs()),
-            lib_cat: "Texture generators/Patterns".into(),
+            lib_cat: "Generators/Patterns".into(),
             favorites,
             show: [true; 5],
             modified: false,
             last_title: String::new(),
             z2d: 1.0,
             pan2d: Vec2::ZERO,
-            left_split: 0.33,
             need_fit: false,
-            w_left: 380.0,
-            w_props: 330.0,
-            h_views: 330.0,
-            view_split: 0.5,
             connecting_in: None,
             copy_out: None,
             logo: Some(logo_handle),
@@ -423,6 +570,165 @@ impl App {
         };
         let stem: String = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "graph".into());
         self.import_graph_value(other, stem, at, graph);
+    }
+
+    /// Folder links of the current package are relative to (the package's own folder, or the working folder when unsaved).
+    fn link_base(&self) -> PathBuf {
+        self.file.as_ref().and_then(|f| f.parent().map(|p| p.to_path_buf())).unwrap_or_else(|| PathBuf::from("."))
+    }
+
+    /// Pick a package file and use its main graph as a live-linked node (the file is read from disk, never copied).
+    fn link_package(&mut self) {
+        if !self.parents.is_empty() {
+            return self.status("Links belong to the package: leave the nested graph first", false);
+        }
+        let Some(p) = rfd::FileDialog::new().add_filter("MaterialCraft graph / package", &["mcg", "mca"]).pick_file() else { return };
+        // a package with several graphs lets the user choose which one to link
+        let names: Vec<String> = std::fs::read_to_string(&p)
+            .ok()
+            .and_then(|s| Graph::parse_unchecked(&s).ok())
+            .map(|g| g.subgraphs.iter().filter(|(_, s)| !s.meta.contains_key("embedded")).map(|(k, _)| k.clone()).collect())
+            .unwrap_or_default();
+        if names.is_empty() {
+            self.link_file(p, None);
+        } else {
+            self.link_pick = Some((p, names));
+        }
+    }
+
+    /// How a link to file `p` is stored: relative to this package when it has a file (so the pair can move together).
+    fn link_path_for(&self, p: &std::path::Path) -> String {
+        let base = self.link_base();
+        match p.strip_prefix(&base) {
+            Ok(r) if self.file.is_some() => r.to_string_lossy().replace('\\', "/"),
+            _ => p.to_string_lossy().replace('\\', "/"),
+        }
+    }
+
+    /// Show graph `name` ("" = the package's main graph) in the editor.
+    fn open_graph_tab(&mut self, name: &str) {
+        let current = self.parents.last().map(|(_, n)| n.clone()).unwrap_or_default();
+        if current == name {
+            return;
+        }
+        self.goto_root();
+        if !name.is_empty() {
+            self.enter_sub(name);
+        }
+    }
+
+    fn close_graph_tab(&mut self, name: &str) {
+        let current = self.parents.last().map(|(_, n)| n.clone()).unwrap_or_default();
+        self.graph_tabs.retain(|t| t != name);
+        if current == name {
+            self.goto_root();
+        }
+    }
+
+    /// Re-point link `name` at another file chosen by the user.
+    fn relink_dialog(&mut self, name: &str) {
+        let Some(p) = rfd::FileDialog::new().add_filter("MaterialCraft graph / package", &["mcg", "mca"]).pick_file() else { return };
+        let path = self.link_path_for(&p);
+        let graph = self.g.links.iter().find(|l| l.name == name).and_then(|l| l.graph.clone());
+        self.snap();
+        self.g.relink(name, &path, graph);
+        self.refresh_links(false);
+        self.dirty = true;
+        self.modified = true;
+        self.status(format!("Link '{name}' now points to {}", p.display()), true);
+    }
+
+    fn break_link_ui(&mut self, name: &str) {
+        self.snap();
+        match self.g.break_link(name) {
+            Ok(n) => {
+                self.dirty = true;
+                self.modified = true;
+                self.status(format!("'{name}' is now an embedded copy ({n} graph(s) saved with this package)"), true);
+            }
+            Err(e) => {
+                self.undo.pop();
+                self.status(e, false);
+            }
+        }
+    }
+
+    fn remove_link_ui(&mut self, name: &str) {
+        self.snap();
+        let left = self.g.remove_link(name);
+        self.dirty = true;
+        self.modified = true;
+        self.status(
+            if left == 0 {
+                format!("Link '{name}' removed")
+            } else {
+                format!("Link '{name}' removed - {left} node(s) still refer to it and will report an error")
+            },
+            left == 0,
+        );
+    }
+
+    /// Add a live link to `graph` of the package at `p` (None = its main graph) and place an instance node.
+    fn link_file(&mut self, p: PathBuf, graph: Option<String>) {
+        let stem: String = match &graph {
+            Some(g) => g.clone(),
+            None => p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "linked".into()),
+        };
+        let base_name: String = stem.chars().map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' }).collect();
+        let mut name = base_name.clone();
+        let mut i = 2;
+        while self.g.subgraphs.contains_key(&name) || self.g.links.iter().any(|l| l.name == name) {
+            name = format!("{base_name}_{i}");
+            i += 1;
+        }
+        // store the path relative to this package when it has a file, so the pair can be moved together
+        let base = self.link_base();
+        let path = match p.strip_prefix(&base) {
+            Ok(r) if self.file.is_some() => r.to_string_lossy().replace('\\', "/"),
+            _ => p.to_string_lossy().replace('\\', "/"),
+        };
+        self.snap();
+        self.g.links.push(materialcraft::graph::Link { name: name.clone(), path, graph });
+        let issues = self.g.resolve_links(&base);
+        if self.g.links.last().map(|l| l.name != name).unwrap_or(true) || !self.g.is_linked(&name) {
+            self.g.links.pop();
+            self.undo.pop();
+            let _ = self.g.resolve_links(&base);
+            return self.status(format!("Cannot link {}: {}", p.display(), issues.join("; ")), false);
+        }
+        let pos = self.view_center_world();
+        self.add_node_at("subgraph", Some(&name), pos);
+        self.undo.pop();
+        self.dirty = true;
+        self.modified = true;
+        self.status(format!("Linked '{name}' - it follows the file on disk. Every node that uses it is an instance."), true);
+    }
+
+    /// Re-read the live links of the current package from disk.
+    fn refresh_links(&mut self, verbose: bool) {
+        if !self.parents.is_empty() {
+            return;
+        }
+        if self.g.links.is_empty() {
+            if verbose {
+                self.status("This package has no live links (File > Link package as node...)", true);
+            }
+            return;
+        }
+        let before: Vec<String> = self.g.managed.iter().map(|k| self.g.subgraphs.get(k).map(|s| s.to_text()).unwrap_or_default()).collect();
+        let issues = self.g.resolve_links(&self.link_base());
+        let after: Vec<String> = self.g.managed.iter().map(|k| self.g.subgraphs.get(k).map(|s| s.to_text()).unwrap_or_default()).collect();
+        if before != after {
+            self.dirty = true;
+        }
+        if !issues.is_empty() {
+            self.dirty = true;
+            self.status(issues.join("; "), false);
+        } else if verbose {
+            self.status(if before != after { "Linked packages reloaded - changes applied" } else { "Linked packages are up to date" }.to_string(), true);
+        } else if before != after {
+            self.status("A linked package changed on disk - reloaded", true);
+        }
     }
 
     /// Import a graph of an open package as a node.
@@ -532,12 +838,13 @@ impl App {
 
     fn snapshot_active(&mut self) -> Pkg {
         self.goto_root();
-        Pkg { path: self.file.clone(), name: self.package_label(), g: self.g.clone(), modified: self.modified }
+        Pkg { path: self.file.clone(), name: self.package_label(), g: self.g.clone(), modified: self.modified, tabs: self.graph_tabs.clone() }
     }
 
     fn load_active(&mut self, p: Pkg) {
         self.parents.clear();
         self.g = p.g;
+        self.graph_tabs = p.tabs;
         self.clear_views();
         self.file = p.path;
         self.unsaved_name = p.name;
@@ -728,6 +1035,24 @@ impl App {
         if src == dst || self.depends_on(src, dst) {
             self.status("Connection rejected: it would create a cycle.", false);
             return;
+        }
+        // a value pin never connects to an image pin (or the other way round)
+        {
+            let pins = materialcraft::graph::pin_types(&self.g);
+            let (sn, dn) = (self.g.nodes.get(&src), self.g.nodes.get(&dst));
+            if let (Some(sn), Some(dn)) = (sn, dn) {
+                let from = match &out {
+                    Some(o) if !materialcraft::graph::node_outputs(&sn.kind).is_empty() => {
+                        materialcraft::graph::output_pin(&sn.kind, Some(o.as_str()), pins.get(&src) == Some(&materialcraft::graph::Pin::Color), sn)
+                    }
+                    _ => pins.get(&src).copied().unwrap_or(materialcraft::graph::Pin::Gray),
+                };
+                let want = materialcraft::graph::input_value_type(&dn.kind, slot).unwrap_or(materialcraft::graph::Pin::Gray);
+                if !want.accepts(from) {
+                    self.status(format!("Connection rejected: {} input needs {}, this output is {}.", slot, want.name(), from.name()), false);
+                    return;
+                }
+            }
         }
         self.snap();
         if let Some(n) = self.g.nodes.get_mut(&dst) {
@@ -984,6 +1309,9 @@ impl App {
         auto_layout_if_unplaced(&mut w);
         let parent = std::mem::replace(&mut self.g, w);
         self.parents.push((parent, name.to_string()));
+        if !self.graph_tabs.iter().any(|t| t == name) {
+            self.graph_tabs.push(name.to_string());
+        }
         self.clear_views();
         self.clear_history();
         self.fit_view();
@@ -1038,11 +1366,23 @@ impl App {
             nums,
         };
         let in_sub = !self.parents.is_empty();
-        let mut v: Vec<Entry> = SPECS
+        // function graphs and pattern programs have their own node families
+        let specs: &[materialcraft::graph::Spec] = match self.g.graph_kind() {
+            "function" => materialcraft::func::FUNC_SPECS,
+            "fxmap" => materialcraft::fxmap::FXM_SPECS,
+            _ => SPECS,
+        };
+        let texture = self.g.graph_kind() == "texture";
+        let mut v: Vec<Entry> = specs
             .iter()
             .filter(|s| !matches!(s.kind, "input" | "subgraph" | "output" | "dot"))
             .map(|s| mk(&label(s.kind), s.kind, category(s.kind), s.doc, vec![]))
             .collect();
+        if !texture {
+            v.push(mk("Comment", "comment", "Utility", "small note placed at the cursor", vec![]));
+            v.push(mk("Frame", "frame", "Utility", "frame around the selected nodes", vec![]));
+            return v;
+        }
         v.push(mk("Output", "output", "Utility", "graph output: drives the 3D view and exports a texture", vec![]));
         if in_sub {
             v.push(mk("Input Color", "input", "Utility", "color input of the subgraph", vec![("gray", 0.0)]));
@@ -1056,6 +1396,10 @@ impl App {
             subs.extend(p.subgraphs.keys().cloned());
         }
         for name in subs {
+            let is_texture = self.g.subgraphs.get(&name).map(|g| g.graph_kind() == "texture").unwrap_or(true);
+            if !is_texture {
+                continue;
+            }
             v.push(Entry {
                 label: format!("subgraph: {name}"),
                 kind: "subgraph".into(),
@@ -1081,7 +1425,7 @@ impl App {
 
     fn save_to(&mut self, p: PathBuf) {
         self.goto_root();
-        match std::fs::write(&p, self.g.to_text()) {
+        match materialcraft::safeio::write_file(&p, self.g.to_text().as_bytes()) {
             Ok(()) => {
                 self.status(format!("Saved {}", p.display()), true);
                 self.push_recent(&p);
@@ -1110,7 +1454,7 @@ impl App {
         match self.g.publish() {
             Ok(text) => {
                 if let Some(p) = rfd::FileDialog::new().add_filter("MaterialCraft published asset", &["mca"]).set_file_name("material.mca").save_file() {
-                    match std::fs::write(&p, &text) {
+                    match materialcraft::safeio::write_file(&p, text.as_bytes()) {
                         Ok(()) => {
                             self.status(format!("Published {} ({} KB, {} exposed parameters)", p.display(), text.len() / 1024, self.g.exposed.len()), true)
                         }
@@ -1156,7 +1500,13 @@ impl App {
             return self.status("Select at least one output to export.", false);
         }
         let fmt = self.export.fmt;
-        let depth = if fmt != Format::Jpeg && self.export.depth16 { 16 } else { 8 };
+        let depth = if fmt.has_float32() && self.export.depth32 {
+            32
+        } else if fmt != Format::Jpeg && (self.export.depth16 || fmt == Format::Exr) {
+            16
+        } else {
+            8
+        };
         let mut count = 0;
         for &s in &sizes {
             match self.g.evaluate(Some(s)) {
@@ -1170,7 +1520,19 @@ impl App {
                             continue;
                         }
                         let p = d.join(format!("{}{}.{}", self.export.prefix, name, fmt.ext()));
-                        if let Err(e) = std::fs::write(&p, export::encode(fmt, t, depth, self.export.quality)) {
+                        let converted;
+                        let t = if materialcraft::colorspace::is_color_output(name) && self.export.space != 0 {
+                            match materialcraft::colorspace::convert(t, materialcraft::colorspace::SPACES[self.export.space].0) {
+                                Ok(c) => {
+                                    converted = c;
+                                    &converted
+                                }
+                                Err(e) => return self.status(format!("Colour conversion failed: {e}"), false),
+                            }
+                        } else {
+                            t
+                        };
+                        if let Err(e) = materialcraft::safeio::write_file(&p, &export::encode(fmt, t, depth, self.export.quality)) {
                             return self.status(format!("Export failed: {e}"), false);
                         }
                         count += 1;
@@ -1202,7 +1564,7 @@ impl App {
                 let mut files = Vec::new();
                 for (name, t) in &maps {
                     let p = out.join(format!("{name}.png"));
-                    std::fs::write(&p, png::encode(t.w, t.h, &t.px, 8)).map_err(|e| e.to_string())?;
+                    materialcraft::safeio::write_file(&p, &png::encode(t.w, t.h, &t.px, 8)).map_err(|e| e.to_string())?;
                     files.push(p);
                 }
                 Ok(files)
@@ -1214,7 +1576,7 @@ impl App {
     // ------------------------------------------------------------ background evaluation
     /// First, cheap resolution of a progressive preview: a tiny pass shows the change at once, then every pass doubles
     /// the size until the chosen preview size is reached.
-    /// The size a node will have in the final result (what Designer shows under a node): its size in the pass on screen,
+    /// The size a node will have in the final result (shown under a node): its size in the pass on screen,
     /// scaled up to the graph's own size.
     fn nominal_node_size(&self, id: u32) -> usize {
         match (self.node_sizes.get(&id), self.pass_size) {
@@ -1228,14 +1590,23 @@ impl App {
         if full > 256 { 256 } else { full }
     }
 
+    /// Node whose result the 2D view shows: the selected node, or for function graphs and pattern programs the
+    /// helper that runs the whole graph.
+    fn view_node(&self) -> Option<u32> {
+        if self.g.graph_kind() != "texture" { Some(materialcraft::graph::PREVIEW_ID) } else { self.active }
+    }
+
     fn spawn_eval(&mut self, size: usize) {
-        let g = self.g.clone();
+        let g = match self.g.preview_host() {
+            Some((h, _)) => h,
+            None => self.g.clone(),
+        };
         let full = self.preview_full();
         let size = size.clamp(16, full.max(16));
         self.job_size = size;
         self.refine_size = None;
         let mut keep: Vec<u32> = g.output_nodes().iter().map(|o| o.2).collect();
-        let active = self.active;
+        let active = self.view_node();
         if let Some(a) = active {
             keep.push(a);
         }
@@ -1307,7 +1678,7 @@ impl App {
             }
             if let Some(p) = latest
                 && p.r#gen == self.r#gen
-                && self.active == Some(p.img_for)
+                && self.view_node() == Some(p.img_for)
             {
                 let opts = egui::TextureOptions {
                     magnification: egui::TextureFilter::Nearest,
@@ -1333,7 +1704,7 @@ impl App {
                     self.refine_size = Some((r.size * 2).min(full));
                     self.refine = true;
                 }
-                // like Designer's 2D view: zoomed in, every texel is a crisp square; zoomed out, a mip chain keeps it smooth
+                // zoomed in, every texel is a crisp square; zoomed out, a mip chain keeps it smooth
                 let opts = egui::TextureOptions {
                     magnification: egui::TextureFilter::Nearest,
                     minification: egui::TextureFilter::Linear,
@@ -1350,10 +1721,19 @@ impl App {
                         }
                     }
                 }
+                if self.g.graph_kind() != "texture" {
+                    if let Some(e) = r.errors.get(&materialcraft::graph::PREVIEW_ID) {
+                        self.status(format!("{}: {e}", if self.g.graph_kind() == "function" { "function" } else { "pattern program" }), false);
+                    }
+                }
                 self.node_err = r.errors;
                 self.node_sizes = r.sizes;
                 self.pass_size = r.size;
-                if let Some(a) = self.active {
+                self.tex2d_range = self
+                    .view_node()
+                    .and_then(|a| r.kept.get(&a))
+                    .map(|t| t.px.iter().fold((f32::MAX, f32::MIN), |m, p| (m.0.min(p[0]).min(p[1]).min(p[2]), m.1.max(p[0]).max(p[1]).max(p[2]))));
+                if let Some(a) = self.view_node() {
                     if let (Some(img), true) = (r.img2d, r.img_for == Some(a)) {
                         self.tex2d_size = (img.size[0], img.size[1]);
                         self.tex2d = Some(ctx.load_texture("view2d", img, opts));
@@ -1498,9 +1878,9 @@ fn apply_theme(ctx: &egui::Context) {
     v.widgets.inactive.weak_bg_fill = Color32::from_rgb(62, 62, 62);
     v.widgets.hovered.bg_fill = Color32::from_rgb(88, 88, 88);
     v.widgets.hovered.weak_bg_fill = Color32::from_rgb(84, 84, 84);
-    v.widgets.active.bg_fill = Color32::from_rgb(235, 130, 20);
-    v.widgets.active.weak_bg_fill = Color32::from_rgb(235, 130, 20);
-    v.selection.bg_fill = Color32::from_rgb(220, 120, 20);
+    v.widgets.active.bg_fill = Color32::from_rgb(40, 170, 145);
+    v.widgets.active.weak_bg_fill = Color32::from_rgb(40, 170, 145);
+    v.selection.bg_fill = Color32::from_rgb(35, 150, 130);
     v.selection.stroke = Stroke::new(1.0_f32, Color32::WHITE);
     v.window_corner_radius = egui::CornerRadius::same(3);
     v.menu_corner_radius = egui::CornerRadius::same(3);
@@ -1518,7 +1898,10 @@ fn apply_theme(ctx: &egui::Context) {
     style.spacing.item_spacing = vec2(6.0, 4.0);
     style.spacing.button_padding = vec2(6.0, 2.0);
     style.spacing.slider_width = 150.0;
-    ctx.set_global_style(style);
+    // always dark: never follow the operating system's light theme (it made text unreadable on the dark panels)
+    ctx.set_theme(egui::ThemePreference::Dark);
+    ctx.set_style_of(egui::Theme::Dark, style.clone());
+    ctx.set_style_of(egui::Theme::Light, style);
 }
 
 include!("gui_params.rs");

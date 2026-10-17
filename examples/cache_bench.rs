@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Editor-style benchmark: first evaluation, then small edits, with and without the node cache.
 //! usage: cache_bench graph.mcg size node param v1 v2   (the edit alternates the parameter between v1 and v2)
 use materialcraft::graph::{Graph, NodeCache};

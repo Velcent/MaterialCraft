@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Node graph: text format, validation, subgraphs, packages and evaluation.
 use crate::expr;
 use crate::grunge;
@@ -93,12 +94,44 @@ pub const SPECS: &[Spec] = &[
     s!("polygon", [], [], "sides radius softness rotation"),
     s!("checker", [], [], "tiles"),
     s!("bricks", [], [], "rows cols mortar bevel offset lum_var seed"),
-    s!("pixel_processor", [], ["in"], "per-pixel expr / expr_g / expr_b / expr_a (string params)"),
+    s!(
+        "fx_map",
+        [],
+        ["in", "in2", "in3", "in4"],
+        "run a pattern program: program=\"name\" depth seed blend (0 max 1 add 2 over 3 min 4 multiply) color bg bg_r bg_g bg_b"
+    ),
+    s!("curve", ["in"], [], "tone curves: points (master), points_r points_g points_b points_a as \"x:y,x:y\" lists"),
+    s!("svg", [], [], "vector image: file=\"art.svg\" fit (0 contain 1 stretch 2 cover) scale x y"),
+    s!("text", [], [], "text: text=\"...\" font=\"face.ttf\" (optional) size x y align (0 left 1 centre 2 right) spacing line_spacing rotation value"),
+    s!(
+        "channel_shuffle",
+        ["in"],
+        ["in2"],
+        "rebuild channels: src_r src_g src_b src_a (0-3 channels of in, 4-7 channels of in2, 8 zero, 9 one), inv_r inv_g inv_b inv_a"
+    ),
+    s!(
+        "input_value",
+        [],
+        [],
+        "graph parameter read by functions: name, type (0 float, 1 int, 2 bool, 3 float2, 4 float3, 5 float4, 6 int2, 7 int3, 8 int4, 9 string), v / x y z w, min max, label"
+    ),
+    s!(
+        "pixel_processor",
+        [],
+        ["in", "in2", "in3", "in4"],
+        "per-pixel expr / expr_g / expr_b / expr_a (string params), or fn=\"function\" to run a function graph per pixel"
+    ),
+    s!(
+        "value_processor",
+        [],
+        ["in", "in2", "in3", "in4"],
+        "run fn=\"function\" once; the result (float, float3 or float4) fills the image. The function can read image statistics"
+    ),
     s!("sdf_shape", [], [], "2D signed distance shape: shape(0 circle,1 box,2 polygon,3 ring) size aspect sides rotation round x y range"),
     s!("sdf_op", ["a", "b"], [], "combine SDFs: op(0 union,1 subtract,2 intersect) smooth range"),
     s!("sdf_mask", ["in"], [], "SDF -> mask: offset softness"),
     s!("sdf_form", [], [], "procedural 3D SDF form as height: shape(0 sphere,1 box,2 torus,3 cylinder) size repeat round scatter seed height"),
-    s!("bitmap", [], [], "imported PNG bitmap: file=\"path.png\""),
+    s!("bitmap", [], [], "flip_x flip_y gray; imported PNG bitmap: file=\"path.png\""),
     s!("input", [], [], "subgraph input: idx"),
     s!("subgraph", [], ["in0", "in1", "in2", "in3"], "instance of a reusable subgraph: graph=\"name\""),
     s!("shape", [], [], "procedural shape: square, disc, paraboloid, gaussian, diamond, pyramid, half sphere, cone"),
@@ -179,6 +212,9 @@ pub const SPECS: &[Spec] = &[
     s!("flood_fill", ["in"], [], "label connected regions of a mask"),
     s!("flood_fill_random", ["in"], [], "random grayscale per flood-fill region"),
     s!("flood_fill_color", ["in"], [], "random color per flood-fill region"),
+    s!("flood_fill_to_index", ["in"], [], "region number of each flood-fill region as a gray level"),
+    s!("flood_fill_to_position", ["in"], [], "centre of each flood-fill region (outputs: position, x, y)"),
+    s!("flood_fill_to_bbox_size", ["in"], [], "bounding-box size of each flood-fill region (outputs: size, width, height)"),
     s!("flood_fill_gradient", ["in"], [], "gradient across each flood-fill region"),
     s!("vector_warp", ["in", "vector"], [], "displace by a vector map: intensity directx"),
     s!("slope_blur", ["in", "slope"], [], "blur along a slope map: samples intensity mode"),
@@ -254,7 +290,7 @@ pub const SPECS: &[Spec] = &[
         "reduce to few colours (k-means): color_amount contour_smoothing dithering dithering_pattern(0 noise,1 bayer) ignore_alpha distance_color_space(0 lab,1 rgb)"
     ),
     s!("curvature", ["in"], [], "curvature of a normal map: mode(0 normal map,1 height map) intensity directx radius"),
-    s!("edge_detect", ["in"], [], "edge lines: mode(0 designer,1 sobel) edge_width edge_roundness invert tolerance intensity"),
+    s!("edge_detect", ["in"], [], "edge lines: mode(0 lines,1 sobel) edge_width edge_roundness invert tolerance intensity"),
     s!("emboss", ["in"], [], "angle intensity"),
     s!("non_uniform_blur", ["in", "mask"], [], "blur by a mask: intensity"),
     s!("radial_blur", ["in"], [], "spin blur around a centre: mode(0 spin,1 zoom) samples angle x y amount radius"),
@@ -320,6 +356,8 @@ pub const SPECS: &[Spec] = &[
         "grid of triangles: style(0 squares,1 jittered mesh) count border variation x_amount y_amount random_position_multiplier quincunx_offset_x quincunx_offset_y triangulation(0 fixed,1 alternate,2 random) output(0 smooth,1 flat,2 edge distance) height_random thin_lines distance_to_edge_thickness thin_line_color thin_line_background seed contrast invert"
     ),
     s!("grunge_map", [], [], "grunge map 1-15: map balance contrast brush_pattern cracks disorder coverage seed invert"),
+    s!("rgba_split", ["in"], [], "split into R, G, B and A grayscale outputs"),
+    s!("alpha_split", ["in"], [], "split into an RGB output and an alpha output"),
     s!("weave_generator", [], [], "woven threads with gaps: tile_x tile_y weave shape gap_x gap_y contrast invert"),
     s!("starburst", [], [], "star-like rays: count rays sharpness size rotation rotation_random seed contrast invert"),
     s!("gradient_reflected", [], [], "gradient that goes 0-1-0: count angle contrast invert"),
@@ -330,7 +368,7 @@ pub const SPECS: &[Spec] = &[
 ];
 
 pub fn spec(kind: &str) -> Option<&'static Spec> {
-    SPECS.iter().find(|s| s.kind == kind)
+    SPECS.iter().chain(crate::func::FUNC_SPECS.iter()).chain(crate::fxmap::FXM_SPECS.iter()).find(|s| s.kind == kind)
 }
 
 pub fn category(kind: &str) -> &'static str {
@@ -338,11 +376,12 @@ pub fn category(kind: &str) -> &'static str {
         "color" | "white_noise" | "gaussian_noise" | "perlin" | "fbm" | "clouds" | "voronoi" | "voronoi_fractal" | "bnw_spots" | "crystal"
         | "directional_noise" | "grunge" | "plasma" | "gradient" | "gradient_axial" | "gradient_circular" | "circle" | "rect" | "polygon" | "shape"
         | "star" | "checker" | "bricks" | "stripes" | "weave" | "tile_sampler" | "tile_generator" | "splatter" | "splatter_circular" | "pixel_processor"
-        | "cells" | "fractal_sum" | "waveform" | "gaussian_spots" | "triangle_grid" | "starburst" | "gradient_reflected" | "weave_generator" | "grunge_map" => {
-            "Generators"
-        }
+        | "value_processor" | "fx_map" | "text" | "svg" | "cells" | "fractal_sum" | "waveform" | "gaussian_spots" | "triangle_grid" | "starburst"
+        | "gradient_reflected" | "weave_generator" | "grunge_map" => "Generators",
         "sdf_shape" | "sdf_op" | "sdf_mask" | "sdf_form" => "SDF",
-        "bitmap" | "input" | "subgraph" | "output" | "dot" => "Utility",
+        "bitmap" | "input" | "input_value" | "subgraph" | "output" | "dot" => "Utility",
+        k if k.starts_with("f_") => "Function",
+        k if k.starts_with("fxm_") => "Pattern Program",
         "normal"
         | "normal_blend"
         | "normal_combine"
@@ -382,6 +421,11 @@ pub fn label(kind: &str) -> String {
         "sdf_mask" => "SDF Mask",
         "sdf_form" => "SDF 3D Form",
         "pixel_processor" => "Pixel Processor",
+        "value_processor" => "Value Processor",
+        "svg" => "SVG",
+        "text" => "Text",
+        "fx_map" => "Pattern Program Map",
+        "input_value" => "Input Value",
         "normal" => "Normal From Height",
         "normal_blend" => "Normal Blend",
         "rgba_split" => "RGBA Split",
@@ -392,6 +436,35 @@ pub fn label(kind: &str) -> String {
     if !named.is_empty() {
         return named.to_string();
     }
+    let fnamed = match kind {
+        "f_vec2" => "Float2",
+        "f_vec3" => "Float3",
+        "f_vec4" => "Float4",
+        "f_ivec2" => "Integer2",
+        "f_ivec3" => "Integer3",
+        "f_ivec4" => "Integer4",
+        "f_int" => "Integer",
+        "f_bool" => "Boolean",
+        "f_graph_input" => "Graph Input",
+        "f_sample_gray" => "Sample Grayscale",
+        "f_sample_color" => "Sample Color",
+        "f_lerp" => "Lerp",
+        "f_atan2" => "Atan2",
+        "f_eq" => "Equal",
+        "f_ne" => "Not Equal",
+        "f_lt" => "Less Than",
+        "f_le" => "Less Or Equal",
+        "f_gt" => "Greater Than",
+        "f_ge" => "Greater Or Equal",
+        "f_pos" => "Position",
+        "f_out" => "Function Output",
+        "fxm_out" => "Program Output",
+        _ => "",
+    };
+    if !fnamed.is_empty() {
+        return fnamed.to_string();
+    }
+    let kind = kind.strip_prefix("fxm_").or_else(|| kind.strip_prefix("f_")).unwrap_or(kind);
     kind.split('_')
         .map(|w| {
             let mut c = w.chars();
@@ -441,6 +514,12 @@ pub fn demo_graph_for(kind: &str) -> Option<String> {
         return None;
     }
     let sp = spec(kind)?;
+    match kind {
+        "fx_map" => return Some("size 64\nsubgraph dots\nmeta kind \"fxmap\"\nnode 1 fxm_marker\nnode 2 fxm_iterate body=@1 grid_x=4 grid_y=4\nnode 3 fxm_out in=@2\nend\nnode 1 fx_map program=\"dots\"\noutput o 1\n".into()),
+        "value_processor" => return Some("size 64\nsubgraph avg\nmeta kind \"function\"\nnode 1 f_image_avg\nnode 2 f_out in=@1\nend\nnode 100 fbm scale=4 seed=2\nnode 1 value_processor fn=\"avg\" in=@100\noutput o 1\n".into()),
+        "svg" => return Some("size 64\nresource art.svg PHN2ZyB2aWV3Qm94PSIwIDAgMTAgMTAiPjxjaXJjbGUgY3g9IjUiIGN5PSI1IiByPSI0IiBmaWxsPSIjZmZmIi8+PC9zdmc+\nnode 1 svg file=\"art.svg\"\noutput o 1\n".into()),
+        _ => {}
+    }
     let mut t = String::from(
         "size 64\nnode 100 fbm scale=4 octaves=4 seed=2\nnode 101 gradient angle=0.1\nnode 102 sdf_shape shape=0 size=0.3\nnode 103 sdf_shape shape=1 size=0.25 x=0.15\nnode 104 voronoi scale=5 mode=2 seed=3\nnode 105 threshold in=@104 threshold=0.2\nnode 106 flood_fill in=@105\nnode 107 normal in=@100 strength=3\nnode 108 colorize in=@100 p0=0 r0=1 g0=0.2 b0=0.1 p1=1 r1=0.1 g1=0.4 b1=1\n",
     )
@@ -457,6 +536,8 @@ pub fn demo_graph_for(kind: &str) -> Option<String> {
     let mut line = format!("node 1 {kind}");
     match kind {
         "pixel_processor" => line += " expr=\"sin(u*18.849556)*0.5+0.5\"",
+        "text" => line += " text=\"Ab\" size=0.5",
+        "input_value" => line += " name=\"level\" type=0 v=0.5",
         "colorize" => line += " p0=0 r0=0.1 g0=0.1 b0=0.35 p1=1 r1=1 g1=0.8 b1=0.3",
         "merge" => line += " r=@100 g=@101 b=@100",
         "alpha_merge" => line += " alpha=@101",
@@ -501,11 +582,47 @@ pub struct Exposed {
     pub max: f32,
 }
 
+/// Version of the `.mcg` text format this build writes. Files without a `format` line are version 1 (they load
+/// unchanged); a file with a newer version is refused with a clear message instead of being half-understood.
+pub const FORMAT_VERSION: u32 = 2;
+
+/// What resolving a live link found (kept in memory only).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LinkInfo {
+    /// the file that was actually read (the stored path, or a match found in the search folders)
+    pub found: Option<std::path::PathBuf>,
+    pub issue: Option<String>,
+    /// subgraph names this link brought into the package
+    pub members: Vec<String>,
+}
+
+/// A live link to a graph in another package file (`link <name> "<relative path>" ["<graph>"]`). The linked graph is
+/// not stored in this file: it is read from disk each time the file is opened or the links are refreshed, and used
+/// through a subgraph node whose `graph` is `<name>`. Every node that uses the same name is an instance of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Link {
+    pub name: String,
+    pub path: String,
+    /// which graph of that package; `None` = its main graph
+    pub graph: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Graph {
+    /// format version the file was written with (1 when it had no `format` line)
+    pub format: u32,
+    pub links: Vec<Link>,
+    /// subgraph names that came from resolving `links` (read-only copies, never written to the file)
+    pub managed: BTreeSet<String>,
+    /// what the last `resolve_links` found for every link (not saved): the file used and the problem, if any
+    pub link_info: BTreeMap<String, LinkInfo>,
     pub size: usize,
+    /// pixel height at the nominal size; 0 means square (same as `size`)
+    pub height: usize,
     pub nodes: BTreeMap<u32, Node>,
     pub outputs: Vec<(String, u32)>,
+    /// `output name id.pin` in a file: which named output of the node feeds the graph output (legacy output lines)
+    pub output_pins: BTreeMap<String, String>,
     pub subgraphs: BTreeMap<String, Graph>,
     pub resources: BTreeMap<String, Vec<u8>>,
     pub exposed: Vec<Exposed>,
@@ -517,9 +634,15 @@ pub struct Graph {
 impl Default for Graph {
     fn default() -> Self {
         Graph {
+            format: FORMAT_VERSION,
+            links: Vec::new(),
+            managed: BTreeSet::new(),
+            link_info: BTreeMap::new(),
             size: 512,
+            height: 0,
             nodes: BTreeMap::new(),
             outputs: Vec::new(),
+            output_pins: BTreeMap::new(),
             subgraphs: BTreeMap::new(),
             resources: BTreeMap::new(),
             exposed: Vec::new(),
@@ -605,15 +728,67 @@ pub struct EvalAll {
 
 struct Ctx<'a> {
     size: usize,
+    /// pixel height (equals `size` for a square graph)
+    height: usize,
     /// the graph's own (nominal) size: absolute node sizes are scaled by size / nominal so quick previews stay proportional
     nominal: usize,
     lib: &'a BTreeMap<String, Graph>,
     res: &'a BTreeMap<String, Vec<u8>>,
     so: u32,
     depth: usize,
+    /// values of the Input Value nodes of the graph being evaluated (read by function graphs)
+    gin: &'a BTreeMap<String, crate::func::Value>,
 }
 
+/// Node id used for the helper nodes of [`Graph::preview_host`] (far above any id an author would reach).
+pub const PREVIEW_ID: u32 = 4_000_000_001;
+
 impl Graph {
+    /// "texture", "function" or "fxmap".
+    pub fn graph_kind(&self) -> &str {
+        match self.meta.get("kind").map(String::as_str) {
+            Some("function") => "function",
+            Some("fxmap") => "fxmap",
+            _ => "texture",
+        }
+    }
+
+    /// Function graphs and pattern programs are not textures. To look at one, wrap it in a texture graph that
+    /// runs it: a pixel processor for a function, a pattern map for a program. Returns the wrapper and the id of the
+    /// node that shows the result (`None` for ordinary graphs).
+    pub fn preview_host(&self) -> Option<(Graph, u32)> {
+        let kind = self.graph_kind();
+        if kind == "texture" {
+            return None;
+        }
+        let mut host = Graph::default();
+        host.size = self.size;
+        host.height = self.height;
+        host.seed_offset = self.seed_offset;
+        host.resources = self.resources.clone();
+        host.subgraphs = self.subgraphs.clone();
+        let mut me = self.clone();
+        me.subgraphs.clear();
+        me.resources.clear();
+        host.subgraphs.insert("__self".into(), me);
+        let mut n = Node::default();
+        if kind == "function" {
+            n.kind = "pixel_processor".into();
+            n.strs.insert("fn".into(), "__self".into());
+        } else {
+            n.kind = "fx_map".into();
+            n.strs.insert("program".into(), "__self".into());
+            n.nums.insert("color".into(), 0.0);
+        }
+        host.nodes.insert(PREVIEW_ID, n);
+        let mut o = Node::default();
+        o.kind = "output".into();
+        o.strs.insert("usage".into(), "basecolor".into());
+        o.ins.insert("in".into(), PREVIEW_ID);
+        host.nodes.insert(PREVIEW_ID + 1, o);
+        Some((host, PREVIEW_ID))
+    }
+
     pub fn parse(text: &str) -> Result<Graph, Error> {
         let g = Graph::parse_unchecked(text)?;
         g.validate()?;
@@ -623,6 +798,7 @@ impl Graph {
     /// Parse without validating connections (used by the editor for work-in-progress graphs).
     pub fn parse_unchecked(text: &str) -> Result<Graph, Error> {
         let mut g = Graph::default();
+        g.format = 1;
         let lines: Vec<&str> = text.lines().collect();
         let mut i = 0;
         while i < lines.len() {
@@ -669,8 +845,28 @@ impl Graph {
             }
             let t = split_tokens(line).map_err(|m| Error::Parse(ln, m))?;
             match t[0].as_str() {
+                "format" => {
+                    let v = t.get(1).and_then(|s| s.parse::<u32>().ok()).ok_or_else(|| Error::Parse(ln, "format needs an integer".into()))?;
+                    if v > FORMAT_VERSION {
+                        return Err(Error::Parse(
+                            ln,
+                            format!("this file uses format {v}, but this version of MaterialCraft reads up to format {FORMAT_VERSION}; please update"),
+                        ));
+                    }
+                    g.format = v;
+                }
+                "link" => {
+                    if t.len() < 3 || t.len() > 4 {
+                        return Err(Error::Parse(ln, "usage: link <name> \"<path>\" [\"<graph>\"]".into()));
+                    }
+                    g.links.push(Link { name: t[1].clone(), path: t[2].clone(), graph: t.get(3).cloned().filter(|s| !s.is_empty()) });
+                }
                 "size" => {
                     g.size = t.get(1).and_then(|s| s.parse::<usize>().ok()).ok_or_else(|| Error::Parse(ln, "size needs an integer".into()))?;
+                    g.height = match t.get(2) {
+                        Some(h) => h.parse::<usize>().map_err(|_| Error::Parse(ln, "size height needs an integer".into()))?,
+                        None => 0,
+                    };
                 }
                 "seed_offset" => {
                     g.seed_offset = t.get(1).and_then(|s| s.parse::<u32>().ok()).ok_or_else(|| Error::Parse(ln, "seed_offset needs an integer".into()))?;
@@ -704,8 +900,15 @@ impl Graph {
                     if t.len() != 3 {
                         return Err(Error::Parse(ln, "usage: output <name> <node-id>".into()));
                     }
-                    let id = t[2].parse::<u32>().map_err(|_| Error::Parse(ln, "bad node id".into()))?;
+                    let (idtxt, pin) = match t[2].split_once('.') {
+                        Some((a, b)) => (a, Some(b.to_string())),
+                        None => (t[2].as_str(), None),
+                    };
+                    let id = idtxt.parse::<u32>().map_err(|_| Error::Parse(ln, "bad node id".into()))?;
                     g.outputs.push((t[1].clone(), id));
+                    if let Some(pin) = pin {
+                        g.output_pins.insert(t[1].clone(), pin);
+                    }
                 }
                 "node" => {
                     if t.len() < 3 {
@@ -744,6 +947,10 @@ impl Graph {
                 other => return Err(Error::Parse(ln, format!("unknown directive '{other}'"))),
             }
         }
+        // `output name id.pin` needs a real Output node to carry the pin
+        if !g.output_pins.is_empty() {
+            g.migrate_outputs();
+        }
         Ok(g)
     }
 
@@ -775,20 +982,43 @@ impl Graph {
     /// Convert legacy `output` assignments into real Output nodes.
     pub fn migrate_outputs(&mut self) {
         let legacy = std::mem::take(&mut self.outputs);
+        let pins = std::mem::take(&mut self.output_pins);
         let mut next = self.nodes.keys().max().copied().unwrap_or(0) + 1;
         for (name, id) in legacy {
             let pos = self.nodes.get(&id).map(|n| [n.pos[0] + 150.0, n.pos[1]]).unwrap_or([0.0, 0.0]);
             let mut node = Node { kind: "output".into(), pos, ..Default::default() };
             node.strs.insert("usage".into(), name.clone());
             node.ins.insert("in".into(), id);
+            if let Some(pin) = pins.get(&name) {
+                node.in_out.insert("in".into(), pin.clone());
+            }
             self.nodes.insert(next, node);
             next += 1;
         }
     }
 
+    /// Precision every node of this graph is quantised to unless it sets its own Output Format:
+    /// 0 = 32-bit float (default, nothing is rounded), 1 = 8 bit, 2 = 16 bit, 3 = 16-bit float.
+    pub fn default_format(&self) -> u32 {
+        self.meta.get("ofmt").and_then(|s| s.parse::<u32>().ok()).filter(|v| *v <= 3).unwrap_or(0)
+    }
+
+    /// true when width and height are the same
+    pub fn is_square(&self) -> bool {
+        self.height == 0 || self.height == self.size
+    }
+
+    /// Height in pixels of an evaluation whose width is `size` (keeps the graph's aspect ratio).
+    pub fn height_for(&self, size: usize) -> usize {
+        if self.is_square() { size } else { ((size as f64 * self.height as f64 / self.size.max(1) as f64).round() as usize).clamp(1, 8192) }
+    }
+
     pub fn validate(&self) -> Result<(), Error> {
         if self.size == 0 || self.size > 8192 {
             return Err(Error::BadSize(self.size));
+        }
+        if self.height > 8192 {
+            return Err(Error::BadSize(self.height));
         }
         if self.output_nodes().is_empty() {
             return Err(Error::NoOutputs);
@@ -820,10 +1050,16 @@ impl Graph {
                 if !self.nodes.contains_key(rid) {
                     return Err(Error::MissingNode(*id, *rid));
                 }
+                if let (Some(o), Some(src)) = (n.in_out.get(slot), self.nodes.get(rid)) {
+                    let outs = node_outputs(&src.kind);
+                    if !outs.is_empty() && !outs.contains(&o.as_str()) {
+                        return Err(Error::BadParam(*id, format!("{slot}: node {rid} ({}) has no output '{o}' (outputs: {})", src.kind, outs.join(", "))));
+                    }
+                }
             }
             if n.kind == "pixel_processor" {
-                if !n.strs.contains_key("expr") {
-                    return Err(Error::BadParam(*id, "pixel_processor needs expr=\"...\"".into()));
+                if !n.strs.contains_key("expr") && !n.strs.contains_key("fn") {
+                    return Err(Error::BadParam(*id, "pixel_processor needs expr=\"...\" or fn=\"function\"".into()));
                 }
                 for (k, v) in &n.strs {
                     if k.starts_with("expr") {
@@ -833,7 +1069,7 @@ impl Graph {
             }
             if n.kind == "subgraph" {
                 match n.strs.get("graph") {
-                    Some(name) if self.subgraphs.contains_key(name) => {}
+                    Some(name) if self.subgraphs.contains_key(name) || self.links.iter().any(|l| l.name == *name) => {}
                     Some(name) => return Err(Error::BadParam(*id, format!("unknown subgraph '{name}'"))),
                     None => return Err(Error::BadParam(*id, "subgraph node needs graph=\"name\"".into())),
                 }
@@ -878,7 +1114,14 @@ impl Graph {
     }
 
     pub fn to_text(&self) -> String {
-        let mut s = format!("size {}\n", self.size);
+        let mut s = format!("format {FORMAT_VERSION}\n");
+        s.push_str(&if self.is_square() { format!("size {}\n", self.size) } else { format!("size {} {}\n", self.size, self.height) });
+        for l in &self.links {
+            match &l.graph {
+                Some(gn) => s.push_str(&format!("link {} \"{}\" \"{}\"\n", l.name, l.path.replace('"', ""), gn.replace('"', ""))),
+                None => s.push_str(&format!("link {} \"{}\"\n", l.name, l.path.replace('"', ""))),
+            }
+        }
         if self.seed_offset != 0 {
             s.push_str(&format!("seed_offset {}\n", self.seed_offset));
         }
@@ -891,6 +1134,9 @@ impl Graph {
             s.push_str(&format!("resource {k} {}\n", b64_encode(v)));
         }
         for (name, sub) in &self.subgraphs {
+            if self.managed.contains(name) {
+                continue;
+            }
             s.push_str(&format!("subgraph {name}\n{}end\n", sub.to_text()));
         }
         for (id, n) in &self.nodes {
@@ -1013,6 +1259,167 @@ impl Graph {
         Ok(())
     }
 
+    /// True when subgraph `name` is a read-only copy that came from a live link.
+    pub fn is_linked(&self, name: &str) -> bool {
+        self.managed.contains(name)
+    }
+
+    /// (Re)read every live link relative to `base` (the folder of this file). Previous results are dropped first, so
+    /// calling it again picks up changes made to the linked files. Returns one message per link that could not be
+    /// used (missing file, parse error, unknown graph, empty graph, name clash); the other links still work.
+    pub fn resolve_links(&mut self, base: &std::path::Path) -> Vec<String> {
+        self.resolve_links_depth(base, 0)
+    }
+
+    fn resolve_links_depth(&mut self, base: &std::path::Path, depth: usize) -> Vec<String> {
+        self.link_info.clear();
+        for m in std::mem::take(&mut self.managed) {
+            self.subgraphs.remove(&m);
+        }
+        let mut issues = Vec::new();
+        if self.links.is_empty() {
+            return issues;
+        }
+        if depth >= 8 {
+            issues.push("links are nested too deeply (a package links itself?)".to_string());
+            return issues;
+        }
+        for l in self.links.clone() {
+            let start = issues.len();
+            match self.resolve_one(&l, base, depth, &mut issues) {
+                Some((path, members)) => {
+                    self.link_info.insert(l.name.clone(), LinkInfo { found: Some(path), issue: None, members });
+                }
+                None => {
+                    let msg = issues.get(start).cloned();
+                    self.link_info.insert(l.name.clone(), LinkInfo { found: None, issue: msg, members: Vec::new() });
+                }
+            }
+        }
+        issues
+    }
+
+    /// Folders (relative to the package) that are searched by file name when a linked file is not where the link says.
+    pub fn search_paths(&self) -> Vec<String> {
+        self.meta.get("search_paths").map(|s| s.split(';').map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect()).unwrap_or_default()
+    }
+
+    fn resolve_one(&mut self, l: &Link, base: &std::path::Path, depth: usize, issues: &mut Vec<String>) -> Option<(std::path::PathBuf, Vec<String>)> {
+        let stored = base.join(&l.path.replace('\\', "/"));
+        // a moved file is looked for by name in the package's search folders
+        let path = if stored.is_file() {
+            stored
+        } else {
+            self.search_paths()
+                .iter()
+                .map(|d| base.join(d.replace('\\', "/")).join(stored.file_name().unwrap_or_default()))
+                .find(|c| c.is_file())
+                .unwrap_or(stored)
+        };
+        if self.subgraphs.contains_key(&l.name) {
+            issues.push(format!("link '{}': a graph with that name is already embedded", l.name));
+            return None;
+        }
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(e) => {
+                issues.push(format!("link '{}': cannot read {} ({e})", l.name, path.display()));
+                return None;
+            }
+        };
+        let mut other = match Graph::parse_unchecked(&text) {
+            Ok(g) => g,
+            Err(e) => {
+                issues.push(format!("link '{}': {} is not a valid package ({e})", l.name, path.display()));
+                return None;
+            }
+        };
+        other.migrate_outputs();
+        let dir = path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| base.to_path_buf());
+        issues.extend(other.resolve_links_depth(&dir, depth + 1));
+        let main = match &l.graph {
+            Some(gn) => match other.subgraphs.remove(gn) {
+                Some(mut m) => {
+                    // the rest of the package is what that graph may use
+                    m.subgraphs = std::mem::take(&mut other.subgraphs);
+                    m.resources.extend(std::mem::take(&mut other.resources));
+                    m
+                }
+                None => {
+                    issues.push(format!("link '{}': {} has no graph '{gn}'", l.name, path.display()));
+                    return None;
+                }
+            },
+            None => other,
+        };
+        let before: BTreeSet<String> = self.subgraphs.keys().cloned().collect();
+        let mut members = Vec::new();
+        if let Err(e) = self.import_graph(main, &l.name) {
+            issues.push(format!("link '{}': {e}", l.name));
+            return None;
+        }
+        for (k, sg) in self.subgraphs.iter_mut() {
+            if !before.contains(k) {
+                self.managed.insert(k.clone());
+                members.push(k.clone());
+                // keeps linked copies out of the Explorer's graph list
+                sg.meta.insert("embedded".into(), "1".into());
+            }
+        }
+        Some((path, members))
+    }
+
+    /// Turn a live link into an ordinary embedded copy: the linked graphs become part of this package and are saved
+    /// with it. Instances keep working; later changes to the linked file no longer reach them.
+    pub fn break_link(&mut self, name: &str) -> Result<usize, String> {
+        let Some(i) = self.links.iter().position(|l| l.name == name) else { return Err(format!("no link '{name}'")) };
+        let info = self.link_info.remove(name).unwrap_or_default();
+        if info.found.is_none() {
+            return Err(format!("link '{name}' is not resolved (nothing to embed): {}", info.issue.unwrap_or_default()));
+        }
+        self.links.remove(i);
+        for m in &info.members {
+            self.managed.remove(m);
+            if let Some(sg) = self.subgraphs.get_mut(m) {
+                sg.meta.remove("embedded");
+            }
+        }
+        Ok(info.members.len())
+    }
+
+    /// Remove a link and the graphs it brought in. Returns how many nodes still refer to the removed name.
+    pub fn remove_link(&mut self, name: &str) -> usize {
+        self.links.retain(|l| l.name != name);
+        if let Some(info) = self.link_info.remove(name) {
+            for m in info.members {
+                self.managed.remove(&m);
+                self.subgraphs.remove(&m);
+            }
+        }
+        self.nodes.values().filter(|n| n.kind == "subgraph" && n.strs.get("graph").map(|g| g == name).unwrap_or(false)).count()
+    }
+
+    /// Point a link at another file (and optionally another graph in it), keeping its name so instances follow.
+    pub fn relink(&mut self, name: &str, path: &str, graph: Option<String>) -> bool {
+        match self.links.iter_mut().find(|l| l.name == name) {
+            Some(l) => {
+                l.path = path.replace('\\', "/");
+                l.graph = graph;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Read a package file, resolve its live links and validate it. The strings are link problems (not fatal).
+    pub fn load_file(path: &std::path::Path) -> Result<(Graph, Vec<String>), Error> {
+        let text = std::fs::read_to_string(path).map_err(|e| Error::Parse(0, format!("{}: {e}", path.display())))?;
+        let mut g = Graph::parse_unchecked(&text)?;
+        g.migrate_outputs();
+        let issues = g.resolve_links(path.parent().unwrap_or_else(|| std::path::Path::new(".")));
+        Ok((g, issues))
+    }
+
     /// Replace the selected nodes with a subgraph instance. Returns the new node id.
     pub fn extract_subgraph(&mut self, sel: &BTreeSet<u32>, name: &str) -> Result<u32, String> {
         let sel: BTreeSet<u32> = sel.iter().copied().filter(|i| self.nodes.contains_key(i)).collect();
@@ -1025,7 +1432,7 @@ impl Graph {
         if sel.iter().any(|i| self.nodes[i].kind == "output") {
             return Err("output nodes cannot be placed inside a subgraph".into());
         }
-        let mut sub = Graph { size: self.size, ..Default::default() };
+        let mut sub = Graph { size: self.size, height: self.height, ..Default::default() };
         let mut map: HashMap<u32, u32> = HashMap::new();
         let mut next = 1u32;
         for id in &sel {
@@ -1137,7 +1544,17 @@ impl Graph {
         if size == 0 || size > 8192 {
             return Err(Error::BadSize(size));
         }
-        let ctx = Ctx { size, nominal: self.size, lib: &self.subgraphs, res: &self.resources, so: self.seed_offset, depth: 0 };
+        let gin = crate::func::graph_inputs(self);
+        let ctx = Ctx {
+            size,
+            height: self.height_for(size),
+            nominal: self.size,
+            lib: &self.subgraphs,
+            res: &self.resources,
+            so: self.seed_offset,
+            depth: 0,
+            gin: &gin,
+        };
         let outs = self.output_nodes();
         let keep: Vec<u32> = outs.iter().map(|o| o.2).collect();
         let mut cache = Cache::for_graph(self, &keep, false);
@@ -1157,7 +1574,17 @@ impl Graph {
             return Err(Error::BadSize(size));
         }
         self.check_cycles()?;
-        let ctx = Ctx { size, nominal: self.size, lib: &self.subgraphs, res: &self.resources, so: self.seed_offset, depth: 0 };
+        let gin = crate::func::graph_inputs(self);
+        let ctx = Ctx {
+            size,
+            height: self.height_for(size),
+            nominal: self.size,
+            lib: &self.subgraphs,
+            res: &self.resources,
+            so: self.seed_offset,
+            depth: 0,
+            gin: &gin,
+        };
         let mut cache = Cache::for_graph(self, &[id], false);
         let t = eval_node(self, id, &ctx, &[], &mut cache)?;
         cache.map.clear();
@@ -1206,7 +1633,17 @@ impl Graph {
             r.errors.insert(0, e.to_string());
             return r;
         }
-        let ctx = Ctx { size, nominal: self.size, lib: &self.subgraphs, res: &self.resources, so: self.seed_offset, depth: 0 };
+        let gin = crate::func::graph_inputs(self);
+        let ctx = Ctx {
+            size,
+            height: self.height_for(size),
+            nominal: self.size,
+            lib: &self.subgraphs,
+            res: &self.resources,
+            so: self.seed_offset,
+            depth: 0,
+            gin: &gin,
+        };
         // thumbnails are taken the moment a node finishes, so intermediate textures can be freed as soon as every
         // node that reads them is done (a big graph at 4K would not fit in memory otherwise)
         let mut cache = Cache::for_graph(self, keep, true);
@@ -1423,6 +1860,8 @@ impl Fnv {
 /// its inputs. Two nodes with the same hash always produce the same texture.
 fn hash_graph(g: &Graph, ctx: &Ctx) -> HashMap<u32, u64> {
     let mut env = Fnv::new();
+    env.u64(crate::gpu::active() as u64);
+    env.u64(g.default_format() as u64);
     for (k, sub) in ctx.lib {
         env.str(k);
         env.str(&sub.to_text());
@@ -1434,6 +1873,10 @@ fn hash_graph(g: &Graph, ctx: &Ctx) -> HashMap<u32, u64> {
         f.bytes(v);
         env.u64(f.0);
     }
+    for (k, v) in ctx.gin {
+        env.str(k);
+        env.str(&v.show());
+    }
     let mut memo: HashMap<u32, u64> = HashMap::new();
     fn go(g: &Graph, id: u32, out: Option<&str>, ctx: &Ctx, env: u64, memo: &mut HashMap<u32, u64>, depth: u32) -> u64 {
         let key = cache_key(g, id, out);
@@ -1444,6 +1887,7 @@ fn hash_graph(g: &Graph, ctx: &Ctx) -> HashMap<u32, u64> {
         let mut h = Fnv::new();
         h.u64(env);
         h.u64(ctx.size as u64);
+        h.u64(ctx.height as u64);
         h.u64(ctx.nominal as u64);
         h.u64(ctx.so as u64);
         h.str(&n.kind);
@@ -1458,14 +1902,15 @@ fn hash_graph(g: &Graph, ctx: &Ctx) -> HashMap<u32, u64> {
             h.str(k);
             h.str(v);
         }
-        if n.kind == "bitmap" {
+        if matches!(n.kind.as_str(), "bitmap" | "svg" | "text") {
             // a file on disk can change under us: its size and modification time are part of the identity
-            if let Some(f) = n.strs.get("file")
-                && !ctx.res.contains_key(f)
-                && let Ok(m) = std::fs::metadata(f).or_else(|_| std::fs::metadata(f.replace('\\', "/")))
-            {
-                h.u64(m.len());
-                h.u64(m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos() as u64).unwrap_or(0));
+            for f in [n.strs.get("file"), n.strs.get("font")].into_iter().flatten() {
+                if !ctx.res.contains_key(f) {
+                    if let Ok(m) = std::fs::metadata(f).or_else(|_| std::fs::metadata(f.replace('\\', "/"))) {
+                        h.u64(m.len());
+                        h.u64(m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos() as u64).unwrap_or(0));
+                    }
+                }
             }
         }
         if depth < 512 {
@@ -1507,27 +1952,36 @@ fn cancelled() -> bool {
     crate::tex::job_stale()
 }
 
-/// Output size of a node, like Designer's Output Size: "Relative to input" (default; falls back to the parent size when
+/// Output size of a node, the Output Size setting: "Relative to input" (default; falls back to the parent size when
 /// nothing is connected), "Relative to parent", or "Absolute" (a power of two). The relative modifier moves the size
 /// up or down in powers of two (-12 .. +12), so a heavy node can run at half or quarter resolution.
-fn node_size(n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> usize {
+fn node_size(n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> (usize, usize) {
     let get = |k: &str, d: f32| n.nums.get(k).copied().unwrap_or(d);
     let mode = get("osize_mode", 0.0).round() as i32;
     let rel = get("osize_rel", 0.0).round().clamp(-12.0, 12.0) as i32;
-    let base = match mode {
+    let (bw, bh) = match mode {
         2 => {
             let e = get("osize_abs", 9.0).round().clamp(4.0, 13.0) as u32;
-            (((1usize << e) as f64 * ctx.size as f64 / ctx.nominal.max(1) as f64).round() as usize).max(1)
+            let w = (((1usize << e) as f64 * ctx.size as f64 / ctx.nominal.max(1) as f64).round() as usize).max(1);
+            // the height keeps the graph's aspect ratio unless the node sets its own height exponent
+            let h = match n.nums.get("osize_abs_h") {
+                Some(eh) => (((1usize << (eh.round().clamp(4.0, 13.0) as u32)) as f64 * ctx.size as f64 / ctx.nominal.max(1) as f64).round() as usize).max(1),
+                None => ((w as f64 * ctx.height as f64 / ctx.size.max(1) as f64).round() as usize).max(1),
+            };
+            (w, h)
         }
-        1 => ctx.size,
-        _ => ins.get("in").or_else(|| ins.get("bg")).or_else(|| ins.values().next()).map(|t| t.w).unwrap_or(ctx.size),
+        1 => (ctx.size, ctx.height),
+        _ => ins.get("in").or_else(|| ins.get("bg")).or_else(|| ins.values().next()).map(|t| (t.w, t.h)).unwrap_or((ctx.size, ctx.height)),
     };
-    let mut sz = base;
-    if mode != 2 && rel != 0 {
-        sz = if rel > 0 { base << rel } else { (base >> (-rel)).max(1) };
-        sz = sz.clamp(16.min(base), 8192);
-    }
-    sz.clamp(1, 8192)
+    let shift = |b: usize| -> usize {
+        if mode != 2 && rel != 0 {
+            let v = if rel > 0 { b << rel } else { (b >> (-rel)).max(1) };
+            v.clamp(16.min(b), 8192)
+        } else {
+            b
+        }
+    };
+    (shift(bw).clamp(1, 8192), shift(bh).clamp(1, 8192))
 }
 
 fn eval_node_out(g: &Graph, id: u32, out: Option<&str>, ctx: &Ctx, ext: &[Option<Rc<Tex>>], cache: &mut Cache) -> Result<Rc<Tex>, Error> {
@@ -1553,6 +2007,13 @@ fn eval_node_out(g: &Graph, id: u32, out: Option<&str>, ctx: &Ctx, ext: &[Option
         return Ok(t);
     }
     let n = g.nodes.get(&id).ok_or(Error::MissingNode(0, id))?;
+    let bound;
+    let n = if n.strs.keys().any(|k| k.starts_with("fn.")) {
+        bound = bind_functions(id, n, ctx)?;
+        &bound
+    } else {
+        n
+    };
     let mut ins: BTreeMap<String, Rc<Tex>> = BTreeMap::new();
     for (slot, rid) in &n.ins {
         let want = n.in_out.get(slot).map(|s| s.as_str());
@@ -1560,16 +2021,16 @@ fn eval_node_out(g: &Graph, id: u32, out: Option<&str>, ctx: &Ctx, ext: &[Option
     }
     // the node's own output size; inputs of another size are resampled to it
     let sz = node_size(n, &ins, ctx);
-    if ins.values().any(|t| t.w != sz || t.h != sz) {
+    if ins.values().any(|t| t.w != sz.0 || t.h != sz.1) {
         for t in ins.values_mut() {
-            if t.w != sz || t.h != sz {
-                *t = Rc::new(ops::resize(t, sz));
+            if t.w != sz.0 || t.h != sz.1 {
+                *t = Rc::new(ops::resize_to(t, sz.0, sz.1));
             }
         }
     }
     let node_ctx;
-    let ctx = if sz != ctx.size {
-        node_ctx = Ctx { size: sz, nominal: ctx.nominal, lib: ctx.lib, res: ctx.res, so: ctx.so, depth: ctx.depth };
+    let ctx = if sz.0 != ctx.size || sz.1 != ctx.height {
+        node_ctx = Ctx { size: sz.0, height: sz.1, nominal: ctx.nominal, lib: ctx.lib, res: ctx.res, so: ctx.so, depth: ctx.depth, gin: ctx.gin };
         &node_ctx
     } else {
         ctx
@@ -1580,13 +2041,22 @@ fn eval_node_out(g: &Graph, id: u32, out: Option<&str>, ctx: &Ctx, ext: &[Option
             match ext.get(idx).cloned().flatten() {
                 Some(t) if n.nums.get("gray").copied().unwrap_or(0.0) > 0.5 => ops::to_gray(&t),
                 Some(t) => (*t).clone(),
-                None => Tex::solid(ctx.size, ctx.size, [0.0, 0.0, 0.0, 1.0]),
+                None => Tex::solid(ctx.size, ctx.height, [0.0, 0.0, 0.0, 1.0]),
             }
         }
         "subgraph" => run_sub(id, n, &ins, ctx, out)?,
         _ => {
             let t0 = std::time::Instant::now();
-            let r = compute(id, n, &ins, ctx)?;
+            // a secondary output of a multi-output node runs the same code with the output index set
+            let extra = out.and_then(|o| node_outputs(&n.kind).iter().position(|x| *x == o)).filter(|i| *i > 0);
+            let r = match extra {
+                Some(i) => {
+                    let mut n2 = n.clone();
+                    n2.nums.insert("_out".into(), i as f32);
+                    compute(id, &n2, &ins, ctx)?
+                }
+                None => compute(id, n, &ins, ctx)?,
+            };
             if std::env::var_os("MC_PROF").is_some() {
                 eprintln!("  {:>5.0} ms  node {} {}", t0.elapsed().as_secs_f64() * 1000.0, id, n.kind);
             }
@@ -1597,15 +2067,25 @@ fn eval_node_out(g: &Graph, id: u32, out: Option<&str>, ctx: &Ctx, ext: &[Option
     if cancelled() {
         return Err(Error::Cancelled);
     }
-    let t = if t.w != sz || t.h != sz { ops::resize(&t, sz) } else { t };
+    let mut t = if t.w != sz.0 || t.h != sz.1 { ops::resize_to(&t, sz.0, sz.1) } else { t };
+    // an explicit per-node Output Format (8 / 16 bit integer, 16 bit float) quantises the result; 32 bit float is untouched
+    // (a node's own value 4 forces 32-bit float even when the graph rounds everything else)
+    let fmt = match n.nums.get("ofmt").map(|v| v.round() as u32) {
+        Some(v @ 1..=3) => v,
+        Some(4) => 0,
+        _ => g.default_format(),
+    };
+    if fmt != 0 {
+        ops::apply_format(&mut t, fmt);
+    }
     let rc = Rc::new(t);
     cache.map.insert(key, rc.clone());
     if key == id {
-        cache.sizes.insert(id, sz);
+        cache.sizes.insert(id, sz.0);
     }
     let thumb = if key == id && (cache.thumbs.is_some() || cache.persist.is_some()) { thumbnail(&rc) } else { Vec::new() };
     if let (Some(p), Some(h)) = (&cache.persist, phash) {
-        p.put(h, rc.clone(), thumb.clone(), sz);
+        p.put(h, rc.clone(), thumb.clone(), sz.0);
     }
     if key == id
         && let Some(th) = cache.thumbs.as_mut()
@@ -1659,20 +2139,315 @@ impl Cache {
     }
 }
 
-/// Cache key of an output: the node id, or a hash of (id, output name) for a named output of a graph node.
+/// Named outputs of a built-in node (empty = one plain output). The first name is the default output: a link that
+/// names no output, or names the first one, reads it. Extra outputs are computed on demand by running the node's
+/// own code with a hidden `_out` index (see `eval_node_out`), and cached separately.
+pub fn node_outputs(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "color_match" => &["output", "mask"],
+        "quantize_color" => &["output", "id", "palette"],
+        "weave_generator" => &["height", "mask_1", "mask_2", "opacity"],
+        "rgba_split" => &["r", "g", "b", "a"],
+        "alpha_split" => &["rgb", "alpha"],
+        "voronoi" => &["output", "cell_id", "edge", "distance"],
+        "cells" => &["output", "cell_id", "distance", "edge"],
+        "splatter" => &["output", "id", "center", "size", "luminance"],
+        "flood_fill_to_position" => &["position", "x", "y"],
+        "flood_fill_to_bbox_size" => &["size", "width", "height"],
+        _ => &[],
+    }
+}
+
+/// What travels through a pin. Grayscale pins carry one value per pixel, colour pins carry RGB(A). Some tools keep
+/// the two kinds apart; here every texture is stored as RGBA, so the type is what the editor shows and what
+/// `output_pin` / `pin_types` report (a grayscale value fed to a colour input simply becomes a gray colour).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pin {
+    Gray,
+    Color,
+    /// value pins (carried by function graphs and value nodes, not by textures)
+    Float,
+    Float2,
+    Float3,
+    Float4,
+    Int,
+    Int2,
+    Int3,
+    Int4,
+    Bool,
+    Text,
+}
+
+impl Pin {
+    /// Carries a texture (grayscale or colour).
+    pub fn is_image(self) -> bool {
+        matches!(self, Pin::Gray | Pin::Color)
+    }
+
+    /// Number of components of a numeric value pin (1 for scalars, 0 for images, bool and text).
+    pub fn lanes(self) -> usize {
+        match self {
+            Pin::Float | Pin::Int => 1,
+            Pin::Float2 | Pin::Int2 => 2,
+            Pin::Float3 | Pin::Int3 => 3,
+            Pin::Float4 | Pin::Int4 => 4,
+            _ => 0,
+        }
+    }
+
+    /// Can an output of type `from` feed an input of this type without an explicit cast?
+    /// Images convert freely between gray and colour; numeric values widen from integer to float and from bool to
+    /// integer or float with the same number of components; nothing else converts implicitly (a float needs a cast
+    /// to become an integer, an image never turns into a value or back).
+    pub fn accepts(self, from: Pin) -> bool {
+        if self == from {
+            return true;
+        }
+        if self.is_image() || from.is_image() {
+            return self.is_image() && from.is_image();
+        }
+        match (self, from) {
+            (Pin::Float, Pin::Int) | (Pin::Float2, Pin::Int2) | (Pin::Float3, Pin::Int3) | (Pin::Float4, Pin::Int4) => true,
+            (Pin::Int, Pin::Bool) | (Pin::Float, Pin::Bool) => true,
+            _ => false,
+        }
+    }
+
+    /// Short name for tooltips and file messages.
+    pub fn name(self) -> &'static str {
+        match self {
+            Pin::Gray => "grayscale",
+            Pin::Color => "color",
+            Pin::Float => "float",
+            Pin::Float2 => "float2",
+            Pin::Float3 => "float3",
+            Pin::Float4 => "float4",
+            Pin::Int => "integer",
+            Pin::Int2 => "integer2",
+            Pin::Int3 => "integer3",
+            Pin::Int4 => "integer4",
+            Pin::Bool => "boolean",
+            Pin::Text => "string",
+        }
+    }
+}
+
+/// What a built-in node's input slot expects when it is not an image slot. Image slots (the default) take any
+/// texture. Value-typed slots belong to the function-graph and value nodes.
+pub fn input_value_type(kind: &str, slot: &str) -> Option<Pin> {
+    let _ = (kind, slot);
+    None
+}
+
+/// Connections whose types do not fit: `(node, slot, message)`. The editor refuses these when a link is dragged;
+/// a file that contains one is still loadable, the node simply reports the error when it is evaluated.
+pub fn connection_issues(g: &Graph) -> Vec<(u32, String, String)> {
+    let pins = pin_types(g);
+    let mut issues = Vec::new();
+    for (id, n) in &g.nodes {
+        for (slot, src) in &n.ins {
+            let Some(sn) = g.nodes.get(src) else { continue };
+            let out = n.in_out.get(slot).map(|s| s.as_str());
+            let from = if !node_outputs(&sn.kind).is_empty() && out.is_some() {
+                let upstream = sn.ins.values().any(|s| pins.get(s) == Some(&Pin::Color));
+                output_pin(&sn.kind, out, upstream, sn)
+            } else {
+                pins.get(src).copied().unwrap_or(Pin::Gray)
+            };
+            let want = input_value_type(&n.kind, slot).unwrap_or(Pin::Gray);
+            if !want.accepts(from) {
+                issues.push((*id, slot.clone(), format!("{} input '{slot}' needs {} but node {src} gives {}", n.kind, want.name(), from.name())));
+            }
+        }
+    }
+    issues
+}
+
+/// Output type of a built-in node. `any_color_in` says whether any connected input is a colour pin, `n` supplies
+/// mode switches such as the Uniform Color node's grayscale flag.
+pub fn output_pin(kind: &str, out: Option<&str>, any_color_in: bool, n: &Node) -> Pin {
+    let flag = |k: &str| n.nums.get(k).copied().unwrap_or(0.0) > 0.5;
+    match kind {
+        // always colour
+        "colorize" | "flood_fill_color" => Pin::Color,
+        "tint"
+        | "hsl"
+        | "channel_mixer"
+        | "merge"
+        | "replace_color"
+        | "chrominance_extract"
+        | "normal"
+        | "normal_blend"
+        | "normal_combine"
+        | "normal_invert"
+        | "normal_normalize"
+        | "normal_vector_rotation"
+        | "alpha_merge"
+        | "vector_warp_color" => Pin::Color,
+        "color" | "bitmap" => {
+            if flag("gray") {
+                Pin::Gray
+            } else {
+                Pin::Color
+            }
+        }
+        "color_match" => match out {
+            Some("mask") => Pin::Gray,
+            _ => Pin::Color,
+        },
+        "quantize_color" => match out {
+            Some("id") => Pin::Gray,
+            _ => Pin::Color,
+        },
+        "rgba_split" => Pin::Gray,
+        "splatter" => match out {
+            Some("center") | Some("size") => Pin::Color,
+            Some("output") | None => {
+                if any_color_in {
+                    Pin::Color
+                } else {
+                    Pin::Gray
+                }
+            }
+            _ => Pin::Gray,
+        },
+        "flood_fill_to_index" => Pin::Gray,
+        "flood_fill_to_position" | "flood_fill_to_bbox_size" => match out {
+            Some("x") | Some("y") | Some("width") | Some("height") => Pin::Gray,
+            _ => Pin::Color,
+        },
+        "alpha_split" => match out {
+            Some("alpha") => Pin::Gray,
+            _ => Pin::Color,
+        },
+        // always grayscale
+        "to_gray"
+        | "grayscale_conversion"
+        | "normal_to_height"
+        | "ao"
+        | "curvature"
+        | "curvature_smooth"
+        | "distance"
+        | "histogram_range"
+        | "histogram_scan"
+        | "histogram_shift"
+        | "threshold"
+        | "flood_fill"
+        | "flood_fill_random"
+        | "flood_fill_gradient"
+        | "edge_detect"
+        | "color_to_mask"
+        | "quantize"
+        | "sobel"
+        | "edge_wear"
+        | "dirt"
+        | "dust"
+        | "bevel"
+        | "channel" => Pin::Gray,
+        // generators with no colour of their own
+        "white_noise" | "gaussian_noise" | "perlin" | "fbm" | "clouds" | "voronoi" | "voronoi_fractal" | "bnw_spots" | "crystal" | "directional_noise"
+        | "grunge" | "plasma" | "gradient" | "gradient_axial" | "gradient_circular" | "gradient_reflected" | "circle" | "rect" | "polygon" | "shape"
+        | "star" | "starburst" | "checker" | "bricks" | "stripes" | "weave" | "cells" | "fractal_sum" | "waveform" | "gaussian_spots" | "triangle_grid"
+        | "grunge_map" | "sdf_shape" | "sdf_op" | "sdf_mask" | "sdf_form" => Pin::Gray,
+        "weave_generator" => Pin::Gray,
+        // pixel processor and the scatter family produce colour only when colour comes in
+        "pixel_processor" | "value_processor" | "fx_map" => Pin::Color,
+        // everything else (blur, levels, blend, transform, warp, ...) keeps the type of what goes in
+        _ => {
+            if any_color_in {
+                Pin::Color
+            } else {
+                Pin::Gray
+            }
+        }
+    }
+}
+
+/// Type of every node's default output in a graph (nodes in a cycle or with unknown inputs count as gray).
+pub fn pin_types(g: &Graph) -> HashMap<u32, Pin> {
+    fn go(g: &Graph, id: u32, memo: &mut HashMap<u32, Pin>, depth: u32) -> Pin {
+        if let Some(p) = memo.get(&id) {
+            return *p;
+        }
+        let Some(n) = g.nodes.get(&id) else { return Pin::Gray };
+        if depth > 512 {
+            return Pin::Gray;
+        }
+        memo.insert(id, Pin::Gray); // breaks cycles
+        let mut any_color = false;
+        for (slot, src) in &n.ins {
+            let want = n.in_out.get(slot).map(|s| s.as_str());
+            let sn = g.nodes.get(src);
+            let p = match (sn, want) {
+                // a named output of a built-in multi-output node has its own type
+                (Some(sn), Some(o)) if !node_outputs(&sn.kind).is_empty() => {
+                    let upstream = sn.ins.values().any(|s| go(g, *s, memo, depth + 1) == Pin::Color);
+                    output_pin(&sn.kind, Some(o), upstream, sn)
+                }
+                _ => go(g, *src, memo, depth + 1),
+            };
+            if p == Pin::Color {
+                any_color = true;
+            }
+        }
+        let p = match n.kind.as_str() {
+            "input" => {
+                if n.nums.get("gray").copied().unwrap_or(0.0) > 0.5 {
+                    Pin::Gray
+                } else {
+                    Pin::Color
+                }
+            }
+            // a graph node is treated as colour (its outputs are defined by the graph inside)
+            "subgraph" => Pin::Color,
+            "output" | "dot" => {
+                if any_color {
+                    Pin::Color
+                } else {
+                    Pin::Gray
+                }
+            }
+            k => output_pin(k, None, any_color, n),
+        };
+        memo.insert(id, p);
+        p
+    }
+    let mut memo = HashMap::new();
+    for id in g.nodes.keys() {
+        go(g, *id, &mut memo, 0);
+    }
+    memo
+}
+
+/// Cache key of an output: the node id, or a hash of (id, output name) for a named output of a graph node or of a
+/// built-in multi-output node (its default output keeps the plain node id).
 fn cache_key(g: &Graph, id: u32, out: Option<&str>) -> u32 {
-    let is_sub = out.is_some() && g.nodes.get(&id).map(|n| n.kind == "subgraph").unwrap_or(false);
-    match out {
-        Some(o) if is_sub => out_key(id, o),
-        _ => id,
+    let Some(o) = out else { return id };
+    match g.nodes.get(&id) {
+        Some(n) if n.kind == "subgraph" => out_key(id, o),
+        Some(n) => match node_outputs(&n.kind).iter().position(|x| *x == o) {
+            Some(i) if i > 0 => out_key(id, o),
+            _ => id,
+        },
+        None => id,
     }
 }
 
 fn thumbnail(t: &Tex) -> Vec<u8> {
+    // a non-square texture is fitted inside the square thumbnail with dark bars instead of being stretched
+    let (w, h) = (t.w.max(1) as f32, t.h.max(1) as f32);
+    let k = (THUMB as f32 / w).min(THUMB as f32 / h);
+    let (tw, th) = ((w * k).round().max(1.0), (h * k).round().max(1.0));
+    let (ox, oy) = ((THUMB as f32 - tw) * 0.5, (THUMB as f32 - th) * 0.5);
     let mut px = Vec::with_capacity(THUMB * THUMB * 4);
     for y in 0..THUMB {
         for x in 0..THUMB {
-            let p = t.sample((x as f32 + 0.5) / THUMB as f32, (y as f32 + 0.5) / THUMB as f32);
+            let (fx, fy) = (x as f32 + 0.5 - ox, y as f32 + 0.5 - oy);
+            if fx < 0.0 || fy < 0.0 || fx >= tw || fy >= th {
+                px.extend_from_slice(&[30, 30, 30, 255]);
+                continue;
+            }
+            let p = t.sample(fx / tw, fy / th);
             for c in &p[..3] {
                 px.push((c.clamp(0.0, 1.0) * 255.0 + 0.5) as u8);
             }
@@ -1680,6 +2455,100 @@ fn thumbnail(t: &Tex) -> Vec<u8> {
         }
     }
     px
+}
+
+/// Function-driven parameters: `fn.<param>="name"` runs that function and stores the result in `<param>`;
+/// `fa.<param>.<input>` numbers feed the function's inputs.
+fn bind_functions(id: u32, n: &Node, ctx: &Ctx) -> Result<Node, Error> {
+    use crate::func::{FnEnv, compile_named};
+    let mut out = n.clone();
+    for (k, fname) in &n.strs {
+        let Some(param) = k.strip_prefix("fn.") else { continue };
+        if fname.is_empty() {
+            continue;
+        }
+        let prog = compile_named(ctx.lib, fname).map_err(|e| Error::BadParam(id, format!("{k}: {e}")))?;
+        let mut env = FnEnv::new([ctx.size as f64, ctx.height as f64]);
+        env.seed = ctx.so;
+        env.graph_inputs = ctx.gin;
+        let prefix = format!("fa.{param}.");
+        for (ak, av) in &n.nums {
+            if let Some(input) = ak.strip_prefix(&prefix) {
+                let pin = prog.inputs.iter().find(|i| i.0 == input).map(|i| i.1).unwrap_or(crate::graph::Pin::Float);
+                env.args.insert(input.to_string(), crate::func::coerce(&crate::func::Value::float(*av as f64), pin));
+            }
+        }
+        let v = prog.run(&env, [0.5, 0.5]).map_err(|e| Error::BadParam(id, format!("{k}: {e}")))?;
+        match v {
+            crate::func::Value::Str(s) => {
+                out.strs.insert(param.to_string(), s.to_string());
+            }
+            v => {
+                out.nums.insert(param.to_string(), v.as_f32());
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Pixel processor / value processor driven by a function graph.
+fn read_resource(id: u32, file: &str, ctx: &Ctx) -> Result<Vec<u8>, Error> {
+    match ctx.res.get(file) {
+        Some(b) => Ok(b.clone()),
+        None => std::fs::read(file)
+            .or_else(|e| if file.contains('\\') { std::fs::read(file.replace('\\', "/")) } else { Err(e) })
+            .map_err(|e| Error::BadParam(id, format!("cannot read '{file}': {e}"))),
+    }
+}
+
+fn run_function_image(id: u32, n: &Node, fname: &str, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx, once: bool) -> Result<Tex, Error> {
+    use crate::func::{FnEnv, Value, compile_named};
+    let prog = compile_named(ctx.lib, fname).map_err(|e| Error::BadParam(id, e))?;
+    let (w, h) = (ctx.size, ctx.height);
+    let mut env = FnEnv::new([w as f64, h as f64]);
+    env.seed = (n.nums.get("seed").copied().unwrap_or(0.0).max(0.0) as u32).wrapping_add(ctx.so);
+    env.graph_inputs = ctx.gin;
+    for slot in ["in", "in2", "in3", "in4"] {
+        if let Some(t) = ins.get(slot) {
+            env.images.push((slot, t.as_ref()));
+        }
+    }
+    for (ak, av) in &n.nums {
+        if let Some(input) = ak.strip_prefix("fa.") {
+            let pin = prog.inputs.iter().find(|i| i.0 == input).map(|i| i.1).unwrap_or(crate::graph::Pin::Float);
+            env.args.insert(input.to_string(), crate::func::coerce(&Value::float(*av as f64), pin));
+        }
+    }
+    if prog.uses_stats {
+        env = env.with_stats();
+    }
+    let to_px = |v: &Value| -> [f32; 4] {
+        match v {
+            Value::Num(x) => match x.lanes {
+                1 => [x.v[0] as f32, x.v[0] as f32, x.v[0] as f32, 1.0],
+                2 => [x.v[0] as f32, x.v[1] as f32, 0.0, 1.0],
+                3 => [x.v[0] as f32, x.v[1] as f32, x.v[2] as f32, 1.0],
+                _ => [x.v[0] as f32, x.v[1] as f32, x.v[2] as f32, x.v[3] as f32],
+            },
+            Value::Bool(b) => {
+                let f = *b as i32 as f32;
+                [f, f, f, 1.0]
+            }
+            Value::Str(_) => [0.0, 0.0, 0.0, 1.0],
+        }
+    };
+    // the first run reports a broken function as an error instead of a silent black image
+    let first = prog.run(&env, [0.5, 0.5]).map_err(|e| Error::BadParam(id, format!("{fname}: {e}")))?;
+    if matches!(first, Value::Str(_)) {
+        return Err(Error::BadParam(id, format!("{fname}: the result must be a number, vector or boolean")));
+    }
+    if once {
+        return Ok(Tex::solid(w, h, to_px(&first)));
+    }
+    Ok(Tex::from_fn(w, h, |u, v| match prog.run(&env, [u as f64, v as f64]) {
+        Ok(r) => to_px(&r),
+        Err(_) => [0.0, 0.0, 0.0, 1.0],
+    }))
 }
 
 fn run_sub(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx, out: Option<&str>) -> Result<Tex, Error> {
@@ -1710,7 +2579,8 @@ fn run_sub(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx, out: O
         .or_else(|| outs.first())
         .map(|o| o.2)
         .ok_or_else(|| Error::BadParam(id, format!("subgraph '{name}' has no output")))?;
-    let c2 = Ctx { size: ctx.size, nominal: ctx.nominal, lib: ctx.lib, res: ctx.res, so: ctx.so, depth: ctx.depth + 1 };
+    let gin = crate::func::graph_inputs(&sub);
+    let c2 = Ctx { size: ctx.size, height: ctx.height, nominal: ctx.nominal, lib: ctx.lib, res: ctx.res, so: ctx.so, depth: ctx.depth + 1, gin: &gin };
     let mut cache = Cache::for_graph(&sub, &[out_id], false);
     let t = eval_node(&sub, out_id, &c2, &ext, &mut cache)?;
     cache.map.clear();
@@ -1726,31 +2596,36 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
     let seed = if tx.floor() != 0.0 || ty.floor() != 0.0 { noise::tile_seed(seed, tx.floor() as i32, ty.floor() as i32) } else { seed };
     let per = |k: &str, d: f32| f(k, d).round().clamp(1.0, 4096.0) as i32;
     let s = ctx.size;
+    let hs = ctx.height;
     let rs = s as f32 / 512.0;
+    // `square_cells` keeps lattice cells square in a non-square graph: the vertical count follows the aspect ratio
+    let ar = if f("square_cells", 0.0) > 0.5 { hs as f32 / s as f32 } else { 1.0 };
+    let per_y = |k: &str, d: f32| ((per(k, d) as f32 * ar).round().max(1.0)) as i32;
     // one pixel in uv units: hard edges are softened by at least this much, so they are anti-aliased at any resolution
     let px1 = 1.2 / s as f32;
     let (dis, con, inv) = (f("disorder", 0.0), f("contrast", 1.0), f("invert", 0.0) > 0.5);
     let dz = noise::Disorder::new(seed, dis, f("disorder_speed", 1.0), f("anisotropy", 0.0), f("anisotropy_angle", 0.0));
+    let no_warp = dis * f("disorder_speed", 1.0) <= 0.0;
     let warp = move |u: f32, v: f32| -> (f32, f32) { dz.warp(u, v) };
     let fin = |t: Tex| -> Tex { if (con - 1.0).abs() > 1e-4 || inv { ops::contrast_invert(&t, con, inv) } else { t } };
     let out = match n.kind.as_str() {
         "color" => {
             if f("gray", 0.0) > 0.5 {
                 let v = f("v", 0.5);
-                Tex::solid(s, s, [v, v, v, f("a", 1.0)])
+                Tex::solid(s, hs, [v, v, v, f("a", 1.0)])
             } else {
-                Tex::solid(s, s, [f("r", 0.5), f("g", 0.5), f("b", 0.5), f("a", 1.0)])
+                Tex::solid(s, hs, [f("r", 0.5), f("g", 0.5), f("b", 0.5), f("a", 1.0)])
             }
         }
         "output" => match ins.get("in") {
             Some(t) => (**t).clone(),
-            None => Tex::solid(s, s, output_default(n.strs.get("usage").map(String::as_str).unwrap_or("basecolor"))),
+            None => Tex::solid(s, hs, output_default(n.strs.get("usage").map(String::as_str).unwrap_or("basecolor"))),
         },
         "dot" => tex("in")?.clone(),
         "white_noise" => {
             // Noise distribution: 0 uniform, 1 gaussian (bell curve), 2 triangle
             let dist = f("distribution", 0.0).round() as u32;
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 let (x, y) = ((u * s as f32) as i32, (v * s as f32) as i32);
                 match dist {
                     1 => {
@@ -1765,7 +2640,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         }
         "gaussian_noise" => {
             let k = f("scale", 1.0).round().max(1.0) as i32;
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 // displaced positions wrap around so the noise still tiles
                 let (a, b) = warp(u, v);
                 let (x, y) = (((a * s as f32).floor() as i32).rem_euclid(s as i32) / k, ((b * s as f32).floor() as i32).rem_euclid(s as i32) / k);
@@ -1774,26 +2649,34 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             }))
         }
         "perlin" => {
-            let (px, py) = (per("scale_x", f("scale", 4.0)), per("scale_y", f("scale", 4.0)));
-            fin(Tex::gray_fn(s, s, move |u, v| {
-                let (a, b) = warp(u, v);
-                noise::perlin(a, b, px, py, seed)
-            }))
+            let (px, py) = (per("scale_x", f("scale", 4.0)), per_y("scale_y", f("scale", 4.0)));
+            match if no_warp { crate::gpu::noise(s, hs, false, px, py, 1, 0.5, seed, 0) } else { None } {
+                Some(t) => fin(t),
+                None => fin(Tex::gray_fn(s, hs, move |u, v| {
+                    let (a, b) = warp(u, v);
+                    noise::perlin(a, b, px, py, seed)
+                })),
+            }
         }
         "fbm" | "clouds" => {
             let cl = n.kind == "clouds";
-            let (px, py) = (per("scale_x", f("scale", if cl { 3.0 } else { 4.0 })), per("scale_y", f("scale", if cl { 3.0 } else { 4.0 })));
+            let (px, py) = (per("scale_x", f("scale", if cl { 3.0 } else { 4.0 })), per_y("scale_y", f("scale", if cl { 3.0 } else { 4.0 })));
             let (oct, gain, mode) =
                 (f("octaves", if cl { 6.0 } else { 5.0 }).max(1.0) as u32, f("gain", if cl { 0.6 } else { 0.5 }), f("mode", 0.0).max(0.0) as u32);
-            let kernel = noise::Fbm::new(px, py, oct, gain, seed, mode);
-            fin(Tex::gray_fn(s, s, move |u, v| {
-                let (a, b) = warp(u, v);
-                kernel.sample(a, b)
-            }))
+            match if no_warp { crate::gpu::noise(s, hs, true, px, py, oct, gain, seed, mode) } else { None } {
+                Some(t) => fin(t),
+                None => {
+                    let kernel = noise::Fbm::new(px, py, oct, gain, seed, mode);
+                    fin(Tex::gray_fn(s, hs, move |u, v| {
+                        let (a, b) = warp(u, v);
+                        kernel.sample(a, b)
+                    }))
+                }
+            }
         }
         "bnw_spots" => {
             let (var, p) = (f("variant", 0.0) as u32, per("scale", 8.0));
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (a, b) = warp(u, v);
                 let grain = if var >= 2 { (noise::fbm(u, v, p * 4, p * 4, 3, 0.5, seed.wrapping_add(5), 0) - 0.5) * 0.25 } else { 0.0 };
                 noise::spots(
@@ -1816,7 +2699,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         }
         "crystal" => {
             let (var, p) = (f("variant", 0.0) as u32, per("scale", 6.0));
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (a, b) = warp(u, v);
                 let vr = noise::voronoi_ext(a, b, p, p, seed, 1.0);
                 let l = (vr.dx * vr.dx + vr.dy * vr.dy).sqrt().max(1e-4);
@@ -1843,7 +2726,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             let wsum: f32 = taps.iter().map(|t| t.1).sum();
             let gain = 1.6 * st.min(p1 as f32).powf(0.55); // restores the contrast lost by averaging (calibrated)
             let (g1, g2) = (noise::GradGrid::new(p1, p1, seed), noise::GradGrid::new(p1 * 2, p1 * 2, seed.wrapping_add(7)));
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (u, v) = warp(u, v);
                 let (mut a1, mut a2) = (0.0f32, 0.0f32);
                 for &(t, w) in &taps {
@@ -1867,7 +2750,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             let (quant, width, length) = (per("quantity", 3.0).min(32), f("scratch_width", 0.4).clamp(0.05, 0.95), f("scratch_length", 0.45).clamp(0.0, 0.9));
             // spots
             let (details, cover, cover_c) = (per("details", 22.0).min(128), f("coverage", 0.35).clamp(0.0, 0.9), f("coverage_contrast", 0.25).clamp(0.02, 1.0));
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (a, b) = warp(u, v);
                 let val = match var {
                     0 => {
@@ -1916,14 +2799,14 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             };
             let t0 = f("coverage", grunge::T0[(gp.map - 1) as usize]);
             let inv = f("invert", 0.0) > 0.5;
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 let x = grunge::grunge_map(&gp, u, v, t0);
                 if inv { 1.0 - x } else { x }
             })
         }
         "plasma" => {
             let sc = f("scale", 3.0).round().max(1.0);
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (a, b) = warp(u, v);
                 let t = std::f32::consts::TAU;
                 let p = (t * (sc * a + 0.35 * (t * (sc + 1.0) * b).sin())).sin()
@@ -1943,14 +2826,14 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
                 let (sa, ca) = (ang * std::f32::consts::TAU).sin_cos();
                 (cnt.round() * ca, cnt.round() * sa)
             };
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 let t = (u * a + v * b).rem_euclid(1.0);
                 smooth(0.0, soft, t) * (1.0 - smooth(wd, wd + soft, t))
             })
         }
         "weave" => {
             let (cnt, wd) = ((f("count", 6.0) / 2.0).round().max(1.0) * 2.0, f("width", 0.8).clamp(0.1, 1.0)); // even count: the over/under pattern wraps
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 let (x, y) = (u * cnt, v * cnt);
                 let (i, j) = (x.floor() as i32, y.floor() as i32);
                 let (fx, fy) = (x - i as f32, y - j as f32);
@@ -1970,12 +2853,12 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
                 f("tiling", 1.0),
                 f("softness", 0.02),
             );
-            Tex::gray_fn(s, s, move |u, v| ops::shape_value(k, u, v, px, py, sx, sy, rot, til, so))
+            Tex::gray_fn(s, hs, move |u, v| ops::shape_value(k, u, v, px, py, sx, sy, rot, til, so))
         }
         "star" => {
             let (pts, inner, size, so, rot) =
                 (f("points", 5.0).round().max(3.0), f("inner", 0.45), f("size", 0.4), f("softness", 0.01).max(px1), f("rotation", 0.0));
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 ops::tiled_max(size > 0.5, ops::wrapd(u - 0.5), ops::wrapd(v - 0.5), |x, y| {
                     let a = y.atan2(x) - rot * std::f32::consts::TAU + std::f32::consts::FRAC_PI_2;
                     let seg = std::f32::consts::TAU / pts;
@@ -1989,12 +2872,12 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             // direction snapped to a whole wave vector so the symmetric ramp repeats seamlessly
             let (a, b) = ops::tileable_wave(1.0, f("angle", 0.0));
             let (a, b) = (a as f32, b as f32);
-            Tex::gray_fn(s, s, move |u, v| 1.0 - (2.0 * ((u - 0.5) * a + (v - 0.5) * b + 0.5).rem_euclid(1.0) - 1.0).abs())
+            Tex::gray_fn(s, hs, move |u, v| 1.0 - (2.0 * ((u - 0.5) * a + (v - 0.5) * b + 0.5).rem_euclid(1.0) - 1.0).abs())
         }
         "gradient_circular" => {
             // the angular ramp fades to a flat value towards the tile border, so neighbouring tiles meet seamlessly
             let off = f("offset", 0.0);
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 let (x, y) = (ops::wrapd(u - 0.5), ops::wrapd(v - 0.5));
                 let a = (y.atan2(x) / std::f32::consts::TAU + 0.5 + off).rem_euclid(1.0);
                 let w = 1.0 - smooth(0.3, 0.5, x.abs().max(y.abs()));
@@ -2003,8 +2886,17 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         }
         "voronoi" | "voronoi_fractal" => {
             let fractal = n.kind == "voronoi_fractal";
-            let (p, j, style) = (per("scale", 6.0), f("jitter", 1.0).clamp(0.0, 1.0), f("mode", 0.0) as u32);
-            let aspect = f("aspect", 1.0).clamp(0.25, 4.0);
+            let (p, j, mut style) = (per("scale", 6.0), f("jitter", 1.0).clamp(0.0, 1.0), f("mode", 0.0) as u32);
+            if !fractal {
+                // extra outputs show the same cells as an id map, an edge map and the plain distance
+                style = match f("_out", 0.0).round() as i32 {
+                    1 => 1,
+                    2 => 2,
+                    3 => 0,
+                    _ => style,
+                };
+            }
+            let aspect = (f("aspect", 1.0) * ar).clamp(0.05, 8.0);
             let (ox, oy) = (f("offset_x", 0.0), f("offset_y", 0.0));
             let (dist, dscale) = (f("distortion", 0.0).clamp(0.0, 2.0), per("distortion_scale", 3.0));
             let metric = noise::Metric::from_index(f("distance_mode", 0.0) as u32, f("minkowski", 2.0));
@@ -2034,7 +2926,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
                 vec![(p, 1.0)]
             };
             let norm: f32 = levels.iter().map(|l| l.1).sum::<f32>().max(1e-6);
-            fin(Tex::gray_fn(s, s, move |u, v| {
+            fin(Tex::gray_fn(s, hs, move |u, v| {
                 if !fractal {
                     return one(u, v, p, seed);
                 }
@@ -2056,7 +2948,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             let (wa, wb) = ops::tileable_wave(1.0, f("angle", 0.0));
             let (wa, wb) = (wa as f32, wb as f32);
             let _ = (sa, ca);
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 if mode == 1 {
                     let (x, y) = (ops::wrapd(u - 0.5), ops::wrapd(v - 0.5));
                     ((x * x + y * y).sqrt() * 2.0).clamp(0.0, 1.0)
@@ -2067,20 +2959,20 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         }
         "circle" => {
             let (r, so) = (f("radius", 0.4), f("softness", 0.01).max(px1));
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 ops::tiled_max(r > 0.5, ops::wrapd(u - 0.5), ops::wrapd(v - 0.5), |x, y| 1.0 - smooth(r - so, r, (x * x + y * y).sqrt()))
             })
         }
         "rect" => {
             let (w, h, so) = (f("width", 0.6), f("height", 0.4), f("softness", 0.01).max(px1));
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 let d = (ops::wrapd(u - 0.5).abs() - w * 0.5).max(ops::wrapd(v - 0.5).abs() - h * 0.5);
                 1.0 - smooth(-so, 0.0, d)
             })
         }
         "polygon" => {
             let (sd, r, so, rot) = (f("sides", 5.0), f("radius", 0.4), f("softness", 0.01).max(px1), f("rotation", 0.0));
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 ops::tiled_max(r > 0.5, ops::wrapd(u - 0.5), ops::wrapd(v - 0.5), |x, y| 1.0 - smooth(-so, 0.0, ops::polygon_sdf(x, y, sd, r, rot)))
             })
         }
@@ -2088,7 +2980,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             let t = (f("tiles", 8.0) / 2.0).round().max(1.0) * 2.0; // even count so the pattern wraps
             // anti-aliased: blend across a cell border over about one pixel
             let aa = (t / s as f32).max(1e-6);
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 let (x, y) = (u * t, v * t);
                 let (fx, fy) = (x - x.floor(), y - y.floor());
                 let (ix, iy) = (x.floor() as i64, y.floor() as i64);
@@ -2107,13 +2999,16 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         "bricks" => {
             let (r, c, m, b, o, lv) = (f("rows", 8.0), f("cols", 4.0), f("mortar", 0.03), f("bevel", 0.05), f("offset", 0.5), f("lum_var", 0.3));
             let b = b.max(1.5 * r.max(c) / s as f32); // edge ramps are at least about a pixel wide (anti-aliased)
-            Tex::gray_fn(s, s, move |u, v| ops::bricks(u, v, r, c, m, b, o, lv, seed))
+            Tex::gray_fn(s, hs, move |u, v| ops::bricks(u, v, r, c, m, b, o, lv, seed))
         }
         "tile_sampler" | "tile_generator" => {
             let r#gen = n.kind == "tile_generator";
             let mut p = scatter::TileP::legacy(r#gen);
             p.nx = f("x_amount", p.nx);
             p.ny = f("y_amount", p.ny);
+            if ar != 1.0 {
+                p.ny = (p.nx * ar).round().max(1.0);
+            }
             p.size = f("size", p.size);
             p.aspect = f("aspect", 1.0);
             p.size_mode = f("size_mode", 0.0) as u32;
@@ -2192,7 +3087,13 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             p.opacity = f("opacity", 1.0);
             p.seed = seed;
             let pats = scatter_patterns(ins, f("pattern_type", 0.0) as u32, 99, f("pattern_distribution", 0.0) as u32);
-            scatter::splatter(s, s, &pats, &p)
+            match f("_out", 0.0).round() as i32 {
+                1 => scatter::splatter_data(s, hs, &pats, &p, scatter::SplatData::Id),
+                2 => scatter::splatter_data(s, hs, &pats, &p, scatter::SplatData::Center),
+                3 => scatter::splatter_data(s, hs, &pats, &p, scatter::SplatData::Size),
+                4 => scatter::splatter_data(s, hs, &pats, &p, scatter::SplatData::Luminance),
+                _ => scatter::splatter(s, s, &pats, &p),
+            }
         }
         "splatter_circular" => {
             let mut p = scatter::CircularP::legacy();
@@ -2238,10 +3139,19 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             let idx = f("index", 0.0).max(0.0) as usize;
             match ins.get(order[idx.min(3)]) {
                 Some(t) => (**t).clone(),
-                None => order.iter().find_map(|k| ins.get(*k)).map(|t| (**t).clone()).unwrap_or_else(|| Tex::solid(s, s, [0.0, 0.0, 0.0, 1.0])),
+                None => order.iter().find_map(|k| ins.get(*k)).map(|t| (**t).clone()).unwrap_or_else(|| Tex::solid(s, hs, [0.0, 0.0, 0.0, 1.0])),
             }
         }
         "flood_fill" => ops::flood_fill(tex("in")?, f("threshold", 0.05)),
+        "flood_fill_to_index" => ops::flood_fill_to_index(tex("in")?),
+        "flood_fill_to_position" | "flood_fill_to_bbox_size" => {
+            let g = ops::flood_fill_to_geometry(tex("in")?, n.kind == "flood_fill_to_bbox_size");
+            match f("_out", 0.0).round() as i32 {
+                1 => g.map(|p| [p[0], p[0], p[0], 1.0]),
+                2 => g.map(|p| [p[1], p[1], p[1], 1.0]),
+                _ => g,
+            }
+        }
         "flood_fill_random" => ops::flood_fill_random(tex("in")?, seed, f("min", 0.0), f("max", 1.0)),
         "flood_fill_color" => ops::flood_fill_color(tex("in")?, seed),
         "flood_fill_gradient" => ops::flood_fill_gradient(tex("in")?, f("angle", 0.0), f("variation", 0.0), seed),
@@ -2273,7 +3183,11 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         }
         "distance" => ops::distance(tex("in")?, f("distance", 0.1) * s as f32, f("threshold", 0.5), f("mode", 0.0) as u32),
         "color_match" if f("method", 0.0) < 0.5 => {
-            ops::color_match(tex("in")?, ins.get("reference").map(|r| r.as_ref()).unwrap_or(tex("in")?), f("strength", 1.0))
+            if f("_out", 0.0) >= 0.5 {
+                Tex::solid(s, hs, [1.0; 4])
+            } else {
+                ops::color_match(tex("in")?, ins.get("reference").map(|r| r.as_ref()).unwrap_or(tex("in")?), f("strength", 1.0))
+            }
         }
         "color_match" => {
             let src = tex("in")?;
@@ -2298,7 +3212,8 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
                 smooth: f("mask_smoothness", 0.3),
                 strength: f("strength", 1.0),
             };
-            ops::color_swap(src, &sw).0
+            let (res, mask) = ops::color_swap(src, &sw);
+            if f("_out", 0.0) >= 0.5 { mask } else { res }
         }
         "curvature_smooth" => ops::curvature_from_normal(tex("in")?, f("smoothing", 2.0) * rs, f("intensity", 6.0)),
         "height_blend" => {
@@ -2347,7 +3262,67 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             }
             m
         }
+        "fx_map" => {
+            let name = n.strs.get("program").ok_or_else(|| Error::BadParam(id, "fx_map needs program=\"name\"".into()))?;
+            let prog = ctx.lib.get(name).ok_or_else(|| Error::BadParam(id, format!("unknown pattern program '{name}'")))?;
+            if !crate::fxmap::is_program(prog) {
+                return Err(Error::BadParam(id, format!("'{name}' is not a pattern program")));
+            }
+            let pats =
+                [ins.get("in").map(|t| t.as_ref()), ins.get("in2").map(|t| t.as_ref()), ins.get("in3").map(|t| t.as_ref()), ins.get("in4").map(|t| t.as_ref())];
+            let color = f("color", 0.0) > 0.5;
+            let bg = f("bg", 0.0);
+            let bgc = if color { [f("bg_r", bg), f("bg_g", bg), f("bg_b", bg)] } else { [bg, bg, bg] };
+            let run = crate::fxmap::Run { depth: f("depth", 12.0).clamp(0.0, 32.0) as u32, seed, blend: f("blend", 0.0) as u32, color, patterns: &pats };
+            crate::fxmap::render(prog, s, hs, bgc, &run).map_err(|e| Error::BadParam(id, format!("{name}: {e}")))?
+        }
+        "curve" => {
+            let get = |k: &str| -> Result<crate::curve::Curve, Error> {
+                match n.strs.get(k) {
+                    Some(t) if !t.trim().is_empty() => crate::curve::Curve::parse(t).map_err(|m| Error::BadParam(id, format!("{k}: {m}"))),
+                    _ => Ok(crate::curve::Curve::identity()),
+                }
+            };
+            let (m, r, g, b, a) = (get("points")?, get("points_r")?, get("points_g")?, get("points_b")?, get("points_a")?);
+            crate::curve::apply(tex("in")?, &m, [&r, &g, &b, &a])
+        }
+        "svg" => {
+            let file = n.strs.get("file").ok_or_else(|| Error::BadParam(id, "svg needs file=\"art.svg\"".into()))?;
+            let bytes = read_resource(id, file, ctx)?;
+            let src = String::from_utf8_lossy(&bytes);
+            crate::vector::render_svg(&src, s, hs, f("fit", 0.0) as u32, f("scale", 1.0).max(0.001), f("x", 0.0), f("y", 0.0))
+                .map_err(|m| Error::BadParam(id, format!("'{file}': {m}")))?
+        }
+        "text" => {
+            let font = match n.strs.get("font").filter(|f| !f.is_empty()) {
+                Some(file) => crate::font::Font::load(&read_resource(id, file, ctx)?).map_err(|m| Error::BadParam(id, format!("'{file}': {m}")))?,
+                None => crate::font::Font::Builtin,
+            };
+            let text = n.strs.get("text").cloned().unwrap_or_default();
+            let xf = crate::vector::Xf::rotate(f("rotation", 0.0).to_radians())
+                .then(crate::vector::Xf::translate((0.5 + f("x", 0.0)) * s as f32, (0.5 + f("y", 0.0)) * hs as f32));
+            let polys = font.layout(&text, f("size", 0.2).max(0.001) * hs as f32, f("align", 1.0) as u32, f("spacing", 0.0), f("line_spacing", 1.0), &xf);
+            let mask = crate::vector::fill(&polys, s, hs, false);
+            let v = f("value", 1.0);
+            let mut t = Tex::solid(s, hs, [0.0, 0.0, 0.0, 1.0]);
+            for (p, c) in t.px.iter_mut().zip(&mask.a) {
+                let g = c * v;
+                *p = [g, g, g, 1.0];
+            }
+            t
+        }
+        "value_processor" => {
+            let fname = n.strs.get("fn").ok_or_else(|| Error::BadParam(id, "value_processor needs fn=\"function\"".into()))?;
+            return run_function_image(id, n, fname, ins, ctx, true);
+        }
+        "input_value" => {
+            let v = f("v", 0.0);
+            Tex::solid(ctx.size, ctx.height, [v, v, v, 1.0])
+        }
         "pixel_processor" => {
+            if let Some(fname) = n.strs.get("fn") {
+                return run_function_image(id, n, fname, ins, ctx, false);
+            }
             let parse = |k: &str| -> Result<Option<expr::Ex>, Error> {
                 match n.strs.get(k) {
                     Some(src) => expr::parse(src).map(Some).map_err(|m| Error::BadParam(id, format!("{k}: {m}"))),
@@ -2357,7 +3332,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             let e0 = parse("expr")?.ok_or_else(|| Error::BadParam(id, "missing expr".into()))?;
             let (eg, eb, ea) = (parse("expr_g")?, parse("expr_b")?, parse("expr_a")?);
             let input = ins.get("in").map(|t| t.as_ref());
-            Tex::from_fn(s, s, |u, v| {
+            Tex::from_fn(s, hs, |u, v| {
                 let c = input.map(|t| t.sample(u, v)).unwrap_or([0.0, 0.0, 0.0, 1.0]);
                 let env = expr::Env { vars: [u, v, u * s as f32, v * s as f32, s as f32, s as f32, c[0], c[1], c[2], lum(c)], tex: input };
                 let r = expr::eval(&e0, &env);
@@ -2371,14 +3346,14 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             let (shape, size, aspect, sides, rot, round) =
                 (f("shape", 0.0) as u32, f("size", 0.25), f("aspect", 1.0), f("sides", 5.0), f("rotation", 0.0), f("round", 0.0));
             let (cx, cy, range) = (f("x", 0.0), f("y", 0.0), f("range", 0.25));
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 ops::sdf_to_value(ops::sdf2d(shape, ops::wrapd(u - 0.5 - cx), ops::wrapd(v - 0.5 - cy), size, aspect, sides, rot, round), range)
             })
         }
         "sdf_op" => {
             let (op, k, range) = (f("op", 0.0) as u32, f("smooth", 0.0), f("range", 0.25));
             let (a, b) = (tex("a")?, tex("b")?);
-            Tex::gray_fn(s, s, move |u, v| {
+            Tex::gray_fn(s, hs, move |u, v| {
                 let (da, db) = (ops::value_to_sdf(lum(a.sample(u, v)), range), ops::value_to_sdf(lum(b.sample(u, v)), range));
                 ops::sdf_to_value(ops::sdf_combine(op, da, db, k), range)
             })
@@ -2386,12 +3361,12 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         "sdf_mask" => {
             let (off, soft) = (f("offset", 0.0), f("softness", 0.02).max(1e-4));
             let a = tex("in")?;
-            Tex::gray_fn(s, s, move |u, v| smooth(0.5 + off - soft * 0.5, 0.5 + off + soft * 0.5, lum(a.sample(u, v))))
+            Tex::gray_fn(s, hs, move |u, v| smooth(0.5 + off - soft * 0.5, 0.5 + off + soft * 0.5, lum(a.sample(u, v))))
         }
         "sdf_form" => {
-            let (shape, size, rep, round, scatter, hs) =
+            let (shape, size, rep, round, scatter, hgt) =
                 (f("shape", 0.0) as u32, f("size", 0.3), f("repeat", 3.0), f("round", 0.05), f("scatter", 0.3), f("height", 1.5));
-            Tex::gray_fn(s, s, move |u, v| ops::sdf_form(u, v, shape, size, rep, round, scatter, seed, hs))
+            Tex::gray_fn(s, hs, move |u, v| ops::sdf_form(u, v, shape, size, rep, round, scatter, seed, hgt))
         }
         "bitmap" => {
             let file = n.strs.get("file").ok_or_else(|| Error::BadParam(id, "bitmap needs file".into()))?;
@@ -2402,10 +3377,51 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
                     .or_else(|e| if file.contains('\\') { std::fs::read(file.replace('\\', "/")) } else { Err(e) })
                     .map_err(|e| Error::BadParam(id, format!("cannot read '{file}': {e}")))?,
             };
-            png::decode(&bytes).map_err(|e| Error::BadParam(id, format!("'{file}': {e}")))?
+            let mut t = png::decode(&bytes).map_err(|e| Error::BadParam(id, format!("'{file}': {e}")))?;
+            if f("flip_x", 0.0) > 0.5 || f("flip_y", 0.0) > 0.5 {
+                let (fx, fy) = (f("flip_x", 0.0) > 0.5, f("flip_y", 0.0) > 0.5);
+                let src = t.clone();
+                for y in 0..t.h {
+                    for x in 0..t.w {
+                        let (sx, sy) = (if fx { t.w - 1 - x } else { x }, if fy { t.h - 1 - y } else { y });
+                        t.px[y * t.w + x] = src.px[sy * t.w + sx];
+                    }
+                }
+            }
+            if f("gray", 0.0) > 0.5 {
+                t = ops::to_gray(&t);
+            }
+            t
         }
-        "blur" => ops::blur(tex("in")?, f("radius", 4.0) * rs),
-        "directional_blur" => ops::directional_blur(tex("in")?, f("angle", 0.0), f("length", 0.05)),
+        "channel_shuffle" => {
+            // each output channel picks a source: 0-3 channels of `in`, 4-7 channels of `in2`, 8 zero, 9 one
+            let a = tex("in")?;
+            let b = ins.get("in2").map(|t| t.as_ref()).unwrap_or(a);
+            let pick = |k: &str, d: f32| f(k, d).round().clamp(0.0, 9.0) as usize;
+            let src = [pick("src_r", 0.0), pick("src_g", 1.0), pick("src_b", 2.0), pick("src_a", 3.0)];
+            let inv = [f("inv_r", 0.0) > 0.5, f("inv_g", 0.0) > 0.5, f("inv_b", 0.0) > 0.5, f("inv_a", 0.0) > 0.5];
+            let mut out = a.clone();
+            for (i, p) in out.px.iter_mut().enumerate() {
+                for k in 0..4 {
+                    let v = match src[k] {
+                        0..=3 => a.px[i][src[k]],
+                        4..=7 => b.px[i][src[k] - 4],
+                        8 => 0.0,
+                        _ => 1.0,
+                    };
+                    p[k] = if inv[k] { 1.0 - v } else { v };
+                }
+            }
+            out
+        }
+        "blur" => {
+            let (src, sg) = (tex("in")?, f("radius", 4.0) * rs);
+            crate::gpu::blur(src, sg).unwrap_or_else(|| ops::blur(src, sg))
+        }
+        "directional_blur" => {
+            let (src, a, l) = (tex("in")?, f("angle", 0.0), f("length", 0.05));
+            crate::gpu::directional_blur(src, a, l).unwrap_or_else(|| ops::directional_blur(src, a, l))
+        }
         "sharpen" => ops::sharpen(tex("in")?, f("radius", 2.0) * rs, f("amount", 1.0)),
         "levels" => {
             let t = tex("in")?;
@@ -2415,7 +3431,8 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
                 lo = mn;
                 hi = mx.max(mn + 1e-4);
             }
-            ops::levels(t, lo, hi, f("gamma", 1.0), f("out_low", 0.0), f("out_high", 1.0))
+            let (gm, ol, oh) = (f("gamma", 1.0), f("out_low", 0.0), f("out_high", 1.0));
+            crate::gpu::levels(t, lo, hi, gm, ol, oh).unwrap_or_else(|| ops::levels(t, lo, hi, gm, ol, oh))
         }
         "adjust" => ops::adjust(tex("in")?, f("brightness", 0.0), f("contrast", 1.0)),
         "invert" => {
@@ -2436,7 +3453,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         "merge" => {
             let g = |slot: &str, ch: usize| ins.get(slot).map(|t| ops::channel(t, ch));
             let (r, gg, b, a) = (g("r", 0), g("g", 1), g("b", 2), g("a", 3));
-            Tex::from_fn(s, s, |u, v| {
+            Tex::from_fn(s, hs, |u, v| {
                 let q = |t: &Option<Tex>, d: f32| t.as_ref().map(|t| t.sample(u, v)[0]).unwrap_or(d);
                 [q(&r, 0.0), q(&gg, 0.0), q(&b, 0.0), q(&a, 1.0)]
             })
@@ -2475,17 +3492,16 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
         "directional_warp" => {
             ops::directional_warp_ex(tex("in")?, tex("warp")?, f("angle", 0.0), f("intensity", 0.1), f("offset", 0.5), f("filtering", 2.0).max(0.0) as u32)
         }
-        "blend" => ops::blend_ex(
-            tex("fg")?,
-            tex("bg")?,
-            ins.get("mask").map(|m| m.as_ref()),
-            f("mode", 0.0).max(0.0) as u32,
-            f("opacity", 1.0),
-            f("alpha_mode", 1.0).max(0.0) as u32,
-            [f("crop_x0", 0.0), f("crop_y0", 0.0), f("crop_x1", 1.0), f("crop_y1", 1.0)],
-        ),
+        "blend" => {
+            let (fg, bg, mask) = (tex("fg")?, tex("bg")?, ins.get("mask").map(|m| m.as_ref()));
+            let (mode, op, am) = (f("mode", 0.0).max(0.0) as u32, f("opacity", 1.0), f("alpha_mode", 1.0).max(0.0) as u32);
+            let crop = [f("crop_x0", 0.0), f("crop_y0", 0.0), f("crop_x1", 1.0), f("crop_y1", 1.0)];
+            let on_gpu = if crop == [0.0, 0.0, 1.0, 1.0] { crate::gpu::blend(fg, bg, mask, mode, op, am) } else { None };
+            on_gpu.unwrap_or_else(|| ops::blend_ex(fg, bg, mask, mode, op, am, crop))
+        }
         "normal" => {
-            let n = ops::normal_from_height(tex("in")?, f("strength", 2.0), f("directx", 0.0) > 0.5);
+            let (src, st, dx) = (tex("in")?, f("strength", 2.0), f("directx", 0.0) > 0.5);
+            let n = crate::gpu::normal_from_height(src, st, dx).unwrap_or_else(|| ops::normal_from_height(src, st, dx));
             if f("alpha_from_input", 0.0) > 0.5 {
                 // "Fill alpha with input": the height map goes into the alpha channel
                 let src = tex("in")?;
@@ -2505,15 +3521,49 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             let dirs = [4u32, 8, 16][(f("quality", 1.0).round() as usize).min(2)];
             ops::hbao(tex("in")?, f("hbao_radius", 1.0).clamp(0.0, 1.0) * 0.25, scale, dirs, f("hbao_intensity", 1.0))
         }
-        "quantize_color" => ops::quantize_color(
-            tex("in")?,
-            per("color_amount", 32.0).clamp(1, 128) as usize,
-            f("contour_smoothing", 0.0) * rs,
-            f("dithering", 0.0).clamp(0.0, 1.0),
-            f("dithering_pattern", 0.0) > 0.5,
-            f("distance_color_space", 0.0) < 0.5,
-            f("ignore_alpha", 0.0) > 0.5,
-        ),
+        "quantize_color" => {
+            let (res, ids, pal) = ops::quantize_color_full(
+                tex("in")?,
+                per("color_amount", 32.0).clamp(1, 128) as usize,
+                f("contour_smoothing", 0.0) * rs,
+                f("dithering", 0.0).clamp(0.0, 1.0),
+                f("dithering_pattern", 0.0) > 0.5,
+                f("distance_color_space", 0.0) < 0.5,
+                f("ignore_alpha", 0.0) > 0.5,
+            );
+            match f("_out", 0.0).round() as i32 {
+                1 => {
+                    // ID: every region's palette index as a gray level (index / (colours - 1))
+                    let div = (pal.len().max(2) - 1) as f32;
+                    let mut t = res.clone();
+                    for (o, i) in t.px.iter_mut().zip(&ids) {
+                        let v = *i as f32 / div;
+                        *o = [v, v, v, 1.0];
+                    }
+                    t
+                }
+                2 => {
+                    // Palette: one vertical band per colour, left to right in index order
+                    let k = pal.len();
+                    Tex::from_fn(s, hs, move |u, _| {
+                        let c = pal[((u * k as f32) as usize).min(k - 1)];
+                        [c[0], c[1], c[2], 1.0]
+                    })
+                }
+                _ => res,
+            }
+        }
+        "rgba_split" => {
+            let c = (f("_out", 0.0).round() as usize).min(3);
+            tex("in")?.map(|p| [p[c], p[c], p[c], 1.0])
+        }
+        "alpha_split" => {
+            if f("_out", 0.0) >= 0.5 {
+                tex("in")?.map(|p| [p[3], p[3], p[3], 1.0])
+            } else {
+                tex("in")?.map(|p| [p[0], p[1], p[2], 1.0])
+            }
+        }
         "curvature" => {
             if f("mode", 0.0) > 0.5 {
                 ops::curvature(tex("in")?, f("radius", 3.0) * rs, f("intensity", 4.0))
@@ -2536,12 +3586,12 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             }
         }
         "emboss" => ops::emboss(tex("in")?, f("angle", 0.125), f("intensity", 4.0)),
-        other => match crate::nodes2::compute(other, id, n, ins, s, seed)? {
+        other => match crate::nodes2::compute(other, id, n, ins, s, hs, seed)? {
             Some(t) => t,
             None => return Err(Error::UnknownNode(id, other.to_string())),
         },
     };
-    let out = if out.w != s || out.h != s { Tex::from_fn(s, s, |u, v| out.sample(u, v)) } else { out };
+    let out = if out.w != s || out.h != hs { Tex::from_fn(s, hs, |u, v| out.sample(u, v)) } else { out };
     let (fx, fy) = (tx - tx.floor(), ty - ty.floor());
     if fx > 0.0 || fy > 0.0 {
         return Ok(ops::roll(&out, fx, fy));

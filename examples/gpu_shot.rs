@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Headless-friendly GPU viewer test: renders a procedural brick material with the GPU renderer and writes a screenshot.
 //! usage: cargo run --release --features gui --example gpu_shot -- out.png [shape 0|1|2] [relief 0..3] [width height] [nomsaa] [wire] [rough=0.3 metal=0 color=r,g,b]
 use eframe::egui;

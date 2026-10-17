@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 use materialcraft::graph::{EXAMPLE, Error, Graph};
 use materialcraft::{expr, noise, png};
 
@@ -430,6 +431,8 @@ fn every_node_output_is_sane_at_several_sizes() {
     // nodes whose demo output may legitimately be a flat colour
     let flat_ok = [
         "color",
+        "input_value",
+        "value_processor",
         "invert_flat",
         "clamp",
         "histogram_range",
@@ -907,7 +910,7 @@ fn slope_blur_gray_path_matches_the_color_path() {
 }
 
 #[test]
-fn phase1_designer_parameters_behave() {
+fn phase1_parameters_behave() {
     let run = |body: &str| Graph::parse(&format!("size 64\n{body}")).unwrap().evaluate(None).unwrap();
     let close = |a: &materialcraft::tex::Tex, b: &materialcraft::tex::Tex, tol: f32, what: &str| {
         for (p, q) in a.px.iter().zip(&b.px) {
@@ -1072,7 +1075,7 @@ fn shared_noise_block_disorder_speed_anisotropy_and_tile_offset() {
 }
 
 #[test]
-fn phase3_scatter_nodes_keep_old_output_and_gain_designer_properties() {
+fn phase3_scatter_nodes_keep_old_output_and_gain_properties() {
     use materialcraft::{ops, scatter, tex::Tex};
     let run = |body: &str| Graph::parse(&format!("size 64\n{body}")).unwrap().evaluate(None).unwrap();
     let diff = |a: &Tex, b: &Tex| a.px.iter().zip(&b.px).map(|(p, q)| (p[0] - q[0]).abs()).fold(0.0f32, f32::max);
@@ -1222,7 +1225,7 @@ fn tile_sampler_and_generator_are_seamless() {
 }
 
 #[test]
-fn phase3b_nodes_behave_like_designer() {
+fn phase3b_nodes_behave_as_documented() {
     let run = |body: &str| Graph::parse(&format!("size 64\n{body}")).unwrap().evaluate(None).unwrap();
     let sum = |t: &materialcraft::tex::Tex| t.px.iter().map(|p| p[0]).sum::<f32>();
     let diff =
@@ -1405,4 +1408,441 @@ fn phase8_hbao_and_quantize_color() {
     assert!(distinct(&o["three"]) <= 3, "at most 3 colours, got {}", distinct(&o["three"]));
     assert!(distinct(&o["eight"]) <= 8 && distinct(&o["eight"]) > 3, "dithered 8 colours: {}", distinct(&o["eight"]));
     assert_eq!(distinct(&o["one"]), 1);
+}
+
+#[test]
+fn m0_multi_output_nodes() {
+    let run = |body: &str| Graph::parse(&format!("size 64\n{body}")).unwrap().evaluate(None).unwrap();
+    let mean = |t: &materialcraft::tex::Tex, c: usize| t.px.iter().map(|p| p[c]).sum::<f32>() / t.px.len() as f32;
+    // RGBA split: each output carries one channel; the default output (no name) is R
+    let o = run(
+        "node 1 color r=0.9 g=0.5 b=0.1 a=0.3\nnode 2 rgba_split in=@1\nnode 3 tint in=@2.r r=1 g=1 b=1\nnode 4 tint in=@2.g r=1 g=1 b=1\nnode 5 tint in=@2.b r=1 g=1 b=1\nnode 6 tint in=@2.a r=1 g=1 b=1\nnode 7 tint in=@2 r=1 g=1 b=1\noutput r 3\noutput g 4\noutput b 5\noutput a 6\noutput def 7\n",
+    );
+    assert!(
+        (mean(&o["r"], 0) - 0.9).abs() < 1e-3
+            && (mean(&o["g"], 0) - 0.5).abs() < 1e-3
+            && (mean(&o["b"], 0) - 0.1).abs() < 1e-3
+            && (mean(&o["a"], 0) - 0.3).abs() < 1e-3,
+        "channels split"
+    );
+    assert!((mean(&o["def"], 0) - 0.9).abs() < 1e-3, "default output is the first");
+    // Alpha split
+    let o = run(
+        "node 1 color r=0.9 g=0.5 b=0.1 a=0.3\nnode 2 alpha_split in=@1\nnode 3 tint in=@2.rgb r=1 g=1 b=1\nnode 4 tint in=@2.alpha r=1 g=1 b=1\noutput rgb 3\noutput alpha 4\n",
+    );
+    assert!((mean(&o["rgb"], 0) - 0.9).abs() < 1e-3 && (mean(&o["rgb"], 3) - 1.0).abs() < 1e-3 && (mean(&o["alpha"], 0) - 0.3).abs() < 1e-3);
+    // Color Match mask: only the red surface is selected
+    let o = run(
+        "node 1 color r=0.8 g=0.1 b=0.1\nnode 2 color_match in=@1 method=1 source_mode=1 src_r=0.8 src_g=0.1 src_b=0.1 target_r=0.1 target_g=0.2 target_b=0.9\nnode 3 tint in=@2.mask r=1 g=1 b=1\nnode 4 color r=0.1 g=0.7 b=0.1\nnode 5 color_match in=@4 method=1 source_mode=1 src_r=0.8 src_g=0.1 src_b=0.1\nnode 6 tint in=@5.mask r=1 g=1 b=1\nnode 7 tint in=@2.output r=1 g=1 b=1\noutput sel 3\noutput not 6\noutput res 7\n",
+    );
+    assert!(mean(&o["sel"], 0) > 0.99 && mean(&o["not"], 0) < 0.01, "mask selects the source colour only");
+    assert!(o["res"].px[0][2] > 0.7, "output 'output' is the recoloured image");
+    // Quantize Color outputs: ID has one level per colour, palette lists the colours
+    let o = run(
+        "node 1 gradient mode=0\nnode 2 colorize in=@1 p0=0 r0=1 g0=0 b0=0 p1=0.5 r1=0 g1=1 b1=0 p2=1 r2=0 g2=0 b2=1\nnode 3 quantize_color in=@2 color_amount=3\nnode 4 tint in=@3.id r=1 g=1 b=1\nnode 5 tint in=@3.palette r=1 g=1 b=1\nnode 6 tint in=@3 r=1 g=1 b=1\noutput id 4\noutput pal 5\noutput img 6\n",
+    );
+    let levels = |t: &materialcraft::tex::Tex| {
+        let mut v: Vec<i32> = t.px.iter().map(|p| (p[0] * 100.0).round() as i32).collect();
+        v.sort();
+        v.dedup();
+        v.len()
+    };
+    assert_eq!(levels(&o["id"]), 3, "three ids");
+    assert!(levels(&o["pal"]) >= 2, "palette bands");
+    assert!(levels(&o["img"]) >= 2);
+    // Weave Generator masks: the two thread directions never overlap and together equal the opacity
+    let o = run(
+        "node 1 weave_generator weave=2\nnode 2 tint in=@1.mask_1 r=1 g=1 b=1\nnode 3 tint in=@1.mask_2 r=1 g=1 b=1\nnode 4 tint in=@1.opacity r=1 g=1 b=1\nnode 5 tint in=@1.height r=1 g=1 b=1\noutput m1 2\noutput m2 3\noutput op 4\noutput h 5\n",
+    );
+    let overlap: f32 = o["m1"].px.iter().zip(&o["m2"].px).map(|(a, b)| a[0] * b[0]).sum();
+    let diff: f32 = o["m1"].px.iter().zip(&o["m2"].px).zip(&o["op"].px).map(|((a, b), c)| (a[0] + b[0] - c[0]).abs()).sum();
+    assert!(overlap == 0.0 && diff == 0.0 && mean(&o["m1"], 0) > 0.1 && mean(&o["h"], 0) > 0.3, "weave masks");
+    // an unknown output name is rejected with a message that lists the real ones
+    let e = Graph::parse("size 64\nnode 1 color r=1\nnode 2 rgba_split in=@1\nnode 3 invert in=@2.x\noutput o 3\n").err();
+    assert!(format!("{e:?}").contains("outputs: r, g, b, a"), "{e:?}");
+}
+
+#[test]
+fn m0_float_export_keeps_values_above_one() {
+    use materialcraft::export::{Format, encode};
+    use materialcraft::exr::f32_to_half;
+    use materialcraft::tex::Tex;
+    // half-float conversion: exact values, rounding, overflow
+    assert_eq!(f32_to_half(1.0), 0x3c00);
+    assert_eq!(f32_to_half(-2.0), 0xc000);
+    assert_eq!(f32_to_half(0.5), 0x3800);
+    assert_eq!(f32_to_half(0.0), 0);
+    assert_eq!(f32_to_half(70000.0), 0x7c00);
+    assert_eq!(f32_to_half(65504.0), 0x7bff);
+    let t = Tex::from_fn(4, 2, |u, v| [u * 4.0 + 0.25, -1.5, 3.0 + v, 0.5]);
+    // EXR float: header, offset table and the first scanline can be read back
+    let b = encode(Format::Exr, &t, 32, 90);
+    assert_eq!(&b[..4], &[0x76, 0x2f, 0x31, 0x01]);
+    let end = b.windows(2).position(|w| w == [0, 0]).unwrap(); // last header attribute ends with a 0, then the end byte
+    let _ = end;
+    // find the offset table: the 8 bytes after the header's terminating zero point at scanline 0
+    let hdr_end = {
+        let mut i = 8;
+        loop {
+            if b[i] == 0 {
+                break i + 1;
+            }
+            // name\0 type\0 size value
+            let n1 = b[i..].iter().position(|c| *c == 0).unwrap();
+            let j = i + n1 + 1;
+            let n2 = b[j..].iter().position(|c| *c == 0).unwrap();
+            let k = j + n2 + 1;
+            let size = i32::from_le_bytes([b[k], b[k + 1], b[k + 2], b[k + 3]]) as usize;
+            i = k + 4 + size;
+        }
+    };
+    let off0 = u64::from_le_bytes(b[hdr_end..hdr_end + 8].try_into().unwrap()) as usize;
+    assert_eq!(off0, hdr_end + 8 * t.h);
+    assert_eq!(i32::from_le_bytes(b[off0..off0 + 4].try_into().unwrap()), 0, "scanline y");
+    let size = u32::from_le_bytes(b[off0 + 4..off0 + 8].try_into().unwrap()) as usize;
+    assert_eq!(size, 4 * t.w * 4);
+    // channels are stored A, B, G, R; the R plane is last
+    let r0 = off0 + 8 + 3 * t.w * 4;
+    let rv = f32::from_le_bytes(b[r0..r0 + 4].try_into().unwrap());
+    assert!((rv - 0.75).abs() < 1e-6, "R of pixel 0 is {rv}");
+    let r3 = r0 + 3 * 4;
+    assert!((f32::from_le_bytes(b[r3..r3 + 4].try_into().unwrap()) - 3.75).abs() < 1e-5, "values above 1 survive");
+    assert_eq!(b.len(), off0 + t.h * (8 + size));
+    // half EXR is smaller; HDR has a header and 4 bytes per pixel
+    assert!(encode(Format::Exr, &t, 16, 90).len() < b.len());
+    let h = encode(Format::Hdr, &t, 8, 90);
+    assert!(h.starts_with(b"#?RADIANCE") && h.len() == "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 2 +X 4\n".len() + 8 * 4);
+    // 32-bit TIFF stores raw floats
+    let tf = encode(Format::Tiff, &t, 32, 90);
+    assert!(tf.windows(4).any(|w| w == 3.75f32.to_le_bytes()), "float tiff holds 3.75");
+    assert!(Format::parse("EXR") == Some(Format::Exr) && Format::parse("hdr") == Some(Format::Hdr));
+}
+
+#[test]
+fn m0_non_square_node_sizes() {
+    // 256x128 graph: relative-to-input inherits the shape, the relative modifier scales both axes,
+    // absolute keeps the aspect ratio of the graph
+    let text = "size 256 128\nnode 1 perlin scale=4\nnode 2 blur in=@1 radius=2 osize_mode=0 osize_rel=-1\nnode 3 perlin scale=4 osize_mode=2 osize_abs=7\nnode 4 blend bg=@1 fg=@2 mode=0 opacity=0.5\noutput a 1\noutput b 2\noutput c 3\noutput d 4\n";
+    let g = Graph::parse(text).unwrap();
+    let out = g.evaluate(None).unwrap();
+    assert_eq!((out["a"].w, out["a"].h), (256, 128));
+    assert_eq!((out["b"].w, out["b"].h), (128, 64));
+    assert_eq!((out["c"].w, out["c"].h), (128, 64));
+    // mixed sizes meet at the node's own size without panicking or changing the aspect
+    assert_eq!((out["d"].w, out["d"].h), (256, 128));
+    // a preview at half width keeps the 2:1 shape
+    let half = g.evaluate(Some(128)).unwrap();
+    assert_eq!((half["a"].w, half["a"].h), (128, 64));
+}
+
+#[test]
+fn m0_pin_types_follow_the_graph() {
+    use materialcraft::graph::{Pin, pin_types};
+    let g = Graph::parse("size 64\nnode 1 perlin scale=4\nnode 2 colorize in=@1\nnode 3 blur in=@2 radius=2\nnode 4 blur in=@1 radius=2\nnode 5 to_gray in=@3\nnode 6 color_match in=@2 reference=@2 method=1\nnode 7 tint in=@4\nnode 8 alpha_split in=@2\nnode 9 invert in=@8.alpha\nnode 10 invert in=@8.rgb\noutput a 5\n").unwrap();
+    let p = pin_types(&g);
+    assert_eq!(p[&1], Pin::Gray);
+    assert_eq!(p[&2], Pin::Color);
+    assert_eq!(p[&3], Pin::Color); // a filter keeps the colour type of its input
+    assert_eq!(p[&4], Pin::Gray);
+    assert_eq!(p[&5], Pin::Gray);
+    assert_eq!(p[&6], Pin::Color);
+    assert_eq!(p[&7], Pin::Color);
+    assert_eq!(p[&9], Pin::Gray, "a named gray output feeds a gray filter");
+    assert_eq!(p[&10], Pin::Color);
+}
+
+#[test]
+fn m0_per_node_output_format_quantises() {
+    let run = |fmt: &str| {
+        let g = Graph::parse(&format!("size 64\nnode 1 gradient mode=0\nnode 2 tint in=@1 r=1.37 g=0.3333 b=0.5{fmt}\noutput o 2\n")).unwrap();
+        g.evaluate(None).unwrap().remove("o").unwrap()
+    };
+    let f32t = run("");
+    assert!(f32t.px.iter().any(|p| p[0] > 1.0), "32-bit float keeps values above 1");
+    let i8 = run(" ofmt=1");
+    assert!(i8.px.iter().all(|p| p[0] <= 1.0 && ((p[0] * 255.0).round() - p[0] * 255.0).abs() < 1e-3));
+    let i16 = run(" ofmt=2");
+    assert!(i16.px.iter().all(|p| p[0] <= 1.0));
+    let h = run(" ofmt=3");
+    assert!(h.px.iter().any(|p| p[0] > 1.0), "16-bit float keeps values above 1");
+    assert!(h.px.iter().zip(&f32t.px).all(|(a, b)| (a[0] - b[0]).abs() <= b[0].abs() * 1e-3 + 1e-6));
+    assert!(h.px.iter().zip(&f32t.px).any(|(a, b)| a[0] != b[0]), "half precision rounds");
+}
+
+#[test]
+fn m0_format_versions() {
+    // a file without a format line is version 1 and still loads; we write version 2
+    let old = Graph::parse("size 64\nnode 1 perlin scale=4\noutput o 1\n").unwrap();
+    assert_eq!(old.format, 1);
+    assert!(old.to_text().starts_with("format 2\n"));
+    let again = Graph::parse(&old.to_text()).unwrap();
+    assert_eq!(again.format, 2);
+    // a newer file is refused with a message that says what to do
+    let err = Graph::parse("format 99\nsize 64\nnode 1 perlin\noutput o 1\n").err().unwrap().to_string();
+    assert!(err.contains("format 99") && err.contains("update"), "{err}");
+}
+
+#[test]
+fn m0_live_links_follow_the_file_on_disk() {
+    let dir = std::env::temp_dir().join(format!("mc_links_{}", std::process::id()));
+    std::fs::create_dir_all(dir.join("lib")).unwrap();
+    let lib = |scale: u32| format!("size 64\nnode 1 perlin scale={scale}\noutput o 1\n");
+    std::fs::write(dir.join("lib/pattern.mcg"), lib(4)).unwrap();
+    let main = "size 64\nlink pat \"lib/pattern.mcg\"\nnode 1 subgraph graph=\"pat\"\nnode 2 subgraph graph=\"pat\"\nnode 3 blend bg=@1 fg=@2 opacity=0.5\noutput o 3\n";
+    std::fs::write(dir.join("main.mcg"), main).unwrap();
+    let (mut g, issues) = Graph::load_file(&dir.join("main.mcg")).unwrap();
+    assert!(issues.is_empty(), "{issues:?}");
+    assert!(g.is_linked("pat"));
+    // the linked graph is not written into the file, only the link
+    let text = g.to_text();
+    assert!(text.contains("link pat \"lib/pattern.mcg\"") && !text.contains("subgraph pat"), "{text}");
+    let a = g.evaluate(None).unwrap().remove("o").unwrap();
+    // change the linked file: refreshing picks it up
+    std::fs::write(dir.join("lib/pattern.mcg"), lib(9)).unwrap();
+    assert!(g.resolve_links(&dir).is_empty());
+    let b = g.evaluate(None).unwrap().remove("o").unwrap();
+    assert!(a.px.iter().zip(&b.px).any(|(p, q)| (p[0] - q[0]).abs() > 0.01), "the new scale must show");
+    // a missing file is reported, not fatal, and the name then fails to evaluate with a clear error
+    std::fs::remove_file(dir.join("lib/pattern.mcg")).unwrap();
+    let issues = g.resolve_links(&dir);
+    assert_eq!(issues.len(), 1);
+    assert!(issues[0].contains("pat") && issues[0].contains("cannot read"), "{issues:?}");
+    assert!(!g.is_linked("pat"));
+    assert!(g.evaluate(None).is_err());
+    // a link to a named graph inside a package
+    std::fs::write(dir.join("lib/pkg.mcg"), "size 64\nsubgraph inner\nsize 64\nnode 1 voronoi scale=5\noutput o 1\nend\nnode 1 perlin\noutput o 1\n").unwrap();
+    let g2 = Graph::parse("size 64\nlink v \"lib/pkg.mcg\" \"inner\"\nnode 1 subgraph graph=\"v\"\noutput o 1\n").unwrap();
+    let mut g2 = g2;
+    assert!(g2.resolve_links(&dir).is_empty());
+    assert!(g2.evaluate(None).is_ok());
+    // a graph that does not exist in the package
+    let mut g3 = Graph::parse("size 64\nlink v \"lib/pkg.mcg\" \"nope\"\nnode 1 perlin\noutput o 1\n").unwrap();
+    assert!(g3.resolve_links(&dir)[0].contains("no graph 'nope'"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn m0_remaining_multi_output_nodes() {
+    let g = Graph::parse(concat!(
+        "size 64\n",
+        "node 1 cells scale=4\nnode 2 voronoi scale=5\nnode 3 splatter count=6 scale=0.2 scale_var=0 rot_var=0\n",
+        "node 4 threshold in=@3 threshold=0.3\nnode 5 flood_fill in=@4\n",
+        "node 6 flood_fill_to_index in=@5\nnode 7 flood_fill_to_position in=@5\nnode 8 flood_fill_to_bbox_size in=@5\n",
+        "output cells_id 1.cell_id\noutput cells 1\noutput vor_id 2.cell_id\noutput vor_edge 2.edge\noutput vor 2\n",
+        "output spl 3\noutput spl_id 3.id\noutput spl_c 3.center\noutput spl_s 3.size\n",
+        "output idx 6\noutput pos 7\noutput posx 7.x\noutput bb 8\noutput bbw 8.width\n",
+    ))
+    .unwrap();
+    let r = g.evaluate(None).unwrap();
+    let distinct = |t: &materialcraft::tex::Tex| {
+        let mut v: Vec<u32> = t.px.iter().map(|p| (p[0] * 1000.0) as u32).collect();
+        v.sort();
+        v.dedup();
+        v.len()
+    };
+    assert!(distinct(&r["cells_id"]) >= 8 && distinct(&r["cells"]) > 2);
+    assert!(r["cells_id"].px != r["cells"].px, "the extra output must differ from the main one");
+    assert!(distinct(&r["vor_id"]) >= 8);
+    assert!(r["vor_id"].px != r["vor_edge"].px && r["vor_edge"].px != r["vor"].px);
+    assert!(distinct(&r["spl_id"]) >= 3, "each splat has its own id");
+    assert!(r["spl_c"].px.iter().any(|p| p[0] > 0.0 && p[1] > 0.0 && p[2] == 0.0));
+    assert!(r["spl_s"].px.iter().any(|p| p[0] > 0.1 && p[0] < 0.3), "splat size 0.2 shows up");
+    // flood-fill mappers: one number / centre / extent per region, background stays black
+    assert!(distinct(&r["idx"]) >= 3);
+    let top = r["idx"].px.iter().fold(0.0f32, |m, p| m.max(p[0]));
+    assert!((top - 1.0).abs() < 1e-5, "the last region is index 1");
+    assert!(r["pos"].px.iter().all(|p| p[0] >= 0.0 && p[0] < 1.0 && p[1] >= 0.0 && p[1] < 1.0));
+    let same_region_same_centre = {
+        // pixels sharing one index must share one centre
+        let mut seen: std::collections::HashMap<u32, (u32, u32)> = std::collections::HashMap::new();
+        r["idx"].px.iter().zip(&r["pos"].px).filter(|(i, _)| i[0] > 0.0).all(|(i, p)| {
+            let e = seen.entry((i[0] * 1e5) as u32).or_insert(((p[0] * 1e5) as u32, (p[1] * 1e5) as u32));
+            *e == ((p[0] * 1e5) as u32, (p[1] * 1e5) as u32)
+        })
+    };
+    assert!(same_region_same_centre);
+    assert!(r["bbw"].px.iter().any(|p| p[0] > 0.1 && p[0] < 0.4), "a 0.2-wide splat has a bounding box of that width");
+    assert_eq!(r["posx"].px.len(), 64 * 64);
+    assert!(r["posx"].px.iter().all(|p| p[0] == p[1] && p[1] == p[2]), "named x output is gray");
+    assert!(materialcraft::graph::node_outputs("flood_fill_to_position").contains(&"x"));
+}
+
+#[test]
+fn m0_pin_type_rules() {
+    use materialcraft::graph::{Pin, connection_issues};
+    // images convert freely between gray and colour
+    assert!(Pin::Color.accepts(Pin::Gray) && Pin::Gray.accepts(Pin::Color));
+    // values widen but never narrow, and never mix with images
+    assert!(Pin::Float.accepts(Pin::Int) && Pin::Float3.accepts(Pin::Int3) && Pin::Int.accepts(Pin::Bool));
+    assert!(!Pin::Int.accepts(Pin::Float) && !Pin::Float2.accepts(Pin::Float) && !Pin::Bool.accepts(Pin::Int));
+    assert!(!Pin::Float.accepts(Pin::Gray) && !Pin::Gray.accepts(Pin::Float) && !Pin::Text.accepts(Pin::Float));
+    assert_eq!((Pin::Float3.lanes(), Pin::Int.lanes(), Pin::Gray.lanes(), Pin::Text.lanes()), (3, 1, 0, 0));
+    // every image graph is well typed
+    let g = Graph::parse("size 32\nnode 1 perlin\nnode 2 colorize in=@1\nnode 3 blend bg=@1 fg=@2\noutput o 3\n").unwrap();
+    assert!(connection_issues(&g).is_empty());
+}
+
+#[test]
+fn m0_graph_default_format_and_hdr_safe_filters() {
+    let base = "size 64\nnode 1 gradient mode=0\nnode 2 tint in=@1 r=1.37 g=0.3333 b=0.5\n";
+    let run = |meta: &str, extra: &str| {
+        let g = Graph::parse(&format!("{base}{meta}{extra}output o 2\n")).unwrap();
+        g.evaluate(None).unwrap().remove("o").unwrap()
+    };
+    let float = run("", "");
+    assert!(float.px.iter().any(|p| p[0] > 1.0));
+    // a graph-wide 8-bit default rounds every node
+    let eight = run("meta ofmt \"1\"\n", "");
+    assert!(eight.px.iter().all(|p| p[0] <= 1.0 && ((p[0] * 255.0).round() - p[0] * 255.0).abs() < 1e-3));
+    let g = Graph::parse(&format!("{base}meta ofmt \"1\"\noutput o 2\n")).unwrap();
+    assert_eq!(g.default_format(), 1);
+    // a node can opt back out (4 = force 32-bit float) or pick its own precision
+    let kept = Graph::parse("size 64\nmeta ofmt \"1\"\nnode 1 gradient mode=0 ofmt=4\nnode 2 tint in=@1 r=1.37 g=0.3333 b=0.5 ofmt=4\noutput o 2\n")
+        .unwrap()
+        .evaluate(None)
+        .unwrap()
+        .remove("o")
+        .unwrap();
+    assert!(kept.px.iter().any(|p| p[0] > 1.0));
+    // the default survives a save / load round trip and changes the cache identity
+    let again = Graph::parse(&g.to_text()).unwrap();
+    assert_eq!(again.default_format(), 1);
+    // filters that are linear keep values above 1 (HDR) instead of clamping
+    for k in ["sharpen", "adjust", "hsl"] {
+        let t = Graph::parse(&format!("size 64\nnode 1 gradient mode=0\nnode 2 tint in=@1 r=1.6 g=1.6 b=1.6\nnode 3 {k} in=@2\noutput o 3\n"))
+            .unwrap()
+            .evaluate(None)
+            .unwrap()
+            .remove("o")
+            .unwrap();
+        assert!(t.px.iter().any(|p| p[0] > 1.0), "{k} must not clamp HDR values");
+    }
+}
+
+#[test]
+fn m0_square_cells_follow_the_aspect_ratio() {
+    use materialcraft::noise;
+    let run = |extra: &str| {
+        let g = Graph::parse(&format!("size 64 32\nnode 1 perlin scale=8{extra}\noutput o 1\n")).unwrap();
+        g.evaluate(None).unwrap().remove("o").unwrap()
+    };
+    let stretched = run("");
+    let square = run(" square_cells=1");
+    assert_eq!((square.w, square.h), (64, 32));
+    // default: the same 8 x 8 lattice stretched over the 2:1 image; option: 8 x 4 lattice (square cells)
+    let want = |py: i32, t: &materialcraft::tex::Tex| {
+        t.px.iter().enumerate().all(|(i, p)| {
+            let (x, y) = (i % t.w, i / t.w);
+            (p[0] - noise::perlin((x as f32 + 0.5) / t.w as f32, (y as f32 + 0.5) / t.h as f32, 8, py, 0)).abs() < 1e-5
+        })
+    };
+    assert!(want(8, &stretched));
+    assert!(want(4, &square));
+    // voronoi and cells take the option too (they keep running and differ from the stretched version)
+    for k in ["voronoi", "cells", "fbm"] {
+        let a = Graph::parse(&format!("size 64 32\nnode 1 {k} scale=6\noutput o 1\n")).unwrap().evaluate(None).unwrap().remove("o").unwrap();
+        let b = Graph::parse(&format!("size 64 32\nnode 1 {k} scale=6 square_cells=1\noutput o 1\n")).unwrap().evaluate(None).unwrap().remove("o").unwrap();
+        assert!(a.px != b.px, "{k} must react to square_cells");
+    }
+    // tile nodes derive the vertical count from the horizontal one
+    let a = Graph::parse("size 64 32\nnode 1 tile_generator x_amount=4 y_amount=4\noutput o 1\n").unwrap().evaluate(None).unwrap().remove("o").unwrap();
+    let b = Graph::parse("size 64 32\nnode 1 tile_generator x_amount=4 y_amount=4 square_cells=1\noutput o 1\n")
+        .unwrap()
+        .evaluate(None)
+        .unwrap()
+        .remove("o")
+        .unwrap();
+    assert!(a.px != b.px);
+}
+
+#[test]
+fn m0_dependency_management() {
+    let dir = std::env::temp_dir().join(format!("mc_deps_{}", std::process::id()));
+    std::fs::create_dir_all(dir.join("lib")).unwrap();
+    std::fs::create_dir_all(dir.join("moved")).unwrap();
+    std::fs::write(dir.join("lib/pat.mcg"), "size 64\nnode 1 perlin scale=4\noutput o 1\n").unwrap();
+    let text = "size 64\nlink pat \"lib/pat.mcg\"\nnode 1 subgraph graph=\"pat\"\nnode 2 subgraph graph=\"pat\"\nnode 3 blend bg=@1 fg=@2\noutput o 3\n";
+    let mut g = Graph::parse(text).unwrap();
+    assert!(g.resolve_links(&dir).is_empty());
+    let info = &g.link_info["pat"];
+    assert!(info.found.as_ref().unwrap().ends_with("lib/pat.mcg") && info.issue.is_none());
+    assert_eq!(info.members, vec!["pat".to_string()]);
+
+    // the file moves: reported, then found again through a search folder
+    std::fs::rename(dir.join("lib/pat.mcg"), dir.join("moved/pat.mcg")).unwrap();
+    assert_eq!(g.resolve_links(&dir).len(), 1);
+    assert!(g.link_info["pat"].found.is_none() && g.link_info["pat"].issue.as_ref().unwrap().contains("cannot read"));
+    g.meta.insert("search_paths".into(), "elsewhere; moved".into());
+    assert_eq!(g.search_paths(), vec!["elsewhere".to_string(), "moved".to_string()]);
+    assert!(g.resolve_links(&dir).is_empty(), "found by name in a search folder");
+    assert!(g.link_info["pat"].found.as_ref().unwrap().ends_with("moved/pat.mcg"));
+    assert!(g.evaluate(None).is_ok());
+
+    // relink keeps the name, so both instances follow
+    std::fs::write(dir.join("moved/other.mcg"), "size 64\nnode 1 voronoi scale=3\noutput o 1\n").unwrap();
+    let before = g.evaluate(None).unwrap().remove("o").unwrap();
+    assert!(g.relink("pat", "moved/other.mcg", None));
+    assert!(g.resolve_links(&dir).is_empty());
+    assert!(before.px != g.evaluate(None).unwrap().remove("o").unwrap().px);
+
+    // breaking the link embeds a copy that is saved with the package and no longer follows the file
+    let n = g.break_link("pat").unwrap();
+    assert_eq!(n, 1);
+    assert!(g.links.is_empty() && !g.is_linked("pat") && g.subgraphs.contains_key("pat"));
+    let saved = g.to_text();
+    assert!(!saved.contains("link pat") && saved.contains("subgraph pat"), "{saved}");
+    std::fs::remove_file(dir.join("moved/other.mcg")).unwrap();
+    let mut again = Graph::parse(&saved).unwrap();
+    assert!(again.resolve_links(&dir).is_empty());
+    assert!(again.evaluate(None).is_ok(), "the embedded copy still works without the file");
+
+    // removing a link reports the instances that are left dangling
+    let mut h = Graph::parse("size 64\nlink pat \"moved/none.mcg\"\nnode 1 subgraph graph=\"pat\"\noutput o 1\n").unwrap();
+    let _ = h.resolve_links(&dir);
+    assert!(h.break_link("pat").is_err(), "an unresolved link cannot be embedded");
+    assert_eq!(h.remove_link("pat"), 1);
+    assert!(h.links.is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn m1_curve_node() {
+    use materialcraft::curve::Curve;
+    let c = Curve::parse("0:0,0.5:0.8,1:1").unwrap();
+    assert!((c.eval(0.5) - 0.8).abs() < 1e-5);
+    assert!(c.eval(0.25) > 0.25, "curve bends up");
+    let lut = c.lut();
+    assert!(lut.windows(2).all(|w| w[1] >= w[0] - 1e-6), "monotone points give a monotone curve");
+    assert!(Curve::parse("0:0,abc").is_err());
+    assert!((Curve::identity().eval(0.3) - 0.3).abs() < 1e-5);
+    let g = G2::parse("size 16\nnode 1 gradient\nnode 2 curve in=@1 points=\"0:1,1:0\"\nnode 3 invert in=@1\noutput a 2\noutput b 3\n").unwrap();
+    let o = g.evaluate(Some(16)).unwrap();
+    for (x, y) in o["a"].px.iter().zip(&o["b"].px) {
+        assert!((x[0] - y[0]).abs() < 2e-3, "reversed curve equals invert");
+    }
+}
+
+#[test]
+fn m1_channel_shuffle_and_bitmap_options() {
+    let g = G2::parse("size 8\nnode 1 color r=0.2 g=0.4 b=0.6\nnode 2 channel_shuffle in=@1 src_r=2 src_g=8 src_b=9 inv_a=1\noutput o 2\n").unwrap();
+    let p = g.evaluate(Some(8)).unwrap()["o"].px[0];
+    assert!((p[0] - 0.6).abs() < 1e-5 && p[1] == 0.0 && p[2] == 1.0 && p[3] == 0.0, "{p:?}");
+}
+
+#[cfg(any(feature = "cms", feature = "craft"))]
+#[test]
+fn colorspace_conversion_roundtrips_and_keeps_alpha() {
+    use materialcraft::{colorspace, tex::Tex};
+    let t = Tex::solid(4, 4, [0.5, 0.25, 0.75, 0.6]);
+    // sRGB means no conversion
+    assert_eq!(colorspace::convert(&t, "srgb").unwrap().px[0], t.px[0]);
+    // mid grey in sRGB is about 0.214 in linear light
+    let lin = colorspace::convert(&Tex::solid(2, 2, [0.5, 0.5, 0.5, 1.0]), "linear").unwrap();
+    assert!((lin.px[0][0] - 0.214).abs() < 0.01, "{:?}", lin.px[0]);
+    // alpha is untouched, wider spaces change colours
+    let p3 = colorspace::convert(&t, "p3").unwrap();
+    assert!((p3.px[0][3] - 0.6).abs() < 1e-6);
+    assert!(p3.px[0][0] != t.px[0][0] || p3.px[0][1] != t.px[0][1]);
+    assert!(colorspace::convert(&t, "nope").is_err());
+    assert!(colorspace::is_color_output("basecolor") && !colorspace::is_color_output("normal"));
 }

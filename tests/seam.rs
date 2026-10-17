@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 use materialcraft::graph::{Graph, SPECS, demo_graph_for};
 use materialcraft::tex::Tex;
 
@@ -313,4 +314,52 @@ fn filters_commute_with_wrapped_shifts() {
         eprintln!("{b}");
     }
     assert!(bad.is_empty(), "{} filter(s) do not wrap at the borders", bad.len());
+}
+
+/// Non-square graphs: every node's demo graph evaluated at 2:1 and 1:2 must return textures of exactly that shape, and
+/// the result must still tile on both axes.
+#[test]
+fn every_node_is_seamless_when_not_square() {
+    let mut bad = Vec::new();
+    for (wide, name) in [(true, "2:1"), (false, "1:2")] {
+        for sp in SPECS {
+            let Some(text) = demo_graph_for(sp.kind) else { continue };
+            let mut g = Graph::parse(&text).unwrap();
+            let s = g.size;
+            g.height = if wide { s / 2 } else { s * 2 };
+            let size = seam_size();
+            let h = if wide { size / 2 } else { size * 2 };
+            let out = match g.evaluate(Some(size)) {
+                Ok(o) => o,
+                Err(e) => {
+                    bad.push(format!("{} {name}: error {e}", sp.kind));
+                    continue;
+                }
+            };
+            let t = &out["o"];
+            if t.w != size || t.h != h {
+                bad.push(format!("{:<22} {name}: got {}x{}, want {size}x{h}", sp.kind, t.w, t.h));
+                continue;
+            }
+            let (sm, inner) = seam(t);
+            if sm > inner * 1.5 + 0.01 {
+                bad.push(format!("{:<22} {name}: seam {sm:.4} inner {inner:.4}", sp.kind));
+            }
+        }
+    }
+    for b in &bad {
+        eprintln!("{b}");
+    }
+    assert!(bad.is_empty(), "{} non-square problem(s)", bad.len());
+}
+
+#[test]
+fn non_square_size_round_trips_through_the_file_format() {
+    let g = Graph::parse("size 512 256\nnode 1 perlin scale=4\noutput o 1\n").unwrap();
+    assert_eq!((g.size, g.height), (512, 256));
+    assert!(g.to_text().contains("\nsize 512 256\n"));
+    let sq = Graph::parse("size 512\nnode 1 perlin scale=4\noutput o 1\n").unwrap();
+    assert!(sq.to_text().contains("\nsize 512\n"));
+    let t = &g.evaluate(Some(128)).unwrap()["o"];
+    assert_eq!((t.w, t.h), (128, 64));
 }

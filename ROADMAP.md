@@ -6,7 +6,7 @@ Status note: everything has been built and tested on Linux only (CI for Windows,
 
 ---
 
-## 1. Implemented (124 node types)
+## 1. Implemented (129 node types)
 
 ### Generators: noise
 - White Noise
@@ -81,7 +81,9 @@ Status note: everything has been built and tested on Linux only (CI for Windows,
 - Subgraph creation and editing, multiple graphs, exposed parameters
 - Per-node property panels with color wheel and gradient editor
 - Home screen with recent files, New Graph dialog, node library with thumbnails
-- Resizable 2D and 3D views
+- Dockable panels (shared `craft-ui` docking): drag a tab to another group, to a side or out into a floating panel; Windows > Reset layout; the layout is remembered between runs; the graph canvas stays fixed
+- Settings in `config.toml` (shared `craft-settings`): atomic saves, backup file, damaged files moved aside; old `settings.txt` / `recent.txt` are imported on first run
+- Forced dark theme (does not follow the operating system's light theme)
 
 ### 3D viewport (GPU, OpenGL 3.3 via egui_glow)
 - 13 preview objects: Cube, Cylinder, Hollow box, Inner box (seen from inside), Plane, Plane (hi-res), Sphere, Cloth, Mat ball, Rounded cube, Rounded cylinder, Sphere 2 tiles, Torus (mesh resolution up to 768 x 768; all closed shapes stay crack-free when displaced)
@@ -93,7 +95,9 @@ Status note: everything has been built and tested on Linux only (CI for Windows,
 - Headless test: `cargo run --release --features gui --example gpu_shot -- out.png [shape] [relief] [w h] [nomsaa] [wire]`
 
 ### Export, files and tools
-- Export to PNG, JPEG, TIFF at 8 or 16 bit
+- Export to PNG, JPEG, TIFF at 8 or 16 bit, EXR, HDR
+- Crash-safe writes for graphs, packages and exports (`craft-atomic`: staged file, flush, atomic replace)
+- Output colour space on export for colour maps: sRGB, P3, wide-gamut RGB, ROMM RGB, Rec. 2020, linear sRGB (`craft-cms` ICC engine); CLI `--colorspace`
 - Several resolutions at once (256 to 8192 px) and per-output selection
 - `.mcg` editable graphs, `.mca` published packages with exposed parameters
 - Mesh baking from OBJ (BVH): normal, world normal, AO, curvature, thickness, position, ID
@@ -103,37 +107,40 @@ Status note: everything has been built and tested on Linux only (CI for Windows,
 - Graph size 128 to 8192 px; the editor previews at the graph's own size (2048 px by default for a 2K graph, capped at 4096 for the preview), shows a quick 256 px pass first and refines in the background. All parameters are resolution independent (checked by a test)
 - Every node tiles seamlessly: centred shapes and gradients wrap around the tile border, checker/weave use even counts, flood fill regions that cross the border keep one continuous gradient, Transform 2D cross-fades only when the matrix cannot tile by itself. `tests/seam.rs` renders every node and 100+ parameter variants and fails on any visible seam
 - Anti-aliased hard edges (shapes, checker, bricks), bicubic resampling in Transform/Warp, Scharr-filter normals, fast gaussian blur (cost independent of radius, multi-threaded), 4096-entry gradient table for noise, rotated fractal octaves (no visible grid), spots as a union of discs (no cell-edge cuts)
-- 2D view shows true texels like Designer: crisp squares when zoomed in, mip-mapped when zoomed out. The shipped example graph is 2048 px. Maps above 4096 px are box-averaged (not point-sampled) when they go to the 3D viewport
-- Per-node Output Size like Designer: every node has Relative to Input (default), Relative to Parent or Absolute (16-8192 px), plus a -12..+12 power-of-two modifier. Inputs of another size are resampled automatically, so heavy nodes (AO, blurs, noises) can run at half or quarter resolution. Nodes with their own size show it under the card
-- Node result cache (Designer-style): the editor keeps every node's result between evaluations, found by a hash of its settings, the evaluation size and the hashes of its inputs. An edit recomputes only the edited node and what is downstream of it; thumbnails and unchanged outputs come straight from the cache. Least-recently-used entries are dropped above a memory budget (3 GB, set `MC_CACHE_MB` to change), and grayscale results are stored with one channel. On the 2048 brick example (2 cores) editing the normal strength went from about 4.5 s to about 0.35 s; `cargo run --release --example cache_bench -- graph.mcg 2048 <node> <param> <v1> <v2>` measures it
+- 2D view shows true texels: crisp squares when zoomed in, mip-mapped when zoomed out. The shipped example graph is 2048 px. Maps above 4096 px are box-averaged (not point-sampled) when they go to the 3D viewport
+- Per-node Output Size: every node has Relative to Input (default), Relative to Parent or Absolute (16-8192 px), plus a -12..+12 power-of-two modifier. Inputs of another size are resampled automatically, so heavy nodes (AO, blurs, noises) can run at half or quarter resolution. Nodes with their own size show it under the card
+- Node result cache: the editor keeps every node's result between evaluations, found by a hash of its settings, the evaluation size and the hashes of its inputs. An edit recomputes only the edited node and what is downstream of it; thumbnails and unchanged outputs come straight from the cache. Least-recently-used entries are dropped above a memory budget (3 GB, set `MC_CACHE_MB` to change), and grayscale results are stored with one channel. On the 2048 brick example (2 cores) editing the normal strength went from about 4.5 s to about 0.35 s; `cargo run --release --example cache_bench -- graph.mcg 2048 <node> <param> <v1> <v2>` measures it
 - The node shown in the 2D view is evaluated first and put on screen as soon as it is done, before the outputs, the 3D maps and the other thumbnails
 - Faster kernels (cold run of the 2048 brick example: 3.9 s to about 1.4 s on 2 cores): Fractal Noise builds its gradient lattices once (about 1.8x faster, identical values); grayscale blurs run on one channel and the vertical pass needs no transpose (Ambient Occlusion about 4x faster); Normal From Height, Levels and Blend run on all cores (Normal about 6x, Levels about 4x faster); Slope Blur uses grayscale planes; Directional Noise samples the streak less densely (2x faster, mean difference below 0.01); bilinear and bicubic sampling skip the wrap arithmetic inside the image; the editor shares the kept output textures instead of copying them
 - Responsive previews: editing cancels the running evaluation (it stops within a few rows, even inside a heavy node) and starts the new one immediately; previews are progressive (256, 512, 1024 ... up to the preview size) so a change shows in a fraction of a second; the 2D image and GPU textures are prepared on the worker thread, so the editor never stalls; switching or entering a graph clears the old previews at once
 - Memory: intermediate textures are freed as soon as every node that reads them has finished, so large graphs at 4K fit
 
 ### Quality checks
-- 60 automated tests, including: a wrap-around check that rolls the input of 30 filters and requires the output to roll identically (proves every filter wraps at the borders), seam checks on every node, every node at four resolutions (finite, sane range, not blank), every documented parameter fuzzed with extreme values (no panics/NaN), and whole-graph import and per-output links
+- 69 automated tests, including: a wrap-around check that rolls the input of 30 filters and requires the output to roll identically (proves every filter wraps at the borders), seam checks on every node, every node at four resolutions (finite, sane range, not blank), every documented parameter fuzzed with extreme values (no panics/NaN), and whole-graph import and per-output links
 - `cargo run --release --example node_sheet -- out_dir` renders a PNG for every node type for visual review
 
 ---
 
 ## 2. Not implemented yet
 
+The full plan (milestones, settings, order, risks) is in `RELEASE_PLAN.md`.
+
 ### Graph logic
 - [ ] Package context menu: Rename, Save As, Duplicate, Reveal in file explorer, Delete; graph context menu: Rename, Duplicate, Delete, Close Graph
 - [ ] Several graph tabs open at once (one graph is shown at a time today)
 - [ ] Imported graphs are embedded copies; no live link or "update from source" when the package file changes
 - [ ] Size/format caption (e.g. 2048x2048 - C8) on graph nodes
-- [ ] Function graphs (variables, math, conditionals, function node family)
-- [ ] FX-Map (recursive, rule-based pattern generation)
-- [ ] Pin node, Input Value node
-- [ ] Non-square graphs
-- [ ] Graph instances and dependency management between packages
+- [x] Function graphs: about 85 `f_*` value nodes (variables, math, vectors, comparisons, logic, if / sequence, random, image sampling and statistics, inputs, casts, calls), a type checker, function-driven parameters (`fn.<param>`), pixel processor and value processor driven by a function
+- [x] Pattern programs (our FX-Map): `fx_map` node running a graph of quadrant / iterate / switch / marker nodes with random seeds, depth limit, blend modes and tileable output
+- [x] Pin (`f_pin`) and Input Value (`input_value`) nodes
+- [x] Curve node (per-channel tone curves) with an interactive editor
+- [x] Non-square graphs (width/height, `size W H`, tests), New Graph dialog with separate sizes, per-node `square_cells` (keeps cells square)
+- [x] Live-linked packages, instances through shared links, format versioning, package tab bar, per-graph tabs, link picker for multi-graph packages, dependency manager (relink, embed copy, remove, search folders)
 - [ ] Graph templates, parameter presets, randomized variations
 
 ### Nodes
 - [ ] Spline and path tools (shapes along curves, tracks, seams, borders)
-- [ ] More of Designer's several hundred nodes, for example:
+- [ ] Several hundred more nodes, for example:
   - more weaves and tile patterns
   - Non-Uniform Blur
   - Multi-Directional Warp
@@ -154,14 +161,15 @@ Status note: everything has been built and tested on Linux only (CI for Windows,
 - [ ] Camera and light presets, turntable rendering
 
 ### Import and color
-- [ ] SVG import, font import, text nodes
+- [x] SVG import (own rasteriser: shapes, paths, transforms, solid fill and stroke), TrueType font import and text nodes (own reader and a built-in face). Not supported: SVG gradients / clipping / filters, CFF (.otf) fonts, kerning and complex-script shaping
 - [ ] Bitmap import for JPEG, TIFF, EXR (only PNG today)
 - [ ] AxF material import
-- [ ] OCIO and Adobe Color Engine color management (sRGB only today)
-- [ ] Linear/HDR 32-bit float output and EXR export
+- [x] ICC-based output colour spaces for colour maps on export (built-in profiles, `craft-cms`)
+- [ ] OCIO config support, per-bitmap input colour space, ICC profile import, colour-managed 2D / 3D views
+- [x] 32-bit float output: EXR, HDR and float TIFF export (graph clamps still to be reviewed)
 
 ### Publishing and automation
-- [ ] `.sbs` / `.sbsar` compatibility and Unreal / Unity plugins
+- [ ] Unreal / Unity plugins and a small runtime for published packages
 - [ ] Scripting API and batch automation
 - [ ] Engine-specific output templates (Unreal ORM packing and similar)
 - [ ] Texture atlases for the shape/splatter workflow
@@ -177,85 +185,76 @@ Status note: everything has been built and tested on Linux only (CI for Windows,
 
 ---
 
-## 2b. Designer feature gap (checked against Adobe's node library and release notes, Oct 2026)
+## 2b. Feature gaps by area
 
-We have 124 node types; Designer's library has roughly 500. Missing, by area:
+We have 129 node types. Missing, by area (described by function; `NODES.md` lists what exists):
 
-**Property parity:** `NODES.md` lists, for each of our 122 nodes, the properties Designer documents, what our Properties panel has and what is missing. Done so far: the cheap one-property gaps (Phase 1) the shared noise block (Disorder speed / anisotropy, Tile offset; Phase 2) and the Tile Sampler / Tile Generator / Splatter / Splatter Circular rebuilds (Phase 3: built-in patterns, six inputs, offsets, masks, blending, map inputs, rings) and the four nodes that behaved differently (Phase 4: Radial Blur spin, Edge Detect lines, Mosaic map, Curvature from normal maps) and Voronoi / Voronoi Fractal / Cells / Grunge properties (Phase 5) and Triangle Grid mesh style plus the new Weave Generator (Phase 6) and the Grunge Map family (Phase 6b) and Phase 7 (crack look, Gradient Map addressing/alpha, Color Match colour swap) and Phase 8 (horizon AO with world units, Quantize Color), see its status section. Still open: the other large rebuilds (Grunge Map 001-015 images, Triangle Grid, Gradient Map editor, Color Match, Quantize Color, RTAO / world-unit AO), and the properties that need engine features (multi-output nodes, extra image inputs, function graphs, baked mesh inputs).
+**Property coverage.** Done so far: the shared noise block (disorder, disorder speed, anisotropy, tile offset), rebuilt scatter nodes (built-in patterns, six inputs, offsets, masks, blending, map inputs, rings), radial blur, edge detect, mosaic and curvature, Voronoi / Cells / Grunge properties, a jittered triangle mesh style, the weave generator, the 15 grunge maps, gradient-map addressing and alpha, colour swapping, horizon AO with world units, colour quantising, multi-output nodes (including Voronoi, Cells, Splatter and the Flood Fill mappers), float export, graph-wide node precision, non-square graphs, typed pins and value pin types, per-node output format, live links, optional GPU compute. Still open: some node properties that need engine features (extra image inputs, function graphs, baked mesh inputs).
 
 ### Noises and generators
-- (done in batch 1: Cells, Fractal Sum, Waveform, Gaussian Spots) Fur 1-3, Fluid, Liquid, Caustics, Moisture Noise, Messy Fibers 1-3, Microscope View, Anisotropic Noise, Blue Noise, Voronoi Fractal, Clouds 2-3, Directional Noise 2-4, Directional Scratches, Dirt 1-5, Dirt Gradient, White Noise Fast
-- 3D noises: 3D Perlin, Perlin Fractal, Ridged Fractal, Simplex, Voronoi, Voronoi Fractal, Worley
-- Grunge: Grunge Map 001-015 and the named grunges (Concrete, Damas, Galvanic, Leaks, Leaky Paint, Rough Dirty, Rust Fine, Scratches x3, Shavings, Splashes Dusty, Spots Dirty); we only have one 4-variant Grunge node
+- Fur-like, fibre-like, fluid-like, liquid, caustic, moisture, microscope-style, anisotropic and blue noise; more cloud and directional-noise variants; dirt gradients; more grunge recipes
+- 3D noises: perlin, fractal perlin, ridged, simplex, voronoi, worley
 
 ### Patterns and shapes
-- Alveolus, Arc Pavement, Brick 2, Brick Generator, Checker 2, Fibers 1-2, Gaussian 1-2, Gradient Linear 1-3, Height Extrude, Mesh 1-2, Panorama Shape, Polygon 2, Scratches Generator, Shape Extrude, Shape Mapper, Tile Random 1-2, Weave 2, Weave Generator
-- Shape Splatter family: Shape Splatter, Splatter Blend, Splatter Data Extract, Splatter to Mask
-- 3D Linear Gradient, 3D Volume Mask, Cube 3D (and GBuffers)
+- Pavement and mesh patterns, more brick and checker variants, fibres, gaussian and gradient variants, scratch generators, extruded and mapped shapes, panorama shapes, random tile patterns
+- Shape splatter with blending, data extraction and mask output
+- 3D gradients and volume masks
 
 ### Adjustments, blending, blurs, channels
-- (done in batch 1: Auto Levels, Channel Mixer, Color to Mask, Grayscale Conversion, Histogram Shift, Pow, Replace Color) Contrast/Luminosity, Convert to Linear / sRGB, Hald CLUT, HDR Range Viewer, Height Map Frequencies Mapper, Histogram Scan Non-Uniform, Histogram Select, Lighting Cancel High/Low Frequencies, Luminance Highpass, Min Max
-- Blend modes: Multi Switch (we have 20 modes incl. Color Dodge/Burn, Linear Burn/Light, Hard Light, Exclusion, Divide, Color, Luminosity, Dissolve)
-- Blurs: Anisotropic, Non Uniform and Radial Blur are done (batch 1)
-- Channels: Alpha Merge done; RGBA Split, Alpha Split (need multi-output nodes), Pre-multiplied <-> Straight
+- Contrast / luminosity, linear and sRGB conversion, colour lookup tables, HDR range viewer, frequency mapping, non-uniform and selecting histogram tools, lighting-cancel filters, luminance highpass, min / max
+- A multi-way switch; pre-multiplied <-> straight alpha conversion
 
 ### Effects and warps
-- Cross Section, Curvature Sobel, Diffusion (Color, Grayscale, UV), Emboss With Gloss, Uber Emboss, Extend Shape, FXAA, Reaction Diffusion, Summed Area Table, Vector Morph
-- Nearest sampling option in warps (Multi and Non Uniform Directional Warp are done)
-- Shadows (Glow, Mosaic, Shape Drop Shadow, Shape Glow and Shape Stroke are done)
-- Flood Fill family: Flood Fill Mapper, to BBox Size, to Index, to Position
-- Ray-traced nodes: AO (RTAO), Shadows, Irradiance, Bent Normal; HBAO as a separate AO node; 3D texture nodes (Position, SDF, Surface/Volume Render, Offset)
+- Cross sections, curvature via Sobel, diffusion (colour, grayscale, UV), gloss-aware embossing, extend shape, FXAA, reaction diffusion, summed area tables, vector morph
+- Nearest sampling in warps
+- Flood-fill mapping outputs (bounding box size, index, position)
+- Ray-traced nodes: AO, shadows, irradiance, bent normal; 3D texture nodes
 
 ### Normal map tools
-- Bent Normal, Facing Normal, Height Normal Blender, Height to Normal (World Units), Normal Sobel, Normal Transform (done: Normal Invert, Normalize, Vector Rotation, Normal to Height via FFT, Sobel)
+- Bent and facing normals, height-normal blending, world-unit height to normal, normal sobel and transform
 
 ### Transforms
-- Auto Crop, Cartesian <-> Polar, Clone, Noise Upscale 1-3, Safe Transform, Non-Square Transform, Non-Uniform Rotation, Symmetry Slice (Skew and Symmetry are done), Trapezoid Transform, Quad Transform
+- Auto crop, polar conversion, clone, noise upscaling, safe transform, non-square transform, non-uniform rotation, symmetry slice, trapezoid and quad transforms
 
 ### Material filters
-- Material blending: Material Blend, Color Blend, Adjustment Blend, Switch, Multi-Material Blend, Material Height Blend, Material Transform
-- Effects: Snow Cover, Season Filter, Water Level
-- PBR utilities: BaseColor/Metallic/Roughness converter, PBR validators (albedo safe color, BaseColor/Metallic validate), Dielectric F0, Metal Reflectance, PBR Render
-- Scan processing: AO Cancellation, Atlas Scatter / Splitter, Clone Patch, Color Equalizer, Crop, Multi-Angle to Albedo/Normal, Smart Auto Tile
-- 1-click Bitmap to Material
+- Material blending (colour, adjustment, height, multi-material), snow / season / water effects
+- PBR utilities: workflow converters, validators, dielectric and metal reflectance, PBR preview
+- Scan processing: AO cancellation, atlas tools, patch cloning, colour equalising, cropping, multi-angle capture to albedo / normal, smart auto tiling
+- One-click bitmap to material
 
 ### Mesh-based generators (driven by baked mesh maps)
-- Mask generators: Bottom to Top, Cloth Wear, Dirt, Dripping Rust, Dust, Edge Blur, Edge Damages, Edge Dirt, Edge Notch, Edge Select, Edge Speckle, Edge Wear, Fiber Glass Edge Wear, Grease, Ground Dirt, Leaks, Leather Wear, Light, Mask Builder, Metal Edge Wear, Paint Wear, Selective Dirt, Sun Bleach, Surface Brush
-- Weathering: Cracks, Fabric, Leather, Metal, Moss, Rock, Rust
-- Utilities: Tri-Planar, 3D Planar Projection, Mesh Data Combiner, Material Selector
-- Our Dirt / Dust / Edge Wear nodes work from a height map only, and baked maps are not yet usable as graph inputs
+- Wear, dirt, dust, edge damage, leaks, grease, bleaching, brush and similar masks; weathering looks (cracks, fabric, leather, metal, moss, rock, rust)
+- Utilities: tri-planar and planar projection, mesh data combining, material selection
+- Our Dirt / Dust / Edge Wear nodes work from a height map only; baked maps are not yet usable as graph inputs
 
-### Splines and paths (Designer 13)
-- Create: Spline Cubic, Poly Quadratic, Circle, Point List, Spline Bridge; Assemble: Merge List, Append, Select; Modify: 2D Transform, Warp, Sample Thickness, Sample Height
-- Render: Scatter on Spline, Spline Fill, Spline Mapper, Bridge Mapper, Flow Mapper, UV Mapper, Spline Render
-- Paths: Mask to Paths, Paths to Splines, Path 2D Transform, Paths Warp, Paths Polygon, Paths Select, Preview Paths, Vertex Processor, Quad Transform on Path
+### Splines and paths
+- Create (cubic, quadratic, circle, point list, bridge), assemble (merge, append, select), modify (transform, warp, sample thickness / height)
+- Render (scatter on spline, fill, mappers, render), path tools (mask to paths, paths to splines, transform, warp, polygon, select, preview, vertex processing)
 
 ### Graph system
-- Function graphs: variables, math, vector, conditionals, loops, Get/Set nodes, sampler nodes with border modes, function-driven parameters
-- FX-Map: Quadrant, Iterate and Switch nodes, rule-based recursion (and the Hemisphere morphlet)
-- Pixel Processor driven by function graphs (ours uses an expression language)
-- Portal node, Pin node, Input Value nodes, non-square graphs, graph instances and dependency management, parameter presets, randomized variations, graph templates
-- Tiling modes (none / horizontal only / vertical only) and 16f / 32f float output formats (we have 8 and 16-bit integer)
+- Function graph extras: loops, sampler border modes, bitwise operators
+- Portal nodes, parameter presets, randomized variations, graph templates
+- Tiling modes (none / horizontal / vertical)
 
 ### 3D view and rendering
-- HDRI / image-based lighting and the HDRI tool nodes (Blackbody, Exposure, HDR Merge, Physical Sun/Sky, area lights, Panorama tools)
+- HDRI / image-based lighting and HDRI tool nodes (blackbody, exposure, HDR merge, physical sun / sky, area lights, panorama tools)
 - Path-traced renderer, post-processing (bloom, DOF, SSAO, tone-mapping choices), camera and light presets, turntable
 - Custom mesh and 3D scene loading, several meshes at once
 
-### Import, export, color, automation
-- SVG, font and text nodes; JPEG, TIFF, EXR, HDR bitmap import; AxF import
-- OCIO / Adobe Color Engine color management; EXR export
-- `.sbs` / `.sbsar` compatibility, Substance Source / Assets library, Python scripting API and batch automation, engine output templates (Unreal / Unity packing), UDIM, texture atlases
+### Import, export, colour, automation
+- JPEG, TIFF, EXR, HDR bitmap import; SVG gradients; OpenType (CFF) fonts
+- OCIO and ICC colour management
+- Scripting API and batch automation, engine output templates (Unreal / Unity packing), UDIM, texture atlases, a built-in asset library
 - Editor extras: dependency / resource manager, user library folders, navigator minimap, customizable shortcuts, language packs
 
 ### Engine
-- Designer's engine cooks on the GPU; ours is multi-threaded CPU. Biggest long-term speed gap
+- Evaluation is multi-threaded CPU, with an optional GPU compute path (`--features gpu`, Tools > GPU acceleration) for Perlin / fractal noise, blur, directional blur, levels, blend and normal-from-height at 512 x 512 and up; results match the CPU within rounding (tests/gpu.rs). Each GPU node still reads its result back, so the next steps (Milestone 10) are more kernels and keeping chains resident on the GPU. Not yet checked on real GPUs
 
 ---
 
 ## 3. Suggested order
 
-1. Function graphs + FX-Map (unlocks the most missing nodes)
+1. Function graphs + pattern programs (done, Milestone 1); next the node library by area (Milestone 2), which they unlock
 2. Spline / path tools
 3. HDRI image-based lighting and custom mesh loading
 4. More nodes and a built-in material library

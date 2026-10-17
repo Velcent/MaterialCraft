@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Seeded, tileable procedural noise.
 use std::f32::consts::TAU;
 
@@ -309,7 +310,7 @@ impl GradGrid {
     }
 }
 
-/// Designer's shared "Disorder" block of the noise nodes: the sampling position is displaced by a smooth, tileable random
+/// The shared "Disorder" block of the noise nodes: the sampling position is displaced by a smooth, tileable random
 /// field. `disorder` is the amount, `speed` the distance it moves per unit of disorder, `aniso` (0..1) narrows the displacement
 /// to one direction and `angle_turns` sets that direction.
 #[derive(Clone, Copy)]
@@ -342,7 +343,7 @@ impl Disorder {
     }
 }
 
-/// Seed of another tile of the infinite noise plane (Designer's Tile offset, integer part).
+/// Seed of another tile of the infinite noise plane (Tile offset, integer part).
 pub fn tile_seed(seed: u32, tx: i32, ty: i32) -> u32 {
     hash2(tx, ty, seed.wrapping_add(0x7157))
 }
@@ -411,7 +412,7 @@ pub fn voronoi_gen(u: f32, v: f32, px: i32, py: i32, seed: u32, id_seed: u32, ji
     r
 }
 
-/// Voronoi "Style" (Designer): 0 F1, 1 random colour, 2 edge, 3 F2, 4 F2-F1, 5 F1*F2, 6 F1/F2.
+/// Voronoi "Style": 0 F1, 1 random colour, 2 edge, 3 F2, 4 F2-F1, 5 F1*F2, 6 F1/F2.
 /// `thick` is the edge thickness, `round` rounds the edge profile (0 = linear).
 pub fn voronoi_style(r: &Vor, style: u32, thick: f32, round: f32) -> f32 {
     match style {

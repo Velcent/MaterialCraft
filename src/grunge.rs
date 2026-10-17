@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Our own grunge map family (fifteen procedural looks: specks, drips, blotches, scratches, crazing, cracks).
 //! Each recipe builds a tileable "dirt" field from our noise primitives; `GrungeP` then thresholds it with balance /
-//! contrast like a grunge map. The looks were modelled by eye on Designer's grunge maps; no Adobe data is used.
+//! contrast like a grunge map. The recipes are our own procedural designs.
 use crate::noise;
 
 #[derive(Clone, Copy)]

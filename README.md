@@ -15,6 +15,7 @@ Procedural, node-based material authoring in pure Rust (Windows / Linux / macOS)
 ## Build & run
     cargo run --release -p materialcraft-editor                     # visual editor (binary materialcraft-gui)
     cargo run --release -- render examples/brick.mcg out --size 1024 --render3d   # CLI
+    cargo run --release --features gpu -- render examples/brick.mcg out --size 2048   # CLI with GPU compute (falls back to the CPU automatically)
 
 Requires a current stable Rust toolchain (https://rustup.rs). On Windows the MSVC build tools are needed.
 The core library has zero dependencies; the editor uses egui/eframe + rfd (native file dialogs).
@@ -35,21 +36,34 @@ F = frame all · Alt/Space/Middle-drag = pan · wheel = zoom.
 
 ## Platforms
 Windows, Linux and macOS use the same code: `eframe` (glow / OpenGL 3.3 core) for the window and the 3D viewport, `rfd` for
-file dialogs, and only the Rust standard library elsewhere (no platform-specific code besides where the settings folder is:
-`%APPDATA%`, `~/.config` or `~/Library/Application Support`). GitHub Actions (`.github/workflows/ci.yml`) builds and tests all three.
+file dialogs, plus the shared Craft libraries (`craft-ui` docking, `craft-settings`, `craft-atomic`, `craft-cms`, `craft-quit`, from
+https://github.com/storytold/craft-libs, MIT OR Apache-2.0). The core library and the command-line tool still use only the Rust standard
+library unless built with `--features cms` or `--features gui`. Settings live in `config.toml` under `%APPDATA%\materialcraft`, `~/.config/materialcraft` or
+`~/Library/Application Support/materialcraft`. Building needs Rust 1.95 or newer. GitHub Actions (`.github/workflows/ci.yml`) builds and tests all three.
 Linux needs the usual X11/Wayland/GL development packages (`libxkbcommon-dev libwayland-dev libx11-dev libgl1-mesa-dev`).
 
+## Licence
+Dual licensed under [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. See [NOTICE](NOTICE),
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) and [INDEPENDENT_IMPLEMENTATION.md](INDEPENDENT_IMPLEMENTATION.md)
+(how we keep the code original). MaterialCraft is not affiliated with any other software vendor.
+
+## Graph language
+Besides texture graphs, a package can hold **function graphs** (`meta kind "function"`, about 85 value nodes: math, vectors,
+logic, variables, random, image sampling, calls) and **pattern programs** (`meta kind "fxmap"`: quadrant, iterate, switch and
+marker nodes, run by the Pattern Program Map node). Any parameter can be driven by a function, and the pixel processor and
+value processor run function graphs. Also: curve node, SVG and text nodes (own rasteriser and TrueType reader).
+
 ## Not implemented (honest list)
-FX-Maps, splines/paths, function graphs, SVG/font/AxF import, OCIO/ACE colour management, scripting API,
-EXR / HDR output, path-traced 3D rendering, custom mesh import in the 3D viewer, third-party file-format compatibility.
+Splines/paths, AxF import, OCIO/ACE colour management, scripting API, SVG gradients, OpenType (CFF) fonts,
+path-traced 3D rendering and custom mesh import in the 3D viewer.
 See ROADMAP.md for the complete list.
 
 
-## Nodes (124)
+## Nodes (136 texture nodes, 84 function nodes, 5 pattern-program nodes)
 Generators: shape, tile sampler, tile generator, splatter, splatter circular, perlin, fractal noise, clouds, gaussian noise,
 BnW spots, crystal, directional noise, grunge, grunge maps, plasma, voronoi, voronoi fractal, stripes, weave, weave generator, bricks, checker, gradients, star, SDF shapes.
 Filters: blend, RGBA merge, switch, flood fill (+ random grayscale / color / gradient), transform 2D, directional / vector /
 slope warps, blur and blur HQ, levels, histogram scan / range, bevel, distance, gradient map, uniform color, HSL, color match,
 make-it-tile photo / patch and more. Material: normal, ambient occlusion, curvature (smooth), height blend, edge wear, dirt, dust.
-Graph items: output (drives the 3D view), input color / grayscale (subgraphs), subgraph instances, bitmap, comment, frame, dot.
+Structure: output (drives the 3D view), input color / grayscale (subgraphs), subgraph instances, bitmap, SVG, text, curve, pattern program map, pixel / value processor, input value, comment, frame, dot.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 use materialcraft::{export, tex::Tex};
 fn main() {
     let (w, h) = (130usize, 90usize);

@@ -12,10 +12,14 @@ mod compression;
 mod decode;
 mod encode;
 mod header;
+// Main's dependency-free Tex writers (uncompressed EXR and Radiance HDR) used by export; merged in from main
+// unchanged and re-exported so `exr::encode_exr` etc. keep their paths.
+mod tex_writers;
 
 pub use compression::Compression;
 pub use decode::decode;
 pub use encode::{encode, encode_with};
+pub use tex_writers::{encode_exr, encode_hdr, f32_to_half, half_to_f32};
 
 /// Stored sample type of a channel. Samples are handled as f32: HALF values convert exactly both ways after the
 /// first rounding, UINT values are exact up to 2^24.

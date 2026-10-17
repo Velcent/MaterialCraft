@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Tiny vec3 helpers on [f32; 3].
 pub type V = [f32; 3];
 pub fn add(a: V, b: V) -> V {

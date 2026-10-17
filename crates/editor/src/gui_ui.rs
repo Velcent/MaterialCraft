@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 // ======================================================================= UI (included into gui.rs)
 
 struct NodeSnap {
@@ -114,14 +115,18 @@ impl App {
             let col = COMMENT_COLORS[c.color as usize % COMMENT_COLORS.len()];
             let base = Color32::from_rgb(col[0], col[1], col[2]);
             let selected = self.sel_comment == Some(ci);
-            painter.rect_filled(r, 4.0 * z, base.gamma_multiply(0.16));
+            painter.rect_filled(r, egui::CornerRadius::same((4.0 * z) as u8), base.gamma_multiply(0.16));
             let title = Rect::from_min_size(r.min, vec2(r.width(), 22.0 * z));
-            painter.rect_filled(title, egui::epaint::CornerRadiusF32 { nw: 4.0 * z, ne: 4.0 * z, sw: 0.0, se: 0.0 }, base.gamma_multiply(0.5));
+            painter.rect_filled(
+                title,
+                egui::CornerRadius { nw: (4.0 * z) as u8, ne: (4.0 * z) as u8, sw: (0.0) as u8, se: (0.0) as u8 },
+                base.gamma_multiply(0.5),
+            );
             painter.rect_stroke(
                 r,
-                4.0 * z,
-                Stroke::new(if selected { 2.0_f32 } else { 1.0_f32 }, if selected { Color32::from_rgb(255, 160, 40) } else { base.gamma_multiply(0.8) }),
-                egui::StrokeKind::Outside,
+                egui::CornerRadius::same((4.0 * z) as u8),
+                Stroke::new(if selected { 2.0_f32 } else { 1.0_f32 }, if selected { Color32::from_rgb(60, 200, 170) } else { base.gamma_multiply(0.8) }),
+                egui::StrokeKind::Inside,
             );
             painter.text(title.left_center() + vec2(8.0 * z, 0.0), Align2::LEFT_CENTER, &c.text, FontId::proportional(13.0 * z), Color32::WHITE);
             let tr = ui.interact(title, Id::new(("cmt", ci)), Sense::click_and_drag());
@@ -150,7 +155,7 @@ impl App {
             }
             let hs = vec2(14.0, 14.0) * z;
             let handle = Rect::from_min_size(r.max - hs, hs);
-            painter.rect_filled(handle, 2.0, base.gamma_multiply(0.7));
+            painter.rect_filled(handle, egui::CornerRadius::same((2.0) as u8), base.gamma_multiply(0.7));
             let hr = ui.interact(handle, Id::new(("cmtr", ci)), Sense::drag());
             if hr.drag_started() {
                 self.snap();
@@ -189,7 +194,7 @@ impl App {
                     .and_then(|g| self.g.subgraphs.get(g))
                     .map(|sg| sg.output_idents())
                     .filter(|o| o.len() >= 2)
-                    .unwrap_or_default(),
+                    .unwrap_or_else(|| materialcraft::graph::node_outputs(&n.kind).iter().map(|s| s.to_string()).collect()),
                 in_out: n.in_out.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
             })
             .collect();
@@ -232,13 +237,18 @@ impl App {
                         &painter,
                         a,
                         in_port(s.pos, i, n, s.dot, body_of(s)),
-                        if hot { Color32::from_rgb(255, 170, 60) } else { Color32::from_rgb(185, 185, 185) },
+                        if hot { Color32::from_rgb(90, 215, 190) } else { Color32::from_rgb(185, 185, 185) },
                         1.8,
                     );
                 }
             }
         }
 
+        // pin type of every node's output: grayscale sockets are drawn gray, colour sockets blue
+        let pins = materialcraft::graph::pin_types(&self.g);
+        let pin_fill = |p: materialcraft::graph::Pin| {
+            if p == materialcraft::graph::Pin::Color { Color32::from_rgb(110, 190, 255) } else { Color32::from_rgb(225, 225, 225) }
+        };
         let out_names: Vec<&'static str> = OUTPUT_NAMES.to_vec();
         let mut ports: Vec<(u32, &'static str, Pos2)> = Vec::new();
         let mut out_ports: Vec<(u32, Option<String>, Pos2)> = Vec::new();
@@ -257,14 +267,18 @@ impl App {
             let selected = self.sel.contains(&id);
             let err = self.node_err.get(&id).cloned();
             if s.dot {
-                let sel_col = if selected { Color32::from_rgb(255, 160, 40) } else { Color32::from_gray(150) };
+                let sel_col = if selected { Color32::from_rgb(60, 200, 170) } else { Color32::from_gray(150) };
                 painter.circle(card.center(), 9.0 * z, Color32::from_rgb(38, 38, 38), Stroke::new(if selected { 2.4_f32 } else { 1.3_f32 }, sel_col));
                 painter.circle_filled(card.center(), 3.2 * z, Color32::from_gray(200));
             } else {
-                painter.rect_filled(card.translate(vec2(2.0, 3.0) * z), 3.0 * z, Color32::from_black_alpha(70));
-                painter.rect_filled(card, 3.0 * z, Color32::from_rgb(32, 32, 32));
+                painter.rect_filled(card.translate(vec2(2.0, 3.0) * z), egui::CornerRadius::same((3.0 * z) as u8), Color32::from_black_alpha(70));
+                painter.rect_filled(card, egui::CornerRadius::same((3.0 * z) as u8), Color32::from_rgb(32, 32, 32));
                 let bar = Rect::from_min_size(card.min, vec2(card.width(), BAR * z));
-                painter.rect_filled(bar, egui::epaint::CornerRadiusF32 { nw: 3.0 * z, ne: 3.0 * z, sw: 0.0, se: 0.0 }, kind_color(&s.kind));
+                painter.rect_filled(
+                    bar,
+                    egui::CornerRadius { nw: (3.0 * z) as u8, ne: (3.0 * z) as u8, sw: (0.0) as u8, se: (0.0) as u8 },
+                    kind_color(&s.kind),
+                );
                 let node_ref = self.g.nodes.get(&id);
                 let usage = node_ref.and_then(|n| n.strs.get("usage").cloned()).unwrap_or_else(|| "basecolor".into());
                 let ident = node_ref.and_then(|n| n.strs.get("identifier").cloned()).filter(|x| !x.is_empty()).unwrap_or_else(|| usage.clone());
@@ -296,15 +310,20 @@ impl App {
                 }
                 painter.rect_stroke(
                     card,
-                    3.0 * z,
+                    egui::CornerRadius::same((3.0 * z) as u8),
                     Stroke::new(
                         if selected { 2.4_f32 } else { 1.0_f32 },
-                        if selected { Color32::from_rgb(255, 160, 40) } else { Color32::from_rgb(14, 14, 14) },
+                        if selected { Color32::from_rgb(60, 200, 170) } else { Color32::from_rgb(14, 14, 14) },
                     ),
-                    egui::StrokeKind::Outside,
+                    egui::StrokeKind::Inside,
                 );
                 if self.active == Some(id) && !selected {
-                    painter.rect_stroke(card, 3.0 * z, Stroke::new(1.5_f32, Color32::from_rgb(150, 150, 150)), egui::StrokeKind::Outside);
+                    painter.rect_stroke(
+                        card,
+                        egui::CornerRadius::same((3.0 * z) as u8),
+                        Stroke::new(1.5_f32, Color32::from_rgb(150, 150, 150)),
+                        egui::StrokeKind::Inside,
+                    );
                 }
 
                 if s.kind == "output" {
@@ -336,16 +355,16 @@ impl App {
                 }
             }
 
-            // a node with its own Output Size shows it under the card, like Designer
+            // a node with its own Output Size shows its size under the card
             if s.kind != "output" && !matches!(s.kind.as_str(), "comment" | "frame" | "dot") {
                 let ns = self.nominal_node_size(id);
                 if ns != self.g.size {
                     painter.text(
                         card.center_bottom() + vec2(0.0, 3.0) * z,
                         Align2::CENTER_TOP,
-                        format!("{0}x{0}", ns),
+                        format!("{}x{}", ns, (ns as f64 * self.g.height_for(self.g.size) as f64 / self.g.size.max(1) as f64).round() as usize),
                         FontId::proportional(10.0 * z),
-                        Color32::from_rgb(255, 190, 110),
+                        Color32::from_rgb(140, 230, 210),
                     );
                 }
             }
@@ -445,12 +464,13 @@ impl App {
                     let op = out_port_i(s.pos, oi, s.outs.len(), body_of(s));
                     out_ports.push((id, Some(oname.clone()), op));
                     let used = used_ports.contains(&(id, oname.clone()));
-                    painter.circle(
-                        op,
-                        4.8 * z,
-                        if used { Color32::from_rgb(240, 170, 50) } else { Color32::from_rgb(200, 200, 200) },
-                        Stroke::new(1.0_f32, Color32::BLACK),
-                    );
+                    let opin = match self.g.nodes.get(&id) {
+                        Some(nd) if materialcraft::graph::node_outputs(&nd.kind).contains(&oname.as_str()) => {
+                            materialcraft::graph::output_pin(&nd.kind, Some(oname.as_str()), pins.get(&id) == Some(&materialcraft::graph::Pin::Color), nd)
+                        }
+                        _ => pins.get(&id).copied().unwrap_or(materialcraft::graph::Pin::Gray),
+                    };
+                    painter.circle(op, 4.8 * z, if used { Color32::from_rgb(70, 210, 180) } else { pin_fill(opin) }, Stroke::new(1.0_f32, Color32::BLACK));
                     if z >= 0.45 {
                         painter.text(
                             op + vec2(9.0 * z, 0.0),
@@ -469,7 +489,12 @@ impl App {
             } else if s.kind != "output" {
                 let op = out_port(s.pos, s.dot, body_of(s));
                 out_ports.push((id, None, op));
-                painter.circle(op, if s.dot { 3.5 } else { 4.8 } * z, Color32::from_rgb(235, 235, 235), Stroke::new(1.0_f32, Color32::BLACK));
+                painter.circle(
+                    op,
+                    if s.dot { 3.5 } else { 4.8 } * z,
+                    pin_fill(pins.get(&id).copied().unwrap_or(materialcraft::graph::Pin::Gray)),
+                    Stroke::new(1.0_f32, Color32::BLACK),
+                );
                 let pr = ui.interact(Rect::from_center_size(op, Vec2::splat(14.0 * z)), Id::new(("out", id)), Sense::drag());
                 if pr.drag_started() {
                     self.connecting = Some(id);
@@ -484,7 +509,7 @@ impl App {
                     ip,
                     4.5 * z,
                     if s.kind == "output" {
-                        Color32::from_rgb(240, 170, 50)
+                        Color32::from_rgb(70, 210, 180)
                     } else if *required {
                         Color32::from_rgb(210, 210, 210)
                     } else {
@@ -518,7 +543,7 @@ impl App {
         // connection drag
         if let Some(src) = self.connecting {
             if let (Some(pt), Some(a)) = (pointer, src_port(src, self.connecting_out.as_deref())) {
-                link(&painter, a, pt, Color32::from_rgb(255, 190, 70), 2.0);
+                link(&painter, a, pt, Color32::from_rgb(110, 225, 200), 2.0);
             }
             if released {
                 if let Some(pt) = pointer {
@@ -544,7 +569,7 @@ impl App {
         if let Some((dst, slot)) = self.connecting_in.clone() {
             let target = ports.iter().find(|(i, s, _)| *i == dst && *s == slot.as_str()).map(|p| p.2);
             if let (Some(pt), Some(ip)) = (pointer, target) {
-                link(&painter, pt, ip, Color32::from_rgb(255, 190, 70), 2.0);
+                link(&painter, pt, ip, Color32::from_rgb(110, 225, 200), 2.0);
             }
             if released {
                 if let Some(pt) = pointer {
@@ -570,9 +595,9 @@ impl App {
                 painter.rect(
                     r,
                     0.0,
-                    Color32::from_rgba_unmultiplied(255, 160, 40, 28),
-                    Stroke::new(1.0_f32, Color32::from_rgb(255, 160, 40)),
-                    egui::StrokeKind::Outside,
+                    Color32::from_rgba_unmultiplied(60, 200, 170, 28),
+                    Stroke::new(1.0_f32, Color32::from_rgb(60, 200, 170)),
+                    egui::StrokeKind::Inside,
                 );
                 if released {
                     for (s, c) in snaps.iter().zip(&cards) {
@@ -658,6 +683,9 @@ impl App {
             }
             Act::Comment => self.add_comment(),
             Act::Subgraph => self.make_subgraph(),
+            Act::EnterSub(n) if self.g.is_linked(&n) => {
+                self.status(format!("'{n}' is a live link to another package and is read-only here - open that package to edit it"), false);
+            }
             Act::EnterSub(n) => {
                 if self.parents.iter().any(|(_, name)| *name == n) {
                     return;
@@ -709,9 +737,14 @@ impl App {
                 });
                 self.import_from_pkg(i, gn, at);
             }
+            Act::LinkPackage => self.link_package(),
+            Act::RefreshLinks => self.refresh_links(true),
             Act::NewPackage => self.open_new_dialog(None),
             Act::NewGraphIn(i) => self.open_new_dialog(Some(i)),
             Act::SwitchPkg(i) => self.switch_pkg(i),
+            Act::OpenGraphTab(n) => self.open_graph_tab(&n),
+            Act::CloseGraphTab(n) => self.close_graph_tab(&n),
+            Act::ToggleDeps => self.show_deps = !self.show_deps,
             Act::SavePkg(i) => {
                 self.switch_pkg(i);
                 self.save();
@@ -884,16 +917,32 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.label("Format");
                     egui::ComboBox::from_id_salt("exp_fmt").selected_text(self.export.fmt.name()).show_ui(ui, |ui| {
-                        for f in [Format::Png, Format::Jpeg, Format::Tiff] {
+                        for f in [Format::Png, Format::Jpeg, Format::Tiff, Format::Exr, Format::Hdr] {
                             ui.selectable_value(&mut self.export.fmt, f, f.name());
                         }
                     });
                     if self.export.fmt == Format::Jpeg {
                         ui.add(egui::Slider::new(&mut self.export.quality, 1..=100).text("quality"));
+                    } else if self.export.fmt == Format::Hdr {
+                        ui.label("32-bit RGBE");
+                    } else if self.export.fmt == Format::Exr {
+                        ui.checkbox(&mut self.export.depth32, "32-bit float (otherwise 16-bit half)");
                     } else {
                         ui.checkbox(&mut self.export.depth16, "16-bit");
+                        if self.export.fmt.has_float32() {
+                            ui.checkbox(&mut self.export.depth32, "32-bit float");
+                        }
                     }
                 });
+                ui.horizontal(|ui| {
+                    ui.label("Colour space");
+                    egui::ComboBox::from_id_salt("exp_space").selected_text(materialcraft::colorspace::SPACES[self.export.space].1).show_ui(ui, |ui| {
+                        for (i, s) in materialcraft::colorspace::SPACES.iter().enumerate() {
+                            ui.selectable_value(&mut self.export.space, i, s.1);
+                        }
+                    });
+                });
+                ui.small("Applies to colour maps only (base colour, emissive, diffuse, specular, 'output'). Data maps are never converted.");
                 ui.label("Resolutions (one sub-folder each when several are selected):");
                 ui.horizontal(|ui| {
                     for (i, s) in [256, 512, 1024, 2048, 4096, 8192].iter().enumerate() {
@@ -994,6 +1043,110 @@ impl App {
                 }
             });
             self.bake.open = open;
+        }
+        if self.show_deps {
+            let mut open = true;
+            let mut todo: Option<(&'static str, String)> = None;
+            let in_sub = !self.parents.is_empty();
+            egui::Window::new("Package dependencies").open(&mut open).collapsible(false).default_width(560.0).show(ctx, |ui| {
+                if in_sub {
+                    ui.label("Links belong to the package: leave the nested graph to manage them.");
+                    return;
+                }
+                if self.g.links.is_empty() {
+                    ui.label("This package has no live links. Use File > Link package as node... to add one.");
+                }
+                let rows: Vec<(String, String, Option<String>, Option<String>, Option<String>, usize)> = self
+                    .g
+                    .links
+                    .iter()
+                    .map(|l| {
+                        let info = self.g.link_info.get(&l.name);
+                        let uses = self.g.nodes.values().filter(|n| n.kind == "subgraph" && n.strs.get("graph").map(|g| *g == l.name).unwrap_or(false)).count();
+                        (l.name.clone(), l.path.clone(), l.graph.clone(), info.and_then(|i| i.found.as_ref().map(|p| p.display().to_string())), info.and_then(|i| i.issue.clone()), uses)
+                    })
+                    .collect();
+                for (name, path, graph, found, issue, uses) in rows {
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.strong(&name);
+                            match (&found, &issue) {
+                                (Some(_), _) => ui.colored_label(ACCENT, "found"),
+                                (None, _) => ui.colored_label(Color32::from_rgb(255, 120, 110), "missing"),
+                            };
+                            ui.small(format!("{uses} instance(s)"));
+                        });
+                        ui.small(format!("{path}{}", graph.as_ref().map(|g| format!("  >  {g}")).unwrap_or_default()));
+                        if let Some(f) = &found {
+                            if *f != path {
+                                ui.small(format!("read from {f}"));
+                            }
+                        }
+                        if let Some(i) = &issue {
+                            ui.colored_label(Color32::from_rgb(255, 150, 140), i);
+                        }
+                        ui.horizontal(|ui| {
+                            if ui.button("Relink...").clicked() {
+                                todo = Some(("relink", name.clone()));
+                            }
+                            if ui.add_enabled(found.is_some(), egui::Button::new("Embed copy")).on_hover_text("Turn the link into a copy saved inside this package").clicked() {
+                                todo = Some(("embed", name.clone()));
+                            }
+                            if ui.button("Remove").clicked() {
+                                todo = Some(("remove", name.clone()));
+                            }
+                        });
+                    });
+                }
+                ui.separator();
+                ui.strong("Search folders");
+                ui.small("When a linked file is not where the link says, these folders (relative to the package, separated by ;) are searched for a file with the same name.");
+                let mut sp = self.g.meta.get("search_paths").cloned().unwrap_or_default();
+                if ui.add(egui::TextEdit::singleline(&mut sp).desired_width(f32::INFINITY)).changed() {
+                    if sp.trim().is_empty() {
+                        self.g.meta.remove("search_paths");
+                    } else {
+                        self.g.meta.insert("search_paths".into(), sp);
+                    }
+                    self.modified = true;
+                }
+                if ui.button("Refresh links").clicked() {
+                    todo = Some(("refresh", String::new()));
+                }
+            });
+            match todo {
+                Some(("relink", n)) => self.relink_dialog(&n),
+                Some(("embed", n)) => self.break_link_ui(&n),
+                Some(("remove", n)) => self.remove_link_ui(&n),
+                Some(("refresh", _)) => self.refresh_links(true),
+                _ => {}
+            }
+            self.show_deps = open;
+        }
+        if let Some((path, names)) = self.link_pick.clone() {
+            let mut open = true;
+            let mut chosen: Option<Option<String>> = None;
+            egui::Window::new("Link which graph?").open(&mut open).collapsible(false).resizable(false).anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0)).show(
+                ctx,
+                |ui| {
+                    ui.label(format!("{} contains several graphs.", path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));
+                    if ui.button("Main graph").clicked() {
+                        chosen = Some(None);
+                    }
+                    ui.separator();
+                    for n in &names {
+                        if ui.button(n).clicked() {
+                            chosen = Some(Some(n.clone()));
+                        }
+                    }
+                },
+            );
+            if let Some(c) = chosen {
+                self.link_pick = None;
+                self.link_file(path, c);
+            } else if !open {
+                self.link_pick = None;
+            }
         }
         if self.show_about {
             let mut open = true;
