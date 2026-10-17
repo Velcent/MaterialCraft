@@ -1,7 +1,7 @@
 //! Mesh map baking: high-poly -> low-poly textures (normal, world normal, position, AO,
 //! curvature, thickness, ID). OBJ input, BVH ray tracing, multi-threaded.
 use crate::noise::rnd;
-use crate::tex::{par_map, Tex};
+use crate::tex::{Tex, par_map};
 use crate::v3::*;
 use std::collections::BTreeMap;
 
@@ -148,7 +148,13 @@ impl Bvh {
             return me;
         }
         let ext = sub(cmx, cmn);
-        let axis = if ext[0] >= ext[1] && ext[0] >= ext[2] { 0 } else if ext[1] >= ext[2] { 1 } else { 2 };
+        let axis = if ext[0] >= ext[1] && ext[0] >= ext[2] {
+            0
+        } else if ext[1] >= ext[2] {
+            1
+        } else {
+            2
+        };
         self.idx[lo..hi].sort_by(|&a, &b| cent[a as usize][axis].partial_cmp(&cent[b as usize][axis]).unwrap_or(std::cmp::Ordering::Equal));
         let mid = (lo + hi) / 2;
         let l = self.rec(tris, cent, lo, mid);
@@ -160,7 +166,11 @@ impl Bvh {
     }
 
     pub fn intersect(&self, tris: &[Tri], o: V, d: V, tmax: f32) -> Option<Hit> {
-        let inv = [1.0 / if d[0].abs() < 1e-12 { 1e-12 } else { d[0] }, 1.0 / if d[1].abs() < 1e-12 { 1e-12 } else { d[1] }, 1.0 / if d[2].abs() < 1e-12 { 1e-12 } else { d[2] }];
+        let inv = [
+            1.0 / if d[0].abs() < 1e-12 { 1e-12 } else { d[0] },
+            1.0 / if d[1].abs() < 1e-12 { 1e-12 } else { d[1] },
+            1.0 / if d[2].abs() < 1e-12 { 1e-12 } else { d[2] },
+        ];
         let mut best: Option<Hit> = None;
         let mut tm = tmax;
         let mut stack = [0u32; 64];
@@ -365,12 +375,16 @@ pub fn bake(low: &Mesh, high: &Mesh, s: &BakeSettings) -> Result<BTreeMap<String
     let world_n = mk(&|i| {
         let (tx, h) = (texels[i], hits[i]);
         let n = if h.ok { h.n } else { tx.n };
-        if !tx.ok { return [0.5, 0.5, 1.0, 1.0]; }
+        if !tx.ok {
+            return [0.5, 0.5, 1.0, 1.0];
+        }
         [n[0] * 0.5 + 0.5, n[1] * 0.5 + 0.5, n[2] * 0.5 + 0.5, 1.0]
     });
     let position = mk(&|i| {
         let tx = texels[i];
-        if !tx.ok { return [0.0, 0.0, 0.0, 1.0]; }
+        if !tx.ok {
+            return [0.0, 0.0, 0.0, 1.0];
+        }
         let p = if hits[i].ok { hits[i].h } else { tx.p };
         let f = |k: usize| ((p[k] - bmin[k]) / (bmax[k] - bmin[k]).max(1e-9)).clamp(0.0, 1.0);
         [f(0), f(1), f(2), 1.0]
@@ -378,7 +392,9 @@ pub fn bake(low: &Mesh, high: &Mesh, s: &BakeSettings) -> Result<BTreeMap<String
     let rays = s.ao_rays.clamp(1, 512);
     let ao = mk(&|i| {
         let (tx, h) = (texels[i], hits[i]);
-        if !tx.ok { return [1.0, 1.0, 1.0, 1.0]; }
+        if !tx.ok {
+            return [1.0, 1.0, 1.0, 1.0];
+        }
         let (o, n) = if h.ok { (h.h, h.n) } else { (tx.p, tx.n) };
         let o = add(o, mul(n, 1e-3 * diag));
         let up = if n[1].abs() < 0.99 { [0.0, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
@@ -401,8 +417,12 @@ pub fn bake(low: &Mesh, high: &Mesh, s: &BakeSettings) -> Result<BTreeMap<String
     });
     let thick = mk(&|i| {
         let (tx, h) = (texels[i], hits[i]);
-        if !tx.ok { return [0.0, 0.0, 0.0, 1.0]; }
-        if !h.ok { return [1.0, 1.0, 1.0, 1.0]; }
+        if !tx.ok {
+            return [0.0, 0.0, 0.0, 1.0];
+        }
+        if !h.ok {
+            return [1.0, 1.0, 1.0, 1.0];
+        }
         let o = sub(h.h, mul(h.n, 1e-3 * diag));
         let v = match bvh.intersect(&high.tris, o, mul(h.n, -1.0), ao_dist) {
             Some(x) => (x.t / ao_dist).clamp(0.0, 1.0),
@@ -412,7 +432,9 @@ pub fn bake(low: &Mesh, high: &Mesh, s: &BakeSettings) -> Result<BTreeMap<String
     });
     let ids = mk(&|i| {
         let h = hits[i];
-        if !h.ok { return [0.0, 0.0, 0.0, 1.0]; }
+        if !h.ok {
+            return [0.0, 0.0, 0.0, 1.0];
+        }
         let g = h.group as i32;
         [0.2 + 0.8 * rnd(g, 1, 11), 0.2 + 0.8 * rnd(g, 2, 11), 0.2 + 0.8 * rnd(g, 3, 11), 1.0]
     });
@@ -423,7 +445,9 @@ pub fn bake(low: &Mesh, high: &Mesh, s: &BakeSettings) -> Result<BTreeMap<String
         };
         mk(&|i| {
             let (x, y) = ((i % size) as i64, (i / size) as i64);
-            if !texels[i].ok { return [0.5, 0.5, 0.5, 1.0]; }
+            if !texels[i].ok {
+                return [0.5, 0.5, 0.5, 1.0];
+            }
             let div = (at(x + 1, y)[0] - at(x - 1, y)[0]) - (at(x, y + 1)[1] - at(x, y - 1)[1]);
             let v = (0.5 + div * 1.5).clamp(0.0, 1.0);
             [v, v, v, 1.0]

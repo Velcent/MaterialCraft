@@ -4,12 +4,7 @@
 use eframe::egui::{self, Color32, RichText};
 use materialcraft::paint::{Fidelity, ImportReport};
 
-const FIDELITIES: [Fidelity; 4] = [
-    Fidelity::Exact,
-    Fidelity::Approximated,
-    Fidelity::Baked,
-    Fidelity::KeptRaw,
-];
+const FIDELITIES: [Fidelity; 4] = [Fidelity::Exact, Fidelity::Approximated, Fidelity::Baked, Fidelity::KeptRaw];
 
 /// Panel state: the active filter.
 #[derive(Default)]
@@ -18,12 +13,7 @@ pub struct ReportPanel {
 }
 
 impl ReportPanel {
-    pub fn show(
-        &mut self,
-        ui: &mut egui::Ui,
-        report: Option<&ImportReport>,
-        summary: Option<&str>,
-    ) {
+    pub fn show(&mut self, ui: &mut egui::Ui, report: Option<&ImportReport>, summary: Option<&str>) {
         crate::gui_theme::panel_header(ui, "IMPORT REPORT", false);
         let Some(report) = report else {
             ui.weak("This document was not imported.");
@@ -34,51 +24,28 @@ impl ReportPanel {
             source.on_hover_text(format!("Importer summary: {s}"));
         }
         ui.horizontal_wrapped(|ui| {
-            if ui
-                .selectable_label(
-                    self.filter.is_none(),
-                    format!("All {}", report.entries.len()),
-                )
-                .clicked()
-            {
+            if ui.selectable_label(self.filter.is_none(), format!("All {}", report.entries.len())).clicked() {
                 self.filter = None;
             }
             for f in FIDELITIES {
                 let n = report.count(f);
-                if n > 0
-                    && ui
-                        .selectable_label(self.filter == Some(f), badge_text(f, n))
-                        .clicked()
-                {
+                if n > 0 && ui.selectable_label(self.filter == Some(f), badge_text(f, n)).clicked() {
                     self.filter = Some(f);
                 }
             }
         });
         ui.separator();
-        egui::ScrollArea::vertical()
-            .id_salt("paint_report")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                for e in report
-                    .entries
-                    .iter()
-                    .filter(|e| self.filter.is_none_or(|f| e.fidelity == f))
-                {
-                    ui.horizontal_wrapped(|ui| {
-                        badge(ui, e.fidelity);
-                        ui.label(&e.item);
-                    });
-                    if !e.note.is_empty() {
-                        ui.indent("note", |ui| {
-                            ui.label(
-                                RichText::new(&e.note)
-                                    .small()
-                                    .color(Color32::from_gray(150)),
-                            )
-                        });
-                    }
+        egui::ScrollArea::vertical().id_salt("paint_report").auto_shrink([false, false]).show(ui, |ui| {
+            for e in report.entries.iter().filter(|e| self.filter.is_none_or(|f| e.fidelity == f)) {
+                ui.horizontal_wrapped(|ui| {
+                    badge(ui, e.fidelity);
+                    ui.label(&e.item);
+                });
+                if !e.note.is_empty() {
+                    ui.indent("note", |ui| ui.label(RichText::new(&e.note).small().color(Color32::from_gray(150))));
                 }
-            });
+            }
+        });
     }
 }
 
@@ -105,13 +72,6 @@ fn badge_text(f: Fidelity, n: usize) -> RichText {
 }
 
 fn badge(ui: &mut egui::Ui, f: Fidelity) {
-    let text = RichText::new(label(f))
-        .small()
-        .strong()
-        .color(Color32::WHITE);
-    egui::Frame::none()
-        .fill(color(f))
-        .rounding(3.0)
-        .inner_margin(egui::Margin::symmetric(4.0, 0.0))
-        .show(ui, |ui| ui.label(text));
+    let text = RichText::new(label(f)).small().strong().color(Color32::WHITE);
+    egui::Frame::none().fill(color(f)).rounding(3.0).inner_margin(egui::Margin::symmetric(4.0, 0.0)).show(ui, |ui| ui.label(text));
 }

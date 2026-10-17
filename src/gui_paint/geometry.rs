@@ -15,28 +15,17 @@ pub struct PartGeometry {
 /// Geometry of every part whose texture set is visible (`visible` is indexed by texture set).
 /// Parts without a texture set are always shown.
 pub fn build(doc: &Document, visible: &[bool]) -> Result<Vec<PartGeometry>, String> {
-    doc.mesh
-        .validate()
-        .map_err(|e| format!("The mesh is invalid: {e}"))?;
+    doc.mesh.validate().map_err(|e| format!("The mesh is invalid: {e}"))?;
     let fit = doc.mesh.fit();
     let mut parts = Vec::new();
     for (i, part) in doc.mesh.parts.iter().enumerate() {
-        let set = doc
-            .texture_sets
-            .iter()
-            .position(|s| s.material_slot == part.material);
+        let set = doc.texture_sets.iter().position(|s| s.material_slot == part.material);
         if set.is_some_and(|s| !visible.get(s).copied().unwrap_or(true)) {
             continue;
         }
         let uv_set = set.map_or(0, |s| doc.texture_sets[s].uv_set);
-        let vp = part
-            .to_viewport(&fit, uv_set)
-            .map_err(|e| format!("Mesh part {i} ('{}'): {e}", part.name))?;
-        parts.push(PartGeometry {
-            mesh: vp.mesh,
-            tangent_w: vp.tangent_w,
-            set,
-        });
+        let vp = part.to_viewport(&fit, uv_set).map_err(|e| format!("Mesh part {i} ('{}'): {e}", part.name))?;
+        parts.push(PartGeometry { mesh: vp.mesh, tangent_w: vp.tangent_w, set });
     }
     Ok(parts)
 }

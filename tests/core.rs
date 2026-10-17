@@ -1,4 +1,4 @@
-use materialcraft::graph::{Error, Graph, EXAMPLE};
+use materialcraft::graph::{EXAMPLE, Error, Graph};
 use materialcraft::{expr, noise, png};
 
 #[test]
@@ -146,9 +146,15 @@ fn baker_produces_maps() {
 
 #[test]
 fn renderer_draws_shapes() {
-    use materialcraft::render3d::{render, Maps, View};
+    use materialcraft::render3d::{Maps, View, render};
     use materialcraft::tex::Tex;
-    let (b, n, r, m, a) = (Tex::solid(8, 8, [0.8, 0.2, 0.2, 1.0]), Tex::solid(8, 8, [0.5, 0.5, 1.0, 1.0]), Tex::solid(8, 8, [0.4; 4]), Tex::solid(8, 8, [0.0, 0.0, 0.0, 1.0]), Tex::solid(8, 8, [1.0; 4]));
+    let (b, n, r, m, a) = (
+        Tex::solid(8, 8, [0.8, 0.2, 0.2, 1.0]),
+        Tex::solid(8, 8, [0.5, 0.5, 1.0, 1.0]),
+        Tex::solid(8, 8, [0.4; 4]),
+        Tex::solid(8, 8, [0.0, 0.0, 0.0, 1.0]),
+        Tex::solid(8, 8, [1.0; 4]),
+    );
     let maps = Maps { base: &b, normal: &n, rough: &r, metal: &m, ao: &a, emissive: None, height: None };
     for shape in 0..3 {
         let img = render(&maps, &View { shape, ..View::default() }, 64, 64);
@@ -167,7 +173,7 @@ fn bad_inputs_are_errors_not_panics() {
 
 #[test]
 fn every_node_type_evaluates() {
-    use materialcraft::graph::{demo_graph_for, SPECS};
+    use materialcraft::graph::{SPECS, demo_graph_for};
     let mut count = 0;
     for sp in SPECS {
         if let Some(text) = demo_graph_for(sp.kind) {
@@ -388,10 +394,16 @@ fn meshes_are_outward_closed_and_finite() {
 
 #[test]
 fn displacement_renders_every_shape_and_camera_without_panics() {
-    use materialcraft::render3d::{render, Maps, View, RELIEF_BUMP, RELIEF_DISPLACE, RELIEF_NONE, RELIEF_PARALLAX};
+    use materialcraft::render3d::{Maps, RELIEF_BUMP, RELIEF_DISPLACE, RELIEF_NONE, RELIEF_PARALLAX, View, render};
     use materialcraft::tex::Tex;
     let hm = Tex::gray_fn(32, 32, |u, v| (u * 6.0).sin() * 0.5 + 0.5 + v * 0.0);
-    let (b, n, r, m, a) = (Tex::solid(4, 4, [0.8, 0.2, 0.2, 1.0]), Tex::solid(4, 4, [0.5, 0.5, 1.0, 1.0]), Tex::solid(4, 4, [0.4; 4]), Tex::solid(4, 4, [0.0, 0.0, 0.0, 1.0]), Tex::solid(4, 4, [1.0; 4]));
+    let (b, n, r, m, a) = (
+        Tex::solid(4, 4, [0.8, 0.2, 0.2, 1.0]),
+        Tex::solid(4, 4, [0.5, 0.5, 1.0, 1.0]),
+        Tex::solid(4, 4, [0.4; 4]),
+        Tex::solid(4, 4, [0.0, 0.0, 0.0, 1.0]),
+        Tex::solid(4, 4, [1.0; 4]),
+    );
     let maps = Maps { base: &b, normal: &n, rough: &r, metal: &m, ao: &a, emissive: None, height: Some(&hm) };
     for shape in 0..3 {
         for relief in [RELIEF_NONE, RELIEF_BUMP, RELIEF_PARALLAX, RELIEF_DISPLACE] {
@@ -414,9 +426,26 @@ fn displacement_renders_every_shape_and_camera_without_panics() {
 /// Every node: several resolutions, finite values, sane range, and (for nodes that should produce variation) a non-blank result.
 #[test]
 fn every_node_output_is_sane_at_several_sizes() {
-    use materialcraft::graph::{demo_graph_for, SPECS};
+    use materialcraft::graph::{SPECS, demo_graph_for};
     // nodes whose demo output may legitimately be a flat colour
-    let flat_ok = ["color", "invert_flat", "clamp", "histogram_range", "dust", "curvature_smooth", "curvature", "edge_detect", "height_blend", "edge_wear", "dirt", "ao", "slope_blur", "vector_warp", "distance", "flood_fill_gradient"];
+    let flat_ok = [
+        "color",
+        "invert_flat",
+        "clamp",
+        "histogram_range",
+        "dust",
+        "curvature_smooth",
+        "curvature",
+        "edge_detect",
+        "height_blend",
+        "edge_wear",
+        "dirt",
+        "ao",
+        "slope_blur",
+        "vector_warp",
+        "distance",
+        "flood_fill_gradient",
+    ];
     let mut problems = Vec::new();
     for sp in SPECS {
         let Some(text) = demo_graph_for(sp.kind) else { continue };
@@ -424,14 +453,27 @@ fn every_node_output_is_sane_at_several_sizes() {
             let g = G2::parse(&text).unwrap();
             let out = match std::panic::catch_unwind(|| g.evaluate(Some(size))) {
                 Ok(Ok(o)) => o,
-                Ok(Err(e)) => { problems.push(format!("{} @{size}: error {e}", sp.kind)); continue; }
-                Err(_) => { problems.push(format!("{} @{size}: PANIC", sp.kind)); continue; }
+                Ok(Err(e)) => {
+                    problems.push(format!("{} @{size}: error {e}", sp.kind));
+                    continue;
+                }
+                Err(_) => {
+                    problems.push(format!("{} @{size}: PANIC", sp.kind));
+                    continue;
+                }
             };
             let t = &out["o"];
-            if t.px.iter().any(|p| p.iter().any(|c| !c.is_finite())) { problems.push(format!("{} @{size}: NaN/Inf", sp.kind)); continue; }
-            if t.px.iter().any(|p| p.iter().any(|c| *c < -4.0 || *c > 8.0)) { problems.push(format!("{} @{size}: wild range", sp.kind)); }
+            if t.px.iter().any(|p| p.iter().any(|c| !c.is_finite())) {
+                problems.push(format!("{} @{size}: NaN/Inf", sp.kind));
+                continue;
+            }
+            if t.px.iter().any(|p| p.iter().any(|c| *c < -4.0 || *c > 8.0)) {
+                problems.push(format!("{} @{size}: wild range", sp.kind));
+            }
             let (mn, mx) = t.px.iter().fold((f32::MAX, f32::MIN), |a, p| (a.0.min(p[0]).min(p[1]).min(p[2]), a.1.max(p[0]).max(p[1]).max(p[2])));
-            if mx - mn < 1e-4 && size >= 32 && !flat_ok.contains(&sp.kind) { problems.push(format!("{} @{size}: blank output ({mn})", sp.kind)); }
+            if mx - mn < 1e-4 && size >= 32 && !flat_ok.contains(&sp.kind) {
+                problems.push(format!("{} @{size}: blank output ({mn})", sp.kind));
+            }
         }
     }
     assert!(problems.is_empty(), "node problems:\n{}", problems.join("\n"));
@@ -440,13 +482,17 @@ fn every_node_output_is_sane_at_several_sizes() {
 /// Fuzz every documented numeric parameter of every node with extreme values: must never panic or return NaN.
 #[test]
 fn node_parameters_survive_extreme_values() {
-    use materialcraft::graph::{demo_graph_for, SPECS};
+    use materialcraft::graph::{SPECS, demo_graph_for};
     let mut problems = Vec::new();
     let mut ran = 0usize;
     for sp in SPECS {
         let Some(text) = demo_graph_for(sp.kind) else { continue };
         let doc = sp.doc.split_once(':').map(|x| x.1).unwrap_or("");
-        let names: Vec<String> = doc.split_whitespace().map(|w| w.split('(').next().unwrap().trim_matches(|c: char| !c.is_alphanumeric() && c != '_').to_string()).filter(|w| !w.is_empty() && w.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') && !w.starts_with("expr")).collect();
+        let names: Vec<String> = doc
+            .split_whitespace()
+            .map(|w| w.split('(').next().unwrap().trim_matches(|c: char| !c.is_alphanumeric() && c != '_').to_string())
+            .filter(|w| !w.is_empty() && w.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') && !w.starts_with("expr"))
+            .collect();
         for name in names {
             for v in ["0", "1", "-1", "0.0001", "50", "1000"] {
                 let line = format!("node 1 {}", sp.kind);
@@ -456,7 +502,9 @@ fn node_parameters_survive_extreme_values() {
                     Ok(Ok(out)) => {
                         ran += 1;
                         let t = &out["o"];
-                        if t.px.iter().any(|p| p.iter().any(|c| !c.is_finite())) { problems.push(format!("{} {name}={v}: NaN/Inf", sp.kind)); }
+                        if t.px.iter().any(|p| p.iter().any(|c| !c.is_finite())) {
+                            problems.push(format!("{} {name}={v}: NaN/Inf", sp.kind));
+                        }
                     }
                     Ok(Err(_)) => {} // a clean error is acceptable
                     Err(_) => problems.push(format!("{} {name}={v}: PANIC", sp.kind)),
@@ -474,7 +522,10 @@ fn node_parameters_survive_extreme_values() {
 fn whole_graph_can_be_imported_and_used_as_a_node() {
     let other = G2::parse("size 64\nnode 1 perlin scale=4 seed=3\nnode 2 invert in=@1\noutput height 2\noutput basecolor 1\n").unwrap();
     let direct = other.evaluate(Some(32)).unwrap();
-    let mut host = G2::parse_unchecked("size 64\nnode 1 subgraph graph=\"mat\" output=\"height\"\nnode 2 subgraph graph=\"mat\" output=\"basecolor\"\noutput a 1\noutput b 2\n").unwrap();
+    let mut host = G2::parse_unchecked(
+        "size 64\nnode 1 subgraph graph=\"mat\" output=\"height\"\nnode 2 subgraph graph=\"mat\" output=\"basecolor\"\noutput a 1\noutput b 2\n",
+    )
+    .unwrap();
     host.import_graph(other.clone(), "mat").unwrap();
     assert!(host.import_graph(other, "mat").is_err(), "duplicate name must be rejected");
     host.validate().unwrap();
@@ -490,7 +541,9 @@ fn whole_graph_can_be_imported_and_used_as_a_node() {
 fn links_can_read_a_specific_output_of_a_graph_node() {
     let other = G2::parse("size 64\nnode 1 perlin scale=4 seed=3\nnode 2 invert in=@1\noutput height 2\noutput basecolor 1\noutput normal 1\n").unwrap();
     assert_eq!(other.output_idents(), vec!["basecolor", "normal", "height"], "outputs are listed in canonical order");
-    let mut host = G2::parse_unchecked("size 64\nnode 1 subgraph graph=\"mat\"\nnode 2 invert in=@1.height\nnode 3 invert in=@1.basecolor\noutput a 2\noutput b 3\n").unwrap();
+    let mut host =
+        G2::parse_unchecked("size 64\nnode 1 subgraph graph=\"mat\"\nnode 2 invert in=@1.height\nnode 3 invert in=@1.basecolor\noutput a 2\noutput b 3\n")
+            .unwrap();
     host.import_graph(other.clone(), "mat").unwrap();
     host.validate().unwrap();
     // round trip keeps the per-link output
@@ -595,7 +648,8 @@ fn nodes_can_have_their_own_output_size() {
     let g = Graph::parse("size 256\nnode 1 fbm scale=4 osize_mode=2 osize_abs=7 osize_rel=3\noutput o 1\n").unwrap();
     assert_eq!(g.evaluate(Some(256)).unwrap()["o"].w, 128);
     // filters inherit from their input; a node with another size resamples its inputs to its own size
-    let g = Graph::parse("size 256\nnode 1 fbm scale=4 osize_rel=-1\nnode 2 blur in=@1 radius=2\nnode 3 invert in=@2 osize_mode=1\noutput o 2\noutput p 3\n").unwrap();
+    let g = Graph::parse("size 256\nnode 1 fbm scale=4 osize_rel=-1\nnode 2 blur in=@1 radius=2\nnode 3 invert in=@2 osize_mode=1\noutput o 2\noutput p 3\n")
+        .unwrap();
     let r = g.evaluate(Some(256)).unwrap();
     assert_eq!(r["o"].w, 128, "blur follows its input");
     assert_eq!(r["p"].w, 256, "relative-to-parent restores the graph size");
@@ -664,7 +718,9 @@ fn batch1_nodes_behave() {
 fn batch1b_nodes_behave() {
     let run = |body: &str| Graph::parse(&format!("size 64\n{body}")).unwrap().evaluate(None).unwrap();
     // normal combine with a flat detail map returns the base normal
-    let o = run("node 1 fbm scale=3 seed=2\nnode 2 normal in=@1 strength=2\nnode 3 color r=0.5 g=0.5 b=1\nnode 4 normal_combine base=@2 detail=@3\noutput a 2\noutput b 4\n");
+    let o = run(
+        "node 1 fbm scale=3 seed=2\nnode 2 normal in=@1 strength=2\nnode 3 color r=0.5 g=0.5 b=1\nnode 4 normal_combine base=@2 detail=@3\noutput a 2\noutput b 4\n",
+    );
     for (p, q) in o["a"].px.iter().zip(&o["b"].px) {
         assert!((p[0] - q[0]).abs() < 0.02 && (p[1] - q[1]).abs() < 0.02, "{p:?} vs {q:?}");
     }
@@ -758,7 +814,7 @@ fn fbm_kernel_matches_the_reference_function() {
 #[test]
 fn faster_kernels_match_straightforward_references() {
     use materialcraft::ops;
-    use materialcraft::tex::{lum, Tex};
+    use materialcraft::tex::{Tex, lum};
     let img = Tex::gray_fn(96, 80, |u, v| noise::fbm(u, v, 4, 4, 3, 0.5, 5, 0));
     // gray blur (single channel path) must equal the general four-channel path
     let mut rgba = img.clone();
@@ -805,7 +861,12 @@ fn directional_noise_with_fewer_taps_matches_the_dense_reference() {
         let (sa, ca) = (ang * std::f32::consts::TAU).sin_cos();
         let len1 = (st / p1 as f32).min(1.0);
         let k = ((st * 5.0).ceil() as usize).clamp(8, 160) | 1;
-        let taps: Vec<(f32, f32)> = (0..k).map(|i| { let t = ((i as f32 + 0.5) / k as f32) * 2.0 - 1.0; (t, 1.0 - t.abs()) }).collect();
+        let taps: Vec<(f32, f32)> = (0..k)
+            .map(|i| {
+                let t = ((i as f32 + 0.5) / k as f32) * 2.0 - 1.0;
+                (t, 1.0 - t.abs())
+            })
+            .collect();
         let wsum: f32 = taps.iter().map(|t| t.1).sum();
         let gain = 1.6 * st.min(p1 as f32).powf(0.55);
         let (g1, g2) = (noise::GradGrid::new(p1, p1, 3), noise::GradGrid::new(p1 * 2, p1 * 2, 3 + 7));
@@ -860,7 +921,9 @@ fn phase1_designer_parameters_behave() {
     close(&o["a"], &o["b"], 0.0, "invert off");
     assert!((o["c"].px[5][0] - (1.0 - o["a"].px[5][0])).abs() < 1e-6);
     // threshold: greater and lower are complements (but for pixels exactly on the threshold)
-    let o = run("node 1 gradient angle=0\nnode 2 threshold in=@1 threshold=0.5 mode=0\nnode 3 threshold in=@1 threshold=0.5 mode=2\nnode 4 threshold in=@1 threshold=0.5 mode=1\noutput a 2\noutput b 3\noutput c 4\n");
+    let o = run(
+        "node 1 gradient angle=0\nnode 2 threshold in=@1 threshold=0.5 mode=0\nnode 3 threshold in=@1 threshold=0.5 mode=2\nnode 4 threshold in=@1 threshold=0.5 mode=1\noutput a 2\noutput b 3\noutput c 4\n",
+    );
     let (mut gt, mut lt, mut ge) = (0, 0, 0);
     for i in 0..64 * 64 {
         gt += (o["a"].px[i][0] > 0.5) as i32;
@@ -870,17 +933,25 @@ fn phase1_designer_parameters_behave() {
     assert!(gt > 0 && lt > 0 && gt + lt <= 64 * 64 && 64 * 64 - gt - lt <= 128, "greater {gt} lower {lt}");
     assert!(ge >= gt, "greater or equal {ge} must include greater {gt}");
     // clamp: apply to alpha
-    let o = run("node 1 color r=0.5 g=0.5 b=0.5 a=0.2\nnode 2 clamp in=@1 low=0.5 high=1 apply_alpha=0\nnode 3 clamp in=@1 low=0.5 high=1 apply_alpha=1\noutput a 2\noutput b 3\n");
+    let o = run(
+        "node 1 color r=0.5 g=0.5 b=0.5 a=0.2\nnode 2 clamp in=@1 low=0.5 high=1 apply_alpha=0\nnode 3 clamp in=@1 low=0.5 high=1 apply_alpha=1\noutput a 2\noutput b 3\n",
+    );
     assert!((o["a"].px[0][3] - 0.2).abs() < 1e-5 && (o["b"].px[0][3] - 0.5).abs() < 1e-5, "{:?} {:?}", o["a"].px[0], o["b"].px[0]);
     // blend: add sub and the cropping area
-    let o = run("node 1 color r=0.5 g=0.5 b=0.5\nnode 2 color r=0.6 g=0.6 b=0.6\nnode 3 blend fg=@2 bg=@1 mode=20 opacity=1\nnode 4 color r=0.9 g=0.9 b=0.9\nnode 5 color r=0.1 g=0.1 b=0.1\nnode 6 blend fg=@4 bg=@5 mode=0 crop_x1=0.5\noutput a 3\noutput b 6\n");
+    let o = run(
+        "node 1 color r=0.5 g=0.5 b=0.5\nnode 2 color r=0.6 g=0.6 b=0.6\nnode 3 blend fg=@2 bg=@1 mode=20 opacity=1\nnode 4 color r=0.9 g=0.9 b=0.9\nnode 5 color r=0.1 g=0.1 b=0.1\nnode 6 blend fg=@4 bg=@5 mode=0 crop_x1=0.5\noutput a 3\noutput b 6\n",
+    );
     assert!((o["a"].px[0][0] - 0.7).abs() < 0.01, "add sub {:?}", o["a"].px[0]);
     assert!(o["b"].at(8, 8)[0] > 0.85 && o["b"].at(56, 8)[0] < 0.15, "crop {:?} {:?}", o["b"].at(8, 8), o["b"].at(56, 8));
     // blend alpha: a half-transparent foreground with "use source alpha" mixes halfway
-    let o = run("node 1 color r=0 g=0 b=0\nnode 2 color r=1 g=1 b=1 a=0.5\nnode 3 blend fg=@2 bg=@1 mode=0 opacity=1 alpha_mode=0\nnode 4 blend fg=@2 bg=@1 mode=0 opacity=1 alpha_mode=1\noutput a 3\noutput b 4\n");
+    let o = run(
+        "node 1 color r=0 g=0 b=0\nnode 2 color r=1 g=1 b=1 a=0.5\nnode 3 blend fg=@2 bg=@1 mode=0 opacity=1 alpha_mode=0\nnode 4 blend fg=@2 bg=@1 mode=0 opacity=1 alpha_mode=1\noutput a 3\noutput b 4\n",
+    );
     assert!((o["a"].px[0][0] - 0.5).abs() < 0.01 && o["b"].px[0][0] > 0.99, "{:?} {:?}", o["a"].px[0], o["b"].px[0]);
     // mirror: default copies the left half onto the right; invert copies the other way; the corner mode mirrors both ways
-    let o = run("node 1 fbm scale=3 seed=7\nnode 2 mirror in=@1 axis=0\nnode 3 mirror in=@1 axis=0 invert_x=1\nnode 4 mirror in=@1 axis=3 corner=3\noutput src 1\noutput m 2\noutput inv 3\noutput cor 4\n");
+    let o = run(
+        "node 1 fbm scale=3 seed=7\nnode 2 mirror in=@1 axis=0\nnode 3 mirror in=@1 axis=0 invert_x=1\nnode 4 mirror in=@1 axis=3 corner=3\noutput src 1\noutput m 2\noutput inv 3\noutput cor 4\n",
+    );
     let (src, m, inv, cor) = (&o["src"], &o["m"], &o["inv"], &o["cor"]);
     for y in [3usize, 20, 50] {
         for x in 0..32usize {
@@ -891,50 +962,67 @@ fn phase1_designer_parameters_behave() {
     }
     assert_eq!(cor.at(5, 6), src.at(58, 57));
     // symmetry: the eight-fold mode is symmetric under swapping x and y; add combines original and mirror
-    let o = run("node 1 fbm scale=3 seed=9\nnode 2 symmetry in=@1 axis=5\nnode 3 symmetry in=@1 axis=0 transfer=1\nnode 4 symmetry in=@1 axis=0\noutput a 2\noutput b 3\noutput c 4\n");
+    let o = run(
+        "node 1 fbm scale=3 seed=9\nnode 2 symmetry in=@1 axis=5\nnode 3 symmetry in=@1 axis=0 transfer=1\nnode 4 symmetry in=@1 axis=0\noutput a 2\noutput b 3\noutput c 4\n",
+    );
     for (x, y) in [(3, 11), (40, 7), (25, 60)] {
         let (p, q) = (o["a"].at(x, y), o["a"].at(y, x));
         assert!((p[0] - q[0]).abs() < 0.03, "eight-fold {p:?} vs {q:?}");
     }
     assert!(o["b"].px.iter().zip(&o["c"].px).any(|(a, b)| (a[0] - b[0]).abs() > 0.05), "add transfer must differ from copy");
     // skew align: pivoting about the centre shifts the result by half a turn for a shear of one
-    let o = run("node 1 fbm scale=3 seed=3\nnode 2 skew in=@1 skew_x=1 skew_y=0 align=0\nnode 3 skew in=@1 skew_x=1 skew_y=0 align=1\noutput a 2\noutput b 3\n");
+    let o =
+        run("node 1 fbm scale=3 seed=3\nnode 2 skew in=@1 skew_x=1 skew_y=0 align=0\nnode 3 skew in=@1 skew_x=1 skew_y=0 align=1\noutput a 2\noutput b 3\n");
     let mut err = 0.0f32;
     for (x, y) in [(5i64, 9i64), (30, 40), (50, 20)] {
         err = err.max((o["a"].at(x, y)[0] - o["b"].at((x + 32).rem_euclid(64), y)[0]).abs());
     }
     assert!(err < 0.08, "skew align mismatch {err}");
     // multi directional warp: max >= average >= min
-    let o = run("node 1 fbm scale=4 seed=1\nnode 2 fbm scale=2 seed=2\nnode 3 multi_directional_warp in=@1 warp=@2 intensity=0.3 mode=0\nnode 4 multi_directional_warp in=@1 warp=@2 intensity=0.3 mode=1\nnode 5 multi_directional_warp in=@1 warp=@2 intensity=0.3 mode=2\nnode 6 multi_directional_warp in=@1 warp=@2 intensity=0.3 mode=3 directions=1\noutput avg 3\noutput max 4\noutput min 5\noutput chain 6\n");
+    let o = run(
+        "node 1 fbm scale=4 seed=1\nnode 2 fbm scale=2 seed=2\nnode 3 multi_directional_warp in=@1 warp=@2 intensity=0.3 mode=0\nnode 4 multi_directional_warp in=@1 warp=@2 intensity=0.3 mode=1\nnode 5 multi_directional_warp in=@1 warp=@2 intensity=0.3 mode=2\nnode 6 multi_directional_warp in=@1 warp=@2 intensity=0.3 mode=3 directions=1\noutput avg 3\noutput max 4\noutput min 5\noutput chain 6\n",
+    );
     for i in 0..64 * 64 {
         assert!(o["max"].px[i][0] + 1e-5 >= o["avg"].px[i][0] && o["avg"].px[i][0] + 1e-5 >= o["min"].px[i][0], "max/avg/min order");
         assert!(o["chain"].px[i][0].is_finite());
     }
     // directional warp: a mid grey intensity map moves nothing with the default offset
-    let o = run("node 1 fbm scale=4 seed=5\nnode 2 color r=0.5 g=0.5 b=0.5\nnode 3 directional_warp in=@1 warp=@2 intensity=0.2 angle=0.1\nnode 4 directional_warp in=@1 warp=@2 intensity=0.2 angle=0.1 offset=0\noutput src 1\noutput a 3\noutput b 4\n");
+    let o = run(
+        "node 1 fbm scale=4 seed=5\nnode 2 color r=0.5 g=0.5 b=0.5\nnode 3 directional_warp in=@1 warp=@2 intensity=0.2 angle=0.1\nnode 4 directional_warp in=@1 warp=@2 intensity=0.2 angle=0.1 offset=0\noutput src 1\noutput a 3\noutput b 4\n",
+    );
     close(&o["src"], &o["a"], 0.02, "grey map, offset 0.5");
     assert!(o["src"].px.iter().zip(&o["b"].px).any(|(a, b)| (a[0] - b[0]).abs() > 0.05), "offset 0 must move pixels");
     // normal nodes: blend opacity, invert z, combine techniques, rotation format, alpha from input
-    let o = run("node 1 fbm scale=3 seed=2\nnode 2 normal in=@1 strength=3\nnode 3 fbm scale=7 seed=8\nnode 4 normal in=@3 strength=3\nnode 5 normal_blend a=@2 b=@4 opacity=0\nnode 6 normal_invert in=@2 invert_z=1\nnode 7 color r=0.5 g=0.5 b=1\nnode 8 normal_combine base=@2 detail=@7 technique=0\nnode 9 normal_combine base=@2 detail=@7 technique=1\nnode 10 normal in=@1 strength=3 alpha_from_input=1\noutput n 2\noutput blend0 5\noutput invz 6\noutput wo 8\noutput cm 9\noutput al 10\noutput h 1\n");
+    let o = run(
+        "node 1 fbm scale=3 seed=2\nnode 2 normal in=@1 strength=3\nnode 3 fbm scale=7 seed=8\nnode 4 normal in=@3 strength=3\nnode 5 normal_blend a=@2 b=@4 opacity=0\nnode 6 normal_invert in=@2 invert_z=1\nnode 7 color r=0.5 g=0.5 b=1\nnode 8 normal_combine base=@2 detail=@7 technique=0\nnode 9 normal_combine base=@2 detail=@7 technique=1\nnode 10 normal in=@1 strength=3 alpha_from_input=1\noutput n 2\noutput blend0 5\noutput invz 6\noutput wo 8\noutput cm 9\noutput al 10\noutput h 1\n",
+    );
     close(&o["n"], &o["blend0"], 0.02, "normal blend opacity 0");
     assert!((o["invz"].px[100][2] - (1.0 - o["n"].px[100][2])).abs() < 1e-5);
     close(&o["n"], &o["wo"], 0.03, "whiteout with a flat detail");
     close(&o["n"], &o["cm"], 0.03, "channel mixer with a flat detail");
     assert!((o["al"].px[77][3] - o["h"].px[77][0]).abs() < 0.01, "alpha {:?} height {:?}", o["al"].px[77], o["h"].px[77]);
     // normal to height: zero opacity gives a flat map
-    let o = run("node 1 fbm scale=3 seed=2\nnode 2 normal in=@1 strength=3\nnode 3 normal_to_height in=@2 opacity=0\nnode 4 normal_to_height in=@2 relief_balance=0.9\nnode 5 normal_to_height in=@2\noutput flat 3\noutput low 4\noutput mid 5\n");
+    let o = run(
+        "node 1 fbm scale=3 seed=2\nnode 2 normal in=@1 strength=3\nnode 3 normal_to_height in=@2 opacity=0\nnode 4 normal_to_height in=@2 relief_balance=0.9\nnode 5 normal_to_height in=@2\noutput flat 3\noutput low 4\noutput mid 5\n",
+    );
     assert!(o["flat"].px.iter().all(|p| (p[0] - 0.5).abs() < 1e-4));
     assert!(o["low"].px.iter().zip(&o["mid"].px).any(|(a, b)| (a[0] - b[0]).abs() > 0.02), "relief balance must change the result");
     // bevel: the round profile rises faster than the angular one
-    let o = run("node 1 circle radius=0.35 softness=0.001\nnode 2 bevel in=@1 distance=0.2 smoothing=0 corner=0\nnode 3 bevel in=@1 distance=0.2 smoothing=0 corner=1\noutput round 2\noutput ang 3\n");
+    let o = run(
+        "node 1 circle radius=0.35 softness=0.001\nnode 2 bevel in=@1 distance=0.2 smoothing=0 corner=0\nnode 3 bevel in=@1 distance=0.2 smoothing=0 corner=1\noutput round 2\noutput ang 3\n",
+    );
     let (sr, sa): (f32, f32) = (o["round"].px.iter().map(|p| p[0]).sum(), o["ang"].px.iter().map(|p| p[0]).sum());
     assert!(sr > sa * 1.02, "round {sr} angular {sa}");
     // shape glow/stroke: opacity and colour scale the result
-    let o = run("node 1 circle radius=0.2 softness=0.001\nnode 2 shape_glow in=@1 width=20\nnode 3 shape_glow in=@1 width=20 opacity=0.5\nnode 4 shape_glow in=@1 width=20 color_g=0\noutput a 2\noutput b 3\noutput c 4\n");
+    let o = run(
+        "node 1 circle radius=0.2 softness=0.001\nnode 2 shape_glow in=@1 width=20\nnode 3 shape_glow in=@1 width=20 opacity=0.5\nnode 4 shape_glow in=@1 width=20 color_g=0\noutput a 2\noutput b 3\noutput c 4\n",
+    );
     assert!((o["b"].at(32, 32)[0] - 0.5 * o["a"].at(32, 32)[0]).abs() < 0.01);
     assert!(o["c"].at(32, 32)[1] < 0.01 && o["c"].at(32, 32)[0] > 0.9);
     // glow: a zero colour removes the glow, a clear amount trims it
-    let o = run("node 1 circle radius=0.2 softness=0.001\nnode 2 glow in=@1 width=12\nnode 3 glow in=@1 width=12 glow_r=0 glow_g=0 glow_b=0\nnode 4 glow in=@1 width=12 clear=0.8\noutput a 2\noutput b 3\noutput c 4\noutput src 1\n");
+    let o = run(
+        "node 1 circle radius=0.2 softness=0.001\nnode 2 glow in=@1 width=12\nnode 3 glow in=@1 width=12 glow_r=0 glow_g=0 glow_b=0\nnode 4 glow in=@1 width=12 clear=0.8\noutput a 2\noutput b 3\noutput c 4\noutput src 1\n",
+    );
     close(&o["b"], &o["src"], 1e-5, "black glow");
     let (sa, sc): (f32, f32) = (o["a"].px.iter().map(|p| p[0]).sum(), o["c"].px.iter().map(|p| p[0]).sum());
     assert!(sc < sa, "clear amount must trim the glow ({sc} vs {sa})");
@@ -953,10 +1041,14 @@ fn shared_noise_block_disorder_speed_anisotropy_and_tile_offset() {
         assert!(diff(&o["dis"], &o["fast"]) > 0.02, "{kind}: speed has no effect");
     }
     // anisotropy narrows the displacement to one direction (noise features move along it, so across it the image barely changes)
-    let o = run("node 1 perlin scale=4 seed=2\nnode 2 clouds scale=4 seed=2\nnode 3 clouds scale=4 seed=2 disorder=1 anisotropy=1 anisotropy_angle=0\nnode 4 clouds scale=4 seed=2 disorder=1\noutput base 2\noutput an 3\noutput iso 4\n");
+    let o = run(
+        "node 1 perlin scale=4 seed=2\nnode 2 clouds scale=4 seed=2\nnode 3 clouds scale=4 seed=2 disorder=1 anisotropy=1 anisotropy_angle=0\nnode 4 clouds scale=4 seed=2 disorder=1\noutput base 2\noutput an 3\noutput iso 4\n",
+    );
     assert!(diff(&o["base"], &o["an"]) > 0.02 && diff(&o["an"], &o["iso"]) > 0.02, "anisotropy must change the result");
     // tile offset: the fraction pans the tiling image, a whole part gives another tile of the plane
-    let o = run("node 1 clouds scale=4 seed=5\nnode 2 clouds scale=4 seed=5 tile_x=0.25\nnode 3 clouds scale=4 seed=5 tile_x=1\nnode 4 clouds scale=4 seed=5 tile_x=1.5 tile_y=2.25\noutput base 1\noutput pan 2\noutput other 3\noutput both 4\n");
+    let o = run(
+        "node 1 clouds scale=4 seed=5\nnode 2 clouds scale=4 seed=5 tile_x=0.25\nnode 3 clouds scale=4 seed=5 tile_x=1\nnode 4 clouds scale=4 seed=5 tile_x=1.5 tile_y=2.25\noutput base 1\noutput pan 2\noutput other 3\noutput both 4\n",
+    );
     for (x, y) in [(0i64, 5i64), (10, 30), (50, 60)] {
         assert_eq!(o["pan"].at(x, y), o["base"].at((x + 16).rem_euclid(64), y), "pan by a quarter tile");
     }
@@ -967,7 +1059,9 @@ fn shared_noise_block_disorder_speed_anisotropy_and_tile_offset() {
     let inner: f32 = (0..64).map(|y| (t.at(31, y)[0] - t.at(32, y)[0]).abs()).sum::<f32>() / 64.0;
     assert!(wrap < inner * 2.5 + 0.01, "seam: wrap {wrap} inner {inner}");
     // white noise distributions: uniform variance 1/12, triangle 1/24
-    let o = run("node 1 white_noise seed=1 distribution=0\nnode 2 white_noise seed=1 distribution=1\nnode 3 white_noise seed=1 distribution=2\noutput u 1\noutput g 2\noutput t 3\n");
+    let o = run(
+        "node 1 white_noise seed=1 distribution=0\nnode 2 white_noise seed=1 distribution=1\nnode 3 white_noise seed=1 distribution=2\noutput u 1\noutput g 2\noutput t 3\n",
+    );
     let var = |t: &materialcraft::tex::Tex| {
         let n = t.px.len() as f32;
         let m = t.px.iter().map(|p| p[0]).sum::<f32>() / n;
@@ -1000,7 +1094,22 @@ fn phase3_scatter_nodes_keep_old_output_and_gain_designer_properties() {
             64,
             Some(&pat),
             None,
-            &ops::TileP { nx: p.nx, ny: p.ny, size: p.size, size_rand: p.size_rand, rot: p.rot, rot_rand: p.rot_rand, pos_rand: p.pos_rand, color: p.color, color_rand: p.color_rand, offset: p.offset, seed: 7, thresh: 0.5, default_disc: !r#gen, brick: r#gen },
+            &ops::TileP {
+                nx: p.nx,
+                ny: p.ny,
+                size: p.size,
+                size_rand: p.size_rand,
+                rot: p.rot,
+                rot_rand: p.rot_rand,
+                pos_rand: p.pos_rand,
+                color: p.color,
+                color_rand: p.color_rand,
+                offset: p.offset,
+                seed: 7,
+                thresh: 0.5,
+                default_disc: !r#gen,
+                brick: r#gen,
+            },
         );
         let pats = scatter::Patterns { inputs: vec![&pat], builtin: 0, fallback: 2, distribution: 0 };
         let maps = scatter::TileMaps { mask: None, scale: None, rotation: None, displacement: None, color: None, distribution: None, background: None };
@@ -1032,33 +1141,49 @@ fn phase3_scatter_nodes_keep_old_output_and_gain_designer_properties() {
     }
     let sq = run("node 1 tile_sampler x_amount=4 y_amount=4 size=0.9 pattern_type=1\noutput a 1\n");
     assert!(sum(&sq["a"]) > sum(&base["a"]) * 1.1, "square must cover more than the soft disc");
-    let cols = run("node 1 tile_generator x_amount=4 y_amount=4 offset_mode=3 offset=0.5\nnode 2 tile_generator x_amount=4 y_amount=4 offset_mode=1 offset=0.5\nnode 3 tile_generator x_amount=4 y_amount=4 offset_mode=0\noutput c 1\noutput r 2\noutput n 3\n");
+    let cols = run(
+        "node 1 tile_generator x_amount=4 y_amount=4 offset_mode=3 offset=0.5\nnode 2 tile_generator x_amount=4 y_amount=4 offset_mode=1 offset=0.5\nnode 3 tile_generator x_amount=4 y_amount=4 offset_mode=0\noutput c 1\noutput r 2\noutput n 3\n",
+    );
     assert!(diff(&cols["c"], &cols["r"]) > 0.3 && diff(&cols["n"], &cols["r"]) > 0.3, "offset types must differ");
-    let chk = run("node 1 tile_generator x_amount=4 y_amount=4 offset_mode=0 pattern_type=1 size=1\nnode 2 tile_generator x_amount=4 y_amount=4 offset_mode=0 pattern_type=1 size=1 mask_checker=1\nnode 3 tile_generator x_amount=4 y_amount=4 offset_mode=0 pattern_type=1 size=1 mask_checker=1 invert_mask=1\nnode 4 tile_generator x_amount=4 y_amount=4 offset_mode=0 pattern_type=1 size=1 mask_random=1\noutput full 1\noutput a 2\noutput b 3\noutput none 4\n");
+    let chk = run(
+        "node 1 tile_generator x_amount=4 y_amount=4 offset_mode=0 pattern_type=1 size=1\nnode 2 tile_generator x_amount=4 y_amount=4 offset_mode=0 pattern_type=1 size=1 mask_checker=1\nnode 3 tile_generator x_amount=4 y_amount=4 offset_mode=0 pattern_type=1 size=1 mask_checker=1 invert_mask=1\nnode 4 tile_generator x_amount=4 y_amount=4 offset_mode=0 pattern_type=1 size=1 mask_random=1\noutput full 1\noutput a 2\noutput b 3\noutput none 4\n",
+    );
     let (f, a, b) = (sum(&chk["full"]), sum(&chk["a"]), sum(&chk["b"]));
     assert!((a - f / 2.0).abs() < f * 0.02 && (b - f / 2.0).abs() < f * 0.02 && (a + b - f).abs() < f * 0.02, "checker {a} {b} {f}");
     assert!(sum(&chk["none"]) == 0.0, "random mask 1 removes every tile");
-    let add = run("node 1 tile_sampler x_amount=2 y_amount=2 size=1.6 pattern_type=1 color=0.4 blending=0\nnode 2 tile_sampler x_amount=2 y_amount=2 size=1.6 pattern_type=1 color=0.4 blending=1\noutput max 1\noutput add 2\n");
+    let add = run(
+        "node 1 tile_sampler x_amount=2 y_amount=2 size=1.6 pattern_type=1 color=0.4 blending=0\nnode 2 tile_sampler x_amount=2 y_amount=2 size=1.6 pattern_type=1 color=0.4 blending=1\noutput max 1\noutput add 2\n",
+    );
     assert!(sum(&add["add"]) > sum(&add["max"]) * 1.5, "add must accumulate overlaps");
     assert!(add["add"].px.iter().all(|p| p[0].is_finite()));
-    let ord = run("node 1 tile_sampler x_amount=3 y_amount=3 size=1.6 pattern_type=1 color_random=0.8 blending=2 seed=2\nnode 2 tile_sampler x_amount=3 y_amount=3 size=1.6 pattern_type=1 color_random=0.8 blending=2 seed=2 reverse_order=1\noutput a 1\noutput b 2\n");
+    let ord = run(
+        "node 1 tile_sampler x_amount=3 y_amount=3 size=1.6 pattern_type=1 color_random=0.8 blending=2 seed=2\nnode 2 tile_sampler x_amount=3 y_amount=3 size=1.6 pattern_type=1 color_random=0.8 blending=2 seed=2 reverse_order=1\noutput a 1\noutput b 2\n",
+    );
     assert!(diff(&ord["a"], &ord["b"]) > 0.05, "reverse order must change overlapping tiles");
     let bg = run("node 1 tile_sampler x_amount=2 y_amount=2 size=0.3 background=0.25\noutput a 1\n");
     assert!(bg["a"].px.iter().all(|p| p[0] >= 0.2499), "background colour");
     // map inputs: a scale map of 0 hides every tile, a colour map darkens
-    let m = run("node 1 color gray=1 v=0\nnode 2 tile_sampler x_amount=4 y_amount=4 scale_map=@1\nnode 3 tile_sampler x_amount=4 y_amount=4\noutput z 2\noutput n 3\n");
+    let m = run(
+        "node 1 color gray=1 v=0\nnode 2 tile_sampler x_amount=4 y_amount=4 scale_map=@1\nnode 3 tile_sampler x_amount=4 y_amount=4\noutput z 2\noutput n 3\n",
+    );
     assert!(sum(&m["z"]) < sum(&m["n"]) * 0.01, "scale map 0 should shrink tiles away");
     // patterns by number: two inputs, each used by alternating tiles
-    let two = run("node 1 color gray=1 v=1\nnode 2 color gray=1 v=0.5\nnode 3 tile_generator x_amount=2 y_amount=2 offset_mode=0 size=1 pattern=@1 pattern2=@2 pattern_distribution=1\noutput a 3\n");
+    let two = run(
+        "node 1 color gray=1 v=1\nnode 2 color gray=1 v=0.5\nnode 3 tile_generator x_amount=2 y_amount=2 offset_mode=0 size=1 pattern=@1 pattern2=@2 pattern_distribution=1\noutput a 3\n",
+    );
     let vals: std::collections::BTreeSet<i32> = two["a"].px.iter().map(|p| (p[0] * 10.0).round() as i32).collect();
     assert!(vals.contains(&10) && vals.contains(&5), "two patterns by number {vals:?}");
 
     // 3. splatter: grid, pan, output levels, gain; circular: rings, spread
-    let g = run("node 1 splatter grid_number=3 scale=0.2 scale_var=0 rot_var=0 disorder=0\nnode 2 splatter grid_number=3 scale=0.2 scale_var=0 rot_var=0 disorder=0 pan_x=0.5\noutput a 1\noutput b 2\n");
+    let g = run(
+        "node 1 splatter grid_number=3 scale=0.2 scale_var=0 rot_var=0 disorder=0\nnode 2 splatter grid_number=3 scale=0.2 scale_var=0 rot_var=0 disorder=0 pan_x=0.5\noutput a 1\noutput b 2\n",
+    );
     assert!(diff(&g["a"], &g["b"]) > 0.1, "pan must move the grid");
     let lv = run("node 1 splatter output_min=0.2 output_max=0.6\noutput a 1\n");
     assert!(lv["a"].px.iter().all(|p| p[0] >= 0.1999 && p[0] <= 0.6001), "output levels");
-    let rg = run("node 1 splatter_circular number=8 radius=0.35 size=0.08\nnode 2 splatter_circular number=8 radius=0.35 size=0.08 rings=3\nnode 3 splatter_circular number=8 radius=0.35 size=0.08 spread=0.5\noutput a 1\noutput b 2\noutput c 3\n");
+    let rg = run(
+        "node 1 splatter_circular number=8 radius=0.35 size=0.08\nnode 2 splatter_circular number=8 radius=0.35 size=0.08 rings=3\nnode 3 splatter_circular number=8 radius=0.35 size=0.08 spread=0.5\noutput a 1\noutput b 2\noutput c 3\n",
+    );
     assert!(sum(&rg["b"]) > sum(&rg["a"]) * 1.5, "rings add instances");
     let top: f32 = (0..64usize).flat_map(|y| (0..64usize).map(move |x| (x, y))).filter(|&(_, y)| y < 24).map(|(x, y)| rg["c"].at(x as i64, y as i64)[0]).sum();
     assert!(top < 1e-3 && sum(&rg["c"]) > 1.0, "spread 0.5 places everything on one half of the circle");
@@ -1080,7 +1205,9 @@ fn tile_sampler_and_generator_are_seamless() {
     ];
     for kind in ["tile_sampler", "tile_generator"] {
         for c in configs {
-            let o = run(&format!("node 1 {kind} {c}\nnode 2 {kind} {c} global_offset_x=0.015625\nnode 3 {kind} {c} global_offset_y=0.015625\noutput a 1\noutput bx 2\noutput by 3\n"));
+            let o = run(&format!(
+                "node 1 {kind} {c}\nnode 2 {kind} {c} global_offset_x=0.015625\nnode 3 {kind} {c} global_offset_y=0.015625\noutput a 1\noutput bx 2\noutput by 3\n"
+            ));
             let a = &o["a"];
             let mut worst = 0.0f32;
             for y in 0..64i64 {
@@ -1098,10 +1225,13 @@ fn tile_sampler_and_generator_are_seamless() {
 fn phase3b_nodes_behave_like_designer() {
     let run = |body: &str| Graph::parse(&format!("size 64\n{body}")).unwrap().evaluate(None).unwrap();
     let sum = |t: &materialcraft::tex::Tex| t.px.iter().map(|p| p[0]).sum::<f32>();
-    let diff = |a: &materialcraft::tex::Tex, b: &materialcraft::tex::Tex| a.px.iter().zip(&b.px).map(|(p, q)| (p[0] - q[0]).abs()).sum::<f32>() / a.px.len() as f32;
+    let diff =
+        |a: &materialcraft::tex::Tex, b: &materialcraft::tex::Tex| a.px.iter().zip(&b.px).map(|(p, q)| (p[0] - q[0]).abs()).sum::<f32>() / a.px.len() as f32;
     // Edge Detect: width, invert, tolerance, roundness
     let run512 = |body: &str| Graph::parse(&format!("size 512\n{body}")).unwrap().evaluate(None).unwrap();
-    let o = run512("node 1 stripes count=2 softness=0.001 width=0.5\nnode 2 edge_detect in=@1 edge_width=1 edge_roundness=0\nnode 3 edge_detect in=@1 edge_width=9 edge_roundness=0\nnode 4 edge_detect in=@1 edge_width=1 edge_roundness=0 invert=1\nnode 5 edge_detect in=@1 edge_width=9 edge_roundness=8\nnode 6 perlin scale=4 seed=1\nnode 7 edge_detect in=@6 tolerance=0 edge_roundness=0\nnode 8 edge_detect in=@6 tolerance=0.9 edge_roundness=0\nnode 9 edge_detect in=@1 mode=1\noutput w1 2\noutput w9 3\noutput inv 4\noutput round 5\noutput t0 7\noutput t9 8\noutput legacy 9\n");
+    let o = run512(
+        "node 1 stripes count=2 softness=0.001 width=0.5\nnode 2 edge_detect in=@1 edge_width=1 edge_roundness=0\nnode 3 edge_detect in=@1 edge_width=9 edge_roundness=0\nnode 4 edge_detect in=@1 edge_width=1 edge_roundness=0 invert=1\nnode 5 edge_detect in=@1 edge_width=9 edge_roundness=8\nnode 6 perlin scale=4 seed=1\nnode 7 edge_detect in=@6 tolerance=0 edge_roundness=0\nnode 8 edge_detect in=@6 tolerance=0.9 edge_roundness=0\nnode 9 edge_detect in=@1 mode=1\noutput w1 2\noutput w9 3\noutput inv 4\noutput round 5\noutput t0 7\noutput t9 8\noutput legacy 9\n",
+    );
     assert!(sum(&o["w1"]) > 1.0, "edges found");
     assert!(sum(&o["w9"]) > sum(&o["w1"]) * 2.0, "edge width widens the line");
     assert!((sum(&o["inv"]) + sum(&o["w1"]) - 512.0 * 512.0).abs() < 1.0, "invert");
@@ -1109,7 +1239,9 @@ fn phase3b_nodes_behave_like_designer() {
     assert!(sum(&o["t9"]) < sum(&o["t0"]) * 0.5, "tolerance drops weak edges");
     assert!(sum(&o["legacy"]) > 1.0, "legacy sobel still works");
     // Radial Blur: a spin blur leaves concentric rings alone, the legacy zoom blur smears them
-    let o = run("node 1 pixel_processor expr=\"sqrt((u-0.5)*(u-0.5)+(v-0.5)*(v-0.5))*2\"\nnode 2 radial_blur in=@1 angle=0.2 samples=16\nnode 3 radial_blur in=@1 mode=1 amount=0.5\nnode 4 radial_blur in=@1 angle=0.4 samples=1\noutput src 1\noutput spin 2\noutput zoom 3\noutput one 4\n");
+    let o = run(
+        "node 1 pixel_processor expr=\"sqrt((u-0.5)*(u-0.5)+(v-0.5)*(v-0.5))*2\"\nnode 2 radial_blur in=@1 angle=0.2 samples=16\nnode 3 radial_blur in=@1 mode=1 amount=0.5\nnode 4 radial_blur in=@1 angle=0.4 samples=1\noutput src 1\noutput spin 2\noutput zoom 3\noutput one 4\n",
+    );
     // compare the inner disc only (the blur samples stay inside the image there)
     let inner = |a: &materialcraft::tex::Tex, b: &materialcraft::tex::Tex| {
         let (mut d, mut n) = (0.0f32, 0.0f32);
@@ -1127,12 +1259,16 @@ fn phase3b_nodes_behave_like_designer() {
     assert!(inner(&o["spin"], &o["src"]) < inner(&o["zoom"], &o["src"]) * 0.5, "spin {} zoom {}", inner(&o["spin"], &o["src"]), inner(&o["zoom"], &o["src"]));
     assert!(diff(&o["one"], &o["src"]) < 1e-3, "one sample is the identity");
     // Mosaic: the map regions are flattened to one colour each
-    let o = run("node 1 perlin scale=4 seed=2\nnode 2 stripes count=2 softness=0.001 width=0.5\nnode 3 mosaic in=@1 mosaic_map=@2\nnode 4 mosaic in=@1 mosaic_map=@2 intensity=0\noutput m 3\noutput z 4\noutput src 1\n");
+    let o = run(
+        "node 1 perlin scale=4 seed=2\nnode 2 stripes count=2 softness=0.001 width=0.5\nnode 3 mosaic in=@1 mosaic_map=@2\nnode 4 mosaic in=@1 mosaic_map=@2 intensity=0\noutput m 3\noutput z 4\noutput src 1\n",
+    );
     let distinct = |t: &materialcraft::tex::Tex| t.px.iter().map(|p| (p[0] * 1000.0).round() as i32).collect::<std::collections::BTreeSet<_>>().len();
     assert!(distinct(&o["m"]) < 60 && distinct(&o["src"]) > 300, "{} {}", distinct(&o["m"]), distinct(&o["src"]));
     assert!(diff(&o["z"], &o["src"]) < 1e-4, "intensity 0 keeps the input");
     // Curvature reads a normal map: flat is mid grey, a bump is not
-    let o = run("node 1 color gray=1 v=0.5\nnode 2 normal in=@1\nnode 3 curvature in=@2\nnode 4 shape shape=0 size=0.3\nnode 5 blur in=@4 intensity=6\nnode 6 normal in=@5 strength=8\nnode 7 curvature in=@6 intensity=8\nnode 8 curvature in=@6 intensity=8 directx=1\noutput flat 3\noutput bump 7\noutput bumpdx 8\n");
+    let o = run(
+        "node 1 color gray=1 v=0.5\nnode 2 normal in=@1\nnode 3 curvature in=@2\nnode 4 shape shape=0 size=0.3\nnode 5 blur in=@4 intensity=6\nnode 6 normal in=@5 strength=8\nnode 7 curvature in=@6 intensity=8\nnode 8 curvature in=@6 intensity=8 directx=1\noutput flat 3\noutput bump 7\noutput bumpdx 8\n",
+    );
     assert!(o["flat"].px.iter().all(|p| (p[0] - 0.5).abs() < 1e-4), "flat normal map has no curvature");
     let (mn, mx) = o["bump"].px.iter().fold((1.0f32, 0.0f32), |a, p| (a.0.min(p[0]), a.1.max(p[0])));
     assert!(mx - mn > 0.2, "bump has curvature {mn} {mx}");
@@ -1143,10 +1279,13 @@ fn phase3b_nodes_behave_like_designer() {
 fn phase5_voronoi_cells_grunge_properties() {
     let run = |body: &str| Graph::parse(&format!("size 64\n{body}")).unwrap().evaluate(None).unwrap();
     let mean = |t: &materialcraft::tex::Tex| t.px.iter().map(|p| p[0]).sum::<f32>() / t.px.len() as f32;
-    let diff = |a: &materialcraft::tex::Tex, b: &materialcraft::tex::Tex| a.px.iter().zip(&b.px).map(|(p, q)| (p[0] - q[0]).abs()).sum::<f32>() / a.px.len() as f32;
+    let diff =
+        |a: &materialcraft::tex::Tex, b: &materialcraft::tex::Tex| a.px.iter().zip(&b.px).map(|(p, q)| (p[0] - q[0]).abs()).sum::<f32>() / a.px.len() as f32;
     let distinct = |t: &materialcraft::tex::Tex| t.px.iter().map(|p| (p[0] * 1000.0).round() as i32).collect::<std::collections::BTreeSet<_>>().len();
     // Voronoi: defaults reproduce the previous node
-    let o = run("node 1 voronoi scale=6 seed=4 mode=0\nnode 2 voronoi scale=6 seed=4 mode=1\nnode 3 voronoi scale=6 seed=4 mode=2\nnode 4 voronoi scale=6 seed=4 mode=3\noutput a 1\noutput b 2\noutput c 3\noutput d 4\n");
+    let o = run(
+        "node 1 voronoi scale=6 seed=4 mode=0\nnode 2 voronoi scale=6 seed=4 mode=1\nnode 3 voronoi scale=6 seed=4 mode=2\nnode 4 voronoi scale=6 seed=4 mode=3\noutput a 1\noutput b 2\noutput c 3\noutput d 4\n",
+    );
     for y in (0..64i64).step_by(7) {
         for x in (0..64i64).step_by(5) {
             let (u, v) = ((x as f32 + 0.5) / 64.0, (y as f32 + 0.5) / 64.0);
@@ -1156,7 +1295,9 @@ fn phase5_voronoi_cells_grunge_properties() {
         }
     }
     // metrics, distortion, aspect, styles, invert, colour seed
-    let o = run("node 1 voronoi scale=5 seed=2\nnode 2 voronoi scale=5 seed=2 distance_mode=1\nnode 3 voronoi scale=5 seed=2 distance_mode=2\nnode 4 voronoi scale=5 seed=2 distance_mode=3 minkowski=2\nnode 5 voronoi scale=5 seed=2 distortion=1\nnode 6 voronoi scale=5 seed=2 aspect=2\nnode 7 voronoi scale=5 seed=2 invert=1\nnode 8 voronoi scale=5 seed=2 mode=1\nnode 9 voronoi scale=5 seed=2 mode=1 color_seed_mode=1 color_seed=77\nnode 10 voronoi scale=5 seed=2 color_seed_mode=1 color_seed=77\nnode 11 voronoi scale=5 seed=2 offset_x=0.5\noutput e 1\noutput m 2\noutput c 3\noutput k 4\noutput dist 5\noutput asp 6\noutput inv 7\noutput id 8\noutput id2 9\noutput f1b 10\noutput off 11\n");
+    let o = run(
+        "node 1 voronoi scale=5 seed=2\nnode 2 voronoi scale=5 seed=2 distance_mode=1\nnode 3 voronoi scale=5 seed=2 distance_mode=2\nnode 4 voronoi scale=5 seed=2 distance_mode=3 minkowski=2\nnode 5 voronoi scale=5 seed=2 distortion=1\nnode 6 voronoi scale=5 seed=2 aspect=2\nnode 7 voronoi scale=5 seed=2 invert=1\nnode 8 voronoi scale=5 seed=2 mode=1\nnode 9 voronoi scale=5 seed=2 mode=1 color_seed_mode=1 color_seed=77\nnode 10 voronoi scale=5 seed=2 color_seed_mode=1 color_seed=77\nnode 11 voronoi scale=5 seed=2 offset_x=0.5\noutput e 1\noutput m 2\noutput c 3\noutput k 4\noutput dist 5\noutput asp 6\noutput inv 7\noutput id 8\noutput id2 9\noutput f1b 10\noutput off 11\n",
+    );
     assert!(diff(&o["e"], &o["m"]) > 0.02 && diff(&o["e"], &o["c"]) > 0.02, "metrics differ");
     assert!(diff(&o["e"], &o["k"]) < 1e-3, "minkowski 2 is euclidean");
     assert!(mean(&o["c"]) <= mean(&o["e"]) + 1e-4 && mean(&o["m"]) >= mean(&o["e"]) - 1e-4, "chebyshev <= euclid <= manhattan");
@@ -1169,17 +1310,23 @@ fn phase5_voronoi_cells_grunge_properties() {
         assert!(o["b"].px.iter().all(|p| p[0].is_finite()));
     }
     // Voronoi Fractal
-    let o = run("node 1 voronoi scale=3 seed=1\nnode 2 voronoi_fractal scale=3 seed=1 min_level=0 max_level=0\nnode 3 voronoi_fractal scale=3 seed=1 max_level=3\nnode 4 voronoi_fractal scale=3 seed=1 max_level=3 blend=1\nnode 5 voronoi_fractal scale=3 seed=1 max_level=3 blend=2\noutput a 1\noutput one 2\noutput add 3\noutput max 4\noutput min 5\n");
+    let o = run(
+        "node 1 voronoi scale=3 seed=1\nnode 2 voronoi_fractal scale=3 seed=1 min_level=0 max_level=0\nnode 3 voronoi_fractal scale=3 seed=1 max_level=3\nnode 4 voronoi_fractal scale=3 seed=1 max_level=3 blend=1\nnode 5 voronoi_fractal scale=3 seed=1 max_level=3 blend=2\noutput a 1\noutput one 2\noutput add 3\noutput max 4\noutput min 5\n",
+    );
     assert!(diff(&o["a"], &o["one"]) < 1e-5, "one level is a plain voronoi");
     assert!(diff(&o["a"], &o["add"]) > 0.02 && diff(&o["add"], &o["max"]) > 0.02 && diff(&o["max"], &o["min"]) > 0.02, "levels and blend modes");
     assert!(mean(&o["max"]) >= mean(&o["min"]));
     // Cells per-variant properties
-    let o = run("node 1 cells variant=0 scale=6 seed=3\nnode 2 cells variant=0 scale=6 seed=3 luminance_random=1\nnode 3 cells variant=2 scale=6 seed=3\nnode 4 cells variant=2 scale=6 seed=3 edge_width=0.8\nnode 5 cells variant=3 scale=6 seed=3\nnode 6 cells variant=3 scale=6 seed=3 hardness=8\nnode 7 color gray=1 v=0.3\nnode 8 cells variant=1 scale=6 seed=3 color_source=2 color=@7\nnode 9 cells variant=1 scale=6 seed=3 color_source=1 pseudorandom_seed=5\nnode 10 cells variant=1 scale=6 seed=3\noutput l0 1\noutput l1 2\noutput e0 3\noutput e1 4\noutput h0 5\noutput h1 6\noutput img 8\noutput ps 9\noutput rnd 10\n");
+    let o = run(
+        "node 1 cells variant=0 scale=6 seed=3\nnode 2 cells variant=0 scale=6 seed=3 luminance_random=1\nnode 3 cells variant=2 scale=6 seed=3\nnode 4 cells variant=2 scale=6 seed=3 edge_width=0.8\nnode 5 cells variant=3 scale=6 seed=3\nnode 6 cells variant=3 scale=6 seed=3 hardness=8\nnode 7 color gray=1 v=0.3\nnode 8 cells variant=1 scale=6 seed=3 color_source=2 color=@7\nnode 9 cells variant=1 scale=6 seed=3 color_source=1 pseudorandom_seed=5\nnode 10 cells variant=1 scale=6 seed=3\noutput l0 1\noutput l1 2\noutput e0 3\noutput e1 4\noutput h0 5\noutput h1 6\noutput img 8\noutput ps 9\noutput rnd 10\n",
+    );
     assert!(diff(&o["l0"], &o["l1"]) > 0.05 && diff(&o["e0"], &o["e1"]) > 0.02 && diff(&o["h0"], &o["h1"]) > 0.02);
     assert!(o["img"].px.iter().all(|p| (p[0] - 0.3).abs() < 1e-3), "image colour source: every cell takes the image value");
     assert!(diff(&o["ps"], &o["rnd"]) > 0.05 && distinct(&o["ps"]) > 10, "pseudorandom source");
     // Grunge
-    let o = run("node 1 grunge variant=0 seed=2\nnode 2 grunge variant=0 seed=2 balance=0.7\nnode 3 grunge variant=0 seed=2 dirt_specks_opacity=1\nnode 4 grunge variant=1 seed=2\nnode 5 grunge variant=1 seed=2 scratch_width=0.8\nnode 6 grunge variant=2 seed=2\nnode 7 grunge variant=2 seed=2 coverage=0.7 details=40\nnode 8 grunge variant=0 seed=2 scratches_opacity=1\noutput c 1\noutput bal 2\noutput specks 3\noutput s0 4\noutput s1 5\noutput p0 6\noutput p1 7\noutput scr 8\n");
+    let o = run(
+        "node 1 grunge variant=0 seed=2\nnode 2 grunge variant=0 seed=2 balance=0.7\nnode 3 grunge variant=0 seed=2 dirt_specks_opacity=1\nnode 4 grunge variant=1 seed=2\nnode 5 grunge variant=1 seed=2 scratch_width=0.8\nnode 6 grunge variant=2 seed=2\nnode 7 grunge variant=2 seed=2 coverage=0.7 details=40\nnode 8 grunge variant=0 seed=2 scratches_opacity=1\noutput c 1\noutput bal 2\noutput specks 3\noutput s0 4\noutput s1 5\noutput p0 6\noutput p1 7\noutput scr 8\n",
+    );
     assert!(mean(&o["bal"]) > mean(&o["c"]) + 0.05, "balance brightens");
     assert!(mean(&o["specks"]) < mean(&o["c"]) && mean(&o["scr"]) > mean(&o["c"]), "concrete specks darken, scratches add");
     assert!(mean(&o["s1"]) > mean(&o["s0"]), "wider scratches cover more");
@@ -1246,7 +1393,9 @@ fn phase8_hbao_and_quantize_color() {
     assert!(mean(&o["w_big"]) < mean(&o["w_small"]), "world units: higher height scale occludes more");
     assert!(o["q16"].px.iter().all(|p| p[0].is_finite() && (0.0..=1.0).contains(&p[0])));
     // quantize colour: a smooth gradient reduces to the requested number of colours
-    let o = run("node 1 gradient mode=0\nnode 2 colorize in=@1 p0=0 r0=1 g0=0 b0=0 p1=0.5 r1=0 g1=1 b1=0 p2=1 r2=0 g2=0 b2=1\nnode 3 quantize_color in=@2 color_amount=3\nnode 4 quantize_color in=@2 color_amount=8 dithering=1 dithering_pattern=1\nnode 5 quantize_color in=@2 color_amount=1\noutput three 3\noutput eight 4\noutput one 5\n");
+    let o = run(
+        "node 1 gradient mode=0\nnode 2 colorize in=@1 p0=0 r0=1 g0=0 b0=0 p1=0.5 r1=0 g1=1 b1=0 p2=1 r2=0 g2=0 b2=1\nnode 3 quantize_color in=@2 color_amount=3\nnode 4 quantize_color in=@2 color_amount=8 dithering=1 dithering_pattern=1\nnode 5 quantize_color in=@2 color_amount=1\noutput three 3\noutput eight 4\noutput one 5\n",
+    );
     let distinct = |t: &materialcraft::tex::Tex| {
         let mut v: Vec<[i32; 3]> = t.px.iter().map(|p| [(p[0] * 200.0) as i32, (p[1] * 200.0) as i32, (p[2] * 200.0) as i32]).collect();
         v.sort();

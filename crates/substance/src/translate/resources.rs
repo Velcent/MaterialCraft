@@ -6,7 +6,7 @@ use super::error::PartError;
 use super::pixel_convert::{Conversion, RowOrder};
 use super::source_format::SourceFormat;
 use crate::decode::image::ImageResource;
-use crate::project::{paths, SppProject};
+use crate::project::{SppProject, paths};
 use materialcraft::paint::TiledImage;
 
 /// One decoded image resource: straight values, rows top first (as image resources are stored).

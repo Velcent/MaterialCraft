@@ -4,7 +4,7 @@ use super::fixtures::*;
 use crate::translate::layers::cache_agreement::CacheAgreement;
 use crate::translate::layers::cache_score::Score;
 use crate::translate::layers::strategy::provides_base;
-use crate::translate::layers::{StackParts, StackStrategy, PAINTER_RESULT_NAME, REFERENCE_NAME};
+use crate::translate::layers::{PAINTER_RESULT_NAME, REFERENCE_NAME, StackParts, StackStrategy};
 use materialcraft::paint::{Channel, Fill, Layer, LayerKind};
 
 fn plain(id: &str) -> Layer {

@@ -1,7 +1,7 @@
 //! [`WorldNormal`]: World-space normal map (in Painter's normalised mesh space).
 //! Both encode `0.5 + 0.5 n`; compared as stored.
 
-use super::{baked_map, NEEDS};
+use super::{NEEDS, baked_map};
 use crate::inputs::Inputs;
 use crate::settings::Params;
 use crate::subject::{CaseError, Component, Need, ReferenceKind, Subject, XYZ};

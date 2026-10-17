@@ -36,11 +36,7 @@ impl Loader {
             let result = load(&path, cancel, tx);
             let _ = tx.send(Event::Done(result));
         });
-        Loader {
-            job,
-            source,
-            progress: (0.0, "Opening".into()),
-        }
+        Loader { job, source, progress: (0.0, "Opening".into()) }
     }
 
     pub fn source(&self) -> &Path {
@@ -69,46 +65,28 @@ impl Loader {
 }
 
 fn load(path: &Path, cancel: &CancelToken, tx: &Sender<Event>) -> Result<Loaded, String> {
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let (file, summary) = match ext.as_str() {
         "mcpaint" => (path.to_path_buf(), None),
         "spp" => {
             let (file, summary) = convert(path, cancel, tx)?;
             (file, Some(summary))
         }
-        _ => {
-            return Err(format!(
-                "{} is neither a .mcpaint document nor a .spp project.",
-                path.display()
-            ))
-        }
+        _ => return Err(format!("{} is neither a .mcpaint document nor a .spp project.", path.display())),
     };
     let _ = tx.send(Event::Progress(0.95, "Reading document".into()));
     let document = read_document(&file)?;
-    Ok(Loaded {
-        document,
-        source: path.to_path_buf(),
-        summary,
-    })
+    Ok(Loaded { document, source: path.to_path_buf(), summary })
 }
 
 /// Converts a `.spp` into the cache unless an up-to-date conversion is there already.
-fn convert(
-    spp: &Path,
-    cancel: &CancelToken,
-    tx: &Sender<Event>,
-) -> Result<(PathBuf, String), String> {
+fn convert(spp: &Path, cancel: &CancelToken, tx: &Sender<Event>) -> Result<(PathBuf, String), String> {
     let mcsub = Mcsub::locate()?;
     let out = cache::converted_path(spp, mcsub.path());
     if out.is_file() {
         return Ok((out, "Opened the cached conversion.".into()));
     }
-    std::fs::create_dir_all(cache::dir())
-        .map_err(|e| format!("Cannot create {}: {e}", cache::dir().display()))?;
+    std::fs::create_dir_all(cache::dir()).map_err(|e| format!("Cannot create {}: {e}", cache::dir().display()))?;
     let part = out.with_extension("mcpaint.part");
     let progress = |f: f32, m: &str| {
         let _ = tx.send(Event::Progress(f * 0.9, m.to_string()));
@@ -121,8 +99,7 @@ fn convert(
             return Err(e);
         }
     };
-    std::fs::rename(&part, &out)
-        .map_err(|e| format!("Cannot store the converted document: {e}"))?;
+    std::fs::rename(&part, &out).map_err(|e| format!("Cannot store the converted document: {e}"))?;
     Ok((out, summary))
 }
 

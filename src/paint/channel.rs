@@ -64,18 +64,13 @@ impl Channel {
             Channel::Roughness => [0.5, 0.5, 0.5, 1.0],
             Channel::Normal => [0.5, 0.5, 1.0, 1.0],
             Channel::Opacity | Channel::AmbientOcclusion => [1.0, 1.0, 1.0, 1.0],
-            Channel::Height | Channel::Metallic | Channel::Emissive | Channel::User(_) => {
-                [0.0, 0.0, 0.0, 1.0]
-            }
+            Channel::Height | Channel::Metallic | Channel::Emissive | Channel::User(_) => [0.0, 0.0, 0.0, 1.0],
         }
     }
 
     /// True for colour channels (three components), false for scalar ones.
     pub fn is_color(self) -> bool {
-        matches!(
-            self,
-            Channel::BaseColor | Channel::Normal | Channel::Emissive
-        )
+        matches!(self, Channel::BaseColor | Channel::Normal | Channel::Emissive)
     }
 
     /// Storage format suggested for a new channel. Height is signed (f16), normals use 16 bits to avoid banding.
@@ -134,11 +129,7 @@ pub struct ChannelSpec {
 impl ChannelSpec {
     /// The channel with its default format and colour space.
     pub fn new(channel: Channel) -> ChannelSpec {
-        ChannelSpec {
-            channel,
-            format: channel.default_format(),
-            color_space: channel.default_color_space(),
-        }
+        ChannelSpec { channel, format: channel.default_format(), color_space: channel.default_color_space() }
     }
 
     /// Format for a paint layer's image of this channel: the value format plus alpha (coverage).
@@ -153,10 +144,7 @@ mod tests {
 
     #[test]
     fn ids_round_trip() {
-        for c in Channel::STANDARD
-            .into_iter()
-            .chain((0..USER_CHANNELS).map(Channel::User))
-        {
+        for c in Channel::STANDARD.into_iter().chain((0..USER_CHANNELS).map(Channel::User)) {
             assert_eq!(Channel::from_id(&c.id()), Some(c));
         }
         assert_eq!(Channel::BaseColor.id(), "base_color");
@@ -164,10 +152,7 @@ mod tests {
         for bad in ["user8", "user", "user03", "user-1", "Base_Color", ""] {
             assert_eq!(Channel::from_id(bad), None, "{bad}");
         }
-        assert_eq!(
-            ColorSpace::from_id(ColorSpace::Srgb.id()),
-            Some(ColorSpace::Srgb)
-        );
+        assert_eq!(ColorSpace::from_id(ColorSpace::Srgb.id()), Some(ColorSpace::Srgb));
     }
 
     #[test]
@@ -177,10 +162,7 @@ mod tests {
         let s = ChannelSpec::new(Channel::Roughness);
         assert_eq!(s.format.id(), "gray8");
         assert_eq!(s.layer_format().id(), "graya8");
-        assert_eq!(
-            ChannelSpec::new(Channel::BaseColor).color_space,
-            ColorSpace::Srgb
-        );
+        assert_eq!(ChannelSpec::new(Channel::BaseColor).color_space, ColorSpace::Srgb);
         assert!(Channel::Height.default_format().sample.is_float());
     }
 }

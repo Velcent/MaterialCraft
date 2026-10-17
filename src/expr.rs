@@ -1,6 +1,6 @@
 //! Mini expression language for the Pixel Processor / function nodes.
 use crate::noise;
-use crate::tex::{lum, Tex};
+use crate::tex::{Tex, lum};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Op {
@@ -203,11 +203,7 @@ impl P {
             Some(Tok::Id(name)) => {
                 self.i += 1;
                 if self.sym('(') {
-                    let (f, arity) = FUNCS
-                        .iter()
-                        .find(|(n, _, _)| *n == name)
-                        .map(|(_, f, a)| (*f, *a))
-                        .ok_or_else(|| format!("unknown function '{name}'"))?;
+                    let (f, arity) = FUNCS.iter().find(|(n, _, _)| *n == name).map(|(_, f, a)| (*f, *a)).ok_or_else(|| format!("unknown function '{name}'"))?;
                     let mut args = Vec::new();
                     if !self.sym(')') {
                         loop {
@@ -227,10 +223,7 @@ impl P {
                 } else if name == "pi" {
                     Ok(Ex::Num(std::f32::consts::PI))
                 } else {
-                    VARS.iter()
-                        .position(|v| *v == name)
-                        .map(Ex::Var)
-                        .ok_or_else(|| format!("unknown variable '{name}'"))
+                    VARS.iter().position(|v| *v == name).map(Ex::Var).ok_or_else(|| format!("unknown variable '{name}'"))
                 }
             }
             other => Err(format!("unexpected token {:?}", other)),
@@ -312,9 +305,5 @@ pub fn eval(e: &Ex, env: &Env) -> f32 {
             }
         }
     };
-    if r.is_finite() {
-        r
-    } else {
-        0.0
-    }
+    if r.is_finite() { r } else { 0.0 }
 }

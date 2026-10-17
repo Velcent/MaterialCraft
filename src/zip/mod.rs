@@ -68,12 +68,7 @@ mod tests {
     use std::io::Cursor;
 
     fn sample() -> Vec<(String, Vec<u8>, Method)> {
-        let text: Vec<u8> = b"layer mask roughness "
-            .iter()
-            .cycle()
-            .take(100_000)
-            .copied()
-            .collect();
+        let text: Vec<u8> = b"layer mask roughness ".iter().cycle().take(100_000).copied().collect();
         let mut s = 99u32;
         let noise: Vec<u8> = (0..5000)
             .map(|_| {
@@ -82,17 +77,9 @@ mod tests {
             })
             .collect();
         vec![
-            (
-                "document.json".into(),
-                b"{\"version\": 1}".to_vec(),
-                Method::Deflate,
-            ),
+            ("document.json".into(), b"{\"version\": 1}".to_vec(), Method::Deflate),
             ("textures/".into(), vec![], Method::Stored),
-            (
-                "textures/vase/base_color.png".into(),
-                noise,
-                Method::Deflate,
-            ),
+            ("textures/vase/base_color.png".into(), noise, Method::Deflate),
             ("big.txt".into(), text, Method::Deflate),
             ("empty".into(), vec![], Method::Deflate),
             ("ümlaut/名前.txt".into(), b"utf8".to_vec(), Method::Stored),
@@ -122,10 +109,7 @@ mod tests {
             assert!(r.find("textures/").unwrap().is_dir());
             assert_eq!(r.find("big.txt").unwrap().method(), Some(Method::Deflate));
             // Incompressible data was stored despite asking for deflate.
-            assert_eq!(
-                r.find("textures/vase/base_color.png").unwrap().method(),
-                Some(Method::Stored)
-            );
+            assert_eq!(r.find("textures/vase/base_color.png").unwrap().method(), Some(Method::Stored));
             assert!(matches!(r.read("nope"), Err(ZipError::NotFound(_))));
         }
     }
@@ -134,10 +118,7 @@ mod tests {
     fn empty_archive() {
         let bytes = ZipWriter::in_memory().finish_bytes().unwrap();
         assert_eq!(bytes.len(), 22);
-        assert!(ZipReader::open(Cursor::new(bytes))
-            .unwrap()
-            .entries()
-            .is_empty());
+        assert!(ZipReader::open(Cursor::new(bytes)).unwrap().entries().is_empty());
     }
 
     #[test]
@@ -169,35 +150,23 @@ mod tests {
         let at = bytes.windows(4).position(|w| w == b"utf8").unwrap();
         bytes[at] ^= 1;
         let mut r = ZipReader::open(Cursor::new(bytes)).unwrap();
-        assert!(matches!(
-            r.read("ümlaut/名前.txt"),
-            Err(ZipError::Checksum(_))
-        ));
+        assert!(matches!(r.read("ümlaut/名前.txt"), Err(ZipError::Checksum(_))));
         assert!(r.read("document.json").is_ok());
     }
 
     #[test]
     fn rejects_encrypted_and_unknown_methods() {
         let bytes = build(false);
-        let cd = bytes
-            .windows(4)
-            .position(|w| w == [0x50, 0x4b, 0x01, 0x02])
-            .unwrap();
+        let cd = bytes.windows(4).position(|w| w == [0x50, 0x4b, 0x01, 0x02]).unwrap();
         let mut enc = bytes.clone();
         enc[cd + 8] |= 1; // general-purpose flags: encrypted
         let mut r = ZipReader::open(Cursor::new(enc)).unwrap();
-        assert!(matches!(
-            r.read("document.json"),
-            Err(ZipError::Unsupported(_))
-        ));
+        assert!(matches!(r.read("document.json"), Err(ZipError::Unsupported(_))));
         let mut lzma = bytes;
         lzma[cd + 10] = 14; // method: LZMA
         let mut r = ZipReader::open(Cursor::new(lzma)).unwrap();
         assert_eq!(r.entries()[0].method(), None);
-        assert!(matches!(
-            r.read("document.json"),
-            Err(ZipError::Unsupported(_))
-        ));
+        assert!(matches!(r.read("document.json"), Err(ZipError::Unsupported(_))));
     }
 
     #[test]
@@ -220,10 +189,7 @@ mod tests {
                 .collect();
             assert!(ZipReader::open(Cursor::new(g.clone())).is_err());
             // Garbage with a plausible end record pointing nowhere.
-            g.extend_from_slice(&[
-                0x50, 0x4b, 5, 6, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0, 0,
-                0, 0, 0, 0,
-            ]);
+            g.extend_from_slice(&[0x50, 0x4b, 5, 6, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0, 0, 0, 0, 0, 0]);
             assert!(ZipReader::open(Cursor::new(g)).is_err());
         }
     }

@@ -19,21 +19,20 @@
 //! the height → normal scale (default 1 = Painter's; 0 leaves height out of the normal map).
 //! `convert`, `maps` and `compare` print progress on stderr as `progress <0..1> <message>`.
 
-use materialcraft::paint::{format, Document};
+use materialcraft::paint::{Document, format};
 use materialcraft_substance::container::hdf5::EntryKind;
 use materialcraft_substance::inspect::document_dump::LIST_PREVIEW;
 use materialcraft_substance::inspect::{Corpus, CorpusTable, DocumentDump, InspectOptions, ProjectReport, TextReport};
-use materialcraft_substance::project::{paths, SppProject};
+use materialcraft_substance::project::{SppProject, paths};
 use materialcraft_substance::tools::model_text::ModelText;
 use materialcraft_substance::tools::report_text::ReportText;
-use materialcraft_substance::tools::verify_layers::{verify_path, VerifyOptions};
+use materialcraft_substance::tools::verify_layers::{VerifyOptions, verify_path};
 use materialcraft_substance::tools::{compare, convert, maps, model_corpus};
 use materialcraft_substance::translate::import_spp;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const USAGE: &str =
-    "usage: mcsub inspect|tree|doc|model|corpus|convert|report|maps|compare|verify-layers … (see the source header for details)";
+const USAGE: &str = "usage: mcsub inspect|tree|doc|model|corpus|convert|report|maps|compare|verify-layers … (see the source header for details)";
 
 /// Parsed command line: positional words, `--flag`s and `--diff <dir>`.
 struct Args {

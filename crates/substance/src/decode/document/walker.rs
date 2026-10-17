@@ -5,9 +5,9 @@
 //! tag byte, payload. End offsets are absolute positions in the file. Because objects and lists
 //! carry their end, a value with an unknown tag only costs the rest of its enclosing container.
 
+use super::RECORD;
 use super::header::ROOT_OFFSET;
 use super::tag::{Payload, ValueTag};
-use super::RECORD;
 use crate::container::bytes::ByteReader;
 use crate::decode::DecodeError;
 
@@ -89,7 +89,7 @@ impl<V: Visitor> Walker<'_, V> {
                 return Err(DecodeError::invalid(
                     RECORD,
                     format!("object flag {flag:#04x} at {}", r.pos() - 1),
-                ))
+                ));
             }
         }
         let end = read_end(r)?;

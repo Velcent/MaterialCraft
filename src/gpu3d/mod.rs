@@ -27,7 +27,7 @@ mod shaders;
 mod shape;
 mod textures;
 
-pub use maps::{prepare, GpuMaps, MapInputs};
+pub use maps::{GpuMaps, MapInputs, prepare};
 pub use scene::ScenePart;
 
 use crate::render3d::View;
@@ -124,7 +124,10 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
     let aniso_req = g.opts.aniso;
     // first use: create everything from the pending maps (or neutral defaults)
     if g.res.is_none() {
-        let maps = g.pending.take().unwrap_or_else(|| prepare(&MapInputs { base: None, normal: None, rough: None, metal: None, ao: None, emissive: None, height: None }));
+        let maps = g
+            .pending
+            .take()
+            .unwrap_or_else(|| prepare(&MapInputs { base: None, normal: None, rough: None, metal: None, ao: None, emissive: None, height: None }));
         match unsafe { Renderer::new(gl, &maps, aniso_req) } {
             Ok(r) => {
                 g.renderer = unsafe { gl.get_parameter_string(glow::RENDERER) };

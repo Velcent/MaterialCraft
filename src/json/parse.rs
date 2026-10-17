@@ -15,11 +15,7 @@ pub struct JsonError {
 
 impl std::fmt::Display for JsonError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "JSON error at line {}, column {}: {}",
-            self.line, self.column, self.message
-        )
+        write!(f, "JSON error at line {}, column {}: {}", self.line, self.column, self.message)
     }
 }
 
@@ -27,11 +23,7 @@ impl std::error::Error for JsonError {}
 
 /// Parse one JSON document (surrounding whitespace and a leading byte-order mark are allowed).
 pub fn parse(text: &str) -> Result<Value, JsonError> {
-    let mut p = Parser {
-        s: text,
-        b: text.as_bytes(),
-        pos: 0,
-    };
+    let mut p = Parser { s: text, b: text.as_bytes(), pos: 0 };
     if p.b.starts_with("\u{feff}".as_bytes()) {
         p.pos = 3;
     }
@@ -59,20 +51,10 @@ impl Parser<'_> {
         let pos = pos.min(self.b.len());
         let before = &self.b[..pos];
         let line = 1 + before.iter().filter(|&&c| c == b'\n').count();
-        let line_start = before
-            .iter()
-            .rposition(|&c| c == b'\n')
-            .map_or(0, |i| i + 1);
+        let line_start = before.iter().rposition(|&c| c == b'\n').map_or(0, |i| i + 1);
         // Count characters, not bytes: skip UTF-8 continuation bytes.
-        let column = 1 + before[line_start..]
-            .iter()
-            .filter(|&&c| c & 0xc0 != 0x80)
-            .count();
-        JsonError {
-            line,
-            column,
-            message: msg.to_string(),
-        }
+        let column = 1 + before[line_start..].iter().filter(|&&c| c & 0xc0 != 0x80).count();
+        JsonError { line, column, message: msg.to_string() }
     }
 
     fn peek(&self) -> Option<u8> {
@@ -109,11 +91,7 @@ impl Parser<'_> {
     }
 
     fn enter(&self, depth: usize) -> Result<(), JsonError> {
-        if depth > MAX_DEPTH {
-            Err(self.error("nesting too deep"))
-        } else {
-            Ok(())
-        }
+        if depth > MAX_DEPTH { Err(self.error("nesting too deep")) } else { Ok(()) }
     }
 
     fn array(&mut self, depth: usize) -> Result<Value, JsonError> {
@@ -210,9 +188,7 @@ impl Parser<'_> {
             }
         }
         // The grammar above is a subset of what Rust's (correctly rounding) float parser accepts.
-        let n: f64 = self.s[start..self.pos]
-            .parse()
-            .map_err(|_| self.error_at(start, "invalid number"))?;
+        let n: f64 = self.s[start..self.pos].parse().map_err(|_| self.error_at(start, "invalid number"))?;
         if !n.is_finite() {
             return Err(self.error_at(start, "number out of range"));
         }
@@ -220,15 +196,10 @@ impl Parser<'_> {
     }
 
     fn hex4(&mut self) -> Result<u32, JsonError> {
-        let digits = self
-            .b
-            .get(self.pos..self.pos + 4)
-            .ok_or_else(|| self.error("truncated \\u escape"))?;
+        let digits = self.b.get(self.pos..self.pos + 4).ok_or_else(|| self.error("truncated \\u escape"))?;
         let mut v = 0u32;
         for &d in digits {
-            let x = (d as char)
-                .to_digit(16)
-                .ok_or_else(|| self.error("invalid \\u escape"))?;
+            let x = (d as char).to_digit(16).ok_or_else(|| self.error("invalid \\u escape"))?;
             v = v * 16 + x;
         }
         self.pos += 4;
@@ -242,10 +213,7 @@ impl Parser<'_> {
         let mut out = String::new();
         loop {
             // Copy the run up to the next quote, backslash or control character in one go.
-            let run = self.b[self.pos..]
-                .iter()
-                .position(|&c| c == b'"' || c == b'\\' || c < 0x20)
-                .ok_or_else(|| self.error_at(open, "unterminated string"))?;
+            let run = self.b[self.pos..].iter().position(|&c| c == b'"' || c == b'\\' || c < 0x20).ok_or_else(|| self.error_at(open, "unterminated string"))?;
             out.push_str(&self.s[self.pos..self.pos + run]);
             self.pos += run;
             match self.b[self.pos] {
@@ -256,9 +224,7 @@ impl Parser<'_> {
                 b'\\' => {
                     let at = self.pos;
                     self.pos += 1;
-                    let c = self
-                        .peek()
-                        .ok_or_else(|| self.error_at(open, "unterminated string"))?;
+                    let c = self.peek().ok_or_else(|| self.error_at(open, "unterminated string"))?;
                     self.pos += 1;
                     match c {
                         b'"' => out.push('"'),
@@ -307,20 +273,13 @@ mod tests {
     #[test]
     fn parses_documents() {
         assert!(parse("\u{feff}").is_err());
-        let v =
-            parse("\u{feff} {\"a\": [1, -2.5e3, true, false, null, \"x\"], \"b\": {}} ").unwrap();
+        let v = parse("\u{feff} {\"a\": [1, -2.5e3, true, false, null, \"x\"], \"b\": {}} ").unwrap();
         assert_eq!(v["a"][1].as_f64(), Some(-2500.0));
         assert_eq!(v["a"][5].as_str(), Some("x"));
         assert_eq!(v["b"], Value::object());
         assert_eq!(parse("0").unwrap(), Value::Number(0.0));
-        assert_eq!(
-            parse("-0").unwrap().as_f64().map(f64::is_sign_negative),
-            Some(true)
-        );
-        assert_eq!(
-            parse("\"\\ud83d\\ude00\\u00e9\\/\"").unwrap().as_str(),
-            Some("😀é/")
-        );
+        assert_eq!(parse("-0").unwrap().as_f64().map(f64::is_sign_negative), Some(true));
+        assert_eq!(parse("\"\\ud83d\\ude00\\u00e9\\/\"").unwrap().as_str(), Some("😀é/"));
     }
 
     #[test]

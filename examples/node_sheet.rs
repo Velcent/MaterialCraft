@@ -1,5 +1,5 @@
 //! Dev helper: renders every node type's demo graph to out_dir/<kind>.png (for a visual contact sheet).
-use materialcraft::graph::{demo_graph_for, Graph, SPECS};
+use materialcraft::graph::{Graph, SPECS, demo_graph_for};
 fn main() {
     let dir = std::env::args().nth(1).unwrap_or_else(|| "node_sheet".into());
     std::fs::create_dir_all(&dir).unwrap();

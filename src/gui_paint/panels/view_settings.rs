@@ -3,32 +3,23 @@
 
 use eframe::egui::{self, Slider};
 use materialcraft::gpu3d::Shared;
-use materialcraft::render3d::{View, RELIEF_BUMP, RELIEF_DISPLACE, RELIEF_NONE, RELIEF_PARALLAX};
+use materialcraft::render3d::{RELIEF_BUMP, RELIEF_DISPLACE, RELIEF_NONE, RELIEF_PARALLAX, View};
 
-const RELIEF: [(u32, &str); 4] = [
-    (RELIEF_NONE, "Normal map only"),
-    (RELIEF_BUMP, "Bump"),
-    (RELIEF_PARALLAX, "Parallax (outward)"),
-    (RELIEF_DISPLACE, "Displacement"),
-];
+const RELIEF: [(u32, &str); 4] =
+    [(RELIEF_NONE, "Normal map only"), (RELIEF_BUMP, "Bump"), (RELIEF_PARALLAX, "Parallax (outward)"), (RELIEF_DISPLACE, "Displacement")];
 
 pub fn show(ui: &mut egui::Ui, view: &mut View, gpu: &Shared) {
     crate::gui_theme::panel_header(ui, "VIEW SETTINGS", false);
     ui.add_space(4.0);
     ui.strong("Height");
-    egui::ComboBox::from_id_salt("paint_relief")
-        .width(170.0)
-        .selected_text(
-            RELIEF
-                .iter()
-                .find(|r| r.0 == view.relief)
-                .map_or("?", |r| r.1),
-        )
-        .show_ui(ui, |ui| {
+    egui::ComboBox::from_id_salt("paint_relief").width(170.0).selected_text(RELIEF.iter().find(|r| r.0 == view.relief).map_or("?", |r| r.1)).show_ui(
+        ui,
+        |ui| {
             for (id, label) in RELIEF {
                 ui.selectable_value(&mut view.relief, id, label);
             }
-        });
+        },
+    );
     if view.relief == RELIEF_BUMP {
         ui.add(Slider::new(&mut view.bump, 0.0..=12.0).text("Bump strength"));
     }
@@ -48,12 +39,6 @@ pub fn show(ui: &mut egui::Ui, view: &mut View, gpu: &Shared) {
     ui.strong("Light");
     ui.checkbox(&mut view.light_follows_camera, "Follows the camera");
     ui.add(Slider::new(&mut view.light_intensity, 0.0..=10.0).text("Intensity"));
-    ui.add(
-        Slider::new(
-            &mut view.light_yaw,
-            -std::f32::consts::PI..=std::f32::consts::PI,
-        )
-        .text("Azimuth"),
-    );
+    ui.add(Slider::new(&mut view.light_yaw, -std::f32::consts::PI..=std::f32::consts::PI).text("Azimuth"));
     ui.add(Slider::new(&mut view.light_pitch, -1.4..=1.4).text("Elevation"));
 }

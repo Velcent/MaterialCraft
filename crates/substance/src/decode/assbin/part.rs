@@ -13,7 +13,7 @@
 use super::faces::triangulate;
 use super::mesh_block::{MeshBlock, RawArray};
 use super::repair::repair_frames;
-use super::transform::{cross, dot, normalize, Transform};
+use super::transform::{Transform, cross, dot, normalize};
 use crate::decode::DecodeError;
 use materialcraft::mesh::MeshPart;
 

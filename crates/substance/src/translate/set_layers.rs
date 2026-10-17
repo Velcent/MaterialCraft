@@ -5,7 +5,7 @@
 use super::channel_table::painter_default;
 use super::layers::cache_agreement::CacheAgreement;
 use super::layers::report::{report_cache_disagreement, report_hidden_masks, report_stack};
-use super::layers::{LayerImport, SetChannels, StackParts, StackStrategy, PAINTER_RESULT_NAME};
+use super::layers::{LayerImport, PAINTER_RESULT_NAME, SetChannels, StackParts, StackStrategy};
 use super::report::Reporter;
 use super::texture_sets::SetSource;
 use crate::model::{PainterDocument, PainterTextureSet};

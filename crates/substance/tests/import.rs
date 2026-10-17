@@ -4,7 +4,7 @@
 use materialcraft::paint::format;
 use materialcraft_substance::inspect::Corpus;
 use materialcraft_substance::project::SppProject;
-use materialcraft_substance::translate::{import_spp, SetBinding};
+use materialcraft_substance::translate::{SetBinding, import_spp};
 use std::path::PathBuf;
 
 /// Full imports are slow; only this many of the smallest projects are imported completely.

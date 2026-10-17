@@ -35,19 +35,13 @@ pub struct OutputOptions {
 impl OutputOptions {
     /// The settings `doc` asks for, at strength 1.
     pub fn for_document(doc: &Document) -> OutputOptions {
-        OutputOptions {
-            height_filter: doc.height_filter,
-            ..OutputOptions::default()
-        }
+        OutputOptions { height_filter: doc.height_filter, ..OutputOptions::default() }
     }
 }
 
 impl Default for OutputOptions {
     fn default() -> OutputOptions {
-        OutputOptions {
-            height_normal_strength: 1.0,
-            height_filter: HeightFilter::default(),
-        }
+        OutputOptions { height_normal_strength: 1.0, height_filter: HeightFilter::default() }
     }
 }
 
@@ -94,58 +88,25 @@ impl MaterialMaps {
         let emissive = channel(Channel::Emissive);
         let opacity = channel(Channel::Opacity);
 
-        let height_normal = (set.has_channel(Channel::Height)
-            && options.height_normal_strength != 0.0
-            && w * h > 0)
-            .then(|| {
-                height_normal::normal_from_height(
-                    &height,
-                    options.height_filter,
-                    options.height_normal_strength,
-                )
-            });
-        let baked_normal = set
-            .baked(&BakedKind::Normal)
-            .map(|i| resample(&i.to_tex(), w, h));
+        let height_normal = (set.has_channel(Channel::Height) && options.height_normal_strength != 0.0 && w * h > 0)
+            .then(|| height_normal::normal_from_height(&height, options.height_filter, options.height_normal_strength));
+        let baked_normal = set.baked(&BakedKind::Normal).map(|i| resample(&i.to_tex(), w, h));
         if height_normal.is_some() || baked_normal.is_some() {
             par_pixels(&mut normal.px, |i, p| {
-                let at = |t: &Option<Tex>| {
-                    t.as_ref()
-                        .and_then(|t| t.px.get(i))
-                        .map_or(normal::FLAT, |&c| normal::decode(c))
-                };
-                let n = normal_combine::combine(
-                    at(&baked_normal),
-                    at(&height_normal),
-                    normal::decode(*p),
-                );
+                let at = |t: &Option<Tex>| t.as_ref().and_then(|t| t.px.get(i)).map_or(normal::FLAT, |&c| normal::decode(c));
+                let n = normal_combine::combine(at(&baked_normal), at(&height_normal), normal::decode(*p));
                 *p = normal::encode(n);
             });
         } else {
-            par_pixels(&mut normal.px, |_, p| {
-                *p = normal::encode(normal::decode(*p))
-            });
+            par_pixels(&mut normal.px, |_, p| *p = normal::encode(normal::decode(*p)));
         }
-        if let Some(ao) = set
-            .baked(&BakedKind::AmbientOcclusion)
-            .map(|i| resample(&i.to_tex(), w, h))
-        {
+        if let Some(ao) = set.baked(&BakedKind::AmbientOcclusion).map(|i| resample(&i.to_tex(), w, h)) {
             par_pixels(&mut ambient_occlusion.px, |i, p| {
                 let k = ao.px.get(i).map_or(1.0, |a| a[0]);
                 *p = [p[0] * k, p[1] * k, p[2] * k, 1.0];
             });
         }
-        MaterialMaps {
-            base_color,
-            roughness,
-            metallic,
-            normal,
-            height,
-            ambient_occlusion,
-            emissive,
-            opacity,
-            warnings,
-        }
+        MaterialMaps { base_color, roughness, metallic, normal, height, ambient_occlusion, emissive, opacity, warnings }
     }
 
     /// The map for a standard channel; `None` for user channels.
@@ -181,12 +142,7 @@ fn resample(tex: &Tex, w: usize, h: usize) -> Tex {
         return tex.clone();
     }
     let mut out = Tex::solid(w, h, [0.0; 4]);
-    par_pixels(&mut out.px, |i, p| {
-        *p = tex.sample(
-            ((i % w) as f32 + 0.5) / w as f32,
-            ((i / w) as f32 + 0.5) / h as f32,
-        )
-    });
+    par_pixels(&mut out.px, |i, p| *p = tex.sample(((i % w) as f32 + 0.5) / w as f32, ((i / w) as f32 + 0.5) / h as f32));
     out
 }
 
@@ -196,23 +152,14 @@ mod tests {
     use crate::paint::{BakedMap, BlendMode, Fill, Layer, LayerKind, PixelFormat, TiledImage};
 
     fn flat_set() -> TextureSet {
-        let mut s = TextureSet::new("s", "S", (8, 8))
-            .with_channel(Channel::Normal)
-            .with_channel(Channel::Height)
-            .with_channel(Channel::AmbientOcclusion);
+        let mut s = TextureSet::new("s", "S", (8, 8)).with_channel(Channel::Normal).with_channel(Channel::Height).with_channel(Channel::AmbientOcclusion);
         let fill = Fill::uniform(vec![(Channel::Height, [0.3; 4])]);
-        s.layers
-            .push(Layer::new("h", "H", LayerKind::Fill(fill)).with_blend(
-                Channel::Height,
-                BlendMode::Normal,
-                1.0,
-            ));
+        s.layers.push(Layer::new("h", "H", LayerKind::Fill(fill)).with_blend(Channel::Height, BlendMode::Normal, 1.0));
         s
     }
 
     fn baked(kind: BakedKind, size: u32, v: [f32; 4]) -> BakedMap {
-        let mut image =
-            TiledImage::new(size, size, PixelFormat::from_id("rgb16").unwrap()).unwrap();
+        let mut image = TiledImage::new(size, size, PixelFormat::from_id("rgb16").unwrap()).unwrap();
         image.fill(v);
         BakedMap { kind, image }
     }
@@ -220,18 +167,11 @@ mod tests {
     #[test]
     fn flat_inputs_give_flat_normal() {
         let mut s = flat_set();
-        s.baked
-            .push(baked(BakedKind::Normal, 4, [0.5, 0.5, 1.0, 1.0]));
+        s.baked.push(baked(BakedKind::Normal, 4, [0.5, 0.5, 1.0, 1.0]));
         let maps = MaterialMaps::build(&s, &OutputOptions::default());
-        assert!(maps.normal.px.iter().all(|p| (p[0] - 0.5).abs() < 1e-4
-            && (p[1] - 0.5).abs() < 1e-4
-            && (p[2] - 1.0).abs() < 1e-4));
+        assert!(maps.normal.px.iter().all(|p| (p[0] - 0.5).abs() < 1e-4 && (p[1] - 0.5).abs() < 1e-4 && (p[2] - 1.0).abs() < 1e-4));
         assert_eq!((maps.normal.w, maps.normal.h), (8, 8));
-        assert!(maps
-            .height
-            .px
-            .iter()
-            .all(|p| (p[0] - 0.3).abs() < 1e-3 && p[3] == 1.0));
+        assert!(maps.height.px.iter().all(|p| (p[0] - 0.3).abs() < 1e-3 && p[3] == 1.0));
         assert_eq!(maps.base_color.px[0], Channel::BaseColor.default_value());
         assert!(maps.warnings.is_empty());
     }
@@ -241,15 +181,9 @@ mod tests {
         let mut s = flat_set();
         let tilted = normal::encode(normal::normalize([0.3, 0.0, 1.0]));
         s.baked.push(baked(BakedKind::Normal, 8, tilted));
-        s.baked
-            .push(baked(BakedKind::AmbientOcclusion, 16, [0.5, 0.5, 0.5, 1.0]));
+        s.baked.push(baked(BakedKind::AmbientOcclusion, 16, [0.5, 0.5, 0.5, 1.0]));
         let fill = Fill::uniform(vec![(Channel::AmbientOcclusion, [0.8; 4])]);
-        s.layers
-            .push(Layer::new("ao", "AO", LayerKind::Fill(fill)).with_blend(
-                Channel::AmbientOcclusion,
-                BlendMode::Normal,
-                1.0,
-            ));
+        s.layers.push(Layer::new("ao", "AO", LayerKind::Fill(fill)).with_blend(Channel::AmbientOcclusion, BlendMode::Normal, 1.0));
         let maps = MaterialMaps::build(&s, &OutputOptions::default());
         assert!((maps.normal.px[9][0] - tilted[0]).abs() < 1e-3);
         assert!((maps.ambient_occlusion.px[9][0] - 0.4).abs() < 1e-3);
@@ -258,10 +192,7 @@ mod tests {
 
     #[test]
     fn options_follow_the_document() {
-        let doc = Document {
-            height_filter: HeightFilter::Sobel,
-            ..Document::default()
-        };
+        let doc = Document { height_filter: HeightFilter::Sobel, ..Document::default() };
         let o = OutputOptions::for_document(&doc);
         assert_eq!(o.height_filter, HeightFilter::Sobel);
         assert_eq!(o.height_normal_strength, 1.0);

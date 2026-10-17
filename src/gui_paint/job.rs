@@ -1,8 +1,8 @@
 //! [`Job`]: one background thread that streams results to the UI thread, with an explicit cancel handle.
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
 /// Shared cancel flag handed to background work (no globals).
 #[derive(Clone, Default)]
@@ -33,11 +33,7 @@ impl<T: Send + 'static> Job<T> {
         let cancel = CancelToken::default();
         let token = cancel.clone();
         std::thread::spawn(move || work(&token, &tx));
-        Job {
-            rx,
-            cancel,
-            finished: false,
-        }
+        Job { rx, cancel, finished: false }
     }
 
     /// Results that arrived since the last call.

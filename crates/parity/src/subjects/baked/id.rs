@@ -2,10 +2,10 @@
 //! Painter colours by its own source (vertex colour, material, ...); ours picks random colours per group,
 //! so only the region layout is comparable. Kept to show the gap.
 
-use super::{baked_map, NEEDS};
+use super::{NEEDS, baked_map};
 use crate::inputs::Inputs;
 use crate::settings::Params;
-use crate::subject::{CaseError, Component, Need, ReferenceKind, Subject, RGB};
+use crate::subject::{CaseError, Component, Need, RGB, ReferenceKind, Subject};
 use materialcraft::paint::BakedKind;
 use materialcraft::tex::Tex;
 

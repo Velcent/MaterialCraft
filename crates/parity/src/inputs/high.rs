@@ -1,7 +1,7 @@
 //! The mesh Painter baked from: [`HighSource::resolve`] decides where it comes from (cheap, no loading),
 //! [`HighMesh::load`] reads it and moves it into Painter's normalised space, like the project's low mesh.
 
-use super::finder::{is_mesh_name, MeshFinder};
+use super::finder::{MeshFinder, is_mesh_name};
 use super::low::bounds;
 use crate::settings::HighPolyRequest;
 use crate::subject::CaseError;

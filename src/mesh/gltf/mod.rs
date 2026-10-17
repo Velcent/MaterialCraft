@@ -45,8 +45,7 @@ impl Mesh {
     /// Reads a glTF 2.0 binary file (see the module docs for what is supported).
     pub fn from_glb(bytes: &[u8]) -> Result<Mesh, GltfError> {
         let glb = glb::Glb::parse(bytes)?;
-        let text = std::str::from_utf8(glb.json)
-            .map_err(|_| GltfError::Json("JSON chunk is not UTF-8".into()))?;
+        let text = std::str::from_utf8(glb.json).map_err(|_| GltfError::Json("JSON chunk is not UTF-8".into()))?;
         let root = json::parse(text).map_err(|e| GltfError::Json(e.to_string()))?;
         read::GltfReader::new(&root, glb.bin.unwrap_or(&[]))?.read()
     }

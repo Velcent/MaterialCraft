@@ -64,7 +64,6 @@ fn decode_sym(br: &mut BitR, h: &Huff) -> Result<u16, String> {
     Err("bad huffman code".into())
 }
 
-
 fn codes(br: &mut BitR, out: &mut Vec<u8>, lh: &Huff, dh: &Huff) -> Result<(), String> {
     loop {
         let sym = decode_sym(br, lh)? as usize;
@@ -121,7 +120,15 @@ pub fn inflate(data: &[u8]) -> Result<Vec<u8>, String> {
             1 => {
                 let mut l = [0u8; 288];
                 for (i, v) in l.iter_mut().enumerate() {
-                    *v = if i < 144 { 8 } else if i < 256 { 9 } else if i < 280 { 7 } else { 8 };
+                    *v = if i < 144 {
+                        8
+                    } else if i < 256 {
+                        9
+                    } else if i < 280 {
+                        7
+                    } else {
+                        8
+                    };
                 }
                 codes(&mut br, &mut out, &build(&l), &build(&[5u8; 30]))?;
             }

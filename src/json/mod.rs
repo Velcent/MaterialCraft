@@ -11,7 +11,7 @@
 mod parse;
 mod write;
 
-pub use parse::{parse, JsonError, MAX_DEPTH};
+pub use parse::{JsonError, MAX_DEPTH, parse};
 
 /// A JSON value. Objects keep their keys in insertion (or document) order.
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -78,19 +78,11 @@ impl Value {
 
     /// Member of an object. With duplicate keys the last one wins, as in JavaScript.
     pub fn get(&self, key: &str) -> Option<&Value> {
-        self.as_object()?
-            .iter()
-            .rev()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| v)
+        self.as_object()?.iter().rev().find(|(k, _)| k == key).map(|(_, v)| v)
     }
 
     pub fn get_mut(&mut self, key: &str) -> Option<&mut Value> {
-        self.as_object_mut()?
-            .iter_mut()
-            .rev()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| v)
+        self.as_object_mut()?.iter_mut().rev().find(|(k, _)| k == key).map(|(_, v)| v)
     }
 
     /// Element of an array.
@@ -267,11 +259,7 @@ mod tests {
 
     #[test]
     fn builders_and_accessors() {
-        let mut v = Value::object()
-            .with("a", 1)
-            .with("b", "x")
-            .with("c", vec![1.5, 2.0])
-            .with("d", Option::<i32>::None);
+        let mut v = Value::object().with("a", 1).with("b", "x").with("c", vec![1.5, 2.0]).with("d", Option::<i32>::None);
         assert!(v.insert("a", true));
         assert_eq!(v.to_string(), r#"{"a":true,"b":"x","c":[1.5,2],"d":null}"#);
         assert_eq!(v["b"].as_str(), Some("x"));
@@ -285,10 +273,7 @@ mod tests {
         assert_eq!(a[3].as_i64(), Some(-4));
         assert_eq!(a[3].as_u64(), None);
         assert!(!a.insert("k", 1));
-        assert_eq!(
-            Value::Number(9_007_199_254_740_993.0).as_u64(),
-            Some(9_007_199_254_740_992)
-        );
+        assert_eq!(Value::Number(9_007_199_254_740_993.0).as_u64(), Some(9_007_199_254_740_992));
         assert_eq!(Value::Number(1e19).as_u64(), None);
     }
 

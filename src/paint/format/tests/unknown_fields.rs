@@ -4,8 +4,8 @@ use super::corruption::rewrite;
 use super::fixtures::full_document;
 use super::round_trip::{from_bytes, to_bytes};
 use crate::json::{self, Value};
-use crate::paint::format::manifest::extras::Extras;
 use crate::paint::format::FORMAT_VERSION;
+use crate::paint::format::manifest::extras::Extras;
 use crate::zip::ZipReader;
 use std::io::Cursor;
 
@@ -45,8 +45,5 @@ fn unknown_fields_are_kept() {
     assert_eq!(from_bytes(&saved).unwrap(), doc);
     assert_eq!(to_bytes(&from_bytes(&saved).unwrap()), saved);
     // A file without unknown fields gets no extras file.
-    assert!(from_bytes(&original)
-        .unwrap()
-        .foreign_file(Extras::PATH)
-        .is_none());
+    assert!(from_bytes(&original).unwrap().foreign_file(Extras::PATH).is_none());
 }

@@ -2,7 +2,7 @@
 //! Run with `SPP_CORPUS=<folders or .spp files, ';'-separated> cargo test --release -p materialcraft-substance corpus -- --ignored --nocapture`.
 
 use super::node::mesh_instances;
-use super::scene::{scene_bytes, SceneBlocks};
+use super::scene::{SceneBlocks, scene_bytes};
 use super::transform::Transform;
 use super::*;
 use crate::project::SppProject;

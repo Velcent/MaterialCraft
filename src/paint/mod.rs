@@ -31,7 +31,7 @@ pub mod working_space;
 pub use blend::BlendMode;
 pub use channel::{Channel, ChannelSpec, ColorSpace};
 pub use doc::{Document, ForeignFile};
-pub use image::{ImageError, Rect, TiledImage, TILE_SIZE};
+pub use image::{ImageError, Rect, TILE_SIZE, TiledImage};
 pub use layer::{ChannelBlend, Fill, FillSource, Layer, LayerKind, Mask, PaintContent};
 pub use output::{MaterialMaps, OutputOptions};
 pub use pixel::{PixelFormat, PixelLayout, SampleType};

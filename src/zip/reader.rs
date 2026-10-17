@@ -76,13 +76,8 @@ impl<R: Read + Seek> ZipReader<R> {
         let tail = Self::read_at(src, tail_start, tail_len)?;
         // Prefer a record whose comment ends exactly at the end of the file (a comment may itself contain the
         // signature); accept trailing junk only if no such record exists.
-        let candidates = || {
-            (0..tail_len.saturating_sub(EOCD_LEN - 1))
-                .rev()
-                .filter(|&i| tail[i..i + 4] == EOCD_SIG.to_le_bytes())
-        };
-        let end_of =
-            |i: usize| i + EOCD_LEN + u16::from_le_bytes([tail[i + 20], tail[i + 21]]) as usize;
+        let candidates = || (0..tail_len.saturating_sub(EOCD_LEN - 1)).rev().filter(|&i| tail[i..i + 4] == EOCD_SIG.to_le_bytes());
+        let end_of = |i: usize| i + EOCD_LEN + u16::from_le_bytes([tail[i + 20], tail[i + 21]]) as usize;
         let at = candidates()
             .find(|&i| end_of(i) == tail_len)
             .or_else(|| candidates().find(|&i| end_of(i) <= tail_len))
@@ -91,19 +86,13 @@ impl<R: Read + Seek> ZipReader<R> {
         let (disk, cd_disk) = (f.u16(), f.u16());
         let _entries_this_disk = f.u16();
         let (count, size, offset) = (f.u16(), f.u32(), f.u32());
-        let (Some(disk), Some(cd_disk), Some(count), Some(size), Some(offset)) =
-            (disk, cd_disk, count, size, offset)
-        else {
+        let (Some(disk), Some(cd_disk), Some(count), Some(size), Some(offset)) = (disk, cd_disk, count, size, offset) else {
             return Err(bad("truncated end record"));
         };
         if disk != 0 || cd_disk != 0 {
             return Err(ZipError::Unsupported("multi-disk archives".into()));
         }
-        let mut dir = Directory {
-            count: count as u64,
-            size: size as u64,
-            offset: offset as u64,
-        };
+        let mut dir = Directory { count: count as u64, size: size as u64, offset: offset as u64 };
 
         // A ZIP64 locator immediately before the end record points at the ZIP64 end record.
         let eocd_pos = tail_start + at as u64;
@@ -113,10 +102,7 @@ impl<R: Read + Seek> ZipReader<R> {
             if f.u32() == Some(ZIP64_LOCATOR_SIG) {
                 let _disk = f.u32();
                 let rec_offset = f.u64().ok_or_else(|| bad("truncated ZIP64 locator"))?;
-                if rec_offset
-                    .checked_add(ZIP64_EOCD_LEN as u64)
-                    .is_none_or(|end| end > len)
-                {
+                if rec_offset.checked_add(ZIP64_EOCD_LEN as u64).is_none_or(|end| end > len) {
                     return Err(bad("ZIP64 end record out of range"));
                 }
                 let rec = Self::read_at(src, rec_offset, ZIP64_EOCD_LEN)?;
@@ -128,11 +114,7 @@ impl<R: Read + Seek> ZipReader<R> {
                 let (Some(count), Some(size), Some(offset)) = (f.u64(), f.u64(), f.u64()) else {
                     return Err(bad("truncated ZIP64 end record"));
                 };
-                dir = Directory {
-                    count,
-                    size,
-                    offset,
-                };
+                dir = Directory { count, size, offset };
             }
         }
         if dir.offset.checked_add(dir.size).is_none_or(|end| end > len) {
@@ -150,8 +132,7 @@ impl<R: Read + Seek> ZipReader<R> {
         let mut f = Fields::new(&cd);
         let mut entries = Vec::with_capacity(dir.count as usize);
         for _ in 0..dir.count {
-            let e =
-                Self::central_entry(&mut f).ok_or_else(|| bad("truncated central directory"))??;
+            let e = Self::central_entry(&mut f).ok_or_else(|| bad("truncated central directory"))??;
             if e.local_header_offset >= len {
                 return Err(bad("entry offset out of range"));
             }
@@ -171,18 +152,13 @@ impl<R: Read + Seek> ZipReader<R> {
         f.bytes(4)?; // time, date
         let crc = f.u32()?;
         let (csize, size) = (f.u32()? as u64, f.u32()? as u64);
-        let (name_len, extra_len, comment_len) =
-            (f.u16()? as usize, f.u16()? as usize, f.u16()? as usize);
+        let (name_len, extra_len, comment_len) = (f.u16()? as usize, f.u16()? as usize, f.u16()? as usize);
         f.bytes(8)?; // disk, internal and external attributes
         let offset = f.u32()? as u64;
         let name = f.bytes(name_len)?;
         let extra = f.bytes(extra_len)?;
         f.bytes(comment_len)?;
-        let (ns, nc, no) = (
-            size == U32_SENTINEL,
-            csize == U32_SENTINEL,
-            offset == U32_SENTINEL,
-        );
+        let (ns, nc, no) = (size == U32_SENTINEL, csize == U32_SENTINEL, offset == U32_SENTINEL);
         let z = if ns || nc || no {
             match Zip64Extra::decode(extra, ns, nc, no) {
                 Some(z) => z,
@@ -213,10 +189,7 @@ impl<R: Read + Seek> ZipReader<R> {
 
     /// Read and decompress the entry called `name`, verifying its size and CRC-32.
     pub fn read(&mut self, name: &str) -> Result<Vec<u8>, ZipError> {
-        let e = self
-            .find(name)
-            .cloned()
-            .ok_or_else(|| ZipError::NotFound(name.to_string()))?;
+        let e = self.find(name).cloned().ok_or_else(|| ZipError::NotFound(name.to_string()))?;
         self.read_entry(&e)
     }
 
@@ -225,12 +198,7 @@ impl<R: Read + Seek> ZipReader<R> {
         if e.encrypted {
             return Err(ZipError::Unsupported(format!("'{}' is encrypted", e.name)));
         }
-        let method = e.method().ok_or_else(|| {
-            ZipError::Unsupported(format!(
-                "'{}' uses compression method {}",
-                e.name, e.method_code
-            ))
-        })?;
+        let method = e.method().ok_or_else(|| ZipError::Unsupported(format!("'{}' uses compression method {}", e.name, e.method_code)))?;
         let header = Self::read_at(&mut self.src, e.local_header_offset, LOCAL_HEADER_LEN)?;
         let mut f = Fields::new(&header);
         if f.u32() != Some(LOCAL_HEADER_SIG) {
@@ -240,19 +208,14 @@ impl<R: Read + Seek> ZipReader<R> {
         let (Some(name_len), Some(extra_len)) = (f.u16(), f.u16()) else {
             return Err(bad("truncated local header"));
         };
-        let start = e.local_header_offset
-            + (LOCAL_HEADER_LEN + name_len as usize + extra_len as usize) as u64;
-        if start
-            .checked_add(e.compressed_size)
-            .is_none_or(|end| end > self.len)
-        {
+        let start = e.local_header_offset + (LOCAL_HEADER_LEN + name_len as usize + extra_len as usize) as u64;
+        if start.checked_add(e.compressed_size).is_none_or(|end| end > self.len) {
             return Err(bad("entry data out of range"));
         }
         let raw = Self::read_at(&mut self.src, start, e.compressed_size as usize)?;
         let data = match method {
             Method::Stored => raw,
-            Method::Deflate => crate::deflate::inflate(&raw)
-                .map_err(|m| ZipError::Format(format!("'{}': {m}", e.name)))?,
+            Method::Deflate => crate::deflate::inflate(&raw).map_err(|m| ZipError::Format(format!("'{}': {m}", e.name)))?,
         };
         if data.len() as u64 != e.size {
             return Err(ZipError::Format(format!("'{}': size mismatch", e.name)));

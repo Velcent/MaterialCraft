@@ -44,18 +44,12 @@ impl Weights {
 
 /// True if the layer is visible and has an enabled blend entry for the channel.
 pub(super) fn affects(l: &Layer, channel: Channel) -> bool {
-    l.visible
-        && l.blend_for(channel)
-            .is_some_and(|b| b.mode != BlendMode::Disable)
+    l.visible && l.blend_for(channel).is_some_and(|b| b.mode != BlendMode::Disable)
 }
 
 /// The layer's strength over `r`, or `None` where it has no effect at all.
 pub(super) fn layer_weights(l: &Layer, strength: f32, r: Rect) -> Option<Weights> {
-    let strength = if strength.is_finite() {
-        strength.clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
+    let strength = if strength.is_finite() { strength.clamp(0.0, 1.0) } else { 0.0 };
     if strength <= 0.0 {
         return None;
     }
@@ -68,9 +62,5 @@ pub(super) fn layer_weights(l: &Layer, strength: f32, r: Rect) -> Option<Weights
     }
     let mut px = vec![[0.0f32; 4]; r.area()];
     img.read_region(r, &mut px);
-    Some(Weights::Masked(
-        px.iter()
-            .map(|p| (p[0] * p[3]).clamp(0.0, 1.0) * strength)
-            .collect(),
-    ))
+    Some(Weights::Masked(px.iter().map(|p| (p[0] * p[3]).clamp(0.0, 1.0) * strength).collect()))
 }

@@ -1,7 +1,7 @@
 //! Sequential reader over QDataStream-encoded bytes.
 
-use super::variant::{type_id, QVariant, QVariantMap};
 use super::QdsError;
+use super::variant::{QVariant, QVariantMap, type_id};
 use crate::container::bytes::ByteReader;
 
 /// Marks a null `QString` / `QByteArray` instead of a length.

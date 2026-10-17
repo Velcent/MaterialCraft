@@ -3,8 +3,8 @@
 //! known and counted, their content is skipped. Every object, pruned or not, is counted per class.
 
 use super::tree::{RawObject, RawValue};
-use crate::decode::document::{walk, DocumentHeader, Scalar, ValueTag, Visitor};
 use crate::decode::DecodeError;
+use crate::decode::document::{DocumentHeader, Scalar, ValueTag, Visitor, walk};
 use std::collections::BTreeMap;
 
 /// Classes whose content is not kept (only counted): strokes hold the bulk of a document.

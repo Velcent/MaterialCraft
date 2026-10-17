@@ -63,11 +63,7 @@ pub struct ExrChannel {
 
 impl ExrChannel {
     pub fn new(name: &str, sample: SampleKind, data: Vec<f32>) -> Self {
-        ExrChannel {
-            name: name.to_string(),
-            sample,
-            data,
-        }
+        ExrChannel { name: name.to_string(), sample, data }
     }
 }
 
@@ -90,16 +86,8 @@ mod tests {
     use super::*;
 
     fn sample_image(w: usize, h: usize) -> ExrImage {
-        let ramp = |k: f32| {
-            (0..w * h)
-                .map(|i| ((i % w) as f32 / w as f32 + (i / w) as f32 * k) * 3.0 - 0.5)
-                .collect::<Vec<f32>>()
-        };
-        let half = |v: Vec<f32>| {
-            v.into_iter()
-                .map(|x| crate::half::f16_to_f32(crate::half::f32_to_f16(x)))
-                .collect::<Vec<f32>>()
-        };
+        let ramp = |k: f32| (0..w * h).map(|i| ((i % w) as f32 / w as f32 + (i / w) as f32 * k) * 3.0 - 0.5).collect::<Vec<f32>>();
+        let half = |v: Vec<f32>| v.into_iter().map(|x| crate::half::f16_to_f32(crate::half::f32_to_f16(x))).collect::<Vec<f32>>();
         ExrImage {
             width: w,
             height: h,
@@ -108,11 +96,7 @@ mod tests {
                 ExrChannel::new("B", SampleKind::Float, ramp(0.3)),
                 ExrChannel::new("G", SampleKind::Half, half(ramp(-0.2))),
                 ExrChannel::new("R", SampleKind::Float, ramp(1.0)),
-                ExrChannel::new(
-                    "id",
-                    SampleKind::Uint,
-                    (0..w * h).map(|i| (i * 7 % 1000) as f32).collect(),
-                ),
+                ExrChannel::new("id", SampleKind::Uint, (0..w * h).map(|i| (i * 7 % 1000) as f32).collect()),
             ],
         }
     }
@@ -140,42 +124,13 @@ mod tests {
 
     #[test]
     fn special_values_survive() {
-        let v = vec![
-            0.0,
-            -0.0,
-            f32::INFINITY,
-            f32::NEG_INFINITY,
-            65504.0,
-            6.0e-8,
-            1e30,
-            -1e-30,
-        ];
-        let img = ExrImage {
-            width: 8,
-            height: 1,
-            channels: vec![
-                ExrChannel::new("F", SampleKind::Float, v.clone()),
-                ExrChannel::new("H", SampleKind::Half, v),
-            ],
-        };
+        let v = vec![0.0, -0.0, f32::INFINITY, f32::NEG_INFINITY, 65504.0, 6.0e-8, 1e30, -1e-30];
+        let img =
+            ExrImage { width: 8, height: 1, channels: vec![ExrChannel::new("F", SampleKind::Float, v.clone()), ExrChannel::new("H", SampleKind::Half, v)] };
         let back = decode(&encode(&img).unwrap()).unwrap();
-        assert_eq!(
-            back.channels[0]
-                .data
-                .iter()
-                .map(|x| x.to_bits())
-                .collect::<Vec<_>>(),
-            img.channels[0]
-                .data
-                .iter()
-                .map(|x| x.to_bits())
-                .collect::<Vec<_>>()
-        );
+        assert_eq!(back.channels[0].data.iter().map(|x| x.to_bits()).collect::<Vec<_>>(), img.channels[0].data.iter().map(|x| x.to_bits()).collect::<Vec<_>>());
         let h = &back.channels[1].data;
-        assert_eq!(
-            (h[2], h[3], h[4]),
-            (f32::INFINITY, f32::NEG_INFINITY, 65504.0)
-        );
+        assert_eq!((h[2], h[3], h[4]), (f32::INFINITY, f32::NEG_INFINITY, 65504.0));
         assert_eq!((h[5], h[6]), (crate::half::f16_to_f32(1), f32::INFINITY));
         assert!(h[7] == 0.0 && h[7].is_sign_negative());
     }
@@ -183,34 +138,15 @@ mod tests {
     #[test]
     fn invalid_images_are_rejected() {
         let bad = |img: ExrImage| assert!(encode(&img).is_err());
-        bad(ExrImage {
-            width: 0,
-            height: 1,
-            channels: vec![ExrChannel::new("R", SampleKind::Half, vec![])],
-        });
+        bad(ExrImage { width: 0, height: 1, channels: vec![ExrChannel::new("R", SampleKind::Half, vec![])] });
+        bad(ExrImage { width: 1, height: 1, channels: vec![] });
+        bad(ExrImage { width: 2, height: 1, channels: vec![ExrChannel::new("R", SampleKind::Half, vec![1.0])] });
         bad(ExrImage {
             width: 1,
             height: 1,
-            channels: vec![],
+            channels: vec![ExrChannel::new("R", SampleKind::Half, vec![1.0]), ExrChannel::new("R", SampleKind::Float, vec![1.0])],
         });
-        bad(ExrImage {
-            width: 2,
-            height: 1,
-            channels: vec![ExrChannel::new("R", SampleKind::Half, vec![1.0])],
-        });
-        bad(ExrImage {
-            width: 1,
-            height: 1,
-            channels: vec![
-                ExrChannel::new("R", SampleKind::Half, vec![1.0]),
-                ExrChannel::new("R", SampleKind::Float, vec![1.0]),
-            ],
-        });
-        bad(ExrImage {
-            width: 1,
-            height: 1,
-            channels: vec![ExrChannel::new("", SampleKind::Half, vec![1.0])],
-        });
+        bad(ExrImage { width: 1, height: 1, channels: vec![ExrChannel::new("", SampleKind::Half, vec![1.0])] });
     }
 
     #[test]

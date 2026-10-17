@@ -40,11 +40,7 @@ impl MapsWorker {
                 }
             }
         });
-        MapsWorker {
-            job,
-            total,
-            done: 0,
-        }
+        MapsWorker { job, total, done: 0 }
     }
 
     /// Sets finished since the last call.

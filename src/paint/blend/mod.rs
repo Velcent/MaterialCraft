@@ -151,12 +151,7 @@ impl BlendMode {
     }
 
     pub fn is_normal_map(self) -> bool {
-        matches!(
-            self,
-            BlendMode::NormalMapCombine
-                | BlendMode::NormalMapDetail
-                | BlendMode::NormalMapInverseDetail
-        )
+        matches!(self, BlendMode::NormalMapCombine | BlendMode::NormalMapDetail | BlendMode::NormalMapInverseDetail)
     }
 
     /// The blended value at full strength. RGB follow the formula; alpha is the top's alpha.
@@ -186,20 +181,12 @@ impl BlendMode {
     /// `lerp(base, apply(base, top), w)`, renormalised for normal-map modes. `Replace` lerps all four
     /// components by `opacity` alone; `Disable` returns `base`.
     pub fn mix(self, base: [f32; 4], top: [f32; 4], opacity: f32) -> [f32; 4] {
-        let opacity = if opacity.is_finite() {
-            opacity.clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
+        let opacity = if opacity.is_finite() { opacity.clamp(0.0, 1.0) } else { 0.0 };
         match self {
             BlendMode::Disable => base,
             BlendMode::Replace => [0, 1, 2, 3].map(|i| lerp(base[i], top[i], opacity)),
             _ => {
-                let cov = if top[3].is_finite() {
-                    top[3].clamp(0.0, 1.0)
-                } else {
-                    0.0
-                };
+                let cov = if top[3].is_finite() { top[3].clamp(0.0, 1.0) } else { 0.0 };
                 let w = opacity * cov;
                 if w <= 0.0 {
                     return base;
@@ -207,9 +194,7 @@ impl BlendMode {
                 let blended = self.apply(base, top);
                 let mut out = [0, 1, 2].map(|i| lerp(base[i], blended[i], w));
                 if self.is_normal_map() {
-                    out = rgb3(normal::encode(normal::decode([
-                        out[0], out[1], out[2], 1.0,
-                    ])));
+                    out = rgb3(normal::encode(normal::decode([out[0], out[1], out[2], 1.0])));
                 }
                 [out[0], out[1], out[2], base[3] + w * (1.0 - base[3])]
             }

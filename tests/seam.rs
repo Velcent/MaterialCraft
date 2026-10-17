@@ -1,4 +1,4 @@
-use materialcraft::graph::{demo_graph_for, Graph, SPECS};
+use materialcraft::graph::{Graph, SPECS, demo_graph_for};
 use materialcraft::tex::Tex;
 
 /// (seam jump, largest jump anywhere else): the mean difference across the wrap-around border, and the
@@ -44,25 +44,86 @@ fn every_node_is_seamless() {
 fn variants_are_seamless() {
     let pre = "size 128\nnode 100 fbm scale=4 octaves=4 seed=2\nnode 102 sdf_shape shape=0 size=0.3 x=0.35\nnode 104 voronoi scale=5 mode=2 seed=3\nnode 105 threshold in=@104 threshold=0.2\nnode 107 normal in=@100 strength=3\nnode 108 shape shape=0 size_x=0.3 size_y=0.3 pos_x=0.4 pos_y=0.45\n";
     let cases: &[&str] = &[
-        "perlin scale=3", "perlin scale=7 seed=4 disorder=0.5", "fbm scale=5 mode=1", "fbm scale=3 mode=2 octaves=8", "clouds scale=5 disorder=0.4",
-        "voronoi scale=7 mode=0", "voronoi scale=7 mode=1", "voronoi scale=7 mode=3", "voronoi scale=5 jitter=0.3 mode=2",
-        "bnw_spots variant=0", "bnw_spots variant=1", "bnw_spots variant=2", "crystal variant=0", "crystal variant=1",
-        "grunge variant=0", "grunge variant=1", "grunge variant=2", "grunge variant=3", "plasma scale=3", "plasma scale=5 disorder=0.3",
-        "directional_noise angle=0.13 scale=5 stretch=6", "directional_noise angle=0.25", "directional_noise angle=0.6 scale=3 stretch=12",
-        "gradient mode=0 angle=0.1", "gradient mode=1", "gradient_axial angle=0.2", "gradient_circular offset=0.3",
-        "circle radius=0.5", "circle radius=0.7 softness=0.1", "rect width=0.9 height=0.9", "polygon sides=3 radius=0.5", "polygon sides=8 radius=0.6 rotation=0.1",
-        "star points=7 size=0.5", "checker tiles=7", "checker tiles=3", "weave count=5", "grunge_map map=1", "grunge_map map=4", "grunge_map map=6 disorder=0.5", "grunge_map map=11 brush_pattern=0.6", "grunge_map map=15", "weave_generator tile_x=2 weave=3", "triangle_grid style=1 x_amount=8 y_amount=8", "triangle_grid style=1 triangulation=2 output=1", "triangle_grid style=1 output=2 thin_lines=1 quincunx_offset_x=0.5", "weave count=9 width=0.6",
-        "bricks rows=7 cols=3 offset=0.3", "bricks rows=5 cols=5 offset=0.5", "bricks rows=9 cols=4 offset=0.25", "bricks rows=6 cols=3.5",
-        "stripes count=7 angle=0.13", "stripes count=5 angle=0.37", "stripes count=9 angle=0.9",
-        "shape shape=0", "shape shape=1", "shape shape=2", "shape shape=3", "shape shape=4", "shape shape=5", "shape shape=6", "shape shape=7",
-        "shape shape=1 size_x=1 size_y=1", "shape shape=2 size_x=1.4 size_y=1.4 pos_x=0.3",
-        "sdf_shape shape=0 x=0.4 y=0.4", "sdf_shape shape=1 x=0.45 size=0.3", "sdf_shape shape=2 sides=6 size=0.4 x=-0.45", "sdf_shape shape=3 size=0.4 y=0.45",
-        "sdf_form shape=0", "sdf_form shape=1 repeat=5", "sdf_form shape=2", "sdf_form shape=3 repeat=2 scatter=0.5",
-        "tile_sampler x_amount=5 y_amount=7", "tile_sampler x_amount=9 y_amount=6 size_random=0.5 rotation_random=1 position_random=0.4",
-        "tile_generator x_amount=5 y_amount=7", "tile_generator x_amount=6 y_amount=6 offset=0.5",
-        "splatter count=30 size=0.2", "splatter count=60 size=0.3 size_random=0.5 rotation_random=1 pos_random=1",
+        "perlin scale=3",
+        "perlin scale=7 seed=4 disorder=0.5",
+        "fbm scale=5 mode=1",
+        "fbm scale=3 mode=2 octaves=8",
+        "clouds scale=5 disorder=0.4",
+        "voronoi scale=7 mode=0",
+        "voronoi scale=7 mode=1",
+        "voronoi scale=7 mode=3",
+        "voronoi scale=5 jitter=0.3 mode=2",
+        "bnw_spots variant=0",
+        "bnw_spots variant=1",
+        "bnw_spots variant=2",
+        "crystal variant=0",
+        "crystal variant=1",
+        "grunge variant=0",
+        "grunge variant=1",
+        "grunge variant=2",
+        "grunge variant=3",
+        "plasma scale=3",
+        "plasma scale=5 disorder=0.3",
+        "directional_noise angle=0.13 scale=5 stretch=6",
+        "directional_noise angle=0.25",
+        "directional_noise angle=0.6 scale=3 stretch=12",
+        "gradient mode=0 angle=0.1",
+        "gradient mode=1",
+        "gradient_axial angle=0.2",
+        "gradient_circular offset=0.3",
+        "circle radius=0.5",
+        "circle radius=0.7 softness=0.1",
+        "rect width=0.9 height=0.9",
+        "polygon sides=3 radius=0.5",
+        "polygon sides=8 radius=0.6 rotation=0.1",
+        "star points=7 size=0.5",
+        "checker tiles=7",
+        "checker tiles=3",
+        "weave count=5",
+        "grunge_map map=1",
+        "grunge_map map=4",
+        "grunge_map map=6 disorder=0.5",
+        "grunge_map map=11 brush_pattern=0.6",
+        "grunge_map map=15",
+        "weave_generator tile_x=2 weave=3",
+        "triangle_grid style=1 x_amount=8 y_amount=8",
+        "triangle_grid style=1 triangulation=2 output=1",
+        "triangle_grid style=1 output=2 thin_lines=1 quincunx_offset_x=0.5",
+        "weave count=9 width=0.6",
+        "bricks rows=7 cols=3 offset=0.3",
+        "bricks rows=5 cols=5 offset=0.5",
+        "bricks rows=9 cols=4 offset=0.25",
+        "bricks rows=6 cols=3.5",
+        "stripes count=7 angle=0.13",
+        "stripes count=5 angle=0.37",
+        "stripes count=9 angle=0.9",
+        "shape shape=0",
+        "shape shape=1",
+        "shape shape=2",
+        "shape shape=3",
+        "shape shape=4",
+        "shape shape=5",
+        "shape shape=6",
+        "shape shape=7",
+        "shape shape=1 size_x=1 size_y=1",
+        "shape shape=2 size_x=1.4 size_y=1.4 pos_x=0.3",
+        "sdf_shape shape=0 x=0.4 y=0.4",
+        "sdf_shape shape=1 x=0.45 size=0.3",
+        "sdf_shape shape=2 sides=6 size=0.4 x=-0.45",
+        "sdf_shape shape=3 size=0.4 y=0.45",
+        "sdf_form shape=0",
+        "sdf_form shape=1 repeat=5",
+        "sdf_form shape=2",
+        "sdf_form shape=3 repeat=2 scatter=0.5",
+        "tile_sampler x_amount=5 y_amount=7",
+        "tile_sampler x_amount=9 y_amount=6 size_random=0.5 rotation_random=1 position_random=0.4",
+        "tile_generator x_amount=5 y_amount=7",
+        "tile_generator x_amount=6 y_amount=6 offset=0.5",
+        "splatter count=30 size=0.2",
+        "splatter count=60 size=0.3 size_random=0.5 rotation_random=1 pos_random=1",
         "splatter_circular count=12 radius=0.45 size=0.2",
-        "gaussian_noise scale=3", "white_noise seed=3",
+        "gaussian_noise scale=3",
+        "white_noise seed=3",
     ];
     // generator-style kinds (no input)  --  with an optional pattern input where the node takes one
     let mut bad = Vec::new();
@@ -85,12 +146,38 @@ fn variants_are_seamless() {
         }
     }
     let filters: &[&str] = &[
-        "blur radius=9", "blur_hq intensity=0.5", "directional_blur angle=0.1 length=0.1", "sharpen radius=3", "highpass radius=8", "swirl amount=1 radius=0.5",
-        "transform offset_x=0.3 offset_y=0.2 scale_x=1.7 scale_y=1.3 rotation=0.123", "transform rotation=0.125", "transform scale_x=0.5 scale_y=0.5", "mirror axis=0", "mirror axis=1", "mirror axis=2",
-        "warp in=@100 warp=@100 intensity=0.2", "directional_warp warp=@100 angle=0.2 intensity=0.3", "vector_warp vector=@107 intensity=0.1", "slope_blur slope=@100 intensity=0.2",
-        "normal strength=4", "ao radius=8", "curvature radius=4", "edge_detect", "emboss angle=0.1", "bevel distance=0.05", "distance distance=0.1", "histogram_range position=0.5",
-        "make_it_tile_photo width=0.2", "make_it_tile_patch patches=5", "edge_wear amount=0.5", "curvature_smooth",
-        "flood_fill", "flood_fill_random", "flood_fill_color", "flood_fill_gradient",
+        "blur radius=9",
+        "blur_hq intensity=0.5",
+        "directional_blur angle=0.1 length=0.1",
+        "sharpen radius=3",
+        "highpass radius=8",
+        "swirl amount=1 radius=0.5",
+        "transform offset_x=0.3 offset_y=0.2 scale_x=1.7 scale_y=1.3 rotation=0.123",
+        "transform rotation=0.125",
+        "transform scale_x=0.5 scale_y=0.5",
+        "mirror axis=0",
+        "mirror axis=1",
+        "mirror axis=2",
+        "warp in=@100 warp=@100 intensity=0.2",
+        "directional_warp warp=@100 angle=0.2 intensity=0.3",
+        "vector_warp vector=@107 intensity=0.1",
+        "slope_blur slope=@100 intensity=0.2",
+        "normal strength=4",
+        "ao radius=8",
+        "curvature radius=4",
+        "edge_detect",
+        "emboss angle=0.1",
+        "bevel distance=0.05",
+        "distance distance=0.1",
+        "histogram_range position=0.5",
+        "make_it_tile_photo width=0.2",
+        "make_it_tile_patch patches=5",
+        "edge_wear amount=0.5",
+        "curvature_smooth",
+        "flood_fill",
+        "flood_fill_random",
+        "flood_fill_color",
+        "flood_fill_gradient",
     ];
     for c in filters {
         let kind = c.split(' ').next().unwrap();
@@ -148,12 +235,37 @@ fn filters_commute_with_wrapped_shifts() {
     const N: usize = 128;
     let (dx, dy) = (37.0 / N as f32, 21.0 / N as f32);
     let filters: &[&str] = &[
-        "blur radius=9", "blur_hq intensity=0.5", "directional_blur angle=0.1 length=0.1", "sharpen radius=3", "highpass radius=8",
-        "normal strength=4", "ao radius=8", "curvature radius=4", "edge_detect", "emboss angle=0.1", "bevel distance=0.05",
-        "distance distance=0.1", "histogram_range position=0.5", "histogram_scan position=0.5", "levels low=0.2 high=0.8", "invert", "threshold threshold=0.5",
-        "slope_blur slope=@100 intensity=0.2", "warp warp=@100 intensity=0.2", "directional_warp warp=@100 angle=0.2 intensity=0.3",
-        "vector_warp vector=@107 intensity=0.1", "swirl amount=0.0", "curvature_smooth", "edge_wear amount=0.5", "dirt", "dust",
-        "height_blend bg=@100 fg=@107 opacity=0.5", "clamp low=0.2 high=0.8", "hsl", "gradient_map", "quantize",
+        "blur radius=9",
+        "blur_hq intensity=0.5",
+        "directional_blur angle=0.1 length=0.1",
+        "sharpen radius=3",
+        "highpass radius=8",
+        "normal strength=4",
+        "ao radius=8",
+        "curvature radius=4",
+        "edge_detect",
+        "emboss angle=0.1",
+        "bevel distance=0.05",
+        "distance distance=0.1",
+        "histogram_range position=0.5",
+        "histogram_scan position=0.5",
+        "levels low=0.2 high=0.8",
+        "invert",
+        "threshold threshold=0.5",
+        "slope_blur slope=@100 intensity=0.2",
+        "warp warp=@100 intensity=0.2",
+        "directional_warp warp=@100 angle=0.2 intensity=0.3",
+        "vector_warp vector=@107 intensity=0.1",
+        "swirl amount=0.0",
+        "curvature_smooth",
+        "edge_wear amount=0.5",
+        "dirt",
+        "dust",
+        "height_blend bg=@100 fg=@107 opacity=0.5",
+        "clamp low=0.2 high=0.8",
+        "hsl",
+        "gradient_map",
+        "quantize",
     ];
     let mut bad = Vec::new();
     for c in filters {
@@ -163,7 +275,11 @@ fn filters_commute_with_wrapped_shifts() {
             line += " in=@100";
         }
         let pre = |shift: bool| {
-            let base = if shift { "node 99 fbm scale=4 octaves=4 seed=2\nnode 100 transform in=@99 offset_x=DX offset_y=DY\n" } else { "node 100 fbm scale=4 octaves=4 seed=2\n" };
+            let base = if shift {
+                "node 99 fbm scale=4 octaves=4 seed=2\nnode 100 transform in=@99 offset_x=DX offset_y=DY\n"
+            } else {
+                "node 100 fbm scale=4 octaves=4 seed=2\n"
+            };
             let base = base.replace("DX", &dx.to_string()).replace("DY", &dy.to_string());
             format!("size {N}\n{base}node 107 normal in=@100 strength=3\n")
         };
@@ -186,7 +302,9 @@ fn filters_commute_with_wrapped_shifts() {
             sum += d;
         }
         let mean = sum / a.px.len() as f32;
-        if std::env::var_os("SEAM_VERBOSE").is_some() { eprintln!("{c:<56} mean {mean:.5} worst {worst:.3}"); }
+        if std::env::var_os("SEAM_VERBOSE").is_some() {
+            eprintln!("{c:<56} mean {mean:.5} worst {worst:.3}");
+        }
         if mean > 0.004 {
             bad.push(format!("{c:<56} mean diff {mean:.4}  worst {worst:.3}"));
         }

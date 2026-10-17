@@ -1,9 +1,9 @@
 //! Entry names inside the archive. Image names are derived from ids (made safe and unique);
 //! readers never derive names, they use the paths recorded in the manifest.
 
+use super::FormatError;
 use super::images::Encoding;
 use super::slot::ImageSlot;
-use super::FormatError;
 use crate::paint::{Document, TiledImage};
 use std::collections::{HashMap, HashSet};
 
@@ -26,10 +26,7 @@ impl<'d> ImagePlan<'d> {
     /// Names every image: `textures/<set>/layers/<layer>/<channel>.<ext>`,
     /// `textures/<set>/layers/<layer>/mask.<ext>` and `textures/<set>/baked/<kind>.<ext>`.
     pub fn new(doc: &'d Document) -> ImagePlan<'d> {
-        let mut plan = ImagePlan {
-            entries: Vec::new(),
-            index: HashMap::new(),
-        };
+        let mut plan = ImagePlan { entries: Vec::new(), index: HashMap::new() };
         let mut set_dirs = Names::default();
         for (s, set) in doc.texture_sets.iter().enumerate() {
             let dir = format!("textures/{}", set_dirs.claim(&segment(&set.id)));
@@ -39,20 +36,10 @@ impl<'d> ImagePlan<'d> {
                 for (channel, img) in layer.images() {
                     let (slot, stem) = match channel {
                         Some(channel) => {
-                            let slot = ImageSlot::Paint {
-                                set: s,
-                                layer: layer.id.clone(),
-                                channel,
-                            };
+                            let slot = ImageSlot::Paint { set: s, layer: layer.id.clone(), channel };
                             (slot, channel.id())
                         }
-                        None => (
-                            ImageSlot::Mask {
-                                set: s,
-                                layer: layer.id.clone(),
-                            },
-                            "mask".into(),
-                        ),
+                        None => (ImageSlot::Mask { set: s, layer: layer.id.clone() }, "mask".into()),
                     };
                     plan.push(slot, format!("{ldir}/{stem}"), img);
                 }
@@ -60,11 +47,7 @@ impl<'d> ImagePlan<'d> {
             let mut baked_names = Names::default();
             for (i, b) in set.baked.iter().enumerate() {
                 let stem = baked_names.claim(&segment(b.kind.id()));
-                plan.push(
-                    ImageSlot::Baked { set: s, index: i },
-                    format!("{dir}/baked/{stem}"),
-                    &b.image,
-                );
+                plan.push(ImageSlot::Baked { set: s, index: i }, format!("{dir}/baked/{stem}"), &b.image);
             }
         }
         plan
@@ -107,38 +90,16 @@ impl Names {
 /// A path segment for `id`: ASCII letters, digits, `-`, `_` and `.` kept, everything else `_`;
 /// at most 64 bytes; never empty, `.` or `..`.
 pub fn segment(id: &str) -> String {
-    let s: String = id
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || "-_.".contains(c) {
-                c
-            } else {
-                '_'
-            }
-        })
-        .take(MAX_SEGMENT)
-        .collect();
-    if s.is_empty() || s.chars().all(|c| c == '.') {
-        format!("_{s}")
-    } else {
-        s
-    }
+    let s: String = id.chars().map(|c| if c.is_ascii_alphanumeric() || "-_.".contains(c) { c } else { '_' }).take(MAX_SEGMENT).collect();
+    if s.is_empty() || s.chars().all(|c| c == '.') { format!("_{s}") } else { s }
 }
 
 /// Checks a foreign file path: under `foreign/`, `/`-separated, no empty, `.` or `..` segments,
 /// no backslashes.
 pub fn check_foreign_path(path: &str) -> Result<(), FormatError> {
     let rest = path.strip_prefix(FOREIGN_PREFIX);
-    let ok = rest.is_some_and(|r| {
-        !r.contains('\\') && r.split('/').all(|s| !s.is_empty() && s != "." && s != "..")
-    });
-    if ok {
-        Ok(())
-    } else {
-        Err(FormatError::Unsupported(format!(
-            "foreign file path {path:?} must look like \"foreign/<source>/<file>\""
-        )))
-    }
+    let ok = rest.is_some_and(|r| !r.contains('\\') && r.split('/').all(|s| !s.is_empty() && s != "." && s != ".."));
+    if ok { Ok(()) } else { Err(FormatError::Unsupported(format!("foreign file path {path:?} must look like \"foreign/<source>/<file>\""))) }
 }
 
 #[cfg(test)]
@@ -162,14 +123,7 @@ mod tests {
     #[test]
     fn foreign_paths() {
         assert!(check_foreign_path("foreign/substance/document.bin").is_ok());
-        for bad in [
-            "substance/x",
-            "foreign/",
-            "foreign//x",
-            "foreign/../x",
-            "foreign/a\\b",
-            "/foreign/x",
-        ] {
+        for bad in ["substance/x", "foreign/", "foreign//x", "foreign/../x", "foreign/a\\b", "/foreign/x"] {
             assert!(check_foreign_path(bad).is_err(), "{bad}");
         }
     }

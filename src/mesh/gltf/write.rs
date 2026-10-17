@@ -27,11 +27,7 @@ pub(super) fn to_gltf(mesh: &Mesh) -> Result<(Value, Vec<u8>), GltfError> {
             node.insert("extras", Value::object().with(EXTRAS_KEY, extras));
         } else {
             node.insert("mesh", meshes.len());
-            meshes.push(
-                Value::object()
-                    .with("name", part.name.as_str())
-                    .with("primitives", vec![primitive(part, &mut buf)]),
-            );
+            meshes.push(Value::object().with("name", part.name.as_str()).with("primitives", vec![primitive(part, &mut buf)]));
         }
         nodes.push(node);
     }
@@ -41,11 +37,7 @@ pub(super) fn to_gltf(mesh: &Mesh) -> Result<(Value, Vec<u8>), GltfError> {
         scene.insert("nodes", (0..nodes.len()).collect::<Value>());
     }
     root.insert("scenes", vec![scene]);
-    let materials: Value = mesh
-        .materials
-        .iter()
-        .map(|m| Value::object().with("name", m.as_str()))
-        .collect();
+    let materials: Value = mesh.materials.iter().map(|m| Value::object().with("name", m.as_str())).collect();
     for (key, list) in [
         ("nodes", Value::Array(nodes)),
         ("meshes", Value::Array(meshes)),
@@ -58,18 +50,13 @@ pub(super) fn to_gltf(mesh: &Mesh) -> Result<(Value, Vec<u8>), GltfError> {
         }
     }
     if !buf.bin.is_empty() {
-        root.insert(
-            "buffers",
-            vec![Value::object().with("byteLength", buf.bin.len())],
-        );
+        root.insert("buffers", vec![Value::object().with("byteLength", buf.bin.len())]);
     }
     Ok((root, buf.bin))
 }
 
 fn asset() -> Value {
-    Value::object()
-        .with("version", "2.0")
-        .with("generator", GENERATOR)
+    Value::object().with("version", "2.0").with("generator", GENERATOR)
 }
 
 fn primitive(part: &MeshPart, buf: &mut BufferBuilder) -> Value {
@@ -113,13 +100,7 @@ impl BufferBuilder {
         self.bin.resize(self.bin.len().next_multiple_of(4), 0);
         let start = self.bin.len();
         bytes.for_each(|b| self.bin.extend_from_slice(&b));
-        self.views.push(
-            Value::object()
-                .with("buffer", 0)
-                .with("byteOffset", start)
-                .with("byteLength", self.bin.len() - start)
-                .with("target", target),
-        );
+        self.views.push(Value::object().with("buffer", 0).with("byteOffset", start).with("byteLength", self.bin.len() - start).with("target", target));
         self.views.len() - 1
     }
 
@@ -127,11 +108,7 @@ impl BufferBuilder {
     fn floats(&mut self, data: &[f32], n: usize, with_bounds: bool) -> usize {
         let view = self.view(data.iter().map(|f| f.to_le_bytes()), ARRAY_BUFFER);
         let kind = ["", "SCALAR", "VEC2", "VEC3", "VEC4"][n];
-        let mut a = Value::object()
-            .with("bufferView", view)
-            .with("componentType", FLOAT)
-            .with("count", data.len() / n)
-            .with("type", kind);
+        let mut a = Value::object().with("bufferView", view).with("componentType", FLOAT).with("count", data.len() / n).with("type", kind);
         if with_bounds {
             let mut lo = vec![f32::INFINITY; n];
             let mut hi = vec![f32::NEG_INFINITY; n];
@@ -149,17 +126,9 @@ impl BufferBuilder {
     }
 
     fn indices(&mut self, triangles: &[[u32; 3]]) -> usize {
-        let view = self.view(
-            triangles.iter().flatten().map(|i| i.to_le_bytes()),
-            ELEMENT_ARRAY_BUFFER,
-        );
-        self.accessors.push(
-            Value::object()
-                .with("bufferView", view)
-                .with("componentType", UNSIGNED_INT)
-                .with("count", triangles.len() * 3)
-                .with("type", "SCALAR"),
-        );
+        let view = self.view(triangles.iter().flatten().map(|i| i.to_le_bytes()), ELEMENT_ARRAY_BUFFER);
+        self.accessors
+            .push(Value::object().with("bufferView", view).with("componentType", UNSIGNED_INT).with("count", triangles.len() * 3).with("type", "SCALAR"));
         self.accessors.len() - 1
     }
 }

@@ -26,6 +26,6 @@ pub use materials::{BitmapRef, ChannelRecord, DocumentMaterials, MaterialRecord}
 pub use settings::{DocumentSettings, NormalMapSyscoord};
 pub use tag::{Payload, ValueTag};
 pub use value::Scalar;
-pub use walker::{walk, Visitor};
+pub use walker::{Visitor, walk};
 
 const RECORD: &str = "document";

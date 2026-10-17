@@ -1,15 +1,10 @@
 use super::*;
-use crate::mesh::test_util::quad;
 use crate::mesh::MeshPart;
+use crate::mesh::test_util::quad;
 
 /// A unit cube with per-face normals and tangents and two UV sets.
 fn cube(name: &str, material: usize) -> MeshPart {
-    let mut p = MeshPart {
-        name: name.into(),
-        material,
-        uv_sets: vec![vec![], vec![]],
-        ..MeshPart::default()
-    };
+    let mut p = MeshPart { name: name.into(), material, uv_sets: vec![vec![], vec![]], ..MeshPart::default() };
     // (normal, tangent): bitangent = cross(n, t) points along -v.
     let faces: [([f32; 3], [f32; 3]); 6] = [
         ([1.0, 0.0, 0.0], [0.0, 0.0, -1.0]),
@@ -20,17 +15,11 @@ fn cube(name: &str, material: usize) -> MeshPart {
         ([0.0, 0.0, -1.0], [-1.0, 0.0, 0.0]),
     ];
     for (f, (n, t)) in faces.iter().enumerate() {
-        let b = [
-            n[1] * t[2] - n[2] * t[1],
-            n[2] * t[0] - n[0] * t[2],
-            n[0] * t[1] - n[1] * t[0],
-        ];
+        let b = [n[1] * t[2] - n[2] * t[1], n[2] * t[0] - n[0] * t[2], n[0] * t[1] - n[1] * t[0]];
         let base = p.positions.len() as u32;
         for (u, v) in [(0.0f32, 1.0f32), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)] {
             let (su, sv) = (u * 2.0 - 1.0, 1.0 - v * 2.0);
-            p.positions.push(std::array::from_fn(|i| {
-                0.5 * (n[i] + su * t[i] + sv * b[i])
-            }));
+            p.positions.push(std::array::from_fn(|i| 0.5 * (n[i] + su * t[i] + sv * b[i])));
             p.normals.push(*n);
             p.tangents.push([t[0], t[1], t[2], 1.0]);
             p.uv_sets[0].push([u, v]);
@@ -51,18 +40,8 @@ pub(crate) fn sample() -> Mesh {
         parts: vec![
             cube("Box", 0),
             floor,
-            MeshPart {
-                name: "empty".into(),
-                material: 2,
-                ..MeshPart::default()
-            },
-            MeshPart {
-                name: "points only".into(),
-                material: 0,
-                positions: vec![[0.0, 2.0, 0.0]],
-                uv_sets: vec![vec![[0.5, 0.5]]],
-                ..MeshPart::default()
-            },
+            MeshPart { name: "empty".into(), material: 2, ..MeshPart::default() },
+            MeshPart { name: "points only".into(), material: 0, positions: vec![[0.0, 2.0, 0.0]], uv_sets: vec![vec![[0.5, 0.5]]], ..MeshPart::default() },
         ],
     }
 }
@@ -88,16 +67,11 @@ fn json_names_slots_and_bounds() {
     assert_eq!(root["asset"]["version"].as_str(), Some("2.0"));
     assert_eq!(root["nodes"][1]["name"].as_str(), Some("Floor"));
     assert_eq!(root["materials"][1]["name"].as_str(), Some("Ground plane"));
-    assert_eq!(
-        root["meshes"][1]["primitives"][0]["material"].as_u64(),
-        Some(1)
-    );
+    assert_eq!(root["meshes"][1]["primitives"][0]["material"].as_u64(), Some(1));
     let pos = &root["accessors"][0];
     assert_eq!(pos["min"][0].as_f64(), Some(-0.5));
     assert_eq!(pos["max"][2].as_f64(), Some(0.5));
-    assert!(root["meshes"][0]["primitives"][0]["attributes"]
-        .get("TEXCOORD_1")
-        .is_some());
+    assert!(root["meshes"][0]["primitives"][0]["attributes"].get("TEXCOORD_1").is_some());
 }
 
 #[test]
@@ -112,31 +86,17 @@ fn rejects_invalid_meshes_and_unsupported_files() {
         r#"{"asset":{"version":"2.0"},"buffers":[{"uri":"a.bin","byteLength":4}]}"#,
     ];
     for j in unsupported {
-        assert!(
-            matches!(Mesh::from_glb(&glb(j)), Err(GltfError::Unsupported(_))),
-            "{j}"
-        );
+        assert!(matches!(Mesh::from_glb(&glb(j)), Err(GltfError::Unsupported(_))), "{j}");
     }
     let lines = r#"{"asset":{"version":"2.0"},"buffers":[{"byteLength":64}],
         "bufferViews":[{"buffer":0,"byteLength":36}],
         "accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}],
         "meshes":[{"primitives":[{"attributes":{"POSITION":0},"mode":1}]}],
         "nodes":[{"mesh":0}]}"#;
-    assert!(matches!(
-        Mesh::from_glb(&glb(lines)),
-        Err(GltfError::Unsupported(_))
-    ));
-    let out_of_range = lines
-        .replace("\"count\":3", "\"count\":30")
-        .replace(",\"mode\":1", "");
-    assert!(matches!(
-        Mesh::from_glb(&glb(&out_of_range)),
-        Err(GltfError::Invalid { .. })
-    ));
-    let cyclic = lines.replace(",\"mode\":1", "").replace(
-        "\"nodes\":[{\"mesh\":0}]",
-        "\"scenes\":[{\"nodes\":[0]}],\"nodes\":[{\"mesh\":0,\"children\":[0]}]",
-    );
+    assert!(matches!(Mesh::from_glb(&glb(lines)), Err(GltfError::Unsupported(_))));
+    let out_of_range = lines.replace("\"count\":3", "\"count\":30").replace(",\"mode\":1", "");
+    assert!(matches!(Mesh::from_glb(&glb(&out_of_range)), Err(GltfError::Invalid { .. })));
+    let cyclic = lines.replace(",\"mode\":1", "").replace("\"nodes\":[{\"mesh\":0}]", "\"scenes\":[{\"nodes\":[0]}],\"nodes\":[{\"mesh\":0,\"children\":[0]}]");
     assert!(Mesh::from_glb(&glb(&cyclic)).is_err());
 }
 
@@ -144,14 +104,8 @@ fn rejects_invalid_meshes_and_unsupported_files() {
 fn reads_hierarchies_strips_and_missing_materials() {
     // Two triangles as a strip under a translated parent, no material.
     let mut bin = Vec::new();
-    for v in [
-        [0.0f32, 0.0, 0.0],
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [1.0, 1.0, 0.0],
-    ] {
-        v.iter()
-            .for_each(|f| bin.extend_from_slice(&f.to_le_bytes()));
+    for v in [[0.0f32, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]] {
+        v.iter().for_each(|f| bin.extend_from_slice(&f.to_le_bytes()));
     }
     bin.extend_from_slice(&[0, 1, 2, 3]);
     let json = r#"{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],

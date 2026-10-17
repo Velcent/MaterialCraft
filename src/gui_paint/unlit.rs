@@ -23,11 +23,7 @@ fn aces_inverse(y: f32) -> f32 {
 }
 
 fn linear_to_srgb(c: f32) -> f32 {
-    if c <= 0.003_130_8 {
-        c * 12.92
-    } else {
-        1.055 * c.powf(1.0 / 2.4) - 0.055
-    }
+    if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 }
 }
 
 /// The sRGB-encoded emissive texel that the unlit viewer shows as the screen colour `rgb` (0..1).
@@ -35,11 +31,7 @@ pub fn emissive_for(rgb: [f32; 3]) -> [f32; 3] {
     let t = rgb.map(|v| v.clamp(0.0, 1.0).powf(2.2));
     let lt = t[0] * LUM[0] + t[1] * LUM[1] + t[2] * LUM[2];
     // the slope of `aces` at 0 is 0.03 / 0.14
-    let k = if lt < 1e-6 {
-        0.14 / 0.03
-    } else {
-        aces_inverse(lt.min(aces(HUE_SAFE_LUM) - 1e-4)) / lt
-    };
+    let k = if lt < 1e-6 { 0.14 / 0.03 } else { aces_inverse(lt.min(aces(HUE_SAFE_LUM) - 1e-4)) / lt };
     t.map(|v| linear_to_srgb((v * k).min(1.0)))
 }
 
@@ -49,13 +41,7 @@ mod tests {
 
     /// What the shader shows for an sRGB emissive texel with the lights off.
     fn shown(e: [f32; 3]) -> [f32; 3] {
-        let lin = e.map(|v| {
-            if v <= 0.04045 {
-                v / 12.92
-            } else {
-                ((v + 0.055) / 1.055).powf(2.4)
-            }
-        });
+        let lin = e.map(|v| if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) });
         let l = lin[0] * LUM[0] + lin[1] * LUM[1] + lin[2] * LUM[2];
         let k = aces(l) / l.max(1e-4);
         lin.map(|v| (v * k).min(1.0).powf(1.0 / 2.2))
@@ -63,13 +49,7 @@ mod tests {
 
     #[test]
     fn round_trip_below_the_cap() {
-        for rgb in [
-            [0.8, 0.2, 0.2],
-            [0.5, 0.5, 0.5],
-            [0.1, 0.6, 0.9],
-            [0.02, 0.02, 0.02],
-            [0.85, 0.85, 0.85],
-        ] {
+        for rgb in [[0.8, 0.2, 0.2], [0.5, 0.5, 0.5], [0.1, 0.6, 0.9], [0.02, 0.02, 0.02], [0.85, 0.85, 0.85]] {
             let s = shown(emissive_for(rgb));
             for c in 0..3 {
                 assert!((s[c] - rgb[c]).abs() < 0.01, "{rgb:?} shows as {s:?}");

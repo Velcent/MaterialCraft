@@ -1,7 +1,7 @@
 //! Counts of `Data*` object classes in one serialised file, to measure what later milestones need.
 
 use super::header::DocumentHeader;
-use super::walker::{walk, Visitor};
+use super::walker::{Visitor, walk};
 use crate::decode::DecodeError;
 use std::collections::BTreeMap;
 

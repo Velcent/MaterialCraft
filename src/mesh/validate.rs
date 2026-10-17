@@ -8,10 +8,7 @@ impl Mesh {
     pub fn validate(&self) -> Result<(), MeshError> {
         for (i, part) in self.parts.iter().enumerate() {
             if part.material >= self.materials.len() {
-                let kind = MeshErrorKind::MaterialOutOfRange {
-                    material: part.material,
-                    material_count: self.materials.len(),
-                };
+                let kind = MeshErrorKind::MaterialOutOfRange { material: part.material, material_count: self.materials.len() };
                 return Err(MeshError::new(kind).in_part(i));
             }
             part.validate().map_err(|e| e.in_part(i))?;
@@ -32,11 +29,7 @@ impl MeshPart {
         }
         for (t, tri) in self.triangles.iter().enumerate() {
             if let Some(&index) = tri.iter().find(|&&i| i as usize >= n) {
-                return Err(MeshError::new(MeshErrorKind::IndexOutOfRange {
-                    triangle: t,
-                    index,
-                    vertex_count: n,
-                }));
+                return Err(MeshError::new(MeshErrorKind::IndexOutOfRange { triangle: t, index, vertex_count: n }));
             }
         }
         check_finite(Attribute::Positions, self.positions.iter().map(|v| &v[..]))?;
@@ -49,33 +42,14 @@ impl MeshPart {
     }
 }
 
-fn check_len(
-    attribute: Attribute,
-    expected: usize,
-    found: usize,
-    may_be_empty: bool,
-) -> Result<(), MeshError> {
-    if found == expected || (may_be_empty && found == 0) {
-        Ok(())
-    } else {
-        Err(MeshError::new(MeshErrorKind::LengthMismatch {
-            attribute,
-            expected,
-            found,
-        }))
-    }
+fn check_len(attribute: Attribute, expected: usize, found: usize, may_be_empty: bool) -> Result<(), MeshError> {
+    if found == expected || (may_be_empty && found == 0) { Ok(()) } else { Err(MeshError::new(MeshErrorKind::LengthMismatch { attribute, expected, found })) }
 }
 
-fn check_finite<'a>(
-    attribute: Attribute,
-    values: impl Iterator<Item = &'a [f32]>,
-) -> Result<(), MeshError> {
+fn check_finite<'a>(attribute: Attribute, values: impl Iterator<Item = &'a [f32]>) -> Result<(), MeshError> {
     for (vertex, v) in values.enumerate() {
         if !v.iter().all(|x| x.is_finite()) {
-            return Err(MeshError::new(MeshErrorKind::NonFinite {
-                attribute,
-                vertex,
-            }));
+            return Err(MeshError::new(MeshErrorKind::NonFinite { attribute, vertex }));
         }
     }
     Ok(())
@@ -87,10 +61,7 @@ mod tests {
     use crate::mesh::test_util::quad;
 
     fn mesh(part: MeshPart) -> Mesh {
-        Mesh {
-            materials: vec!["m".into()],
-            parts: vec![part],
-        }
+        Mesh { materials: vec!["m".into()], parts: vec![part] }
     }
 
     #[test]
@@ -112,14 +83,7 @@ mod tests {
         p.uv_sets[0].pop();
         let e = mesh(p).validate().unwrap_err();
         assert_eq!(e.part, Some(0));
-        assert_eq!(
-            e.kind,
-            MeshErrorKind::LengthMismatch {
-                attribute: Attribute::UvSet(0),
-                expected: 4,
-                found: 3
-            }
-        );
+        assert_eq!(e.kind, MeshErrorKind::LengthMismatch { attribute: Attribute::UvSet(0), expected: 4, found: 3 });
         assert!(e.to_string().contains("UV set 0"));
     }
 
@@ -128,14 +92,7 @@ mod tests {
         let mut p = quad();
         p.triangles[1][2] = 9;
         let e = p.validate().unwrap_err();
-        assert_eq!(
-            e.kind,
-            MeshErrorKind::IndexOutOfRange {
-                triangle: 1,
-                index: 9,
-                vertex_count: 4
-            }
-        );
+        assert_eq!(e.kind, MeshErrorKind::IndexOutOfRange { triangle: 1, index: 9, vertex_count: 4 });
     }
 
     #[test]
@@ -143,13 +100,7 @@ mod tests {
         let mut p = quad();
         p.material = 3;
         let e = mesh(p).validate().unwrap_err();
-        assert_eq!(
-            e.kind,
-            MeshErrorKind::MaterialOutOfRange {
-                material: 3,
-                material_count: 1
-            }
-        );
+        assert_eq!(e.kind, MeshErrorKind::MaterialOutOfRange { material: 3, material_count: 1 });
     }
 
     #[test]
@@ -157,12 +108,6 @@ mod tests {
         let mut p = quad();
         p.normals[2][1] = f32::NAN;
         let e = p.validate().unwrap_err();
-        assert_eq!(
-            e.kind,
-            MeshErrorKind::NonFinite {
-                attribute: Attribute::Normals,
-                vertex: 2
-            }
-        );
+        assert_eq!(e.kind, MeshErrorKind::NonFinite { attribute: Attribute::Normals, vertex: 2 });
     }
 }

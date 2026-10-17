@@ -79,71 +79,29 @@ impl fmt::Display for DocError {
         match self {
             EmptyId { set } => write!(f, "texture set {set:?}: empty texture set or layer id"),
             DuplicateTextureSet { set } => write!(f, "texture set id {set:?} is used twice"),
-            BadResolution {
-                set,
-                resolution: (w, h),
-            } => write!(
-                f,
-                "texture set {set:?}: resolution {w}x{h} must be 1..={MAX_DIMENSION}"
-            ),
+            BadResolution { set, resolution: (w, h) } => write!(f, "texture set {set:?}: resolution {w}x{h} must be 1..={MAX_DIMENSION}"),
             MaterialSlotOutOfRange { set, slot } => {
                 write!(f, "texture set {set:?}: mesh has no material slot {slot}")
             }
             UvSetOutOfRange { set, uv_set } => {
                 write!(f, "texture set {set:?}: mesh part lacks UV set {uv_set}")
             }
-            DuplicateChannel { set, channel } => write!(
-                f,
-                "texture set {set:?}: channel {} declared twice",
-                channel.id()
-            ),
+            DuplicateChannel { set, channel } => write!(f, "texture set {set:?}: channel {} declared twice", channel.id()),
             DuplicateLayer { set, layer } => {
                 write!(f, "texture set {set:?}: layer id {layer:?} is used twice")
             }
-            UndeclaredChannel {
-                set,
-                layer,
-                channel,
-            } => {
-                write!(
-                    f,
-                    "texture set {set:?}, layer {layer:?}: channel {} is not declared",
-                    channel.id()
-                )
+            UndeclaredChannel { set, layer, channel } => {
+                write!(f, "texture set {set:?}, layer {layer:?}: channel {} is not declared", channel.id())
             }
-            DuplicateLayerChannel {
-                set,
-                layer,
-                channel,
-            } => {
-                write!(
-                    f,
-                    "texture set {set:?}, layer {layer:?}: channel {} appears twice",
-                    channel.id()
-                )
+            DuplicateLayerChannel { set, layer, channel } => {
+                write!(f, "texture set {set:?}, layer {layer:?}: channel {} appears twice", channel.id())
             }
-            BadOpacity { set, layer } => write!(
-                f,
-                "texture set {set:?}, layer {layer:?}: opacity must be within 0..=1"
-            ),
-            ImageSize {
-                set,
-                layer,
-                channel,
-                size,
-                expected,
-            } => {
+            BadOpacity { set, layer } => write!(f, "texture set {set:?}, layer {layer:?}: opacity must be within 0..=1"),
+            ImageSize { set, layer, channel, size, expected } => {
                 let what = channel.map_or("mask".to_string(), |c| c.id());
-                write!(
-                    f,
-                    "texture set {set:?}, layer {layer:?}: {what} image is {}x{}, expected {}x{}",
-                    size.0, size.1, expected.0, expected.1
-                )
+                write!(f, "texture set {set:?}, layer {layer:?}: {what} image is {}x{}, expected {}x{}", size.0, size.1, expected.0, expected.1)
             }
-            GroupTooDeep { set, layer } => write!(
-                f,
-                "texture set {set:?}, layer {layer:?}: groups nested deeper than {MAX_GROUP_DEPTH}"
-            ),
+            GroupTooDeep { set, layer } => write!(f, "texture set {set:?}, layer {layer:?}: groups nested deeper than {MAX_GROUP_DEPTH}"),
             DuplicateForeignFile { path } => write!(f, "foreign file {path:?} is stored twice"),
         }
     }
@@ -156,17 +114,13 @@ pub(crate) fn problems(doc: &Document) -> Vec<DocError> {
     let mut out = Vec::new();
     for (i, set) in doc.texture_sets.iter().enumerate() {
         if doc.texture_sets[..i].iter().any(|s| s.id == set.id) {
-            out.push(DocError::DuplicateTextureSet {
-                set: set.id.clone(),
-            });
+            out.push(DocError::DuplicateTextureSet { set: set.id.clone() });
         }
         check_set(doc, set, &mut out);
     }
     for (i, f) in doc.foreign.iter().enumerate() {
         if doc.foreign[..i].iter().any(|g| g.path == f.path) {
-            out.push(DocError::DuplicateForeignFile {
-                path: f.path.clone(),
-            });
+            out.push(DocError::DuplicateForeignFile { path: f.path.clone() });
         }
     }
     out
@@ -179,34 +133,17 @@ fn check_set(doc: &Document, set: &TextureSet, out: &mut Vec<DocError>) {
     }
     let (w, h) = set.resolution;
     if w == 0 || h == 0 || w > MAX_DIMENSION || h > MAX_DIMENSION {
-        out.push(DocError::BadResolution {
-            set: sid(),
-            resolution: set.resolution,
-        });
+        out.push(DocError::BadResolution { set: sid(), resolution: set.resolution });
     }
     if !doc.mesh.materials.is_empty() && set.material_slot >= doc.mesh.materials.len() {
-        out.push(DocError::MaterialSlotOutOfRange {
-            set: sid(),
-            slot: set.material_slot,
-        });
+        out.push(DocError::MaterialSlotOutOfRange { set: sid(), slot: set.material_slot });
     }
-    if doc
-        .mesh
-        .parts
-        .iter()
-        .any(|p| p.material == set.material_slot && set.uv_set >= p.uv_sets.len())
-    {
-        out.push(DocError::UvSetOutOfRange {
-            set: sid(),
-            uv_set: set.uv_set,
-        });
+    if doc.mesh.parts.iter().any(|p| p.material == set.material_slot && set.uv_set >= p.uv_sets.len()) {
+        out.push(DocError::UvSetOutOfRange { set: sid(), uv_set: set.uv_set });
     }
     for (i, spec) in set.channels.iter().enumerate() {
         if set.channels[..i].iter().any(|s| s.channel == spec.channel) {
-            out.push(DocError::DuplicateChannel {
-                set: sid(),
-                channel: spec.channel,
-            });
+            out.push(DocError::DuplicateChannel { set: sid(), channel: spec.channel });
         }
     }
     let mut seen: Vec<&str> = Vec::new();
@@ -214,17 +151,11 @@ fn check_set(doc: &Document, set: &TextureSet, out: &mut Vec<DocError>) {
         if layer.id.is_empty() {
             out.push(DocError::EmptyId { set: sid() });
         } else if seen.contains(&layer.id.as_str()) {
-            out.push(DocError::DuplicateLayer {
-                set: sid(),
-                layer: layer.id.clone(),
-            });
+            out.push(DocError::DuplicateLayer { set: sid(), layer: layer.id.clone() });
         }
         seen.push(&layer.id);
         if depth > MAX_GROUP_DEPTH {
-            out.push(DocError::GroupTooDeep {
-                set: sid(),
-                layer: layer.id.clone(),
-            });
+            out.push(DocError::GroupTooDeep { set: sid(), layer: layer.id.clone() });
         }
         check_layer(set, layer, out);
     }
@@ -251,30 +182,16 @@ fn check_layer(set: &TextureSet, layer: &Layer, out: &mut Vec<DocError>) {
         for (i, &c) in list.iter().enumerate() {
             let (s, l) = err_ctx();
             if !set.has_channel(c) {
-                out.push(DocError::UndeclaredChannel {
-                    set: s,
-                    layer: l,
-                    channel: c,
-                });
+                out.push(DocError::UndeclaredChannel { set: s, layer: l, channel: c });
             } else if list[..i].contains(&c) {
-                out.push(DocError::DuplicateLayerChannel {
-                    set: s,
-                    layer: l,
-                    channel: c,
-                });
+                out.push(DocError::DuplicateLayerChannel { set: s, layer: l, channel: c });
             }
         }
     }
     for (channel, img) in layer.images() {
         if img.size() != set.resolution {
             let (s, l) = err_ctx();
-            out.push(DocError::ImageSize {
-                set: s,
-                layer: l,
-                channel,
-                size: img.size(),
-                expected: set.resolution,
-            });
+            out.push(DocError::ImageSize { set: s, layer: l, channel, size: img.size(), expected: set.resolution });
         }
     }
 }

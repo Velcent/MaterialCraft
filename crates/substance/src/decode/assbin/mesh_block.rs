@@ -6,8 +6,8 @@
 //! UV sets additionally with a `u32` component count first. Then `u32` face count, the faces,
 //! and bones (not read).
 
-use super::block::{read_count, read_string, read_u32};
 use super::RECORD;
+use super::block::{read_count, read_string, read_u32};
 use crate::container::bytes::ByteReader;
 use crate::decode::DecodeError;
 

@@ -32,16 +32,11 @@ impl<'a> Accessors<'a> {
         let buffers = root.get("buffers").and_then(Value::as_array);
         for (i, b) in buffers.into_iter().flatten().enumerate() {
             if b.get("uri").is_some() {
-                return Err(GltfError::Unsupported(format!(
-                    "buffers[{i}] refers to external data; only GLB-embedded buffers are read"
-                )));
+                return Err(GltfError::Unsupported(format!("buffers[{i}] refers to external data; only GLB-embedded buffers are read")));
             }
             let len = b.get("byteLength").and_then(Value::as_usize);
             if i > 0 || len.is_none_or(|l| l > bin.len()) {
-                return Err(GltfError::invalid(
-                    format!("buffers[{i}]"),
-                    "byteLength does not match the GLB binary chunk",
-                ));
+                return Err(GltfError::invalid(format!("buffers[{i}]"), "byteLength does not match the GLB binary chunk"));
             }
         }
         Ok(Accessors { root, bin })
@@ -53,10 +48,7 @@ impl<'a> Accessors<'a> {
         let at = format!("accessors[{index}]");
         let l = self.layout(index, N)?;
         if l.component != FLOAT && !l.normalized {
-            return Err(GltfError::invalid(
-                at,
-                "expected float or normalised components",
-            ));
+            return Err(GltfError::invalid(at, "expected float or normalised components"));
         }
         let size = component_size(l.component);
         let mut out = Vec::with_capacity(l.count);
@@ -74,10 +66,7 @@ impl<'a> Accessors<'a> {
     pub fn indices(&self, index: usize) -> Result<Vec<u32>, GltfError> {
         let l = self.layout(index, 1)?;
         if ![UNSIGNED_BYTE, UNSIGNED_SHORT, UNSIGNED_INT].contains(&l.component) || l.normalized {
-            return Err(GltfError::invalid(
-                format!("accessors[{index}]"),
-                "indices must be unsigned byte, short or int",
-            ));
+            return Err(GltfError::invalid(format!("accessors[{index}]"), "indices must be unsigned byte, short or int"));
         }
         Ok((0..l.count)
             .map(|e| {
@@ -94,16 +83,11 @@ impl<'a> Accessors<'a> {
     /// Number of elements of accessor `index`.
     pub fn count(&self, index: usize) -> Result<usize, GltfError> {
         let a = self.accessor(index)?;
-        a.get("count")
-            .and_then(Value::as_usize)
-            .ok_or_else(|| GltfError::invalid(format!("accessors[{index}]"), "missing count"))
+        a.get("count").and_then(Value::as_usize).ok_or_else(|| GltfError::invalid(format!("accessors[{index}]"), "missing count"))
     }
 
     fn accessor(&self, index: usize) -> Result<&'a Value, GltfError> {
-        self.root
-            .get("accessors")
-            .and_then(|a| a.at(index))
-            .ok_or_else(|| GltfError::invalid(format!("accessors[{index}]"), "does not exist"))
+        self.root.get("accessors").and_then(|a| a.at(index)).ok_or_else(|| GltfError::invalid(format!("accessors[{index}]"), "does not exist"))
     }
 
     fn layout(&self, index: usize, components: usize) -> Result<Layout<'a>, GltfError> {
@@ -115,9 +99,7 @@ impl<'a> Accessors<'a> {
         }
         let kind = a.get("type").and_then(Value::as_str).unwrap_or("");
         if type_components(kind) != Some(components) {
-            return Err(inv(&format!(
-                "type {kind:?}, expected {components} components"
-            )));
+            return Err(inv(&format!("type {kind:?}, expected {components} components")));
         }
         let component = a.get("componentType").and_then(Value::as_u64).unwrap_or(0);
         let size = component_size(component);
@@ -138,47 +120,28 @@ impl<'a> Accessors<'a> {
         }
         let end = match count {
             0 => Some(offset),
-            n => (n - 1)
-                .checked_mul(stride)
-                .and_then(|b| b.checked_add(elem))
-                .and_then(|b| b.checked_add(offset)),
+            n => (n - 1).checked_mul(stride).and_then(|b| b.checked_add(elem)).and_then(|b| b.checked_add(offset)),
         }
         .filter(|&end| end <= view.0.len())
         .ok_or_else(|| inv("data extends past its bufferView"))?;
-        Ok(Layout {
-            data: &view.0[offset..end],
-            count,
-            stride,
-            component,
-            normalized,
-        })
+        Ok(Layout { data: &view.0[offset..end], count, stride, component, normalized })
     }
 
     /// The bytes of buffer view `index` and its stride.
     fn view(&self, index: usize) -> Result<(&'a [u8], Option<usize>), GltfError> {
         let at = format!("bufferViews[{index}]");
-        let v = self
-            .root
-            .get("bufferViews")
-            .and_then(|v| v.at(index))
-            .ok_or_else(|| GltfError::invalid(at.clone(), "does not exist"))?;
+        let v = self.root.get("bufferViews").and_then(|v| v.at(index)).ok_or_else(|| GltfError::invalid(at.clone(), "does not exist"))?;
         let inv = |m: &str| GltfError::invalid(at.clone(), m);
         if v.get("buffer").and_then(Value::as_usize) != Some(0) {
             return Err(inv("must use buffer 0 (the GLB binary chunk)"));
         }
         let offset = usize_or(v.get("byteOffset"), 0).ok_or_else(|| inv("bad byteOffset"))?;
-        let len = v
-            .get("byteLength")
-            .and_then(Value::as_usize)
-            .ok_or_else(|| inv("missing byteLength"))?;
+        let len = v.get("byteLength").and_then(Value::as_usize).ok_or_else(|| inv("missing byteLength"))?;
         let stride = match v.get("byteStride") {
             None => None,
             Some(s) => Some(s.as_usize().ok_or_else(|| inv("bad byteStride"))?),
         };
-        let data = offset
-            .checked_add(len)
-            .and_then(|end| self.bin.get(offset..end))
-            .ok_or_else(|| inv("extends past the binary chunk"))?;
+        let data = offset.checked_add(len).and_then(|end| self.bin.get(offset..end)).ok_or_else(|| inv("extends past the binary chunk"))?;
         Ok((data, stride))
     }
 }

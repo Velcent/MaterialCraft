@@ -1,7 +1,7 @@
 //! Software PBR renderer for the 3D viewer. Every shape (sphere, cube, plane) is a real tessellated triangle mesh that is
 //! rasterised with a depth buffer, so height maps can displace actual geometry (true displacement), not just fake it.
 //! GGX specular, hemisphere environment lighting, tangent-space normal mapping, bump, outward parallax relief, wireframe.
-use crate::tex::{lum, Tex};
+use crate::tex::{Tex, lum};
 use crate::v3::*;
 use std::f32::consts::{PI, TAU};
 
@@ -79,7 +79,6 @@ impl Default for View {
         }
     }
 }
-
 
 /// Key light direction and the opposite soft fill light (unit vectors pointing TO the lights).
 pub fn light_dirs(v: &View) -> (V, V) {
@@ -203,7 +202,16 @@ fn raw_sphere(n: u32, tiling: f32) -> Raw {
                 2 + j * nu + (i % nu)
             };
             let sin_t = st.max(0.05);
-            r.push(p, p, [cl, 0.0, -sl], [(i as f32 / nu as f32) * tiling * 2.0, theta / PI * tiling], TAU * sin_t / (tiling * 2.0), PI / tiling, weld, smoothstep01(st / 0.05));
+            r.push(
+                p,
+                p,
+                [cl, 0.0, -sl],
+                [(i as f32 / nu as f32) * tiling * 2.0, theta / PI * tiling],
+                TAU * sin_t / (tiling * 2.0),
+                PI / tiling,
+                weld,
+                smoothstep01(st / 0.05),
+            );
         }
     }
     r.grid_tris(0, nu, nv);
@@ -236,7 +244,6 @@ fn raw_cube(n: u32, tiling: f32) -> Raw {
     }
     r
 }
-
 
 // ------------------------------------------------------------------------------------------------ more shapes
 /// Shapes the viewer can show, in menu order: (name, shape id). Ids 0..2 are the original sphere, cube and plane.
@@ -332,11 +339,29 @@ struct Seg {
 }
 
 fn seg_line(a: [f32; 2], b: [f32; 2], steps: usize, fade0: bool, fade1: bool) -> Seg {
-    Seg { pts: (0..=steps).map(|i| { let t = i as f32 / steps as f32; [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t] }).collect(), fade0, fade1 }
+    Seg {
+        pts: (0..=steps)
+            .map(|i| {
+                let t = i as f32 / steps as f32;
+                [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+            })
+            .collect(),
+        fade0,
+        fade1,
+    }
 }
 
 fn seg_arc(c: [f32; 2], rad: f32, a0: f32, a1: f32, steps: usize, fade0: bool, fade1: bool) -> Seg {
-    Seg { pts: (0..=steps).map(|i| { let a = a0 + (a1 - a0) * i as f32 / steps as f32; [c[0] + rad * a.cos(), c[1] + rad * a.sin()] }).collect(), fade0, fade1 }
+    Seg {
+        pts: (0..=steps)
+            .map(|i| {
+                let a = a0 + (a1 - a0) * i as f32 / steps as f32;
+                [c[0] + rad * a.cos(), c[1] + rad * a.sin()]
+            })
+            .collect(),
+        fade0,
+        fade1,
+    }
 }
 
 fn revolve(r: &mut Raw, n: u32, tiling: f32, ku: f32, segs: &[Seg]) {
@@ -346,7 +371,8 @@ fn revolve(r: &mut Raw, n: u32, tiling: f32, ku: f32, segs: &[Seg]) {
     for sg in segs {
         let m = sg.pts.len();
         let first = r.pos.len() as u32;
-        let lens: Vec<f32> = (0..m).map(|k| if k == 0 { 0.0 } else { ((sg.pts[k][0] - sg.pts[k - 1][0]).powi(2) + (sg.pts[k][1] - sg.pts[k - 1][1]).powi(2)).sqrt() }).collect();
+        let lens: Vec<f32> =
+            (0..m).map(|k| if k == 0 { 0.0 } else { ((sg.pts[k][0] - sg.pts[k - 1][0]).powi(2) + (sg.pts[k][1] - sg.pts[k - 1][1]).powi(2)).sqrt() }).collect();
         let total: f32 = lens.iter().sum();
         let mut run = 0.0f32;
         for k in 0..m {
@@ -370,7 +396,16 @@ fn revolve(r: &mut Raw, n: u32, tiling: f32, ku: f32, segs: &[Seg]) {
                 let (sl, cl) = lon.sin_cos();
                 let pos = [rad * sl, y, rad * cl];
                 let nrm = norm([nr * sl, ny, nr * cl]);
-                r.push(pos, nrm, [cl, 0.0, -sl], [i as f32 / nu as f32 * tiling * ku, (acc + run) * tiling / 3.14], (TAU * rad.max(0.05) / (ku * tiling)).max(0.05), 3.14 / tiling, 0, fade);
+                r.push(
+                    pos,
+                    nrm,
+                    [cl, 0.0, -sl],
+                    [i as f32 / nu as f32 * tiling * ku, (acc + run) * tiling / 3.14],
+                    (TAU * rad.max(0.05) / (ku * tiling)).max(0.05),
+                    3.14 / tiling,
+                    0,
+                    fade,
+                );
             }
         }
         r.grid_tris(first, nu, (m - 1) as u32);
@@ -416,7 +451,16 @@ fn raw_rounded_cylinder(n: u32, tiling: f32) -> Raw {
 fn raw_torus(n: u32, tiling: f32) -> Raw {
     let (big, small) = (0.68, 0.34);
     let steps = (n as usize).max(12);
-    let seg = Seg { pts: (0..=steps).map(|i| { let t = i as f32 / steps as f32 * TAU; [big + small * t.cos(), -small * t.sin()] }).collect(), fade0: false, fade1: false };
+    let seg = Seg {
+        pts: (0..=steps)
+            .map(|i| {
+                let t = i as f32 / steps as f32 * TAU;
+                [big + small * t.cos(), -small * t.sin()]
+            })
+            .collect(),
+        fade0: false,
+        fade1: false,
+    };
     let mut r = Raw::new();
     revolve(&mut r, n, tiling, 4.0, &[seg]);
     weld_by_position(&mut r, true);
@@ -426,10 +470,24 @@ fn raw_torus(n: u32, tiling: f32) -> Raw {
 fn raw_mat_ball(n: u32, tiling: f32) -> Raw {
     let (rad, cy) = (0.8, 0.2);
     let steps = (n as usize).max(12);
-    let ball = Seg { pts: (0..=steps).map(|i| { let t = i as f32 / steps as f32 * PI; [rad * t.sin(), cy + rad * t.cos()] }).collect(), fade0: false, fade1: false };
+    let ball = Seg {
+        pts: (0..=steps)
+            .map(|i| {
+                let t = i as f32 / steps as f32 * PI;
+                [rad * t.sin(), cy + rad * t.cos()]
+            })
+            .collect(),
+        fade0: false,
+        fade1: false,
+    };
     let (top, bot, pr) = (cy - rad, cy - rad - 0.18, 1.2);
     let st = (n / 2).max(4) as usize;
-    let segs = [ball, seg_line([0.0, top], [pr, top], st, true, true), seg_line([pr, top], [pr, bot], 8, true, true), seg_line([pr, bot], [0.0, bot], st, true, false)];
+    let segs = [
+        ball,
+        seg_line([0.0, top], [pr, top], st, true, true),
+        seg_line([pr, top], [pr, bot], 8, true, true),
+        seg_line([pr, bot], [0.0, bot], st, true, false),
+    ];
     let mut r = Raw::new();
     revolve(&mut r, n, tiling, 2.0, &segs);
     weld_by_position(&mut r, false);
@@ -939,14 +997,14 @@ fn wire_coverage(frags: &[Frag], w: usize, h: usize, x: usize, y: usize, f: Frag
             return None;
         }
         let g = frags[ny as usize * w + nx as usize];
-        if g.tri == f.tri {
-            Some([1.0 - g.b1 - g.b2, g.b1, g.b2])
-        } else {
-            None
-        }
+        if g.tri == f.tri { Some([1.0 - g.b1 - g.b2, g.b1, g.b2]) } else { None }
     };
-    let gx = nb(1, 0).map(|o| (0..3).map(|i| (o[i] - b[i]).abs()).collect::<Vec<_>>()).or_else(|| nb(-1, 0).map(|o| (0..3).map(|i| (o[i] - b[i]).abs()).collect::<Vec<_>>()));
-    let gy = nb(0, 1).map(|o| (0..3).map(|i| (o[i] - b[i]).abs()).collect::<Vec<_>>()).or_else(|| nb(0, -1).map(|o| (0..3).map(|i| (o[i] - b[i]).abs()).collect::<Vec<_>>()));
+    let gx = nb(1, 0)
+        .map(|o| (0..3).map(|i| (o[i] - b[i]).abs()).collect::<Vec<_>>())
+        .or_else(|| nb(-1, 0).map(|o| (0..3).map(|i| (o[i] - b[i]).abs()).collect::<Vec<_>>()));
+    let gy = nb(0, 1)
+        .map(|o| (0..3).map(|i| (o[i] - b[i]).abs()).collect::<Vec<_>>())
+        .or_else(|| nb(0, -1).map(|o| (0..3).map(|i| (o[i] - b[i]).abs()).collect::<Vec<_>>()));
     let (Some(gx), Some(gy)) = (gx, gy) else { return 0.0 };
     let mut dmin = f32::MAX;
     for i in 0..3 {

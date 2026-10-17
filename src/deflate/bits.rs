@@ -8,11 +8,7 @@ pub(super) struct BitWriter {
 
 impl BitWriter {
     pub fn with_capacity(cap: usize) -> Self {
-        BitWriter {
-            out: Vec::with_capacity(cap),
-            acc: 0,
-            n: 0,
-        }
+        BitWriter { out: Vec::with_capacity(cap), acc: 0, n: 0 }
     }
 
     /// Append the low `count` bits of `bits` (count <= 32).

@@ -42,17 +42,11 @@ pub struct PaintContent {
 
 impl PaintContent {
     pub fn image(&self, channel: Channel) -> Option<&TiledImage> {
-        self.images
-            .iter()
-            .find(|(c, _)| *c == channel)
-            .map(|(_, i)| i)
+        self.images.iter().find(|(c, _)| *c == channel).map(|(_, i)| i)
     }
 
     pub fn image_mut(&mut self, channel: Channel) -> Option<&mut TiledImage> {
-        self.images
-            .iter_mut()
-            .find(|(c, _)| *c == channel)
-            .map(|(_, i)| i)
+        self.images.iter_mut().find(|(c, _)| *c == channel).map(|(_, i)| i)
     }
 
     /// Adds or replaces the image of `channel`.
@@ -71,10 +65,7 @@ pub enum FillSource {
     Uniform(Vec<(Channel, [f32; 4])>),
     /// A procedural material, evaluated outside the core document (path inside the document, e.g.
     /// `materials/rust.mca`, plus parameter overrides as strings).
-    Material {
-        path: String,
-        params: Vec<(String, String)>,
-    },
+    Material { path: String, params: Vec<(String, String)> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -85,9 +76,7 @@ pub struct Fill {
 impl Fill {
     /// A uniform fill.
     pub fn uniform(values: Vec<(Channel, [f32; 4])>) -> Fill {
-        Fill {
-            source: FillSource::Uniform(values),
-        }
+        Fill { source: FillSource::Uniform(values) }
     }
 
     /// The uniform value for `channel`, if this is a uniform fill that sets it.
@@ -125,15 +114,7 @@ pub struct Layer {
 impl Layer {
     /// A visible, fully opaque layer with no channel entries yet.
     pub fn new(id: impl Into<String>, name: impl Into<String>, kind: LayerKind) -> Layer {
-        Layer {
-            id: id.into(),
-            name: name.into(),
-            visible: true,
-            opacity: 1.0,
-            blend: Vec::new(),
-            mask: None,
-            kind,
-        }
+        Layer { id: id.into(), name: name.into(), visible: true, opacity: 1.0, blend: Vec::new(), mask: None, kind }
     }
 
     /// The blend entry for `channel`; `None` means the layer does not affect it.
@@ -143,11 +124,7 @@ impl Layer {
 
     /// Adds or replaces the blend entry for `channel`.
     pub fn set_blend(&mut self, channel: Channel, mode: BlendMode, opacity: f32) {
-        let entry = ChannelBlend {
-            channel,
-            mode,
-            opacity,
-        };
+        let entry = ChannelBlend { channel, mode, opacity };
         match self.blend.iter_mut().find(|b| b.channel == channel) {
             Some(b) => *b = entry,
             None => self.blend.push(entry),
@@ -193,9 +170,7 @@ pub struct LayerWalk<'a> {
 
 impl<'a> LayerWalk<'a> {
     pub fn new(layers: &'a [Layer]) -> LayerWalk<'a> {
-        LayerWalk {
-            stack: vec![layers.iter()],
-        }
+        LayerWalk { stack: vec![layers.iter()] }
     }
 }
 
@@ -226,37 +201,15 @@ mod tests {
 
     #[test]
     fn blend_entries_and_walk() {
-        let mut l = Layer::new("a", "A", LayerKind::Paint(PaintContent::default())).with_blend(
-            Channel::BaseColor,
-            BlendMode::Normal,
-            1.0,
-        );
+        let mut l = Layer::new("a", "A", LayerKind::Paint(PaintContent::default())).with_blend(Channel::BaseColor, BlendMode::Normal, 1.0);
         l.set_blend(Channel::BaseColor, BlendMode::Multiply, 0.5);
         assert_eq!(l.blend.len(), 1);
-        assert_eq!(
-            l.blend_for(Channel::BaseColor).map(|b| b.mode),
-            Some(BlendMode::Multiply)
-        );
+        assert_eq!(l.blend_for(Channel::BaseColor).map(|b| b.mode), Some(BlendMode::Multiply));
         assert!(l.blend_for(Channel::Roughness).is_none());
-        let g = Layer::new(
-            "g",
-            "G",
-            LayerKind::Group(vec![
-                l.clone(),
-                Layer::new("b", "B", LayerKind::Group(vec![])),
-            ]),
-        );
-        let top = vec![
-            g,
-            Layer::new("c", "C", LayerKind::Fill(Fill::uniform(vec![]))),
-        ];
-        let ids: Vec<_> = LayerWalk::new(&top)
-            .map(|(d, l)| format!("{d}{}", l.id))
-            .collect();
+        let g = Layer::new("g", "G", LayerKind::Group(vec![l.clone(), Layer::new("b", "B", LayerKind::Group(vec![]))]));
+        let top = vec![g, Layer::new("c", "C", LayerKind::Fill(Fill::uniform(vec![])))];
+        let ids: Vec<_> = LayerWalk::new(&top).map(|(d, l)| format!("{d}{}", l.id)).collect();
         assert_eq!(ids, ["0g", "1a", "1b", "0c"]);
-        assert_eq!(
-            Fill::uniform(vec![(Channel::Metallic, [1.0; 4])]).uniform_value(Channel::Metallic),
-            Some([1.0; 4])
-        );
+        assert_eq!(Fill::uniform(vec![(Channel::Metallic, [1.0; 4])]).uniform_value(Channel::Metallic), Some([1.0; 4]));
     }
 }

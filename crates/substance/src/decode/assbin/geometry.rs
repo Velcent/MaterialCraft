@@ -1,12 +1,12 @@
 //! Full geometry of the scene as a [`Mesh`]; see [`super::part`] for the conventions.
 
+use super::RECORD;
 use super::material::MaterialSummary;
 use super::mesh_block::MeshBlock;
-use super::node::{mesh_instances, MeshInstance};
+use super::node::{MeshInstance, mesh_instances};
 use super::part::build_part;
-use super::scene::{scene_bytes, SceneBlocks};
+use super::scene::{SceneBlocks, scene_bytes};
 use super::transform::Transform;
-use super::RECORD;
 use crate::decode::DecodeError;
 use materialcraft::mesh::Mesh;
 

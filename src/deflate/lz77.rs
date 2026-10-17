@@ -38,10 +38,7 @@ struct Chains {
 
 impl Chains {
     fn new() -> Self {
-        Chains {
-            head: vec![0; HASH_SIZE],
-            prev: vec![0; WINDOW],
-        }
+        Chains { head: vec![0; HASH_SIZE], prev: vec![0; WINDOW] }
     }
 
     #[inline]
@@ -61,14 +58,7 @@ impl Chains {
     }
 
     /// Longest match for `pos` (which must already be inserted) that is longer than `better_than`.
-    fn longest(
-        &self,
-        data: &[u8],
-        pos: usize,
-        better_than: usize,
-        mut chain: usize,
-        nice: usize,
-    ) -> Option<(usize, usize)> {
+    fn longest(&self, data: &[u8], pos: usize, better_than: usize, mut chain: usize, nice: usize) -> Option<(usize, usize)> {
         let max_len = MAX_MATCH.min(data.len() - pos);
         if max_len < MIN_MATCH || better_than >= max_len {
             return None;
@@ -110,10 +100,7 @@ fn match_len(data: &[u8], a: usize, b: usize, max: usize) -> usize {
     let (x, y) = (&data[a..a + max], &data[b..b + max]);
     let mut n = 0;
     while n + 8 <= max {
-        let (p, q) = (
-            u64::from_le_bytes(word(&x[n..])),
-            u64::from_le_bytes(word(&y[n..])),
-        );
+        let (p, q) = (u64::from_le_bytes(word(&x[n..])), u64::from_le_bytes(word(&y[n..])));
         if p != q {
             return n + ((p ^ q).trailing_zeros() / 8) as usize;
         }
@@ -175,11 +162,7 @@ fn lazy(data: &[u8], p: Params, chains: &mut Chains, sink: &mut impl TokenSink) 
             None => (MIN_MATCH - 1, p.max_chain),
         };
         let skip_search = matches!(pending, Some((len, _)) if len >= p.max_lazy);
-        let cur = if skip_search {
-            None
-        } else {
-            chains.longest(data, pos, better_than, chain, p.nice_len)
-        };
+        let cur = if skip_search { None } else { chains.longest(data, pos, better_than, chain, p.nice_len) };
         match (pending, cur) {
             (Some((len, dist)), None) => {
                 // The deferred match wins: it started at pos - 1.
@@ -230,11 +213,7 @@ mod tests {
             self.0.push(b);
         }
         fn copy(&mut self, len: usize, dist: usize) {
-            assert!(
-                (MIN_MATCH..=MAX_MATCH).contains(&len)
-                    && (1..=WINDOW).contains(&dist)
-                    && dist <= self.0.len()
-            );
+            assert!((MIN_MATCH..=MAX_MATCH).contains(&len) && (1..=WINDOW).contains(&dist) && dist <= self.0.len());
             for _ in 0..len {
                 let b = self.0[self.0.len() - dist];
                 self.0.push(b);
@@ -248,20 +227,10 @@ mod tests {
         let mut s = 1u32;
         for i in 0..200_000u32 {
             s = s.wrapping_mul(1_103_515_245).wrapping_add(12345);
-            data.push(if i % 1000 < 500 {
-                (s >> 24) as u8 & 7
-            } else {
-                b"abcabcabd"[(i % 9) as usize]
-            });
+            data.push(if i % 1000 < 500 { (s >> 24) as u8 & 7 } else { b"abcabcabd"[(i % 9) as usize] });
         }
         for max_lazy in [0, 16, 258] {
-            let p = Params {
-                max_chain: 64,
-                nice_len: 128,
-                good_len: 8,
-                max_lazy,
-                max_insert: 8,
-            };
+            let p = Params { max_chain: 64, nice_len: 128, good_len: 8, max_lazy, max_insert: 8 };
             let mut r = Replay(Vec::new());
             parse(&data, p, &mut r);
             assert!(r.0 == data, "max_lazy {max_lazy}");

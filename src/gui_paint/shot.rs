@@ -18,11 +18,7 @@ pub struct ShotJob {
 
 impl ShotJob {
     pub fn new(out: PathBuf) -> ShotJob {
-        ShotJob {
-            out,
-            settled_at: None,
-            requested: false,
-        }
+        ShotJob { out, settled_at: None, requested: false }
     }
 
     /// Call every frame. `settled` is true when no work is pending; `frames` is the GPU frame count.

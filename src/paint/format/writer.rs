@@ -3,9 +3,9 @@
 //! `thumbnail.png`. JSON and glTF are deflated; PNG and EXR are stored (already compressed).
 
 use super::batch::{batch_size, par_map};
-use super::manifest::{self, extras::Extras, report, WriteCtx};
+use super::manifest::{self, WriteCtx, extras::Extras, report};
 use super::paths::{self, ImagePlan};
-use super::{images, FormatError, Thumbnail};
+use super::{FormatError, Thumbnail, images};
 use crate::deflate::Level;
 use crate::paint::Document;
 use crate::zip::{Method, ZipWriter};
@@ -39,20 +39,13 @@ impl<'o> DocumentWriter<'o> {
         let plan = ImagePlan::new(doc);
         let glb = doc.mesh.to_glb()?;
         let thumbnail = self.options.thumbnail.render(doc);
-        let ctx = WriteCtx {
-            plan: &plan,
-            extras: &extras,
-        };
+        let ctx = WriteCtx { plan: &plan, extras: &extras };
         let manifest = manifest::write(doc, &ctx, thumbnail.is_some());
 
         let mut zip = ZipWriter::new(out);
         zip.add(paths::DOCUMENT, &json_bytes(&manifest), Method::Deflate)?;
         if let Some(r) = &doc.import_report {
-            zip.add(
-                paths::IMPORT_REPORT,
-                &json_bytes(&report::write(r)),
-                Method::Deflate,
-            )?;
+            zip.add(paths::IMPORT_REPORT, &json_bytes(&report::write(r)), Method::Deflate)?;
         }
         zip.add(paths::MESH, &glb, Method::Deflate)?;
         drop(glb);
@@ -91,25 +84,11 @@ fn write_images<W: Write>(plan: &ImagePlan, zip: &mut ZipWriter<W>) -> Result<()
 
 /// Runs `write` on a temporary file next to `path`, then renames it over `path`. The temporary
 /// file is removed if anything fails.
-pub(super) fn save_atomically(
-    path: &Path,
-    write: impl FnOnce(&mut dyn Write) -> Result<(), FormatError>,
-) -> Result<(), FormatError> {
-    let name = path.file_name().ok_or_else(|| {
-        FormatError::Unsupported(format!("{} is not a file path", path.display()))
-    })?;
-    let dir = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos());
-    let tmp = dir.join(format!(
-        ".{}.{}-{stamp}.tmp",
-        name.to_string_lossy(),
-        std::process::id()
-    ));
+pub(super) fn save_atomically(path: &Path, write: impl FnOnce(&mut dyn Write) -> Result<(), FormatError>) -> Result<(), FormatError> {
+    let name = path.file_name().ok_or_else(|| FormatError::Unsupported(format!("{} is not a file path", path.display())))?;
+    let dir = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    let tmp = dir.join(format!(".{}.{}-{stamp}.tmp", name.to_string_lossy(), std::process::id()));
     let result = (|| {
         let mut out = std::io::BufWriter::new(std::fs::File::create(&tmp)?);
         write(&mut out)?;

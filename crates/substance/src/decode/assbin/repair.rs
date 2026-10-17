@@ -1,7 +1,7 @@
 //! Repairs for non-finite normals and tangents. Assimp writes NaN normals for vertices that
 //! only touch degenerate (zero-area) triangles; 3 of 156 corpus files have some.
 
-use super::transform::{cross, dot, normalize, Vec3};
+use super::transform::{Vec3, cross, dot, normalize};
 use materialcraft::mesh::MeshPart;
 
 /// Replaces non-finite normals by the area-weighted normal of the vertex's triangles (or +Z

@@ -2,7 +2,7 @@
 //! Both encode position in 0..1 over a bounding box; Painter's mode, axis and normalisation settings are
 //! listed as unmapped.
 
-use super::{baked_map, NEEDS};
+use super::{NEEDS, baked_map};
 use crate::inputs::Inputs;
 use crate::settings::Params;
 use crate::subject::{CaseError, Component, Need, ReferenceKind, Subject, XYZ};

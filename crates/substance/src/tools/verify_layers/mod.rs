@@ -6,14 +6,14 @@ mod fit;
 mod prepared;
 mod table;
 
-pub use crate::translate::layers::cache_score::{Score, EXACT_STEPS};
+pub use crate::translate::layers::cache_score::{EXACT_STEPS, Score};
 pub use fit::FitTally;
 pub use table::Verification;
 
 use crate::inspect::Corpus;
 use crate::project::SppProject;
 use crate::translate::cache_channels::CacheChannels;
-use crate::translate::layers::cache_agreement::{disagrees, CacheAgreement};
+use crate::translate::layers::cache_agreement::{CacheAgreement, disagrees};
 use crate::translate::layers::{BlendTable, Computability, ProjectImages, StackStrategy};
 use materialcraft::paint::Channel;
 use prepared::PreparedSet;

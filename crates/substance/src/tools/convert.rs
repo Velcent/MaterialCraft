@@ -1,8 +1,8 @@
 //! `mcsub convert`: import a `.spp` and save it as `.mcpaint`, for one file or a whole folder.
 
 use crate::inspect::Corpus;
-use crate::translate::{import_spp, ImportError};
-use materialcraft::paint::format::{save_path, FormatError};
+use crate::translate::{ImportError, import_spp};
+use materialcraft::paint::format::{FormatError, save_path};
 use materialcraft::paint::{Document, Fidelity};
 use std::fmt;
 use std::path::{Path, PathBuf};

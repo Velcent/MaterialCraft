@@ -1,5 +1,5 @@
 //! Image-processing operators used by graph nodes. All are wrap-around (tileable).
-use crate::tex::{lum, Tex};
+use crate::tex::{Tex, lum};
 use std::f32::consts::{PI, TAU};
 
 fn sm(a: f32, b: f32, x: f32) -> f32 {
@@ -476,12 +476,7 @@ pub fn colorize(t: &Tex, stops: &[(f32, [f32; 3])], interp: u32) -> Tex {
                 } else if interp == 2 {
                     f = 0.0;
                 }
-                return [
-                    a.1[0] + (b.1[0] - a.1[0]) * f,
-                    a.1[1] + (b.1[1] - a.1[1]) * f,
-                    a.1[2] + (b.1[2] - a.1[2]) * f,
-                    p[3],
-                ];
+                return [a.1[0] + (b.1[0] - a.1[0]) * f, a.1[1] + (b.1[1] - a.1[1]) * f, a.1[2] + (b.1[2] - a.1[2]) * f, p[3]];
             }
         }
         let c = st[st.len() - 1].1;
@@ -508,12 +503,36 @@ fn bm(mode: u32, f: f32, b: f32) -> f32 {
         7 => f.min(b),
         8 => (f - b).abs(),
         9 => (1.0 - 2.0 * f) * b * b + 2.0 * f * b,
-        10 => if f >= 0.999 { 1.0 } else { b / (1.0 - f) },
-        11 => if f <= 0.001 { 0.0 } else { 1.0 - (1.0 - b) / f },
+        10 => {
+            if f >= 0.999 {
+                1.0
+            } else {
+                b / (1.0 - f)
+            }
+        }
+        11 => {
+            if f <= 0.001 {
+                0.0
+            } else {
+                1.0 - (1.0 - b) / f
+            }
+        }
         12 => f + b - 1.0,
-        13 => if f < 0.5 { 2.0 * f * b } else { 1.0 - 2.0 * (1.0 - f) * (1.0 - b) },
+        13 => {
+            if f < 0.5 {
+                2.0 * f * b
+            } else {
+                1.0 - 2.0 * (1.0 - f) * (1.0 - b)
+            }
+        }
         14 => f + b - 2.0 * f * b,
-        15 => if f <= 0.001 { b } else { b / f },
+        15 => {
+            if f <= 0.001 {
+                b
+            } else {
+                b / f
+            }
+        }
         16 => b + 2.0 * f - 1.0,
         20 => b + (f - 0.5) * 2.0,
         _ => f,
@@ -532,54 +551,54 @@ pub fn blend_ex(fg: &Tex, bg: &Tex, mask: Option<&Tex>, mode: u32, opacity: f32,
     let (ow, oh) = (out.w, out.h);
     let cropped = crop != [0.0, 0.0, 1.0, 1.0];
     crate::tex::par_rows(&mut out.px, ow, |start, chunk| {
-      for (j, dst) in chunk.iter_mut().enumerate() {
-        let i = start + j;
-        let f = fg.px.get(i).copied().unwrap_or([0.0; 4]);
-        let b = bg.px[i];
-        let mut m = mask.and_then(|m| m.px.get(i)).map(|p| lum(*p)).unwrap_or(1.0) * opacity;
-        if cropped {
-            let (px, py) = (((i % ow) as f32 + 0.5) / ow as f32, ((i / ow) as f32 + 0.5) / oh as f32);
-            if px < crop[0] || px > crop[2] || py < crop[1] || py > crop[3] {
-                m = 0.0;
-            }
-        }
-        // alpha: 1 leaves the background alpha alone, the others let the foreground alpha act as extra opacity
-        let m_plain = m;
-        match alpha_mode {
-            0 => {
-                dst[3] = b[3] + (f[3] - b[3]) * m_plain;
-                m *= f[3];
-            }
-            2 | 3 => {
-                dst[3] = f[3] * m_plain + b[3] * (1.0 - f[3] * m_plain);
-                m *= f[3];
-            }
-            _ => {}
-        }
-        if (17..=19).contains(&mode) {
-            // 17 color (hue+saturation of the foreground, brightness of the background), 18 luminosity, 19 dissolve
-            let set_lum = |c: [f32; 4], l: f32| {
-                let d = l - lum(c);
-                [(c[0] + d).clamp(0.0, 1.0), (c[1] + d).clamp(0.0, 1.0), (c[2] + d).clamp(0.0, 1.0)]
-            };
-            let r = match mode {
-                17 => set_lum(f, lum(b)),
-                18 => set_lum(b, lum(f)),
-                _ => {
-                    let keep = crate::noise::rnd((i % out.w) as i32, (i / out.w) as i32, 4242) < m;
-                    if keep { [f[0], f[1], f[2]] } else { [b[0], b[1], b[2]] }
+        for (j, dst) in chunk.iter_mut().enumerate() {
+            let i = start + j;
+            let f = fg.px.get(i).copied().unwrap_or([0.0; 4]);
+            let b = bg.px[i];
+            let mut m = mask.and_then(|m| m.px.get(i)).map(|p| lum(*p)).unwrap_or(1.0) * opacity;
+            if cropped {
+                let (px, py) = (((i % ow) as f32 + 0.5) / ow as f32, ((i / ow) as f32 + 0.5) / oh as f32);
+                if px < crop[0] || px > crop[2] || py < crop[1] || py > crop[3] {
+                    m = 0.0;
                 }
-            };
-            let m2 = if mode == 19 { 1.0 } else { m };
-            for c in 0..3 {
-                dst[c] = (b[c] + (r[c] - b[c]) * m2).clamp(0.0, 1.0);
             }
-            continue;
+            // alpha: 1 leaves the background alpha alone, the others let the foreground alpha act as extra opacity
+            let m_plain = m;
+            match alpha_mode {
+                0 => {
+                    dst[3] = b[3] + (f[3] - b[3]) * m_plain;
+                    m *= f[3];
+                }
+                2 | 3 => {
+                    dst[3] = f[3] * m_plain + b[3] * (1.0 - f[3] * m_plain);
+                    m *= f[3];
+                }
+                _ => {}
+            }
+            if (17..=19).contains(&mode) {
+                // 17 color (hue+saturation of the foreground, brightness of the background), 18 luminosity, 19 dissolve
+                let set_lum = |c: [f32; 4], l: f32| {
+                    let d = l - lum(c);
+                    [(c[0] + d).clamp(0.0, 1.0), (c[1] + d).clamp(0.0, 1.0), (c[2] + d).clamp(0.0, 1.0)]
+                };
+                let r = match mode {
+                    17 => set_lum(f, lum(b)),
+                    18 => set_lum(b, lum(f)),
+                    _ => {
+                        let keep = crate::noise::rnd((i % out.w) as i32, (i / out.w) as i32, 4242) < m;
+                        if keep { [f[0], f[1], f[2]] } else { [b[0], b[1], b[2]] }
+                    }
+                };
+                let m2 = if mode == 19 { 1.0 } else { m };
+                for c in 0..3 {
+                    dst[c] = (b[c] + (r[c] - b[c]) * m2).clamp(0.0, 1.0);
+                }
+                continue;
+            }
+            for c in 0..3 {
+                dst[c] = (b[c] + (bm(mode, f[c], b[c]).clamp(0.0, 1.0) - b[c]) * m).clamp(0.0, 1.0);
+            }
         }
-        for c in 0..3 {
-            dst[c] = (b[c] + (bm(mode, f[c], b[c]).clamp(0.0, 1.0) - b[c]) * m).clamp(0.0, 1.0);
-        }
-      }
     });
     out
 }
@@ -602,11 +621,7 @@ pub fn transform(t: &Tex, ox: f32, oy: f32, sx: f32, sy: f32, rot: f32, tile: bo
         }
         t.sample_cubic(su, sv)
     });
-    if tile && !whole {
-        seamless_blend(&out)
-    } else {
-        out
-    }
+    if tile && !whole { seamless_blend(&out) } else { out }
 }
 
 pub fn mirror(t: &Tex, axis: u32) -> Tex {
@@ -819,8 +834,14 @@ pub fn edge_detect_ex(t: &Tex, width: f32, roundness: f32, invert: bool, toleran
     // Sobel magnitude, 1 for a full black / white step
     let e = Tex::from_fn(t.w, t.h, |u, v| {
         let (x, y) = ((u * t.w as f32) as i64, (v * t.h as f32) as i64);
-        let gx = -g.gray_at(x - 1, y - 1) - 2.0 * g.gray_at(x - 1, y) - g.gray_at(x - 1, y + 1) + g.gray_at(x + 1, y - 1) + 2.0 * g.gray_at(x + 1, y) + g.gray_at(x + 1, y + 1);
-        let gy = -g.gray_at(x - 1, y - 1) - 2.0 * g.gray_at(x, y - 1) - g.gray_at(x + 1, y - 1) + g.gray_at(x - 1, y + 1) + 2.0 * g.gray_at(x, y + 1) + g.gray_at(x + 1, y + 1);
+        let gx = -g.gray_at(x - 1, y - 1) - 2.0 * g.gray_at(x - 1, y) - g.gray_at(x - 1, y + 1)
+            + g.gray_at(x + 1, y - 1)
+            + 2.0 * g.gray_at(x + 1, y)
+            + g.gray_at(x + 1, y + 1);
+        let gy = -g.gray_at(x - 1, y - 1) - 2.0 * g.gray_at(x, y - 1) - g.gray_at(x + 1, y - 1)
+            + g.gray_at(x - 1, y + 1)
+            + 2.0 * g.gray_at(x, y + 1)
+            + g.gray_at(x + 1, y + 1);
         let m = (gx * gx + gy * gy).sqrt() * 0.25;
         let k = tolerance.clamp(0.0, 0.999);
         // everything below the tolerance is no edge; a step of the tolerance size already counts as a full edge
@@ -927,17 +948,7 @@ pub fn bricks(u: f32, v: f32, rows: f32, cols: f32, mortar: f32, bevel: f32, off
 
 // ---------- scattering ----------
 #[allow(clippy::too_many_arguments)]
-pub fn splatter(
-    w: usize,
-    h: usize,
-    pattern: Option<&Tex>,
-    count: u32,
-    scale: f32,
-    scale_var: f32,
-    rot_var: f32,
-    lum_var: f32,
-    seed: u32,
-) -> Tex {
+pub fn splatter(w: usize, h: usize, pattern: Option<&Tex>, count: u32, scale: f32, scale_var: f32, rot_var: f32, lum_var: f32, seed: u32) -> Tex {
     use crate::noise::rnd;
     let inst: Vec<(f32, f32, f32, f32, f32)> = (0..count.min(2000))
         .map(|i| {
@@ -1175,7 +1186,8 @@ pub fn tile_grid(w: usize, h: usize, pattern: Option<&Tex>, mask: Option<&Tex>, 
                 let (i, j) = (ci + di, cj + dj);
                 let (wi, wj) = (i.rem_euclid(nx), j.rem_euclid(ny));
                 let shift = if p.brick && (wj & 1) == 1 { p.offset } else { 0.0 };
-                let (r1, r2, r3, r4) = (rnd(wi, wj, p.seed), rnd(wi, wj, p.seed.wrapping_add(1)), rnd(wi, wj, p.seed.wrapping_add(2)), rnd(wi, wj, p.seed.wrapping_add(3)));
+                let (r1, r2, r3, r4) =
+                    (rnd(wi, wj, p.seed), rnd(wi, wj, p.seed.wrapping_add(1)), rnd(wi, wj, p.seed.wrapping_add(2)), rnd(wi, wj, p.seed.wrapping_add(3)));
                 let cx = (i as f32 + 0.5 + shift) / fnx + (r1 - 0.5) * p.pos_rand / fnx;
                 let cy = (j as f32 + 0.5) / fny + (r2 - 0.5) * p.pos_rand / fny;
                 if let Some(m) = mask {
@@ -1208,7 +1220,19 @@ pub fn tile_grid(w: usize, h: usize, pattern: Option<&Tex>, mask: Option<&Tex>, 
 
 /// Instances placed on a circle.
 #[allow(clippy::too_many_arguments)]
-pub fn splatter_circular(w: usize, h: usize, pattern: Option<&Tex>, n: u32, radius: f32, size: f32, size_rand: f32, rot: f32, rot_rand: f32, pos_rand: f32, seed: u32) -> Tex {
+pub fn splatter_circular(
+    w: usize,
+    h: usize,
+    pattern: Option<&Tex>,
+    n: u32,
+    radius: f32,
+    size: f32,
+    size_rand: f32,
+    rot: f32,
+    rot_rand: f32,
+    pos_rand: f32,
+    seed: u32,
+) -> Tex {
     let n = n.clamp(1, 256);
     let inst: Vec<(f32, f32, f32, f32)> = (0..n)
         .map(|k| {
@@ -1293,11 +1317,7 @@ pub fn flood_fill(t: &Tex, thresh: f32) -> Tex {
 }
 
 fn region_id(p: [f32; 4]) -> Option<i32> {
-    if p[0] == 0.0 && p[1] == 0.0 && p[2] == 0.0 {
-        None
-    } else {
-        Some((p[0] * 100_000.0) as i32)
-    }
+    if p[0] == 0.0 && p[1] == 0.0 && p[2] == 0.0 { None } else { Some((p[0] * 100_000.0) as i32) }
 }
 
 pub fn flood_fill_random(t: &Tex, seed: u32, lo: f32, hi: f32) -> Tex {
@@ -1779,11 +1799,11 @@ pub fn mean_rgb(t: &Tex) -> [f32; 3] {
 pub struct ColorSwap {
     pub source: [f32; 3],
     pub target: [f32; 3],
-    pub hue_shift: f32,     // turns
+    pub hue_shift: f32, // turns
     pub chroma_mul: f32,
     pub luma_mul: f32,
     pub use_mask: bool,
-    pub hue_range: f32,     // turns
+    pub hue_range: f32, // turns
     pub chroma_range: f32,
     pub luma_range: f32,
     pub smooth: f32,
@@ -1806,7 +1826,9 @@ pub fn color_swap(t: &Tex, c: &ColorSwap) -> (Tex, Tex) {
     let calc = |p: [f32; 4]| -> ([f32; 4], f32) {
         let q = rgb_to_lch([p[0], p[1], p[2]]);
         let w = if c.use_mask {
-            let d = (wrap(q[2] - s[2]) / c.hue_range.max(1e-4)).max((q[1] - s[1]).abs() / c.chroma_range.max(1e-4)).max((q[0] - s[0]).abs() / c.luma_range.max(1e-4));
+            let d = (wrap(q[2] - s[2]) / c.hue_range.max(1e-4))
+                .max((q[1] - s[1]).abs() / c.chroma_range.max(1e-4))
+                .max((q[0] - s[0]).abs() / c.luma_range.max(1e-4));
             1.0 - ((d - 1.0) / c.smooth.max(0.02)).clamp(0.0, 1.0)
         } else {
             1.0
@@ -1817,10 +1839,13 @@ pub fn color_swap(t: &Tex, c: &ColorSwap) -> (Tex, Tex) {
         let res = lch_to_rgb([nl, nc.max(0.0), (q[2] + dh).rem_euclid(1.0)]);
         ([p[0] + (res[0] - p[0]) * w, p[1] + (res[1] - p[1]) * w, p[2] + (res[2] - p[2]) * w, p[3]], w)
     };
-    (t.map(|p| calc(p).0), t.map(|p| {
-        let w = calc(p).1;
-        [w, w, w, 1.0]
-    }))
+    (
+        t.map(|p| calc(p).0),
+        t.map(|p| {
+            let w = calc(p).1;
+            [w, w, w, 1.0]
+        }),
+    )
 }
 
 // ---------- horizon based ambient occlusion ----------
@@ -1832,7 +1857,8 @@ pub fn hbao(h: &Tex, radius_uv: f32, height_scale: f32, dirs: u32, intensity: f3
     let (w, hh) = (g.w, g.h);
     let dirs = dirs.clamp(2, 64) as usize;
     let steps = 14usize;
-    let tab: Vec<(f32, f32)> = (0..dirs).map(|k| ((k as f32 / dirs as f32 * std::f32::consts::TAU).cos(), (k as f32 / dirs as f32 * std::f32::consts::TAU).sin())).collect();
+    let tab: Vec<(f32, f32)> =
+        (0..dirs).map(|k| ((k as f32 / dirs as f32 * std::f32::consts::TAU).cos(), (k as f32 / dirs as f32 * std::f32::consts::TAU).sin())).collect();
     let rows = crate::tex::par_map(hh, |y| {
         let mut row = vec![[0.0f32; 4]; w];
         for x in 0..w {
@@ -1883,7 +1909,8 @@ pub fn quantize_color(t: &Tex, k: usize, smoothing: f32, dither: f32, bayer: boo
     const B: usize = 24;
     let mut hist: std::collections::HashMap<usize, (f64, [f64; 3], [f64; 3])> = std::collections::HashMap::new();
     for p in &src.px {
-        let key = ((p[0].clamp(0.0, 1.0) * (B as f32 - 1e-3)) as usize * B + (p[1].clamp(0.0, 1.0) * (B as f32 - 1e-3)) as usize) * B + (p[2].clamp(0.0, 1.0) * (B as f32 - 1e-3)) as usize;
+        let key = ((p[0].clamp(0.0, 1.0) * (B as f32 - 1e-3)) as usize * B + (p[1].clamp(0.0, 1.0) * (B as f32 - 1e-3)) as usize) * B
+            + (p[2].clamp(0.0, 1.0) * (B as f32 - 1e-3)) as usize;
         let e = hist.entry(key).or_insert((0.0, [0.0; 3], [0.0; 3]));
         let s = space(*p);
         e.0 += 1.0;
@@ -1940,7 +1967,8 @@ pub fn quantize_color(t: &Tex, k: usize, smoothing: f32, dither: f32, bayer: boo
         }
         pal[j].1 += b.1;
     }
-    let pal: Vec<[f32; 3]> = pal.iter().zip(&cent).map(|(p, c)| if p.1 > 0.0 { [(p.0[0] / p.1) as f32, (p.0[1] / p.1) as f32, (p.0[2] / p.1) as f32] } else { *c }).collect();
+    let pal: Vec<[f32; 3]> =
+        pal.iter().zip(&cent).map(|(p, c)| if p.1 > 0.0 { [(p.0[0] / p.1) as f32, (p.0[1] / p.1) as f32, (p.0[2] / p.1) as f32] } else { *c }).collect();
     const BAYER: [[f32; 8]; 8] = [
         [0., 32., 8., 40., 2., 34., 10., 42.],
         [48., 16., 56., 24., 50., 18., 58., 26.],

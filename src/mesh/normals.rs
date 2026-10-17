@@ -35,11 +35,7 @@ pub(super) fn smooth_normals(positions: &[Vec3], triangles: &[[u32; 3]]) -> Vec<
     let mut sum = vec![[0.0f32; 3]; group_of_position.len()];
     for tri in triangles {
         let i = tri.map(|i| i as usize);
-        let (Some(&a), Some(&b), Some(&c)) = (
-            positions.get(i[0]),
-            positions.get(i[1]),
-            positions.get(i[2]),
-        ) else {
+        let (Some(&a), Some(&b), Some(&c)) = (positions.get(i[0]), positions.get(i[1]), positions.get(i[2])) else {
             continue;
         };
         // the cross product's length is twice the area, so summing it weights by area
@@ -51,10 +47,7 @@ pub(super) fn smooth_normals(positions: &[Vec3], triangles: &[[u32; 3]]) -> Vec<
             sum[groups[v]] = add(sum[groups[v]], face);
         }
     }
-    groups
-        .iter()
-        .map(|&g| unit_or(sum[g], FALLBACK_NORMAL))
-        .collect()
+    groups.iter().map(|&g| unit_or(sum[g], FALLBACK_NORMAL)).collect()
 }
 
 /// Bit pattern of a position, with -0.0 folded into 0.0 so they weld.
@@ -65,11 +58,7 @@ fn position_key(p: Vec3) -> [u32; 3] {
 /// `v` normalised, or `fallback` when `v` is too short to have a direction.
 pub(super) fn unit_or(v: Vec3, fallback: Vec3) -> Vec3 {
     let l2 = dot(v, v);
-    if l2 > 1e-30 && l2.is_finite() {
-        mul(v, 1.0 / l2.sqrt())
-    } else {
-        fallback
-    }
+    if l2 > 1e-30 && l2.is_finite() { mul(v, 1.0 / l2.sqrt()) } else { fallback }
 }
 
 #[cfg(test)]
@@ -91,16 +80,8 @@ mod tests {
     #[test]
     fn seam_vertices_share_a_normal() {
         // two faces of a roof meeting at a ridge, ridge vertices duplicated as at a UV seam
-        let positions = vec![
-            [0.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],
-            [1.0, 1.0, 0.0],
-            [1.0, 1.0, 1.0],
-            [1.0, 1.0, 0.0],
-            [1.0, 1.0, 1.0],
-            [2.0, 0.0, 0.0],
-            [2.0, 0.0, 1.0],
-        ];
+        let positions =
+            vec![[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 0.0], [1.0, 1.0, 1.0], [1.0, 1.0, 0.0], [1.0, 1.0, 1.0], [2.0, 0.0, 0.0], [2.0, 0.0, 1.0]];
         let triangles = vec![[0, 1, 2], [2, 1, 3], [4, 5, 7], [4, 7, 6]];
         let n = smooth_normals(&positions, &triangles);
         assert!(close(&n[2], &n[4], 1e-6));

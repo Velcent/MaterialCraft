@@ -14,14 +14,8 @@ pub struct Obj<'v> {
 impl<'v> Obj<'v> {
     pub fn new(v: &'v Value, at: impl Into<String>) -> Result<Obj<'v>, FormatError> {
         let at = at.into();
-        let entries = v
-            .as_object()
-            .ok_or_else(|| FormatError::manifest(at.clone(), "expected an object"))?;
-        Ok(Obj {
-            entries,
-            read: vec![false; entries.len()],
-            at,
-        })
+        let entries = v.as_object().ok_or_else(|| FormatError::manifest(at.clone(), "expected an object"))?;
+        Ok(Obj { entries, read: vec![false; entries.len()], at })
     }
 
     /// Path of this object.
@@ -31,11 +25,7 @@ impl<'v> Obj<'v> {
 
     /// Path of `key` in this object.
     pub fn path(&self, key: &str) -> String {
-        if self.at.is_empty() {
-            key.to_string()
-        } else {
-            format!("{}.{key}", self.at)
-        }
+        if self.at.is_empty() { key.to_string() } else { format!("{}.{key}", self.at) }
     }
 
     pub fn error(&self, key: &str, message: impl Into<String>) -> FormatError {
@@ -55,32 +45,25 @@ impl<'v> Obj<'v> {
 
     pub fn str(&mut self, key: &str) -> Result<&'v str, FormatError> {
         let v = self.req(key)?;
-        v.as_str()
-            .ok_or_else(|| self.error(key, "expected a string"))
+        v.as_str().ok_or_else(|| self.error(key, "expected a string"))
     }
 
     pub fn opt_str(&mut self, key: &str) -> Result<Option<&'v str>, FormatError> {
         match self.opt(key) {
             None => Ok(None),
-            Some(v) => v
-                .as_str()
-                .map(Some)
-                .ok_or_else(|| self.error(key, "expected a string")),
+            Some(v) => v.as_str().map(Some).ok_or_else(|| self.error(key, "expected a string")),
         }
     }
 
     pub fn usize(&mut self, key: &str) -> Result<usize, FormatError> {
         let v = self.req(key)?;
-        v.as_usize()
-            .ok_or_else(|| self.error(key, "expected a non-negative integer"))
+        v.as_usize().ok_or_else(|| self.error(key, "expected a non-negative integer"))
     }
 
     pub fn bool_or(&mut self, key: &str, default: bool) -> Result<bool, FormatError> {
         match self.opt(key) {
             None => Ok(default),
-            Some(v) => v
-                .as_bool()
-                .ok_or_else(|| self.error(key, "expected true or false")),
+            Some(v) => v.as_bool().ok_or_else(|| self.error(key, "expected true or false")),
         }
     }
 
@@ -95,10 +78,7 @@ impl<'v> Obj<'v> {
     pub fn array(&mut self, key: &str) -> Result<&'v [Value], FormatError> {
         match self.opt(key) {
             None => Ok(&[]),
-            Some(v) => v
-                .as_array()
-                .map(Vec::as_slice)
-                .ok_or_else(|| self.error(key, "expected an array")),
+            Some(v) => v.as_array().map(Vec::as_slice).ok_or_else(|| self.error(key, "expected an array")),
         }
     }
 
@@ -106,21 +86,15 @@ impl<'v> Obj<'v> {
     pub fn entries(&mut self, key: &str) -> Result<&'v [(String, Value)], FormatError> {
         match self.opt(key) {
             None => Ok(&[]),
-            Some(v) => v
-                .as_object()
-                .map(Vec::as_slice)
-                .ok_or_else(|| self.error(key, "expected an object")),
+            Some(v) => v.as_object().map(Vec::as_slice).ok_or_else(|| self.error(key, "expected an object")),
         }
     }
 
     /// `[width, height]`, both at least 1.
     pub fn size(&mut self, key: &str) -> Result<(u32, u32), FormatError> {
         let v = self.req(key)?;
-        let dims: Option<Vec<u32>> = v.as_array().filter(|a| a.len() == 2).and_then(|a| {
-            a.iter()
-                .map(|d| d.as_u64().and_then(|d| u32::try_from(d).ok()))
-                .collect()
-        });
+        let dims: Option<Vec<u32>> =
+            v.as_array().filter(|a| a.len() == 2).and_then(|a| a.iter().map(|d| d.as_u64().and_then(|d| u32::try_from(d).ok())).collect());
         match dims.as_deref() {
             Some(&[w, h]) if w > 0 && h > 0 => Ok((w, h)),
             _ => Err(self.error(key, "expected [width, height] of positive integers")),
@@ -129,12 +103,7 @@ impl<'v> Obj<'v> {
 
     /// The keys not read so far, in document order.
     pub fn unread(&self) -> Vec<(String, Value)> {
-        self.entries
-            .iter()
-            .zip(&self.read)
-            .filter(|(_, r)| !**r)
-            .map(|(e, _)| e.clone())
-            .collect()
+        self.entries.iter().zip(&self.read).filter(|(_, r)| !**r).map(|(e, _)| e.clone()).collect()
     }
 }
 

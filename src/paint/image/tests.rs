@@ -25,15 +25,7 @@ fn tiles_are_lazy_and_read_as_zero() {
 #[test]
 fn edges_and_out_of_bounds() {
     let mut img = TiledImage::new(130, 129, fmt(PixelLayout::Gray, SampleType::F32)).unwrap();
-    assert_eq!(
-        img.tile_rect(1, 1),
-        Some(Rect {
-            x: 128,
-            y: 128,
-            w: 2,
-            h: 1
-        })
-    );
+    assert_eq!(img.tile_rect(1, 1), Some(Rect { x: 128, y: 128, w: 2, h: 1 }));
     assert_eq!(img.tile_rect(2, 0), None);
     assert!(!img.set(130, 0, [1.0; 4]));
     assert!(!img.write_tile(5, 5, &[]));
@@ -44,15 +36,7 @@ fn edges_and_out_of_bounds() {
     assert_eq!(empty.to_tex().px.len(), 0);
     img.set(129, 128, [0.25; 4]);
     let mut out = vec![[9.0; 4]; 4];
-    img.read_region(
-        Rect {
-            x: 128,
-            y: 128,
-            w: 2,
-            h: 2,
-        },
-        &mut out,
-    );
+    img.read_region(Rect { x: 128, y: 128, w: 2, h: 2 }, &mut out);
     assert_eq!(out[1][0], 0.25);
     assert_eq!(out[2], [0.0, 0.0, 0.0, 1.0]); // below the image
 }
@@ -82,13 +66,7 @@ fn raw_round_trip_every_format_with_odd_size() {
         }
     }
     let f = fmt(PixelLayout::Gray, SampleType::U8);
-    assert!(matches!(
-        TiledImage::from_raw(2, 2, f, &[0; 3]),
-        Err(ImageError::WrongDataSize {
-            expected: 4,
-            found: 3
-        })
-    ));
+    assert!(matches!(TiledImage::from_raw(2, 2, f, &[0; 3]), Err(ImageError::WrongDataSize { expected: 4, found: 3 })));
 }
 
 #[test]
@@ -98,18 +76,8 @@ fn zero_tiles_stay_unallocated_on_import() {
     raw[256 * 200 + 200] = 9;
     let img = TiledImage::from_raw(256, 256, f, &raw).unwrap();
     assert_eq!(img.allocated_tiles(), 1);
-    assert!(img.region_allocated(Rect {
-        x: 150,
-        y: 150,
-        w: 10,
-        h: 10
-    }));
-    assert!(!img.region_allocated(Rect {
-        x: 0,
-        y: 0,
-        w: 128,
-        h: 128
-    }));
+    assert!(img.region_allocated(Rect { x: 150, y: 150, w: 10, h: 10 }));
+    assert!(!img.region_allocated(Rect { x: 0, y: 0, w: 128, h: 128 }));
 }
 
 #[test]
@@ -120,17 +88,8 @@ fn tex_round_trip() {
     assert_eq!((back.w, back.h), (200, 150));
     assert_eq!(back.px, tex.px);
     let img8 = TiledImage::from_tex(&tex, fmt(PixelLayout::Rgba, SampleType::U8)).unwrap();
-    assert!(img8
-        .to_tex()
-        .px
-        .iter()
-        .zip(&tex.px)
-        .all(|(a, b)| (0..4).all(|c| (a[c] - b[c]).abs() <= 0.5 / 255.0 + 1e-6)));
-    let bad = Tex {
-        w: 3,
-        h: 3,
-        px: vec![[0.0; 4]; 2],
-    };
+    assert!(img8.to_tex().px.iter().zip(&tex.px).all(|(a, b)| (0..4).all(|c| (a[c] - b[c]).abs() <= 0.5 / 255.0 + 1e-6)));
+    let bad = Tex { w: 3, h: 3, px: vec![[0.0; 4]; 2] };
     assert!(TiledImage::from_tex(&bad, fmt(PixelLayout::Rgba, SampleType::U8)).is_err());
 }
 
@@ -144,15 +103,7 @@ fn dirty_tracking() {
     img.clear_dirty();
     assert!(img.dirty_tiles().is_empty());
     img.update_tiles(&[(3, 0), (3, 0), (9, 9)], |r, px| {
-        assert_eq!(
-            r,
-            Rect {
-                x: 384,
-                y: 0,
-                w: 128,
-                h: 128
-            }
-        );
+        assert_eq!(r, Rect { x: 384, y: 0, w: 128, h: 128 });
         px.fill([0.5, 0.5, 0.5, 1.0]);
     });
     assert_eq!(img.dirty_tiles(), vec![(3, 0)]);
@@ -166,9 +117,7 @@ fn dirty_tracking() {
 fn update_tiles_sees_current_pixels_and_convert_keeps_them() {
     let mut img = TiledImage::new(140, 140, fmt(PixelLayout::Rgba, SampleType::F16)).unwrap();
     img.fill([0.25, 0.5, 0.75, 1.0]);
-    img.update_tiles(&img.all_tiles(), |_, px| {
-        px.iter_mut().for_each(|p| p[0] *= 2.0)
-    });
+    img.update_tiles(&img.all_tiles(), |_, px| px.iter_mut().for_each(|p| p[0] *= 2.0));
     assert_eq!(img.get(139, 139), [0.5, 0.5, 0.75, 1.0]);
     let c = img.converted(fmt(PixelLayout::Rgb, SampleType::F32));
     assert_eq!(c.get(0, 0), [0.5, 0.5, 0.75, 1.0]);

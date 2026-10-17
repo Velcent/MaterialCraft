@@ -21,7 +21,8 @@ impl App {
 
     fn open_search(&mut self, screen: Pos2, link_from: Option<u32>) {
         let w = self.screen_to_world(screen);
-        self.search = Some(SearchState { screen, world: pos2(w.x - CARD * 0.5, w.y - CARD_H * 0.5), text: String::new(), idx: 0, link_from, link_to: None, fresh: true });
+        self.search =
+            Some(SearchState { screen, world: pos2(w.x - CARD * 0.5, w.y - CARD_H * 0.5), text: String::new(), idx: 0, link_from, link_to: None, fresh: true });
     }
 
     fn open_search_to(&mut self, screen: Pos2, dst: u32, slot: String) {
@@ -63,7 +64,9 @@ impl App {
             }
         }
         let pan_mode = mods.alt || ui.input(|i| i.key_down(Key::Space));
-        if resp.dragged_by(PointerButton::Middle) || (resp.dragged_by(PointerButton::Primary) && pan_mode && (self.connecting.is_none() && self.connecting_in.is_none())) {
+        if resp.dragged_by(PointerButton::Middle)
+            || (resp.dragged_by(PointerButton::Primary) && pan_mode && (self.connecting.is_none() && self.connecting_in.is_none()))
+        {
             self.pan += resp.drag_delta();
         }
         if resp.drag_started_by(PointerButton::Primary) && !pan_mode && (self.connecting.is_none() && self.connecting_in.is_none()) {
@@ -114,13 +117,18 @@ impl App {
             painter.rect_filled(r, Rounding::same(4.0 * z), base.gamma_multiply(0.16));
             let title = Rect::from_min_size(r.min, vec2(r.width(), 22.0 * z));
             painter.rect_filled(title, Rounding { nw: 4.0 * z, ne: 4.0 * z, sw: 0.0, se: 0.0 }, base.gamma_multiply(0.5));
-            painter.rect_stroke(r, Rounding::same(4.0 * z), Stroke::new(if selected { 2.0_f32 } else { 1.0_f32 }, if selected { Color32::from_rgb(255, 160, 40) } else { base.gamma_multiply(0.8) }));
+            painter.rect_stroke(
+                r,
+                Rounding::same(4.0 * z),
+                Stroke::new(if selected { 2.0_f32 } else { 1.0_f32 }, if selected { Color32::from_rgb(255, 160, 40) } else { base.gamma_multiply(0.8) }),
+            );
             painter.text(title.left_center() + vec2(8.0 * z, 0.0), Align2::LEFT_CENTER, &c.text, FontId::proportional(13.0 * z), Color32::WHITE);
             let tr = ui.interact(title, Id::new(("cmt", ci)), Sense::click_and_drag());
             if tr.drag_started() {
                 self.snap();
                 let cr = Rect::from_min_size(pos2(c.pos[0], c.pos[1]), vec2(c.size[0], c.size[1]));
-                self.comment_members = self.g.nodes.iter().filter(|(_, n)| cr.contains(pos2(n.pos[0] + CARD * 0.5, n.pos[1] + CARD_H * 0.5))).map(|(i, _)| *i).collect();
+                self.comment_members =
+                    self.g.nodes.iter().filter(|(_, n)| cr.contains(pos2(n.pos[0] + CARD * 0.5, n.pos[1] + CARD_H * 0.5))).map(|(i, _)| *i).collect();
                 self.sel_comment = Some(ci);
                 self.sel.clear();
             }
@@ -162,18 +170,32 @@ impl App {
                 id: *id,
                 kind: n.kind.clone(),
                 // a graph node only has input sockets when that graph defines inputs
-                slots: if n.kind == "subgraph" && !n.strs.get("graph").and_then(|g| self.g.subgraphs.get(g)).map(|sg| sg.nodes.values().any(|x| x.kind == "input")).unwrap_or(true) { Vec::new() } else { slots(&n.kind) },
+                slots: if n.kind == "subgraph"
+                    && !n.strs.get("graph").and_then(|g| self.g.subgraphs.get(g)).map(|sg| sg.nodes.values().any(|x| x.kind == "input")).unwrap_or(true)
+                {
+                    Vec::new()
+                } else {
+                    slots(&n.kind)
+                },
                 ins: n.ins.iter().map(|(k, v)| (k.clone(), *v)).collect(),
                 pos: n.pos,
                 graph_name: n.strs.get("graph").cloned(),
                 dot: n.kind == "dot",
-                outs: n.strs.get("graph").filter(|_| n.kind == "subgraph").and_then(|g| self.g.subgraphs.get(g)).map(|sg| sg.output_idents()).filter(|o| o.len() >= 2).unwrap_or_default(),
+                outs: n
+                    .strs
+                    .get("graph")
+                    .filter(|_| n.kind == "subgraph")
+                    .and_then(|g| self.g.subgraphs.get(g))
+                    .map(|sg| sg.output_idents())
+                    .filter(|o| o.len() >= 2)
+                    .unwrap_or_default(),
                 in_out: n.in_out.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
             })
             .collect();
         let body_of = |s: &NodeSnap| card_body(s.slots.len(), s.outs.len());
         let posmap: HashMap<u32, ([f32; 2], bool, f32)> = snaps.iter().map(|s| (s.id, (s.pos, s.dot, body_of(s)))).collect();
-        let out_port = move |p: [f32; 2], dot: bool, body: f32| if dot { ts(p) + vec2(24.0 * z, 12.0 * z) } else { ts(p) + vec2(CARD * z, (BAR + body * 0.5) * z) };
+        let out_port =
+            move |p: [f32; 2], dot: bool, body: f32| if dot { ts(p) + vec2(24.0 * z, 12.0 * z) } else { ts(p) + vec2(CARD * z, (BAR + body * 0.5) * z) };
         let outs_map: HashMap<u32, Vec<String>> = snaps.iter().filter(|s| !s.outs.is_empty()).map(|s| (s.id, s.outs.clone())).collect();
         let out_port_i = move |p: [f32; 2], i: usize, n: usize, body: f32| ts(p) + vec2(CARD * z, (BAR + body * (i as f32 + 1.0) / (n as f32 + 1.0)) * z);
         // where the link of output `name` of node `src` leaves its card
@@ -184,19 +206,34 @@ impl App {
                 None => out_port(sp.0, sp.1, sp.2),
             })
         };
-        let in_port = move |p: [f32; 2], i: usize, n: usize, dot: bool, body: f32| if dot { ts(p) + vec2(0.0, 12.0 * z) } else { ts(p) + vec2(0.0, (BAR + body * (i as f32 + 1.0) / (n as f32 + 1.0)) * z) };
+        let in_port = move |p: [f32; 2], i: usize, n: usize, dot: bool, body: f32| {
+            if dot { ts(p) + vec2(0.0, 12.0 * z) } else { ts(p) + vec2(0.0, (BAR + body * (i as f32 + 1.0) / (n as f32 + 1.0)) * z) }
+        };
         let link = |painter: &egui::Painter, a: Pos2, b: Pos2, col: Color32, w: f32| {
             let dx = ((b.x - a.x).abs() * 0.5).max(40.0 * z);
-            painter.add(CubicBezierShape::from_points_stroke([a, a + vec2(dx, 0.0), b - vec2(dx, 0.0), b], false, Color32::TRANSPARENT, Stroke::new(w * z.max(0.7), col)));
+            painter.add(CubicBezierShape::from_points_stroke(
+                [a, a + vec2(dx, 0.0), b - vec2(dx, 0.0), b],
+                false,
+                Color32::TRANSPARENT,
+                Stroke::new(w * z.max(0.7), col),
+            ));
         };
 
         // links
         for s in &snaps {
             let n = s.slots.len();
             for (slot, src) in &s.ins {
-                if let (Some(i), Some(a)) = (s.slots.iter().position(|x| x.0 == slot), src_port(*src, s.in_out.iter().find(|(k, _)| k == slot).map(|(_, v)| v.as_str()))) {
+                if let (Some(i), Some(a)) =
+                    (s.slots.iter().position(|x| x.0 == slot), src_port(*src, s.in_out.iter().find(|(k, _)| k == slot).map(|(_, v)| v.as_str())))
+                {
                     let hot = self.sel.contains(&s.id) || self.sel.contains(src);
-                    link(&painter, a, in_port(s.pos, i, n, s.dot, body_of(s)), if hot { Color32::from_rgb(255, 170, 60) } else { Color32::from_rgb(185, 185, 185) }, 1.8);
+                    link(
+                        &painter,
+                        a,
+                        in_port(s.pos, i, n, s.dot, body_of(s)),
+                        if hot { Color32::from_rgb(255, 170, 60) } else { Color32::from_rgb(185, 185, 185) },
+                        1.8,
+                    );
                 }
             }
         }
@@ -223,60 +260,91 @@ impl App {
                 painter.circle(card.center(), 9.0 * z, Color32::from_rgb(38, 38, 38), Stroke::new(if selected { 2.4_f32 } else { 1.3_f32 }, sel_col));
                 painter.circle_filled(card.center(), 3.2 * z, Color32::from_gray(200));
             } else {
-            painter.rect_filled(card.translate(vec2(2.0, 3.0) * z), Rounding::same(3.0 * z), Color32::from_black_alpha(70));
-            painter.rect_filled(card, Rounding::same(3.0 * z), Color32::from_rgb(32, 32, 32));
-            let bar = Rect::from_min_size(card.min, vec2(card.width(), BAR * z));
-            painter.rect_filled(bar, Rounding { nw: 3.0 * z, ne: 3.0 * z, sw: 0.0, se: 0.0 }, kind_color(&s.kind));
-            let node_ref = self.g.nodes.get(&id);
-            let usage = node_ref.and_then(|n| n.strs.get("usage").cloned()).unwrap_or_else(|| "basecolor".into());
-            let ident = node_ref.and_then(|n| n.strs.get("identifier").cloned()).filter(|x| !x.is_empty()).unwrap_or_else(|| usage.clone());
-            let label = match (&s.graph_name, s.kind.as_str()) {
-                (Some(g), "subgraph") => g.clone(),
-                (_, "output") => usage_label(&usage),
-                _ => label(&s.kind),
-            };
-            let fs = if label.len() > 16 { 8.0 } else if label.len() > 12 { 9.0 } else { 10.5 };
-            painter.text(bar.center(), Align2::CENTER_CENTER, label, FontId::proportional(fs * z), Color32::WHITE);
-            let th = Rect::from_min_size(card.min + vec2(3.0, BAR + 3.0 + (body_of(s) - CARD) * 0.5) * z, vec2(CARD - 6.0, CARD - 6.0) * z);
-            match self.thumbs.get(&id) {
-                Some(t) => {
-                    painter.image(t.id(), th, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+                painter.rect_filled(card.translate(vec2(2.0, 3.0) * z), Rounding::same(3.0 * z), Color32::from_black_alpha(70));
+                painter.rect_filled(card, Rounding::same(3.0 * z), Color32::from_rgb(32, 32, 32));
+                let bar = Rect::from_min_size(card.min, vec2(card.width(), BAR * z));
+                painter.rect_filled(bar, Rounding { nw: 3.0 * z, ne: 3.0 * z, sw: 0.0, se: 0.0 }, kind_color(&s.kind));
+                let node_ref = self.g.nodes.get(&id);
+                let usage = node_ref.and_then(|n| n.strs.get("usage").cloned()).unwrap_or_else(|| "basecolor".into());
+                let ident = node_ref.and_then(|n| n.strs.get("identifier").cloned()).filter(|x| !x.is_empty()).unwrap_or_else(|| usage.clone());
+                let label = match (&s.graph_name, s.kind.as_str()) {
+                    (Some(g), "subgraph") => g.clone(),
+                    (_, "output") => usage_label(&usage),
+                    _ => label(&s.kind),
+                };
+                let fs = if label.len() > 16 {
+                    8.0
+                } else if label.len() > 12 {
+                    9.0
+                } else {
+                    10.5
+                };
+                painter.text(bar.center(), Align2::CENTER_CENTER, label, FontId::proportional(fs * z), Color32::WHITE);
+                let th = Rect::from_min_size(card.min + vec2(3.0, BAR + 3.0 + (body_of(s) - CARD) * 0.5) * z, vec2(CARD - 6.0, CARD - 6.0) * z);
+                match self.thumbs.get(&id) {
+                    Some(t) => {
+                        painter.image(t.id(), th, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+                    }
+                    None => {
+                        painter.rect_filled(th, 0.0, Color32::from_rgb(22, 22, 22));
+                    }
                 }
-                None => {
-                    painter.rect_filled(th, 0.0, Color32::from_rgb(22, 22, 22));
+                if err.is_some() {
+                    painter.rect_filled(th, 0.0, Color32::from_rgba_unmultiplied(170, 30, 30, 150));
+                    painter.text(th.center(), Align2::CENTER_CENTER, "!", FontId::proportional(30.0 * z), Color32::WHITE);
                 }
-            }
-            if err.is_some() {
-                painter.rect_filled(th, 0.0, Color32::from_rgba_unmultiplied(170, 30, 30, 150));
-                painter.text(th.center(), Align2::CENTER_CENTER, "!", FontId::proportional(30.0 * z), Color32::WHITE);
-            }
-            painter.rect_stroke(card, Rounding::same(3.0 * z), Stroke::new(if selected { 2.4_f32 } else { 1.0_f32 }, if selected { Color32::from_rgb(255, 160, 40) } else { Color32::from_rgb(14, 14, 14) }));
-            if self.active == Some(id) && !selected {
-                painter.rect_stroke(card, Rounding::same(3.0 * z), Stroke::new(1.5_f32, Color32::from_rgb(150, 150, 150)));
-            }
+                painter.rect_stroke(
+                    card,
+                    Rounding::same(3.0 * z),
+                    Stroke::new(
+                        if selected { 2.4_f32 } else { 1.0_f32 },
+                        if selected { Color32::from_rgb(255, 160, 40) } else { Color32::from_rgb(14, 14, 14) },
+                    ),
+                );
+                if self.active == Some(id) && !selected {
+                    painter.rect_stroke(card, Rounding::same(3.0 * z), Stroke::new(1.5_f32, Color32::from_rgb(150, 150, 150)));
+                }
 
-            if s.kind == "output" {
-                let bc = card.left_top() + vec2(3.0, -1.0) * z;
-                painter.circle(bc, 10.5 * z, Color32::from_rgb(30, 30, 30), Stroke::new(1.5_f32, Color32::from_gray(205)));
-                painter.circle_stroke(bc, 5.6 * z, Stroke::new(1.3_f32, Color32::from_gray(235)));
-                let mut pts = Vec::new();
-                for k in 0..=24 {
-                    let a = k as f32 / 24.0 * std::f32::consts::TAU;
-                    pts.push(bc + vec2(a.cos() * 5.6, a.sin() * 2.2) * z);
+                if s.kind == "output" {
+                    let bc = card.left_top() + vec2(3.0, -1.0) * z;
+                    painter.circle(bc, 10.5 * z, Color32::from_rgb(30, 30, 30), Stroke::new(1.5_f32, Color32::from_gray(205)));
+                    painter.circle_stroke(bc, 5.6 * z, Stroke::new(1.3_f32, Color32::from_gray(235)));
+                    let mut pts = Vec::new();
+                    for k in 0..=24 {
+                        let a = k as f32 / 24.0 * std::f32::consts::TAU;
+                        pts.push(bc + vec2(a.cos() * 5.6, a.sin() * 2.2) * z);
+                    }
+                    painter.add(egui::Shape::line(pts, Stroke::new(1.0_f32, Color32::from_gray(200))));
+                    painter.circle_filled(bc + vec2(-1.8, -1.8) * z, 1.4 * z, Color32::WHITE);
+                    painter.text(
+                        card.left_top() + vec2(16.0, -4.0) * z,
+                        Align2::LEFT_BOTTOM,
+                        format!("({ident})"),
+                        FontId::proportional(9.0 * z),
+                        Color32::from_gray(150),
+                    );
+                    let bits = if self.g.meta.get("output_format").map(|f| f == "16").unwrap_or(false) { 16 } else { 8 };
+                    painter.text(
+                        card.center_bottom() + vec2(0.0, 3.0) * z,
+                        Align2::CENTER_TOP,
+                        format!("{0}x{0} - C{1}", self.nominal_node_size(id), bits),
+                        FontId::proportional(10.5 * z),
+                        Color32::from_gray(185),
+                    );
                 }
-                painter.add(egui::Shape::line(pts, Stroke::new(1.0_f32, Color32::from_gray(200))));
-                painter.circle_filled(bc + vec2(-1.8, -1.8) * z, 1.4 * z, Color32::WHITE);
-                painter.text(card.left_top() + vec2(16.0, -4.0) * z, Align2::LEFT_BOTTOM, format!("({ident})"), FontId::proportional(9.0 * z), Color32::from_gray(150));
-                let bits = if self.g.meta.get("output_format").map(|f| f == "16").unwrap_or(false) { 16 } else { 8 };
-                painter.text(card.center_bottom() + vec2(0.0, 3.0) * z, Align2::CENTER_TOP, format!("{0}x{0} - C{1}", self.nominal_node_size(id), bits), FontId::proportional(10.5 * z), Color32::from_gray(185));
-            }
             }
 
             // a node with its own Output Size shows it under the card, like Designer
             if s.kind != "output" && !matches!(s.kind.as_str(), "comment" | "frame" | "dot") {
                 let ns = self.nominal_node_size(id);
                 if ns != self.g.size {
-                    painter.text(card.center_bottom() + vec2(0.0, 3.0) * z, Align2::CENTER_TOP, format!("{0}x{0}", ns), FontId::proportional(10.0 * z), Color32::from_rgb(255, 190, 110));
+                    painter.text(
+                        card.center_bottom() + vec2(0.0, 3.0) * z,
+                        Align2::CENTER_TOP,
+                        format!("{0}x{0}", ns),
+                        FontId::proportional(10.0 * z),
+                        Color32::from_rgb(255, 190, 110),
+                    );
                 }
             }
 
@@ -376,9 +444,20 @@ impl App {
                     let op = out_port_i(s.pos, oi, s.outs.len(), body_of(s));
                     out_ports.push((id, Some(oname.clone()), op));
                     let used = used_ports.contains(&(id, oname.clone()));
-                    painter.circle(op, 4.8 * z, if used { Color32::from_rgb(240, 170, 50) } else { Color32::from_rgb(200, 200, 200) }, Stroke::new(1.0_f32, Color32::BLACK));
+                    painter.circle(
+                        op,
+                        4.8 * z,
+                        if used { Color32::from_rgb(240, 170, 50) } else { Color32::from_rgb(200, 200, 200) },
+                        Stroke::new(1.0_f32, Color32::BLACK),
+                    );
                     if z >= 0.45 {
-                        painter.text(op + vec2(9.0 * z, 0.0), Align2::LEFT_CENTER, usage_label(oname), FontId::proportional(10.5 * z.max(0.7)), Color32::from_gray(175));
+                        painter.text(
+                            op + vec2(9.0 * z, 0.0),
+                            Align2::LEFT_CENTER,
+                            usage_label(oname),
+                            FontId::proportional(10.5 * z.max(0.7)),
+                            Color32::from_gray(175),
+                        );
                     }
                     let pr = ui.interact(Rect::from_center_size(op, Vec2::splat(14.0 * z)), Id::new(("out", id, oi)), Sense::drag());
                     if pr.drag_started() {
@@ -400,7 +479,18 @@ impl App {
             for (i, (slot, required)) in s.slots.iter().enumerate() {
                 let ip = in_port(s.pos, i, n, s.dot, body_of(s));
                 ports.push((id, *slot, ip));
-                painter.circle(ip, 4.5 * z, if s.kind == "output" { Color32::from_rgb(240, 170, 50) } else if *required { Color32::from_rgb(210, 210, 210) } else { Color32::from_rgb(60, 60, 60) }, Stroke::new(1.2_f32, Color32::from_rgb(190, 190, 190)));
+                painter.circle(
+                    ip,
+                    4.5 * z,
+                    if s.kind == "output" {
+                        Color32::from_rgb(240, 170, 50)
+                    } else if *required {
+                        Color32::from_rgb(210, 210, 210)
+                    } else {
+                        Color32::from_rgb(60, 60, 60)
+                    },
+                    Stroke::new(1.2_f32, Color32::from_rgb(190, 190, 190)),
+                );
                 let ir = ui.interact(Rect::from_center_size(ip, Vec2::splat(14.0 * z)), Id::new(("in", id, i)), Sense::drag());
                 if ir.drag_started() {
                     let had = self.g.nodes.get(&id).and_then(|nd| nd.ins.get(*slot).copied());
@@ -431,7 +521,10 @@ impl App {
             }
             if released {
                 if let Some(pt) = pointer {
-                    let near = ports.iter().filter(|(_, _, p)| (*p - pt).length() < 14.0 * z).min_by(|a, b| (a.2 - pt).length().partial_cmp(&(b.2 - pt).length()).unwrap_or(std::cmp::Ordering::Equal));
+                    let near = ports
+                        .iter()
+                        .filter(|(_, _, p)| (*p - pt).length() < 14.0 * z)
+                        .min_by(|a, b| (a.2 - pt).length().partial_cmp(&(b.2 - pt).length()).unwrap_or(std::cmp::Ordering::Equal));
                     if let Some((dst, slot, _)) = near {
                         let (dst, slot) = (*dst, slot.to_string());
                         let o = self.connecting_out.clone();
@@ -454,7 +547,10 @@ impl App {
             }
             if released {
                 if let Some(pt) = pointer {
-                    let near = out_ports.iter().filter(|(_, _, p)| (*p - pt).length() < 14.0 * z).min_by(|a, b| (a.2 - pt).length().partial_cmp(&(b.2 - pt).length()).unwrap_or(std::cmp::Ordering::Equal));
+                    let near = out_ports
+                        .iter()
+                        .filter(|(_, _, p)| (*p - pt).length() < 14.0 * z)
+                        .min_by(|a, b| (a.2 - pt).length().partial_cmp(&(b.2 - pt).length()).unwrap_or(std::cmp::Ordering::Equal));
                     if let Some((src, oname, _)) = near {
                         let (src, oname) = (*src, oname.clone());
                         self.try_connect_out(src, dst, &slot, oname);
@@ -576,7 +672,12 @@ impl App {
                 self.open_search(p, None);
             }
             Act::NewGraph => {
-                let dest = if self.screen == Screen::Editor { self.ws_init(); Some(self.pkg_sel) } else { None };
+                let dest = if self.screen == Screen::Editor {
+                    self.ws_init();
+                    Some(self.pkg_sel)
+                } else {
+                    None
+                };
                 self.open_new_dialog(dest);
             }
             Act::Home => self.screen = Screen::Home,
@@ -695,8 +796,20 @@ impl App {
                         let ir = Rect::from_min_size(rect.min + vec2(3.0, 3.0), vec2(16.0, 16.0));
                         ui.painter().rect_filled(ir, 3.0, kind_color(&e.kind));
                         draw_icon(ui.painter(), ir.center(), entry_icon(&e.kind), Color32::WHITE.gamma_multiply(0.9));
-                        ui.painter().text(rect.left_center() + vec2(26.0, 0.0), Align2::LEFT_CENTER, &e.label, FontId::proportional(12.5), Color32::from_gray(230));
-                        ui.painter().text(rect.right_center() - vec2(6.0, 0.0), Align2::RIGHT_CENTER, e.cat, FontId::proportional(10.0), Color32::from_gray(130));
+                        ui.painter().text(
+                            rect.left_center() + vec2(26.0, 0.0),
+                            Align2::LEFT_CENTER,
+                            &e.label,
+                            FontId::proportional(12.5),
+                            Color32::from_gray(230),
+                        );
+                        ui.painter().text(
+                            rect.right_center() - vec2(6.0, 0.0),
+                            Align2::RIGHT_CENTER,
+                            e.cat,
+                            FontId::proportional(10.0),
+                            Color32::from_gray(130),
+                        );
                         if resp.clicked() {
                             chosen = Some(e.clone());
                         }
@@ -719,7 +832,8 @@ impl App {
             chosen = list.get(st.idx).map(|x| x.1.clone());
         }
         if !st.fresh {
-            let clicked_outside = ctx.input(|i| i.pointer.any_click()) && ctx.input(|i| i.pointer.interact_pos()).map(|p| !area.response.rect.contains(p)).unwrap_or(false);
+            let clicked_outside =
+                ctx.input(|i| i.pointer.any_click()) && ctx.input(|i| i.pointer.interact_pos()).map(|p| !area.response.rect.contains(p)).unwrap_or(false);
             if clicked_outside {
                 close = true;
             }
@@ -844,7 +958,9 @@ impl App {
                     let d = std::env::temp_dir().join("materialcraft_demo");
                     let _ = std::fs::create_dir_all(&d);
                     let (lo, hi) = (d.join("low.obj"), d.join("high.obj"));
-                    if std::fs::write(&lo, bake::uv_sphere_obj(24, 16, 1.0, 0.0)).is_ok() && std::fs::write(&hi, bake::uv_sphere_obj(160, 100, 1.0, 0.04)).is_ok() {
+                    if std::fs::write(&lo, bake::uv_sphere_obj(24, 16, 1.0, 0.0)).is_ok()
+                        && std::fs::write(&hi, bake::uv_sphere_obj(160, 100, 1.0, 0.04)).is_ok()
+                    {
                         self.bake.low = Some(lo);
                         self.bake.high = Some(hi);
                         if self.bake.out.is_none() {
@@ -901,4 +1017,3 @@ impl App {
         }
     }
 }
-

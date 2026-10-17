@@ -37,11 +37,7 @@ pub(super) fn pretty(v: &Value, depth: usize, out: &mut String) {
     match v {
         Value::Array(items) if items.is_empty() => out.push_str("[]"),
         Value::Object(entries) if entries.is_empty() => out.push_str("{}"),
-        Value::Array(items)
-            if items
-                .iter()
-                .all(|i| matches!(i, Value::Null | Value::Bool(_) | Value::Number(_))) =>
-        {
+        Value::Array(items) if items.iter().all(|i| matches!(i, Value::Null | Value::Bool(_) | Value::Number(_))) => {
             out.push('[');
             for (i, item) in items.iter().enumerate() {
                 if i > 0 {
@@ -139,7 +135,7 @@ fn string(s: &str, out: &mut String) {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{parse, Value};
+    use super::super::{Value, parse};
 
     #[test]
     fn numbers_round_trip_exactly() {
@@ -182,11 +178,7 @@ mod tests {
 
     #[test]
     fn pretty_layout() {
-        let v = Value::object()
-            .with("name", "vase")
-            .with("size", vec![1, 2])
-            .with("empty", Value::array())
-            .with("layers", vec![Value::object().with("id", 1)]);
+        let v = Value::object().with("name", "vase").with("size", vec![1, 2]).with("empty", Value::array()).with("layers", vec![Value::object().with("id", 1)]);
         let expect = "{\n  \"name\": \"vase\",\n  \"size\": [1, 2],\n  \"empty\": [],\n  \"layers\": [\n    {\n      \"id\": 1\n    }\n  ]\n}";
         assert_eq!(v.to_string_pretty(), expect);
         assert_eq!(parse(expect).unwrap(), v);

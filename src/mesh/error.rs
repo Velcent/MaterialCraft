@@ -14,22 +14,11 @@ pub struct MeshError {
 #[derive(Debug, Clone, PartialEq)]
 pub enum MeshErrorKind {
     /// A vertex attribute has a different length than `positions` (normals and tangents may also be empty).
-    LengthMismatch {
-        attribute: Attribute,
-        expected: usize,
-        found: usize,
-    },
+    LengthMismatch { attribute: Attribute, expected: usize, found: usize },
     /// A triangle refers to a vertex that does not exist.
-    IndexOutOfRange {
-        triangle: usize,
-        index: u32,
-        vertex_count: usize,
-    },
+    IndexOutOfRange { triangle: usize, index: u32, vertex_count: usize },
     /// The part's material slot is not in [`super::Mesh::materials`].
-    MaterialOutOfRange {
-        material: usize,
-        material_count: usize,
-    },
+    MaterialOutOfRange { material: usize, material_count: usize },
     /// A vertex attribute holds NaN or infinity.
     NonFinite { attribute: Attribute, vertex: usize },
     /// A UV set was asked for that the part does not have.
@@ -53,10 +42,7 @@ impl MeshError {
 
     /// The same error, attributed to part `index` of a mesh.
     pub fn in_part(self, index: usize) -> MeshError {
-        MeshError {
-            part: Some(index),
-            ..self
-        }
+        MeshError { part: Some(index), ..self }
     }
 }
 
@@ -74,31 +60,14 @@ impl fmt::Display for Attribute {
 impl fmt::Display for MeshErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MeshErrorKind::LengthMismatch {
-                attribute,
-                expected,
-                found,
-            } => {
+            MeshErrorKind::LengthMismatch { attribute, expected, found } => {
                 write!(f, "{attribute} has {found} entries, expected {expected}")
             }
-            MeshErrorKind::IndexOutOfRange {
-                triangle,
-                index,
-                vertex_count,
-            } => {
-                write!(
-                    f,
-                    "triangle {triangle} uses vertex {index}, but there are only {vertex_count} vertices"
-                )
+            MeshErrorKind::IndexOutOfRange { triangle, index, vertex_count } => {
+                write!(f, "triangle {triangle} uses vertex {index}, but there are only {vertex_count} vertices")
             }
-            MeshErrorKind::MaterialOutOfRange {
-                material,
-                material_count,
-            } => {
-                write!(
-                    f,
-                    "material slot {material} does not exist ({material_count} slots)"
-                )
+            MeshErrorKind::MaterialOutOfRange { material, material_count } => {
+                write!(f, "material slot {material} does not exist ({material_count} slots)")
             }
             MeshErrorKind::NonFinite { attribute, vertex } => {
                 write!(f, "{attribute} of vertex {vertex} is not a finite number")

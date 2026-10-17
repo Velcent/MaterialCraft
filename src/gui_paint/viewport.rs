@@ -5,7 +5,7 @@
 use super::channel_view::ChannelView;
 use eframe::egui::{self, Align2, Color32, FontId, PointerButton, Sense};
 use materialcraft::gpu3d::{self, Shared};
-use materialcraft::render3d::{View, RELIEF_NONE};
+use materialcraft::render3d::{RELIEF_NONE, View};
 use std::sync::Arc;
 
 const BACKGROUND: Color32 = crate::gui_theme::HEADER_BG;
@@ -20,13 +20,7 @@ pub struct Viewport {
 impl Viewport {
     pub fn new() -> Viewport {
         // Painter shows height through the normal map; displacement stays opt-in.
-        Viewport {
-            gpu: gpu3d::new_shared(),
-            view: View {
-                relief: RELIEF_NONE,
-                ..View::default()
-            },
-        }
+        Viewport { gpu: gpu3d::new_shared(), view: View { relief: RELIEF_NONE, ..View::default() } }
     }
 
     pub fn gpu(&self) -> &Shared {
@@ -59,33 +53,16 @@ impl Viewport {
         match error {
             None => {
                 let (gpu, view) = (self.gpu.clone(), display.view_for(&self.view));
-                let cb = eframe::egui_glow::CallbackFn::new(move |info, painter| {
-                    gpu3d::paint(&gpu, &info, painter, &view)
-                });
-                ui.painter().add(egui::PaintCallback {
-                    rect,
-                    callback: Arc::new(cb),
-                });
+                let cb = eframe::egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&gpu, &info, painter, &view));
+                ui.painter().add(egui::PaintCallback { rect, callback: Arc::new(cb) });
             }
             Some(e) => {
                 let msg = format!("The GPU viewer is unavailable: {e}");
-                ui.painter().text(
-                    rect.center(),
-                    Align2::CENTER_CENTER,
-                    msg,
-                    FontId::proportional(13.0),
-                    Color32::from_rgb(255, 170, 120),
-                );
+                ui.painter().text(rect.center(), Align2::CENTER_CENTER, msg, FontId::proportional(13.0), Color32::from_rgb(255, 170, 120));
             }
         }
         let corner = rect.left_bottom() + egui::vec2(6.0, -5.0);
-        ui.painter().text(
-            corner,
-            Align2::LEFT_BOTTOM,
-            HINT,
-            FontId::proportional(10.0),
-            Color32::from_gray(110),
-        );
+        ui.painter().text(corner, Align2::LEFT_BOTTOM, HINT, FontId::proportional(10.0), Color32::from_gray(110));
     }
 
     fn camera_input(&mut self, ui: &egui::Ui, resp: &egui::Response) {

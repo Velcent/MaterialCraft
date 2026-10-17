@@ -4,7 +4,7 @@
 use crate::graph::{Error, Node};
 use crate::noise;
 use crate::ops;
-use crate::tex::{lum, Tex};
+use crate::tex::{Tex, lum};
 use std::collections::BTreeMap;
 use std::f32::consts::TAU;
 use std::sync::Arc as Rc;
@@ -110,12 +110,19 @@ fn normal_to_height(nm: &Tex, directx: bool, relief: f32, opacity: f32) -> Tex {
     let vals: Vec<f32> = h.iter().map(|c| c[0] / (n * n) as f32).collect();
     let (mn, mx) = vals.iter().fold((f32::MAX, f32::MIN), |a, v| (a.0.min(*v), a.1.max(*v)));
     let k = if mx - mn > 1e-9 { 1.0 / (mx - mn) } else { 0.0 };
-    let out = Tex { w: n, h: n, px: vals.iter().map(|v| { let g = if k > 0.0 { (v - mn) * k } else { 0.5 }; let g = 0.5 + (g - 0.5) * opacity; [g, g, g, 1.0] }).collect() };
-    if nm.w == n && nm.h == n {
-        out
-    } else {
-        ops::resize(&out, nm.w)
-    }
+    let out = Tex {
+        w: n,
+        h: n,
+        px: vals
+            .iter()
+            .map(|v| {
+                let g = if k > 0.0 { (v - mn) * k } else { 0.5 };
+                let g = 0.5 + (g - 0.5) * opacity;
+                [g, g, g, 1.0]
+            })
+            .collect(),
+    };
+    if nm.w == n && nm.h == n { out } else { ops::resize(&out, nm.w) }
 }
 
 /// Run a node of this module. Ok(None) = not one of ours.
@@ -127,13 +134,7 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
     let per = |k: &str, d: f32| f(k, d).round().clamp(1.0, 256.0) as i32;
     let (con, inv) = (f("contrast", 1.0), f("invert", 0.0) > 0.5);
     let dz = noise::Disorder::new(seed, f("disorder", 0.0), f("disorder_speed", 1.0), f("anisotropy", 0.0), f("anisotropy_angle", 0.0));
-    let fin = |t: Tex| -> Tex {
-        if (con - 1.0).abs() > 1e-4 || inv {
-            ops::contrast_invert(&t, con, inv)
-        } else {
-            t
-        }
-    };
+    let fin = |t: Tex| -> Tex { if (con - 1.0).abs() > 1e-4 || inv { ops::contrast_invert(&t, con, inv) } else { t } };
     let out = match kind {
         // ------------------------------------------------ blurs and warps
         "non_uniform_blur" => {
@@ -248,7 +249,11 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
             // whole numbers keep the lattice periodic: the skewed texture still tiles
             let (kx, ky) = (f("skew_x", 1.0).round().clamp(-32.0, 32.0), f("skew_y", 0.0).round().clamp(-32.0, 32.0));
             // align = the line the shear pivots around: 0 centre, 1 top left (default), 2 bottom right
-            let o = match f("align", 1.0).round() as u32 { 0 => 0.5, 2 => 1.0, _ => 0.0 };
+            let o = match f("align", 1.0).round() as u32 {
+                0 => 0.5,
+                2 => 1.0,
+                _ => 0.0,
+            };
             Tex::from_fn(t.w, t.h, |u, v| t.sample_cubic(u + kx * (v - o), v + ky * (u - o)))
         }
         // ------------------------------------------------ adjustments
@@ -345,7 +350,8 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
         "cells" => {
             let (var, p) = (f("variant", 0.0) as u32, per("scale", 8.0));
             let jitter = f("jitter", 1.0).clamp(0.0, 1.0);
-            let (lum_rand, edge_w, hard) = (f("luminance_random", 0.0).clamp(0.0, 1.0), f("edge_width", 0.25).clamp(0.01, 1.0), f("hardness", 2.0).clamp(0.1, 16.0));
+            let (lum_rand, edge_w, hard) =
+                (f("luminance_random", 0.0).clamp(0.0, 1.0), f("edge_width", 0.25).clamp(0.01, 1.0), f("hardness", 2.0).clamp(0.1, 16.0));
             let (src, pseed) = (f("color_source", 0.0) as u32, f("pseudorandom_seed", 0.0) as u32);
             let img = if src == 2 { opt("color") } else { None };
             fin(Tex::gray_fn(s, s, move |u, v| {
@@ -354,7 +360,11 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
                 // cell value of Cells 4: random, pseudorandom (re-rolled with its own seed) or the input image at the cell centre
                 let cell_val = || match (src, img) {
                     (2, Some(t)) => lum(t.sample(u + vr.dx / p as f32, v + vr.dy / p as f32)),
-                    (1, _) => noise::rnd((((u + vr.dx / p as f32) * p as f32).floor()) as i32, (((v + vr.dy / p as f32) * p as f32).floor()) as i32, pseed.wrapping_add(4242)),
+                    (1, _) => noise::rnd(
+                        (((u + vr.dx / p as f32) * p as f32).floor()) as i32,
+                        (((v + vr.dy / p as f32) * p as f32).floor()) as i32,
+                        pseed.wrapping_add(4242),
+                    ),
                     _ => vr.id1,
                 };
                 match var {
@@ -402,7 +412,13 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
                 match shape {
                     1 => 1.0 - (x * 2.0 - 1.0).abs(),
                     2 => x,
-                    3 => if x < 0.5 { 1.0 } else { 0.0 },
+                    3 => {
+                        if x < 0.5 {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
                     _ => 0.5 + 0.5 * (x * TAU).sin(),
                 }
             }))
@@ -413,17 +429,27 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
             fin(Tex::gray_fn(s, s, move |u, v| {
                 let (u, v) = dz.warp(u, v);
                 // spots() blends smoothly from 1 to 0 between the inner and outer radius, i.e. a gaussian-like bump
-                noise::spots(u, v, p, p, seed, |id| {
-                    let r = size * 0.55 * (1.0 - var + var * id);
-                    (0.0, r.max(0.02))
-                }, 0.0)
+                noise::spots(
+                    u,
+                    v,
+                    p,
+                    p,
+                    seed,
+                    |id| {
+                        let r = size * 0.55 * (1.0 - var + var * id);
+                        (0.0, r.max(0.02))
+                    },
+                    0.0,
+                )
             }))
         }
         // ------------------------------------------------ normals and surface
         "normal_invert" => {
             let t = need("in")?;
             let (ix, iy, iz, ia) = (f("invert_x", 0.0) > 0.5, f("invert_y", 1.0) > 0.5, f("invert_z", 0.0) > 0.5, f("invert_a", 0.0) > 0.5);
-            t.map(|p| [if ix { 1.0 - p[0] } else { p[0] }, if iy { 1.0 - p[1] } else { p[1] }, if iz { 1.0 - p[2] } else { p[2] }, if ia { 1.0 - p[3] } else { p[3] }])
+            t.map(|p| {
+                [if ix { 1.0 - p[0] } else { p[0] }, if iy { 1.0 - p[1] } else { p[1] }, if iz { 1.0 - p[2] } else { p[2] }, if ia { 1.0 - p[3] } else { p[3] }]
+            })
         }
         "normal_normalize" => need("in")?.map(|p| {
             let (x, y, z) = ((p[0] - 0.5) * 2.0, (p[1] - 0.5) * 2.0, (p[2] - 0.5) * 2.0);
@@ -444,7 +470,9 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
                 [rx * 0.5 + 0.5, gs * ry * 0.5 + 0.5, p[2], p[3]]
             })
         }
-        "normal_to_height" => normal_to_height(need("in")?, f("directx", 0.0) > 0.5, f("relief_balance", 0.5).clamp(0.0, 1.0), f("opacity", 1.0).clamp(0.0, 1.0)),
+        "normal_to_height" => {
+            normal_to_height(need("in")?, f("directx", 0.0) > 0.5, f("relief_balance", 0.5).clamp(0.0, 1.0), f("opacity", 1.0).clamp(0.0, 1.0))
+        }
         "sobel" => {
             let t = need("in")?;
             let k = f("intensity", 1.0).clamp(0.0, 64.0) * (t.w as f32 / 512.0).max(0.25);
@@ -467,7 +495,12 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
             Tex::from_fn(t.w, t.h, |u, v| {
                 let (p, q) = (t.sample(u, v), b.sample(u, v));
                 let cut = |x: f32| ((x - clear) / (1.0 - clear)).max(0.0);
-                [(p[0] + cut(q[0]) * gc[0] * inten).clamp(0.0, 1.0), (p[1] + cut(q[1]) * gc[1] * inten).clamp(0.0, 1.0), (p[2] + cut(q[2]) * gc[2] * inten).clamp(0.0, 1.0), p[3]]
+                [
+                    (p[0] + cut(q[0]) * gc[0] * inten).clamp(0.0, 1.0),
+                    (p[1] + cut(q[1]) * gc[1] * inten).clamp(0.0, 1.0),
+                    (p[2] + cut(q[2]) * gc[2] * inten).clamp(0.0, 1.0),
+                    p[3],
+                ]
             })
         }
         "mosaic" => {
@@ -529,7 +562,13 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
             } else {
                 Tex::from_fn(t.w, t.h, |u, v| {
                     let d = (lum(m.sample(u, v)) - 0.5) * 2.0 * k;
-                    let mut acc = if mode == 1 { [f32::MIN; 4] } else if mode == 2 { [f32::MAX; 4] } else { [0.0f32; 4] };
+                    let mut acc = if mode == 1 {
+                        [f32::MIN; 4]
+                    } else if mode == 2 {
+                        [f32::MAX; 4]
+                    } else {
+                        [0.0f32; 4]
+                    };
                     for i in 0..n {
                         let a = (a0 + i as f32 / n as f32) * TAU;
                         let p = t.sample(u + a.cos() * d, v + a.sin() * d);
@@ -555,11 +594,7 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
                 if tech < 2 {
                     let (bx, by, bz) = ((pb[0] - 0.5) * 2.0, (pb[1] - 0.5) * 2.0, ((pb[2] - 0.5) * 2.0).max(0.05));
                     let (dx, dy, dz) = ((pd[0] - 0.5) * 2.0, (pd[1] - 0.5) * 2.0, ((pd[2] - 0.5) * 2.0).max(0.05));
-                    let r = if tech == 0 {
-                        [bx + dx, by + dy, bz * dz]
-                    } else {
-                        [bx / bz + dx / dz, by / bz + dy / dz, 1.0]
-                    };
+                    let r = if tech == 0 { [bx + dx, by + dy, bz * dz] } else { [bx / bz + dx / dz, by / bz + dy / dz, 1.0] };
                     let l = (r[0] * r[0] + r[1] * r[1] + r[2] * r[2]).sqrt().max(1e-6);
                     return [r[0] / l * 0.5 + 0.5, r[1] / l * 0.5 + 0.5, r[2] / l * 0.5 + 0.5, 1.0];
                 }
@@ -599,7 +634,11 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
                     for di in -1..=1 {
                         let (i, j) = (ci + di, cj + dj);
                         let (wi, wj) = (i.rem_euclid(nx), j.rem_euclid(ny));
-                        let alt = match tmode { 1 => ((i + j) & 1) as i32, 2 => (noise::rnd(wi, wj, seed.wrapping_add(31)) > 0.5) as i32, _ => 0 };
+                        let alt = match tmode {
+                            1 => ((i + j) & 1) as i32,
+                            2 => (noise::rnd(wi, wj, seed.wrapping_add(31)) > 0.5) as i32,
+                            _ => 0,
+                        };
                         let (a, ha) = vert(i, j);
                         let (b, hb) = vert(i + 1, j);
                         let (c, hc) = vert(i, j + 1);

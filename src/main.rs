@@ -1,6 +1,6 @@
 use materialcraft::bake::{self, BakeSettings};
-use materialcraft::graph::{Graph, EXAMPLE, SPECS};
 use materialcraft::export::{self, Format};
+use materialcraft::graph::{EXAMPLE, Graph, SPECS};
 use materialcraft::render3d::{self, Maps, View};
 use materialcraft::{ops, png, tex::Tex};
 use std::collections::BTreeMap;
@@ -182,7 +182,8 @@ fn run(args: &[String]) -> Result<(), String> {
                             continue;
                         }
                         let p = d.join(format!("{name}.{}", fmt.ext()));
-                        fs::write(&p, export::encode(fmt, t, if fmt == Format::Jpeg { 8 } else { depth }, quality)).map_err(|e| format!("{}: {e}", p.display()))?;
+                        fs::write(&p, export::encode(fmt, t, if fmt == Format::Jpeg { 8 } else { depth }, quality))
+                            .map_err(|e| format!("{}: {e}", p.display()))?;
                         println!("wrote {}", p.display());
                     }
                     let flat = Tex::solid(s, s, [0.5, 0.5, 1.0, 1.0]);

@@ -36,17 +36,9 @@ impl TriangleFrame {
     }
 
     /// The frame of triangle `tri`, or `None` when an index is out of range or the UVs are degenerate.
-    pub fn of_triangle(
-        positions: &[Vec3],
-        uvs: &[[f32; 2]],
-        tri: [u32; 3],
-    ) -> Option<TriangleFrame> {
+    pub fn of_triangle(positions: &[Vec3], uvs: &[[f32; 2]], tri: [u32; 3]) -> Option<TriangleFrame> {
         let i = tri.map(|i| i as usize);
-        let p = [
-            *positions.get(i[0])?,
-            *positions.get(i[1])?,
-            *positions.get(i[2])?,
-        ];
+        let p = [*positions.get(i[0])?, *positions.get(i[1])?, *positions.get(i[2])?];
         let uv = [*uvs.get(i[0])?, *uvs.get(i[1])?, *uvs.get(i[2])?];
         TriangleFrame::new(p, uv)
     }
@@ -70,13 +62,7 @@ mod tests {
     fn degenerate_uvs_have_no_frame() {
         let p = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
         assert_eq!(TriangleFrame::new(p, [[0.5, 0.5]; 3]), None);
-        assert_eq!(
-            TriangleFrame::new(p, [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]]),
-            None
-        );
-        assert_eq!(
-            TriangleFrame::of_triangle(&p, &[[0.0, 0.0]; 3], [0, 1, 7]),
-            None
-        );
+        assert_eq!(TriangleFrame::new(p, [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]]), None);
+        assert_eq!(TriangleFrame::of_triangle(&p, &[[0.0, 0.0]; 3], [0, 1, 7]), None);
     }
 }

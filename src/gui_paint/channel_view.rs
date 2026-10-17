@@ -51,15 +51,7 @@ impl ChannelView {
                 });
                 let black = Tex::solid(1, 1, [0.0, 0.0, 0.0, 1.0]);
                 let rough = Tex::solid(1, 1, [1.0; 4]);
-                gpu3d::prepare(&MapInputs {
-                    base: Some(&black),
-                    normal: None,
-                    rough: Some(&rough),
-                    metal: None,
-                    ao: None,
-                    emissive: Some(&shown),
-                    height,
-                })
+                gpu3d::prepare(&MapInputs { base: Some(&black), normal: None, rough: Some(&rough), metal: None, ao: None, emissive: Some(&shown), height })
             }
         }
     }
@@ -68,11 +60,7 @@ impl ChannelView {
     pub fn view_for(self, view: &View) -> View {
         match self {
             ChannelView::Material => view.clone(),
-            ChannelView::Single(_) => View {
-                light_intensity: 0.0,
-                ambient: 0.0,
-                ..view.clone()
-            },
+            ChannelView::Single(_) => View { light_intensity: 0.0, ambient: 0.0, ..view.clone() },
         }
     }
 }

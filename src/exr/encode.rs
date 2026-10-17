@@ -16,17 +16,9 @@ pub fn encode_with(img: &ExrImage, compression: Compression) -> Result<Vec<u8>, 
         return Err("writing RLE-compressed OpenEXR is not supported".into());
     }
     let mut order: Vec<usize> = (0..img.channels.len()).collect();
-    order.sort_by(|&a, &b| {
-        img.channels[a]
-            .name
-            .as_bytes()
-            .cmp(img.channels[b].name.as_bytes())
-    });
+    order.sort_by(|&a, &b| img.channels[a].name.as_bytes().cmp(img.channels[b].name.as_bytes()));
     let header = Header {
-        channels: order
-            .iter()
-            .map(|&i| (img.channels[i].name.clone(), img.channels[i].sample))
-            .collect(),
+        channels: order.iter().map(|&i| (img.channels[i].name.clone(), img.channels[i].sample)).collect(),
         compression,
         data_window: [0, 0, img.width as i32 - 1, img.height as i32 - 1],
     };
@@ -44,11 +36,7 @@ pub fn encode_with(img: &ExrImage, compression: Compression) -> Result<Vec<u8>, 
         for y in y0..(y0 + lines).min(img.height) {
             for &c in &order {
                 let ch = &img.channels[c];
-                write_samples(
-                    &ch.data[y * img.width..(y + 1) * img.width],
-                    ch.sample,
-                    &mut raw,
-                );
+                write_samples(&ch.data[y * img.width..(y + 1) * img.width], ch.sample, &mut raw);
             }
         }
         let data = compression.compress(&raw);
@@ -62,11 +50,7 @@ pub fn encode_with(img: &ExrImage, compression: Compression) -> Result<Vec<u8>, 
 }
 
 fn validate(img: &ExrImage) -> Result<(), String> {
-    if img.width == 0
-        || img.height == 0
-        || img.width > i32::MAX as usize
-        || img.height > i32::MAX as usize
-    {
+    if img.width == 0 || img.height == 0 || img.width > i32::MAX as usize || img.height > i32::MAX as usize {
         return Err(format!("bad image size {}x{}", img.width, img.height));
     }
     if img.channels.is_empty() {
@@ -81,11 +65,7 @@ fn validate(img: &ExrImage) -> Result<(), String> {
             return Err(format!("duplicate channel '{}'", c.name));
         }
         if c.data.len() != n {
-            return Err(format!(
-                "channel '{}' has {} samples, expected {n}",
-                c.name,
-                c.data.len()
-            ));
+            return Err(format!("channel '{}' has {} samples, expected {n}", c.name, c.data.len()));
         }
     }
     Ok(())
@@ -93,15 +73,9 @@ fn validate(img: &ExrImage) -> Result<(), String> {
 
 fn write_samples(row: &[f32], kind: SampleKind, out: &mut Vec<u8>) {
     match kind {
-        SampleKind::Half => row
-            .iter()
-            .for_each(|&v| out.extend_from_slice(&f32_to_f16(v).to_le_bytes())),
-        SampleKind::Float => row
-            .iter()
-            .for_each(|&v| out.extend_from_slice(&v.to_le_bytes())),
+        SampleKind::Half => row.iter().for_each(|&v| out.extend_from_slice(&f32_to_f16(v).to_le_bytes())),
+        SampleKind::Float => row.iter().for_each(|&v| out.extend_from_slice(&v.to_le_bytes())),
         // Saturating cast: negatives and NaN become 0.
-        SampleKind::Uint => row
-            .iter()
-            .for_each(|&v| out.extend_from_slice(&(v as u32).to_le_bytes())),
+        SampleKind::Uint => row.iter().for_each(|&v| out.extend_from_slice(&(v as u32).to_le_bytes())),
     }
 }

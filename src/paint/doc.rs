@@ -30,10 +30,7 @@ pub struct Document {
 
 impl Document {
     pub fn new(mesh: Mesh) -> Document {
-        Document {
-            mesh,
-            ..Document::default()
-        }
+        Document { mesh, ..Document::default() }
     }
 
     pub fn texture_set(&self, id: &str) -> Option<&TextureSet> {
@@ -55,19 +52,8 @@ impl Document {
 
     /// Bytes used by all layer, mask and baked images.
     pub fn image_memory_bytes(&self) -> usize {
-        let layers: usize = self
-            .texture_sets
-            .iter()
-            .flat_map(|s| s.walk_layers())
-            .flat_map(|(_, l)| l.images())
-            .map(|(_, i)| i.memory_bytes())
-            .sum();
-        let baked: usize = self
-            .texture_sets
-            .iter()
-            .flat_map(|s| &s.baked)
-            .map(|b| b.image.memory_bytes())
-            .sum();
+        let layers: usize = self.texture_sets.iter().flat_map(|s| s.walk_layers()).flat_map(|(_, l)| l.images()).map(|(_, i)| i.memory_bytes()).sum();
+        let baked: usize = self.texture_sets.iter().flat_map(|s| &s.baked).map(|b| b.image.memory_bytes()).sum();
         layers + baked
     }
 

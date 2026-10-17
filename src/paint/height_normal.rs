@@ -39,9 +39,7 @@ impl HeightFilter {
 
     /// Parses an id; `None` for unknown ids.
     pub fn from_id(id: &str) -> Option<HeightFilter> {
-        [HeightFilter::Sobel, HeightFilter::Backward]
-            .into_iter()
-            .find(|f| f.id() == id)
+        [HeightFilter::Sobel, HeightFilter::Backward].into_iter().find(|f| f.id() == id)
     }
 
     /// Height change per texel along image x and image y (rows top first, y down) at `(x, y)`;
@@ -62,18 +60,11 @@ impl HeightFilter {
 /// component, with Painter's scale times `strength`. Alpha is 1.
 pub fn normal_from_height(height: &Tex, filter: HeightFilter, strength: f32) -> Tex {
     let (w, h) = (height.w, height.h);
-    let mut out = Tex {
-        w,
-        h,
-        px: vec![[0.5, 0.5, 1.0, 1.0]; w * h],
-    };
+    let mut out = Tex { w, h, px: vec![[0.5, 0.5, 1.0, 1.0]; w * h] };
     if w == 0 || h == 0 || height.px.len() < w * h {
         return out;
     }
-    let (kx, ky) = (
-        strength * UV_SLOPE * w as f32,
-        strength * UV_SLOPE * h as f32,
-    );
+    let (kx, ky) = (strength * UV_SLOPE * w as f32, strength * UV_SLOPE * h as f32);
     let at = |x: usize, y: usize, dx: isize, dy: isize| {
         let xx = x.saturating_add_signed(dx).min(w - 1);
         let yy = y.saturating_add_signed(dy).min(h - 1);
@@ -86,11 +77,7 @@ pub fn normal_from_height(height: &Tex, filter: HeightFilter, strength: f32) -> 
             // Image y runs against +v, so a height rising down the image tilts the normal up (+Y).
             let (nx, ny, nz) = (-gx * kx, gy * ky, 1.0f32);
             let l = (nx * nx + ny * ny + nz * nz).sqrt();
-            let n = if l.is_finite() && l > 0.0 {
-                [nx / l, ny / l, nz / l]
-            } else {
-                [0.0, 0.0, 1.0]
-            };
+            let n = if l.is_finite() && l > 0.0 { [nx / l, ny / l, nz / l] } else { [0.0, 0.0, 1.0] };
             *p = [n[0] * 0.5 + 0.5, n[1] * 0.5 + 0.5, n[2] * 0.5 + 0.5, 1.0];
         }
     });
@@ -160,11 +147,7 @@ mod tests {
     #[test]
     fn backward_reads_left_and_up_only() {
         // A single raised texel tilts its own normal (−x, +y) and its right/lower neighbours the other way.
-        let n = normal_from_height(
-            &tex(5, 5, |x, y| f32::from(x == 2 && y == 2)),
-            HeightFilter::Backward,
-            1.0,
-        );
+        let n = normal_from_height(&tex(5, 5, |x, y| f32::from(x == 2 && y == 2)), HeightFilter::Backward, 1.0);
         assert!(n.px[2 * 5 + 2][0] < 0.5 && n.px[2 * 5 + 2][1] > 0.5);
         assert!(n.px[2 * 5 + 3][0] > 0.5 && n.px[3 * 5 + 2][1] < 0.5);
         assert_eq!(n.px[2 * 5 + 1], [0.5, 0.5, 1.0, 1.0]);
@@ -181,24 +164,9 @@ mod tests {
 
     #[test]
     fn empty_and_short_inputs_do_not_panic() {
-        let empty = Tex {
-            w: 0,
-            h: 0,
-            px: vec![],
-        };
-        assert!(normal_from_height(&empty, HeightFilter::Sobel, 1.0)
-            .px
-            .is_empty());
-        let short = Tex {
-            w: 4,
-            h: 4,
-            px: vec![[1.0; 4]; 3],
-        };
-        assert_eq!(
-            normal_from_height(&short, HeightFilter::Backward, 1.0)
-                .px
-                .len(),
-            16
-        );
+        let empty = Tex { w: 0, h: 0, px: vec![] };
+        assert!(normal_from_height(&empty, HeightFilter::Sobel, 1.0).px.is_empty());
+        let short = Tex { w: 4, h: 4, px: vec![[1.0; 4]; 3] };
+        assert_eq!(normal_from_height(&short, HeightFilter::Backward, 1.0).px.len(), 16);
     }
 }

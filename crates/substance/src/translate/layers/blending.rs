@@ -1,9 +1,9 @@
 //! [`ResolvedBlend`]: the blend mode and opacity one channel gets from a stored `perChannelBlending` list,
 //! with Painter's default filled in where a sparse list leaves the channel out.
 
-use super::blend_table::{default_mode, BlendMapping, BlendTable, Holder};
+use super::blend_table::{BlendMapping, BlendTable, Holder, default_mode};
 use super::computability::Computability;
-use crate::model::{blending_for, ChannelBlending, PainterBlendMode, PainterChannel};
+use crate::model::{ChannelBlending, PainterBlendMode, PainterChannel, blending_for};
 use materialcraft::paint::BlendMode;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -64,11 +64,7 @@ impl ResolvedBlend {
 
 /// Clamps an opacity to 0..1 (non-finite values from a corrupt file count as 1).
 pub fn unit(v: f32) -> f32 {
-    if v.is_finite() {
-        v.clamp(0.0, 1.0)
-    } else {
-        1.0
-    }
+    if v.is_finite() { v.clamp(0.0, 1.0) } else { 1.0 }
 }
 
 #[cfg(test)]

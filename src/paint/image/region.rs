@@ -1,6 +1,6 @@
 //! Bulk pixel access to a [`TiledImage`] by region and by tile, including the parallel tile update.
 
-use super::{tile_rect, Rect, TileBuf, TiledImage, T};
+use super::{Rect, T, TileBuf, TiledImage, tile_rect};
 use crate::paint::par::for_each_mut;
 use crate::paint::pixel::PixelFormat;
 
@@ -10,11 +10,7 @@ impl TiledImage {
     pub fn read_region(&self, r: Rect, out: &mut [[f32; 4]]) {
         let zero = self.zero_pixel();
         let bpp = self.format.bytes_per_pixel();
-        for (row, line) in out
-            .chunks_exact_mut(r.w as usize)
-            .take(r.h as usize)
-            .enumerate()
-        {
+        for (row, line) in out.chunks_exact_mut(r.w as usize).take(r.h as usize).enumerate() {
             let y = r.y as usize + row;
             if y >= self.height as usize {
                 line.fill(zero);
@@ -51,8 +47,7 @@ impl TiledImage {
             return false;
         };
         let fmt = self.format;
-        let t = self.tiles[i]
-            .get_or_insert_with(|| vec![0u8; T * T * fmt.bytes_per_pixel()].into_boxed_slice());
+        let t = self.tiles[i].get_or_insert_with(|| vec![0u8; T * T * fmt.bytes_per_pixel()].into_boxed_slice());
         encode_tile(fmt, r, pixels, t);
         self.dirty[i] = true;
         true
@@ -60,11 +55,7 @@ impl TiledImage {
 
     /// Rewrites the listed tiles in parallel: `f` gets the tile rect and its current pixels, and
     /// edits them in place. Tiles outside the grid and repeated entries are ignored. Marks them dirty.
-    pub fn update_tiles<F: Fn(Rect, &mut [[f32; 4]]) + Sync>(
-        &mut self,
-        tiles: &[(u32, u32)],
-        f: F,
-    ) {
+    pub fn update_tiles<F: Fn(Rect, &mut [[f32; 4]]) + Sync>(&mut self, tiles: &[(u32, u32)], f: F) {
         let (w, h, fmt) = (self.width, self.height, self.format);
         let mut wanted = vec![false; self.tiles.len()];
         for &(tx, ty) in tiles {
@@ -73,20 +64,13 @@ impl TiledImage {
             }
         }
         let tiles_x = self.tiles_x();
-        let mut jobs: Vec<(u32, &mut TileBuf)> = self
-            .tiles
-            .iter_mut()
-            .enumerate()
-            .filter(|(i, _)| wanted[*i])
-            .map(|(i, t)| (i as u32, t))
-            .collect();
+        let mut jobs: Vec<(u32, &mut TileBuf)> = self.tiles.iter_mut().enumerate().filter(|(i, _)| wanted[*i]).map(|(i, t)| (i as u32, t)).collect();
         for_each_mut(&mut jobs, |_, (i, tile)| {
             let Some(r) = tile_rect(w, h, *i % tiles_x, *i / tiles_x) else {
                 return;
             };
             let mut px = vec![[0.0f32; 4]; r.area()];
-            let buf = tile
-                .get_or_insert_with(|| vec![0u8; T * T * fmt.bytes_per_pixel()].into_boxed_slice());
+            let buf = tile.get_or_insert_with(|| vec![0u8; T * T * fmt.bytes_per_pixel()].into_boxed_slice());
             decode_tile(fmt, r, buf, &mut px);
             f(r, &mut px);
             encode_tile(fmt, r, &px, buf);
@@ -111,11 +95,7 @@ impl TiledImage {
 
 pub(super) fn decode_tile(fmt: PixelFormat, r: Rect, buf: &[u8], out: &mut [[f32; 4]]) {
     let bpp = fmt.bytes_per_pixel();
-    for (row, line) in out
-        .chunks_exact_mut(r.w as usize)
-        .take(r.h as usize)
-        .enumerate()
-    {
+    for (row, line) in out.chunks_exact_mut(r.w as usize).take(r.h as usize).enumerate() {
         for (col, p) in line.iter_mut().enumerate() {
             let o = (row * T + col) * bpp;
             *p = fmt.decode(&buf[o..o + bpp]);

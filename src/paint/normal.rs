@@ -21,20 +21,12 @@ pub fn encode(n: Vec3) -> [f32; 4] {
 
 pub fn normalize(v: Vec3) -> Vec3 {
     let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    if l > 1e-8 && l.is_finite() {
-        [v[0] / l, v[1] / l, v[2] / l]
-    } else {
-        FLAT
-    }
+    if l > 1e-8 && l.is_finite() { [v[0] / l, v[1] / l, v[2] / l] } else { FLAT }
 }
 
 /// Whiteout blend: `normalize(b.xy + d.xy, b.z * d.z)`. Cheap, adds both slopes.
 pub fn whiteout(base: Vec3, detail: Vec3) -> Vec3 {
-    normalize([
-        base[0] + detail[0],
-        base[1] + detail[1],
-        base[2] * detail[2],
-    ])
+    normalize([base[0] + detail[0], base[1] + detail[1], base[2] * detail[2]])
 }
 
 /// Reoriented normal mapping (Barré-Brisebois & Hill 2012): rotates `detail` so that its "up" follows

@@ -33,47 +33,19 @@ impl MeshPart {
         let uv = match self.uv_sets.get(uv_set) {
             Some(uv) => uv.clone(),
             None if self.uv_sets.is_empty() => vec![[0.0; 2]; n],
-            None => {
-                return Err(MeshError::new(MeshErrorKind::MissingUvSet {
-                    set: uv_set,
-                    available: self.uv_sets.len(),
-                }))
-            }
+            None => return Err(MeshError::new(MeshErrorKind::MissingUvSet { set: uv_set, available: self.uv_sets.len() })),
         };
         let pos: Vec<Vec3> = self.positions.iter().map(|&p| fit.apply(p)).collect();
         let nrm = if self.normals.is_empty() {
             smooth_normals(&self.positions, &self.triangles)
         } else {
-            self.normals
-                .iter()
-                .map(|&v| unit_or(v, [0.0, 0.0, 1.0]))
-                .collect()
+            self.normals.iter().map(|&v| unit_or(v, [0.0, 0.0, 1.0])).collect()
         };
-        let frames = if uv_set == 0 && !self.tangents.is_empty() {
-            self.tangents.clone()
-        } else {
-            tangent_frames(&self.positions, &nrm, &uv, &self.triangles)
-        };
-        let tan = frames
-            .iter()
-            .map(|t| unit_or([t[0], t[1], t[2]], [1.0, 0.0, 0.0]))
-            .collect();
-        let tangent_w = frames
-            .iter()
-            .map(|t| if t[3] < 0.0 { -1.0 } else { 1.0 })
-            .collect();
+        let frames = if uv_set == 0 && !self.tangents.is_empty() { self.tangents.clone() } else { tangent_frames(&self.positions, &nrm, &uv, &self.triangles) };
+        let tan = frames.iter().map(|t| unit_or([t[0], t[1], t[2]], [1.0, 0.0, 0.0])).collect();
+        let tangent_w = frames.iter().map(|t| if t[3] < 0.0 { -1.0 } else { 1.0 }).collect();
         let (su, sv) = uv_scales(&pos, &uv, &self.triangles);
-        let mesh = render3d::Mesh {
-            pos,
-            base_nrm: nrm.clone(),
-            nrm,
-            tan,
-            uv,
-            su,
-            sv,
-            fade: vec![1.0; n],
-            tris: self.triangles.clone(),
-        };
+        let mesh = render3d::Mesh { pos, base_nrm: nrm.clone(), nrm, tan, uv, su, sv, fade: vec![1.0; n], tris: self.triangles.clone() };
         Ok(ViewportPart { mesh, tangent_w })
     }
 
@@ -96,11 +68,7 @@ impl Mesh {
     pub fn to_viewport(&self, uv_set: usize) -> Result<Vec<ViewportPart>, MeshError> {
         self.validate()?;
         let fit = self.fit();
-        self.parts
-            .iter()
-            .enumerate()
-            .map(|(i, p)| p.to_viewport(&fit, uv_set).map_err(|e| e.in_part(i)))
-            .collect()
+        self.parts.iter().enumerate().map(|(i, p)| p.to_viewport(&fit, uv_set).map_err(|e| e.in_part(i))).collect()
     }
 }
 
@@ -129,25 +97,13 @@ fn uv_scales(positions: &[Vec3], uvs: &[[f32; 2]], triangles: &[[u32; 3]]) -> (V
         total.1 += lv * f.area;
         total_weight += f.area;
     }
-    let fallback = if total_weight > 0.0 {
-        (total.0 / total_weight, total.1 / total_weight)
-    } else {
-        (FALLBACK_UV_SCALE, FALLBACK_UV_SCALE)
-    };
+    let fallback = if total_weight > 0.0 { (total.0 / total_weight, total.1 / total_weight) } else { (FALLBACK_UV_SCALE, FALLBACK_UV_SCALE) };
     let clamp = |x: f32| {
-        if x.is_finite() {
-            x.max(MIN_UV_SCALE)
-        } else {
-            FALLBACK_UV_SCALE
-        }
+        if x.is_finite() { x.max(MIN_UV_SCALE) } else { FALLBACK_UV_SCALE }
     };
     (0..n)
         .map(|i| {
-            let (u, v) = if weight[i] > 0.0 {
-                (sum[i].0 / weight[i], sum[i].1 / weight[i])
-            } else {
-                fallback
-            };
+            let (u, v) = if weight[i] > 0.0 { (sum[i].0 / weight[i], sum[i].1 / weight[i]) } else { fallback };
             (clamp(u), clamp(v))
         })
         .unzip()
@@ -161,15 +117,7 @@ mod tests {
 
     fn assert_consistent(m: &render3d::Mesh) {
         let n = m.pos.len();
-        for l in [
-            m.nrm.len(),
-            m.tan.len(),
-            m.uv.len(),
-            m.su.len(),
-            m.sv.len(),
-            m.fade.len(),
-            m.base_nrm.len(),
-        ] {
+        for l in [m.nrm.len(), m.tan.len(), m.uv.len(), m.su.len(), m.sv.len(), m.fade.len(), m.base_nrm.len()] {
             assert_eq!(l, n);
         }
         assert!(m.tris.iter().flatten().all(|&i| (i as usize) < n));
@@ -190,10 +138,7 @@ mod tests {
         assert_eq!(m.fade, vec![1.0; 4]);
         assert_eq!(m.base_nrm, m.nrm);
         // with a fit the scales shrink with the model
-        let fit = Fit {
-            translate: [0.0; 3],
-            scale: 0.5,
-        };
+        let fit = Fit { translate: [0.0; 3], scale: 0.5 };
         let m = q.to_viewport(&fit, 0).unwrap().mesh;
         assert!((m.su[0] - 1.0).abs() < 1e-5);
         assert!(close(&m.pos[2], &[0.5, 0.5, 0.0], 1e-6));
@@ -222,19 +167,10 @@ mod tests {
     fn errors() {
         let q = quad();
         let e = q.to_viewport(&Fit::IDENTITY, 1).err().unwrap();
-        assert_eq!(
-            e.kind,
-            MeshErrorKind::MissingUvSet {
-                set: 1,
-                available: 1
-            }
-        );
+        assert_eq!(e.kind, MeshErrorKind::MissingUvSet { set: 1, available: 1 });
         let mut bad = quad();
         bad.triangles[0][0] = 40;
-        let mesh = Mesh {
-            materials: vec!["a".into()],
-            parts: vec![quad(), bad],
-        };
+        let mesh = Mesh { materials: vec!["a".into()], parts: vec![quad(), bad] };
         assert_eq!(mesh.to_viewport(0).err().unwrap().part, Some(1));
     }
 
@@ -244,16 +180,10 @@ mod tests {
         for p in &mut far.positions {
             p[0] += 10.0;
         }
-        let mesh = Mesh {
-            materials: vec!["a".into()],
-            parts: vec![quad(), far],
-        };
+        let mesh = Mesh { materials: vec!["a".into()], parts: vec![quad(), far] };
         let parts = mesh.to_viewport(0).unwrap();
         assert_eq!(parts.len(), 2);
-        let all: Vec<Vec3> = parts
-            .iter()
-            .flat_map(|m| m.mesh.pos.iter().copied())
-            .collect();
+        let all: Vec<Vec3> = parts.iter().flat_map(|m| m.mesh.pos.iter().copied()).collect();
         let r = all.iter().map(|&p| len(p)).fold(0.0, f32::max);
         assert!((r - 1.0).abs() < 1e-5);
         assert!(parts[0].mesh.pos[0][0] < 0.0 && parts[1].mesh.pos[0][0] > 0.0);
@@ -275,25 +205,10 @@ mod tests {
                 continue;
             }
             checked += 1;
-            assert!(
-                dot(back.tan[i], sphere.tan[i]) > 0.99,
-                "tangent {i}: {:?} vs {:?}",
-                back.tan[i],
-                sphere.tan[i]
-            );
+            assert!(dot(back.tan[i], sphere.tan[i]) > 0.99, "tangent {i}: {:?} vs {:?}", back.tan[i], sphere.tan[i]);
             assert_eq!(part.tangents[i][3], 1.0);
-            assert!(
-                (back.su[i] / sphere.su[i] - 1.0).abs() < 0.08,
-                "su {i}: {} vs {}",
-                back.su[i],
-                sphere.su[i]
-            );
-            assert!(
-                (back.sv[i] / sphere.sv[i] - 1.0).abs() < 0.08,
-                "sv {i}: {} vs {}",
-                back.sv[i],
-                sphere.sv[i]
-            );
+            assert!((back.su[i] / sphere.su[i] - 1.0).abs() < 0.08, "su {i}: {} vs {}", back.su[i], sphere.su[i]);
+            assert!((back.sv[i] / sphere.sv[i] - 1.0).abs() < 0.08, "sv {i}: {} vs {}", back.sv[i], sphere.sv[i]);
         }
         assert!(checked > 100);
     }

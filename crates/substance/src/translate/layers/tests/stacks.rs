@@ -2,9 +2,9 @@
 
 use super::fixtures::*;
 use crate::model::LayerKind as PainterKind;
+use crate::translate::layers::StackStrategy;
 use crate::translate::layers::cache_agreement::CacheAgreement;
 use crate::translate::layers::strategy::provides_base;
-use crate::translate::layers::StackStrategy;
 use materialcraft::paint::working_space::{linear_to_srgb, srgb_to_linear};
 use materialcraft::paint::{BlendMode, Channel, LayerKind};
 

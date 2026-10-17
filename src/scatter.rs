@@ -1,7 +1,7 @@
 //! Scatter nodes with the Designer property set: Tile Sampler, Tile Generator, Splatter, Splatter Circular.
 //! Every new property defaults to the previous behaviour, so graphs saved before this module render unchanged.
 use crate::noise::rnd;
-use crate::tex::{lum, Tex};
+use crate::tex::{Tex, lum};
 use std::f32::consts::TAU;
 
 fn sm(a: f32, b: f32, x: f32) -> f32 {
@@ -12,7 +12,22 @@ fn sm(a: f32, b: f32, x: f32) -> f32 {
 
 /// Names of the built-in pattern shapes, index 0 = "use the pattern input (or the node's default shape)".
 pub const PATTERN_NAMES: &[&str] = &[
-    "Input / default", "Square", "Disc", "Paraboloid", "Bell", "Gaussian", "Thorn", "Pyramid", "Brick", "Gradation", "Waves", "Half Bell", "Ridged Bell", "Crescent", "Capsule", "Cone",
+    "Input / default",
+    "Square",
+    "Disc",
+    "Paraboloid",
+    "Bell",
+    "Gaussian",
+    "Thorn",
+    "Pyramid",
+    "Brick",
+    "Gradation",
+    "Waves",
+    "Half Bell",
+    "Ridged Bell",
+    "Crescent",
+    "Capsule",
+    "Cone",
 ];
 
 /// Built-in pattern value at local coordinates (lx, ly) in 0..1 (centre 0.5). `spec` is "Pattern Specific" (0..1).
@@ -518,7 +533,18 @@ pub fn splatter(w: usize, h: usize, pats: &Patterns, p: &SplatterP) -> Tex {
                 3 => (rnd(i, 6, seed) < 0.5, rnd(i, 7, seed) < 0.5),
                 _ => (false, false),
             };
-            S { cx, cy, sx: s, sy: (s * p.aspect.max(0.01)).max(1e-3), sn, cs, l: 1.0 - p.lum_var * rnd(i, 5, seed), fx, fy, pat: pats.choose(k as usize, rnd(i, 8, seed)) }
+            S {
+                cx,
+                cy,
+                sx: s,
+                sy: (s * p.aspect.max(0.01)).max(1e-3),
+                sn,
+                cs,
+                l: 1.0 - p.lum_var * rnd(i, 5, seed),
+                fx,
+                fy,
+                pat: pats.choose(k as usize, rnd(i, 8, seed)),
+            }
         })
         .collect();
     Tex::from_fn(w, h, |u, v| {

@@ -1,10 +1,10 @@
 //! [`AmbientOcclusion`]: Ambient occlusion from the high-poly mesh (our hemisphere rays against Painter's AO baker).
 //! Both are 0 (occluded) .. 1 (open); compared as stored.
 
-use super::{baked_map, NEEDS};
+use super::{NEEDS, baked_map};
 use crate::inputs::Inputs;
 use crate::settings::Params;
-use crate::subject::{CaseError, Component, Need, ReferenceKind, Subject, GRAY};
+use crate::subject::{CaseError, Component, GRAY, Need, ReferenceKind, Subject};
 use materialcraft::paint::BakedKind;
 use materialcraft::tex::Tex;
 

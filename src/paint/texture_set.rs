@@ -79,21 +79,8 @@ pub struct TextureSet {
 
 impl TextureSet {
     /// An empty texture set on material slot 0 and UV set 0, without channels or layers.
-    pub fn new(
-        id: impl Into<String>,
-        name: impl Into<String>,
-        resolution: (u32, u32),
-    ) -> TextureSet {
-        TextureSet {
-            id: id.into(),
-            name: name.into(),
-            material_slot: 0,
-            uv_set: 0,
-            resolution,
-            channels: Vec::new(),
-            layers: Vec::new(),
-            baked: Vec::new(),
-        }
+    pub fn new(id: impl Into<String>, name: impl Into<String>, resolution: (u32, u32)) -> TextureSet {
+        TextureSet { id: id.into(), name: name.into(), material_slot: 0, uv_set: 0, resolution, channels: Vec::new(), layers: Vec::new(), baked: Vec::new() }
     }
 
     /// Declares `channel` with its default spec unless it is already declared.
@@ -129,10 +116,7 @@ impl TextureSet {
 
     /// The first baked map of `kind`.
     pub fn baked(&self, kind: &BakedKind) -> Option<&TiledImage> {
-        self.baked
-            .iter()
-            .find(|b| &b.kind == kind)
-            .map(|b| &b.image)
+        self.baked.iter().find(|b| &b.kind == kind).map(|b| &b.image)
     }
 }
 
@@ -157,24 +141,17 @@ mod tests {
 
     #[test]
     fn lookups() {
-        let mut set = TextureSet::new("s", "S", (64, 64))
-            .with_channel(Channel::BaseColor)
-            .with_channel(Channel::BaseColor);
+        let mut set = TextureSet::new("s", "S", (64, 64)).with_channel(Channel::BaseColor).with_channel(Channel::BaseColor);
         assert_eq!(set.channels.len(), 1);
         let inner = Layer::new("inner", "Inner", LayerKind::Fill(Fill::uniform(vec![])));
-        set.layers
-            .push(Layer::new("g", "G", LayerKind::Group(vec![inner])));
+        set.layers.push(Layer::new("g", "G", LayerKind::Group(vec![inner])));
         assert!(set.layer("inner").is_some());
         if let Some(l) = set.layer_mut("inner") {
             l.visible = false;
         }
         assert_eq!(set.layer("inner").map(|l| l.visible), Some(false));
         assert!(set.layer("nope").is_none());
-        for k in [
-            BakedKind::AmbientOcclusion,
-            BakedKind::WorldSpaceNormal,
-            BakedKind::Other("bent".into()),
-        ] {
+        for k in [BakedKind::AmbientOcclusion, BakedKind::WorldSpaceNormal, BakedKind::Other("bent".into())] {
             assert_eq!(BakedKind::from_id(k.id()), k);
         }
     }

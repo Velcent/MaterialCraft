@@ -2,9 +2,7 @@
 use std::f32::consts::TAU;
 
 pub fn hash2(x: i32, y: i32, seed: u32) -> u32 {
-    let mut h = (x as u32).wrapping_mul(0x27d4_eb2d)
-        ^ (y as u32).wrapping_mul(0x1656_67b1)
-        ^ seed.wrapping_mul(0x9e37_79b9);
+    let mut h = (x as u32).wrapping_mul(0x27d4_eb2d) ^ (y as u32).wrapping_mul(0x1656_67b1) ^ seed.wrapping_mul(0x9e37_79b9);
     h ^= h >> 15;
     h = h.wrapping_mul(0x85eb_ca6b);
     h ^= h >> 13;
@@ -310,7 +308,6 @@ impl GradGrid {
         (n * std::f32::consts::FRAC_1_SQRT_2 + 0.5).clamp(0.0, 1.0)
     }
 }
-
 
 /// Designer's shared "Disorder" block of the noise nodes: the sampling position is displaced by a smooth, tileable random
 /// field. `disorder` is the amount, `speed` the distance it moves per unit of disorder, `aniso` (0..1) narrows the displacement

@@ -1,8 +1,8 @@
 //! [`Params::from_painter`]: Painter's baking settings for one set mapped onto our [`BakeSettings`], with
 //! every setting we cannot reproduce listed as [`Unmapped`] (so reports say what limits parity).
 
-use super::painter::{MaterialBaking, TweakList, TweakValue};
 use super::Params;
+use super::painter::{MaterialBaking, TweakList, TweakValue};
 use materialcraft::bake::BakeSettings;
 use materialcraft::paint::BakedKind;
 

@@ -1,19 +1,19 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 //! MaterialCraft visual editor. Run: cargo run --release --features gui --bin materialcraft-gui
 use eframe::egui::{
-    self, epaint::CubicBezierShape, Align2, Color32, ColorImage, FontId, Id, Key, Modifiers, PointerButton, Pos2, Rect,
-    Rounding, Sense, Stroke, TextStyle, Vec2, pos2, vec2,
+    self, Align2, Color32, ColorImage, FontId, Id, Key, Modifiers, PointerButton, Pos2, Rect, Rounding, Sense, Stroke, TextStyle, Vec2,
+    epaint::CubicBezierShape, pos2, vec2,
 };
 use materialcraft::bake::{self, BakeSettings};
-use materialcraft::graph::{category, label, spec, usage_label, Comment, Exposed, Graph, Node, NodeCache, EXAMPLE, SPECS, THUMB};
-use materialcraft::render3d::{self, Maps, View};
-use materialcraft::tex::{self, Tex};
 use materialcraft::export::{self, Format};
 use materialcraft::gpu3d::{self, MapInputs};
+use materialcraft::graph::{Comment, EXAMPLE, Exposed, Graph, Node, NodeCache, SPECS, THUMB, category, label, spec, usage_label};
+use materialcraft::render3d::{self, Maps, View};
+use materialcraft::tex::{self, Tex};
 use materialcraft::{ops, png};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 mod logo_data {
     include!(concat!(env!("OUT_DIR"), "/logo.rs"));
@@ -32,14 +32,13 @@ const CARD_H: f32 = BAR + CARD;
 fn card_body(n_slots: usize, n_outs: usize) -> f32 {
     CARD.max(15.0 * (n_slots as f32 + 1.0)).max(if n_outs >= 2 { 20.0 * n_outs as f32 } else { 0.0 })
 }
-const OUTPUT_NAMES: [&str; 11] = ["basecolor", "normal", "roughness", "metallic", "height", "ambient_occlusion", "opacity", "emissive", "diffuse", "specular", "glossiness"];
+const OUTPUT_NAMES: [&str; 11] =
+    ["basecolor", "normal", "roughness", "metallic", "height", "ambient_occlusion", "opacity", "emissive", "diffuse", "specular", "glossiness"];
 const COMMENT_COLORS: [[u8; 3]; 6] = [[90, 140, 200], [200, 160, 60], [90, 180, 110], [190, 90, 90], [150, 100, 200], [150, 150, 150]];
 
 // ---------------------------------------------------------------- parameter tables
 fn slots(kind: &str) -> Vec<(&'static str, bool)> {
-    spec(kind)
-        .map(|s| s.req.iter().map(|n| (*n, true)).chain(s.opt.iter().map(|n| (*n, false))).collect())
-        .unwrap_or_default()
+    spec(kind).map(|s| s.req.iter().map(|n| (*n, true)).chain(s.opt.iter().map(|n| (*n, false))).collect()).unwrap_or_default()
 }
 
 fn kind_color(kind: &str) -> Color32 {
@@ -294,7 +293,11 @@ impl App {
         let active: Option<u32> = None;
         let settings = read_lines("settings.txt");
         let skip_home = settings.iter().any(|l| l == "skip_home=1");
-        let favorites: BTreeSet<String> = settings.iter().find_map(|l| l.strip_prefix("favorites=")).map(|v| v.split(',').filter(|x| !x.is_empty()).map(String::from).collect()).unwrap_or_default();
+        let favorites: BTreeSet<String> = settings
+            .iter()
+            .find_map(|l| l.strip_prefix("favorites="))
+            .map(|v| v.split(',').filter(|x| !x.is_empty()).map(String::from).collect())
+            .unwrap_or_default();
         let recent: Vec<PathBuf> = read_lines("recent.txt").into_iter().map(PathBuf::from).collect();
         let paint = gui_paint::PaintMode::from_args();
         App {
@@ -349,10 +352,25 @@ impl App {
             node_cache: std::sync::Arc::new(NodeCache::with_default_budget()),
             lib_search: String::new(),
             text_focus: false,
-            export: ExportUi { open: false, dir: None, prefix: String::new(), sizes: [false, true, false, false, false, false], depth16: false, fmt: Format::Png, quality: 92, skip: BTreeSet::new() },
+            export: ExportUi {
+                open: false,
+                dir: None,
+                prefix: String::new(),
+                sizes: [false, true, false, false, false, false],
+                depth16: false,
+                fmt: Format::Png,
+                quality: 92,
+                skip: BTreeSet::new(),
+            },
             bake: BakeUi { open: false, low: None, high: None, out: None, s: BakeSettings { size: 512, ..Default::default() }, job: None, msg: String::new() },
             show_about: false,
-            screen: if paint.wants_screen() { Screen::Paint } else if skip_home { Screen::Editor } else { Screen::Home },
+            screen: if paint.wants_screen() {
+                Screen::Paint
+            } else if skip_home {
+                Screen::Editor
+            } else {
+                Screen::Home
+            },
             new_dlg: NewDlg { open: false, sel: 1, name: "Graph".into(), size: 2048, depth16: false, dest: None },
             recent,
             home_filter: String::new(),
@@ -999,7 +1017,14 @@ impl App {
     }
 
     fn entries(&self) -> Vec<Entry> {
-        let mk = |label: &str, kind: &str, cat: &'static str, doc: &str, nums: Vec<(&'static str, f32)>| Entry { label: label.to_string(), kind: kind.to_string(), sub: None, cat, doc: doc.to_string(), nums };
+        let mk = |label: &str, kind: &str, cat: &'static str, doc: &str, nums: Vec<(&'static str, f32)>| Entry {
+            label: label.to_string(),
+            kind: kind.to_string(),
+            sub: None,
+            cat,
+            doc: doc.to_string(),
+            nums,
+        };
         let in_sub = !self.parents.is_empty();
         let mut v: Vec<Entry> = SPECS
             .iter()
@@ -1019,7 +1044,14 @@ impl App {
             subs.extend(p.subgraphs.keys().cloned());
         }
         for name in subs {
-            v.push(Entry { label: format!("subgraph: {name}"), kind: "subgraph".into(), sub: Some(name.clone()), cat: "Subgraphs", doc: format!("instance of subgraph '{name}'"), nums: vec![] });
+            v.push(Entry {
+                label: format!("subgraph: {name}"),
+                kind: "subgraph".into(),
+                sub: Some(name.clone()),
+                cat: "Subgraphs",
+                doc: format!("instance of subgraph '{name}'"),
+                nums: vec![],
+            });
         }
         v
     }
@@ -1067,7 +1099,9 @@ impl App {
             Ok(text) => {
                 if let Some(p) = rfd::FileDialog::new().add_filter("MaterialCraft published asset", &["mca"]).set_file_name("material.mca").save_file() {
                     match std::fs::write(&p, &text) {
-                        Ok(()) => self.status(format!("Published {} ({} KB, {} exposed parameters)", p.display(), text.len() / 1024, self.g.exposed.len()), true),
+                        Ok(()) => {
+                            self.status(format!("Published {} ({} KB, {} exposed parameters)", p.display(), text.len() / 1024, self.g.exposed.len()), true)
+                        }
                         Err(e) => self.status(format!("Publish failed: {e}"), false),
                     }
                 }
@@ -1099,7 +1133,8 @@ impl App {
             return self.status("Select at least one output to export.", false);
         }
         let fmt = self.export.fmt;
-        let depth = if fmt != Format::Jpeg && (self.export.depth16 || self.g.meta.get("output_format").map(|f| f == "16" && false).unwrap_or(false)) { 16 } else { 8 };
+        let depth =
+            if fmt != Format::Jpeg && (self.export.depth16 || self.g.meta.get("output_format").map(|f| f == "16" && false).unwrap_or(false)) { 16 } else { 8 };
         let mut count = 0;
         for &s in &sizes {
             match self.g.evaluate(Some(s)) {
@@ -1136,8 +1171,10 @@ impl App {
         self.bake.msg = "Baking...".into();
         std::thread::spawn(move || {
             let r = (|| -> Result<Vec<PathBuf>, String> {
-                let low = bake::parse_obj(&std::fs::read_to_string(&lo).map_err(|e| format!("{}: {e}", lo.display()))?).map_err(|e| format!("low-poly: {e}"))?;
-                let high = bake::parse_obj(&std::fs::read_to_string(&hi).map_err(|e| format!("{}: {e}", hi.display()))?).map_err(|e| format!("high-poly: {e}"))?;
+                let low =
+                    bake::parse_obj(&std::fs::read_to_string(&lo).map_err(|e| format!("{}: {e}", lo.display()))?).map_err(|e| format!("low-poly: {e}"))?;
+                let high =
+                    bake::parse_obj(&std::fs::read_to_string(&hi).map_err(|e| format!("{}: {e}", hi.display()))?).map_err(|e| format!("high-poly: {e}"))?;
                 let maps = bake::bake(&low, &high, &s)?;
                 std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
                 let mut files = Vec::new();
@@ -1166,11 +1203,7 @@ impl App {
 
     fn first_tier(&self) -> usize {
         let full = self.preview_full();
-        if full > 256 {
-            256
-        } else {
-            full
-        }
+        if full > 256 { 256 } else { full }
     }
 
     fn spawn_eval(&mut self, size: usize) {
@@ -1240,11 +1273,7 @@ impl App {
 
     /// Resolution of the editor preview: the chosen size, or the graph's own size (at most 4096).
     fn preview_full(&self) -> usize {
-        if self.prev_size == 0 {
-            self.g.size.clamp(16, 4096)
-        } else {
-            self.prev_size
-        }
+        if self.prev_size == 0 { self.g.size.clamp(16, 4096) } else { self.prev_size }
     }
 
     fn poll_eval(&mut self, ctx: &egui::Context) {
@@ -1376,7 +1405,12 @@ impl App {
             ctx.request_repaint();
             return;
         }
-        let (flat, half, zero, one) = (Tex::solid(4, 4, [0.5, 0.5, 1.0, 1.0]), Tex::solid(4, 4, [0.5, 0.5, 0.5, 1.0]), Tex::solid(4, 4, [0.0, 0.0, 0.0, 1.0]), Tex::solid(4, 4, [1.0; 4]));
+        let (flat, half, zero, one) = (
+            Tex::solid(4, 4, [0.5, 0.5, 1.0, 1.0]),
+            Tex::solid(4, 4, [0.5, 0.5, 0.5, 1.0]),
+            Tex::solid(4, 4, [0.0, 0.0, 0.0, 1.0]),
+            Tex::solid(4, 4, [1.0; 4]),
+        );
         let get = |k: &str| self.maps.get(k).map(|a| a.as_ref());
         let inv_gloss = get("glossiness").map(ops::invert);
         let m = Maps {

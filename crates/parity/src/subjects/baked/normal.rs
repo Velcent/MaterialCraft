@@ -1,7 +1,7 @@
 //! [`TangentNormal`]: Tangent-space normal map from the high-poly mesh.
 //! Ours is OpenGL (+Y up); the reference is converted to OpenGL when the project stores DirectX bakes.
 
-use super::{baked_map, NEEDS};
+use super::{NEEDS, baked_map};
 use crate::inputs::Inputs;
 use crate::settings::Params;
 use crate::subject::{CaseError, Component, Need, ReferenceKind, Subject, XYZ};

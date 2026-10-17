@@ -34,7 +34,7 @@ pub use mesh::MeshSummary;
 pub use normalization::Normalization;
 
 use crate::decode::DecodeError;
-use scene::{scene_bytes, SceneBlocks};
+use scene::{SceneBlocks, scene_bytes};
 
 const RECORD: &str = "scene.assbin";
 

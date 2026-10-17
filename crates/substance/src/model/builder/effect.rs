@@ -1,6 +1,6 @@
 //! `DataStackActions` → [`PainterEffect`]s, one builder per effect class.
 
-use super::{ModelBuilder, MAX_NESTING};
+use super::{MAX_NESTING, ModelBuilder};
 use crate::model::channel::ChannelMask;
 use crate::model::effect::{
     ColorSelectionEffect, EffectGroup, EffectHeader, FilterEffect, Levels, LevelsEffect, PainterEffect,

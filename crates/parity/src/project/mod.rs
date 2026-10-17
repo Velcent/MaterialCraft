@@ -3,16 +3,16 @@
 
 mod sets;
 
-pub use sets::{discover, SetCase};
+pub use sets::{SetCase, discover};
 
-use crate::inputs::{to_bake_mesh, HighCache, HighSource, Inputs};
-use crate::settings::{HighPolyRequest, MaterialBaking, PainterBaking, Params, BAKING_INI};
+use crate::inputs::{HighCache, HighSource, Inputs, to_bake_mesh};
+use crate::settings::{BAKING_INI, HighPolyRequest, MaterialBaking, PainterBaking, Params};
 use crate::subject::CaseError;
 use materialcraft::bake;
 use materialcraft::mesh::Mesh;
 use materialcraft_substance::decode::assbin::{AssbinGeometry, Normalization};
 use materialcraft_substance::decode::document::NormalMapSyscoord;
-use materialcraft_substance::project::{paths, SppProject};
+use materialcraft_substance::project::{SppProject, paths};
 use std::path::{Path, PathBuf};
 
 pub struct OpenedProject {

@@ -27,10 +27,10 @@ use document_state::OpenDocument;
 use eframe::egui;
 use launch::{Launch, StartDocument};
 use loader::{Loaded, Loader};
+use panels::PanelEvent;
 use panels::import_report::ReportPanel;
 use panels::layout::Screen;
 use panels::status_bar::{Activity, Status};
-use panels::PanelEvent;
 use scene_sync::SceneSync;
 use shot::ShotJob;
 use std::path::PathBuf;
@@ -78,19 +78,13 @@ impl PaintMode {
             viewport: Viewport::new(),
             display: launch.channel.unwrap_or(ChannelView::Material),
             report: ReportPanel::default(),
-            status: Status::info(
-                "Open a .mcpaint document or import a Substance Painter project (.spp).",
-            ),
+            status: Status::info("Open a .mcpaint document or import a Substance Painter project (.spp)."),
             shot: launch.shot.map(ShotJob::new),
             title: WindowTitle::default(),
         };
         match launch.open {
             Some(StartDocument::File(p)) => pm.open(p),
-            Some(StartDocument::Demo) => pm.show(Loaded {
-                document: demo::document(),
-                source: "demo".into(),
-                summary: None,
-            }),
+            Some(StartDocument::Demo) => pm.show(Loaded { document: demo::document(), source: "demo".into(), summary: None }),
             None => {}
         }
         pm
@@ -105,14 +99,9 @@ impl PaintMode {
     pub fn pick(&mut self, pick: Pick) -> bool {
         let dialog = match pick {
             Pick::Any => rfd::FileDialog::new()
-                .add_filter(
-                    "Paint document or Substance Painter project",
-                    &["mcpaint", "spp"],
-                )
+                .add_filter("Paint document or Substance Painter project", &["mcpaint", "spp"])
                 .add_filter("MaterialCraft paint document", &["mcpaint"]),
-            Pick::Substance => {
-                rfd::FileDialog::new().add_filter("Substance 3D Painter project", &["spp"])
-            }
+            Pick::Substance => rfd::FileDialog::new().add_filter("Substance 3D Painter project", &["spp"]),
         };
         match dialog.pick_file() {
             Some(p) => {
@@ -167,10 +156,7 @@ impl PaintMode {
             viewport: &mut self.viewport,
             display: self.display,
             status: &self.status,
-            activity: Activity {
-                loading: self.loader.as_ref().map(|l| l.progress()),
-                maps: self.scene.progress(),
-            },
+            activity: Activity { loading: self.loader.as_ref().map(|l| l.progress()), maps: self.scene.progress() },
         };
         panels::layout::show(ctx, screen)
     }
@@ -213,11 +199,7 @@ impl PaintMode {
         let Some(result) = self.loader.as_mut().and_then(|l| l.poll()) else {
             return;
         };
-        let source = self
-            .loader
-            .take()
-            .map(|l| l.source().display().to_string())
-            .unwrap_or_default();
+        let source = self.loader.take().map(|l| l.source().display().to_string()).unwrap_or_default();
         match result {
             Ok(loaded) => self.show(loaded),
             Err(e) => {
@@ -233,12 +215,7 @@ impl PaintMode {
     fn show(&mut self, loaded: Loaded) {
         let mut doc = OpenDocument::new(loaded.document, loaded.source, loaded.summary);
         let d = doc.doc();
-        self.status = Status::info(format!(
-            "Opened {}: {} texture sets, {} mesh parts.",
-            doc.source().display(),
-            d.texture_sets.len(),
-            d.mesh.parts.len()
-        ));
+        self.status = Status::info(format!("Opened {}: {} texture sets, {} mesh parts.", doc.source().display(), d.texture_sets.len(), d.mesh.parts.len()));
         self.scene.rebuild(&mut doc, self.display);
         self.viewport.reset_camera();
         self.document = Some(doc);

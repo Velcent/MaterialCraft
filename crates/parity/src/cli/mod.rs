@@ -19,7 +19,7 @@ pub use args::{Args, DEFAULT_MAX_SIZE};
 use crate::history::{History, RunStamp};
 use crate::provenance;
 use crate::report::run_dir::iso_time;
-use crate::report::{text, HtmlReport, RunDir};
+use crate::report::{HtmlReport, RunDir, text};
 use crate::run::survey::{reason_counts, survey};
 use crate::run::{RunOptions, Runner};
 use crate::subjects;

@@ -3,7 +3,7 @@
 //! listed with their reasons.
 
 use super::images::CaseFiles;
-use super::summary::{fmt_opt, SubjectSummary};
+use super::summary::{SubjectSummary, fmt_opt};
 use crate::run::{CaseResult, Measured, Outcome};
 use std::fmt::Write;
 

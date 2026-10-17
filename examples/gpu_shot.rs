@@ -52,7 +52,8 @@ impl eframe::App for App {
         egui::CentralPanel::default().frame(egui::Frame::none()).show(ctx, |ui| {
             let rect = ui.max_rect();
             let (g, v) = (self.gpu.clone(), self.view.clone());
-            ui.painter().add(egui::PaintCallback { rect, callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&g, &info, painter, &v))) });
+            ui.painter()
+                .add(egui::PaintCallback { rect, callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&g, &info, painter, &v))) });
         });
         self.frame += 1;
         if self.frame == 4 {
@@ -94,7 +95,15 @@ fn main() -> eframe::Result<()> {
         let g = materialcraft::graph::Graph::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
         gout = g.evaluate(Some(gsize)).unwrap();
         let get = |k: &str| gout.get(k);
-        gpu3d::prepare(&MapInputs { base: get("basecolor"), normal: get("normal"), rough: get("roughness"), metal: get("metallic"), ao: get("ambient_occlusion"), emissive: get("emissive"), height: get("height") })
+        gpu3d::prepare(&MapInputs {
+            base: get("basecolor"),
+            normal: get("normal"),
+            rough: get("roughness"),
+            metal: get("metallic"),
+            ao: get("ambient_occlusion"),
+            emissive: get("emissive"),
+            height: get("height"),
+        })
     } else if let Some(r) = arg("rough=") {
         // uniform material test: rough=0.3 metal=0 color=0.8,0.2,0.2
         let r: f32 = r.parse().unwrap_or(0.5);
@@ -105,7 +114,15 @@ fn main() -> eframe::Result<()> {
         gpu3d::prepare(&MapInputs { base: Some(&b), normal: Some(&n), rough: Some(&ro), metal: Some(&me), ao: None, emissive: None, height: None })
     } else {
         let (base, normal, rough, ao, height) = bricks(1024);
-        gpu3d::prepare(&MapInputs { base: Some(&base), normal: Some(&normal), rough: Some(&rough), metal: None, ao: Some(&ao), emissive: None, height: Some(&height) })
+        gpu3d::prepare(&MapInputs {
+            base: Some(&base),
+            normal: Some(&normal),
+            rough: Some(&rough),
+            metal: None,
+            ao: Some(&ao),
+            emissive: None,
+            height: Some(&height),
+        })
     };
     let gpu = gpu3d::new_shared();
     gpu.lock().unwrap().set_maps(maps);

@@ -5,7 +5,7 @@
 use super::blend_table::BlendTable;
 use super::blending::ResolvedBlend;
 use super::computability::Computability;
-use super::images::{fit, grey_values, ImageSource};
+use super::images::{ImageSource, fit, grey_values};
 use crate::model::{MaskInitial, PainterEffect, PainterMask, PainterSource};
 use materialcraft::paint::{Mask, PixelFormat, PixelLayout, SampleType, TiledImage};
 
@@ -136,11 +136,7 @@ fn not_computable(why: String) -> MaskOutcome {
 fn blend_into(grey: &mut Grey, top: &Grey, blend: &ResolvedBlend) {
     let mix = |b: f32, t: f32| {
         let v = blend.mode().mix([b, b, b, 1.0], [t, t, t, 1.0], blend.opacity)[0];
-        if v.is_finite() {
-            v.clamp(0.0, 1.0)
-        } else {
-            0.0
-        }
+        if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
     };
     *grey = match (&*grey, top) {
         (Grey::Constant(b), Grey::Constant(t)) => Grey::Constant(mix(*b, *t)),

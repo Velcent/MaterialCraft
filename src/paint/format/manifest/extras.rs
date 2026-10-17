@@ -50,12 +50,7 @@ impl Extras {
 
     /// Adds the fields stored for `location` to `target`, skipping keys it already has.
     pub fn inject(&self, location: &str, target: &mut Value) {
-        let Some(fields) = self
-            .entries
-            .iter()
-            .find(|(l, _)| l == location)
-            .map(|e| &e.1)
-        else {
+        let Some(fields) = self.entries.iter().find(|(l, _)| l == location).map(|e| &e.1) else {
             return;
         };
         for (k, v) in fields {
@@ -74,27 +69,15 @@ impl Extras {
         if self.entries.is_empty() {
             return None;
         }
-        let root = Value::Object(
-            self.entries
-                .iter()
-                .map(|(l, f)| (l.clone(), Value::Object(f.clone())))
-                .collect(),
-        );
-        Some(ForeignFile {
-            path: Self::PATH.to_string(),
-            bytes: root.to_string_pretty().into_bytes(),
-        })
+        let root = Value::Object(self.entries.iter().map(|(l, f)| (l.clone(), Value::Object(f.clone()))).collect());
+        Some(ForeignFile { path: Self::PATH.to_string(), bytes: root.to_string_pretty().into_bytes() })
     }
 }
 
 /// Location strings: ids are escaped like JSON pointer tokens (`~` → `~0`, `/` → `~1`).
 pub fn loc(parent: &str, kind: &str, id: &str) -> String {
     let id = id.replace('~', "~0").replace('/', "~1");
-    if parent.is_empty() {
-        format!("{kind}/{id}")
-    } else {
-        format!("{parent}/{kind}/{id}")
-    }
+    if parent.is_empty() { format!("{kind}/{id}") } else { format!("{parent}/{kind}/{id}") }
 }
 
 #[cfg(test)]
@@ -109,10 +92,7 @@ mod tests {
         let mut e = Extras::default();
         e.record("texture_sets/a", &o);
         let file = e.to_foreign().unwrap();
-        let doc = Document {
-            foreign: vec![file],
-            ..Document::default()
-        };
+        let doc = Document { foreign: vec![file], ..Document::default() };
         let e2 = Extras::of_document(&doc).unwrap();
         assert_eq!(e2, e);
         let mut target = Value::object().with("id2", false);

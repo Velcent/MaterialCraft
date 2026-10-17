@@ -1,8 +1,8 @@
 //! [`DocumentDump`]: an indented text listing of an object-serialisation file (`document.bin` and friends),
 //! for finding where Painter stores things. Long lists are shortened.
 
-use crate::decode::document::{walk, DocumentHeader, Scalar, ValueTag, Visitor};
 use crate::decode::DecodeError;
+use crate::decode::document::{DocumentHeader, Scalar, ValueTag, Visitor, walk};
 use std::fmt::Write;
 
 /// Elements printed per list before the rest are summarised, unless the caller asks for more.

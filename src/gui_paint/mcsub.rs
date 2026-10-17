@@ -6,7 +6,7 @@ use super::job::CancelToken;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc::{channel, RecvTimeoutError};
+use std::sync::mpsc::{RecvTimeoutError, channel};
 use std::time::Duration;
 
 /// Stderr lines kept for the error message when the conversion fails.
@@ -20,8 +20,7 @@ pub struct Mcsub {
 impl Mcsub {
     /// Finds `mcsub` next to the running editor, with a clear message if it is missing.
     pub fn locate() -> Result<Mcsub, String> {
-        let me = std::env::current_exe()
-            .map_err(|e| format!("Cannot locate the editor executable: {e}"))?;
+        let me = std::env::current_exe().map_err(|e| format!("Cannot locate the editor executable: {e}"))?;
         let exe = me.with_file_name(format!("mcsub{}", std::env::consts::EXE_SUFFIX));
         if exe.is_file() {
             Ok(Mcsub { exe })
@@ -39,13 +38,7 @@ impl Mcsub {
     }
 
     /// Converts `input` to `output`, reporting progress. Returns mcsub's summary line.
-    pub fn convert(
-        &self,
-        input: &Path,
-        output: &Path,
-        cancel: &CancelToken,
-        mut progress: impl FnMut(f32, &str),
-    ) -> Result<String, String> {
+    pub fn convert(&self, input: &Path, output: &Path, cancel: &CancelToken, mut progress: impl FnMut(f32, &str)) -> Result<String, String> {
         let mut child = Command::new(&self.exe)
             .arg("convert")
             .arg(input)
@@ -90,9 +83,7 @@ impl Mcsub {
         if let Some(mut out) = child.stdout.take() {
             let _ = out.read_to_string(&mut summary);
         }
-        let status = child
-            .wait()
-            .map_err(|e| format!("mcsub did not finish: {e}"))?;
+        let status = child.wait().map_err(|e| format!("mcsub did not finish: {e}"))?;
         if status.success() {
             Ok(summary.trim().to_string())
         } else if errors.is_empty() {
@@ -117,10 +108,7 @@ mod tests {
 
     #[test]
     fn progress_lines() {
-        assert_eq!(
-            parse_progress("progress 0.25 Reading layers"),
-            Some((0.25, "Reading layers"))
-        );
+        assert_eq!(parse_progress("progress 0.25 Reading layers"), Some((0.25, "Reading layers")));
         assert_eq!(parse_progress("progress 1"), Some((1.0, "")));
         assert_eq!(parse_progress("progress x y"), None);
         assert_eq!(parse_progress("error: bad file"), None);

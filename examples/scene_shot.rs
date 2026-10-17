@@ -8,7 +8,7 @@
 use eframe::egui;
 use eframe::egui_glow;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
-use materialcraft::render3d::{build_mesh, Mesh, View};
+use materialcraft::render3d::{Mesh, View, build_mesh};
 use materialcraft::tex::Tex;
 use std::sync::Arc;
 
@@ -61,7 +61,8 @@ fn place(mut m: Mesh, scale: f32, off: [f32; 3]) -> Mesh {
 /// points to -x and the bitangent sign is -1 (bitangent = cross(N, T) * w points along -v, i.e. up).
 fn quad(s: f32, c: [f32; 3], mirrored: bool) -> (Mesh, Vec<f32>) {
     let corners = [(-0.5f32, -0.5f32), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)];
-    let mut m = Mesh { pos: vec![], nrm: vec![], tan: vec![], uv: vec![], su: vec![], sv: vec![], fade: vec![], base_nrm: vec![], tris: vec![[0, 1, 2], [0, 2, 3]] };
+    let mut m =
+        Mesh { pos: vec![], nrm: vec![], tan: vec![], uv: vec![], su: vec![], sv: vec![], fade: vec![], base_nrm: vec![], tris: vec![[0, 1, 2], [0, 2, 3]] };
     for (x, y) in corners {
         m.pos.push([c[0] + x * s, c[1] + y * s, c[2]]);
         m.nrm.push([0.0, 0.0, 1.0]);
@@ -112,7 +113,8 @@ impl eframe::App for App {
         egui::CentralPanel::default().frame(egui::Frame::none()).show(ctx, |ui| {
             let rect = ui.max_rect();
             let (g, v) = (self.gpu.clone(), self.view.clone());
-            ui.painter().add(egui::PaintCallback { rect, callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&g, &info, painter, &v))) });
+            ui.painter()
+                .add(egui::PaintCallback { rect, callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&g, &info, painter, &v))) });
         });
         self.frame += 1;
         if self.frame == 3 {
@@ -157,7 +159,8 @@ fn main() -> eframe::Result<()> {
     let gpu = gpu3d::new_shared();
     gpu.lock().unwrap().set_scene(scene(has("big"), has("nosign")));
     let view = View { relief, wireframe: has("wire"), yaw: 0.15, pitch: 0.25, dist: 5.2, height_scale: 0.04, ..View::default() };
-    let options = eframe::NativeOptions { viewport: egui::ViewportBuilder::default().with_inner_size([w, h]), multisampling: 4, depth_buffer: 24, ..Default::default() };
+    let options =
+        eframe::NativeOptions { viewport: egui::ViewportBuilder::default().with_inner_size([w, h]), multisampling: 4, depth_buffer: 24, ..Default::default() };
     let (swap, clear) = (has("swap"), has("clear"));
     eframe::run_native("scene_shot", options, Box::new(move |_cc| Ok(Box::new(App { gpu, view, out, swap, clear, frame: 0 }))))
 }

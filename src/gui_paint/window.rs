@@ -29,17 +29,6 @@ impl WindowTitle {
 
 /// The first `.mcpaint` or `.spp` file dropped onto the window this frame.
 pub fn dropped_document(ctx: &egui::Context) -> Option<PathBuf> {
-    let dropped: Vec<PathBuf> = ctx.input(|i| {
-        i.raw
-            .dropped_files
-            .iter()
-            .filter_map(|f| f.path.clone())
-            .collect()
-    });
-    dropped.into_iter().find(|p| {
-        matches!(
-            p.extension().and_then(|e| e.to_str()),
-            Some("mcpaint" | "spp")
-        )
-    })
+    let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().filter_map(|f| f.path.clone()).collect());
+    dropped.into_iter().find(|p| matches!(p.extension().and_then(|e| e.to_str()), Some("mcpaint" | "spp")))
 }

@@ -18,11 +18,7 @@ pub enum Encoding {
 impl Encoding {
     /// PNG for 8/16-bit integer samples, OpenEXR for float samples.
     pub fn for_format(format: PixelFormat) -> Encoding {
-        if format.sample.is_float() {
-            Encoding::Exr
-        } else {
-            Encoding::Png
-        }
+        if format.sample.is_float() { Encoding::Exr } else { Encoding::Png }
     }
 
     pub fn extension(self) -> &'static str {

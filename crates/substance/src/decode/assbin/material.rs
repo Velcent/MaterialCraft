@@ -5,8 +5,8 @@
 //! key string, `u32` semantic, `u32` index, `u32` type, `u32` data length, data.
 //! Note: Painter writes type before length; upstream Assimp writes length before type.
 
-use super::block::{read_block, read_count, read_string, read_u32};
 use super::RECORD;
+use super::block::{read_block, read_count, read_string, read_u32};
 use crate::container::bytes::ByteReader;
 use crate::decode::DecodeError;
 
@@ -62,7 +62,7 @@ impl MaterialSummary {
                 return Err(DecodeError::invalid(
                     RECORD,
                     format!("{key} has type {kind} and {len} bytes"),
-                ))
+                ));
             }
         }
         Ok(())

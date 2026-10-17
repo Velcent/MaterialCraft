@@ -33,7 +33,7 @@ pub use channels::SetChannels;
 pub use computability::Computability;
 pub use images::{ImageSource, NoImages, ProjectImages};
 pub use stack_builder::ImportedStack;
-pub use strategy::{StackParts, StackStrategy, PAINTER_RESULT_NAME, REFERENCE_NAME};
+pub use strategy::{PAINTER_RESULT_NAME, REFERENCE_NAME, StackParts, StackStrategy};
 pub use verdict::StackVerdict;
 
 use crate::model::PainterTextureSet;

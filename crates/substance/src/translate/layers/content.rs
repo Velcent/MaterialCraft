@@ -6,7 +6,7 @@ use super::blend_table::{BlendTable, Holder};
 use super::blending::ResolvedBlend;
 use super::channels::SetChannels;
 use super::computability::Computability;
-use super::images::{channel_pixels, fit, ImageSource};
+use super::images::{ImageSource, channel_pixels, fit};
 use crate::model::{EffectHeader, FillEffect, PainterEffect, PainterSource};
 use materialcraft::paint::{BlendMode, Channel, TiledImage};
 

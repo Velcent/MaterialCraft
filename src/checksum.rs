@@ -11,11 +11,7 @@ const fn crc_tables() -> [[u32; 256]; 8] {
         let mut c = n as u32;
         let mut k = 0;
         while k < 8 {
-            c = if c & 1 != 0 {
-                0xedb8_8320 ^ (c >> 1)
-            } else {
-                c >> 1
-            };
+            c = if c & 1 != 0 { 0xedb8_8320 ^ (c >> 1) } else { c >> 1 };
             k += 1;
         }
         t[0][n] = c;
@@ -140,19 +136,14 @@ mod tests {
     fn known_values() {
         assert_eq!(crc32(b""), 0);
         assert_eq!(crc32(b"123456789"), 0xcbf4_3926);
-        assert_eq!(
-            crc32(b"The quick brown fox jumps over the lazy dog"),
-            0x414f_a339
-        );
+        assert_eq!(crc32(b"The quick brown fox jumps over the lazy dog"), 0x414f_a339);
         assert_eq!(adler32(b""), 1);
         assert_eq!(adler32(b"Wikipedia"), 0x11e6_0398);
     }
 
     #[test]
     fn incremental_matches_one_shot() {
-        let data: Vec<u8> = (0..100_000u32)
-            .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
-            .collect();
+        let data: Vec<u8> = (0..100_000u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect();
         let (mut c, mut a) = (Crc32::new(), Adler32::new());
         for part in data.chunks(777) {
             c.update(part);

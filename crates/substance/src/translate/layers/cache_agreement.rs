@@ -3,7 +3,7 @@
 //! can be exact by its parts and still disagree when the cache is stale (Painter re-renders sets lazily, so a
 //! set edited last, e.g. a folder hidden, may keep the old pixels).
 
-use super::cache_score::{score, Score};
+use super::cache_score::{Score, score};
 use materialcraft::paint::{Channel, Compositor, Layer, LayerKind, TextureSet};
 
 /// Mean difference above which a channel counts as disagreeing (8-bit steps). Above the 0.5 of float vs

@@ -4,8 +4,8 @@
 //! The flag is 1 on the first triangle of a source polygon and 0 on the following ones
 //! (Painter's meshes are already triangulated), so it is not needed here.
 
-use super::block::{read_count, read_u32};
 use super::RECORD;
+use super::block::{read_count, read_u32};
 use crate::container::bytes::ByteReader;
 use crate::decode::DecodeError;
 

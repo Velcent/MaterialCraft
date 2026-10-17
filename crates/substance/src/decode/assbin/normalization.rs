@@ -6,9 +6,9 @@
 //! (1 = present), `u32` key count, keys (strings), `u32` value count, values as `u32` type + payload
 //! (3 = f32, 5 = vec3, 6 = 4×4 matrix). Unknown types end the reading.
 
-use super::block::{read_block, read_count, read_string, read_u32};
-use super::scene::{scene_bytes, SceneBlocks};
 use super::RECORD;
+use super::block::{read_block, read_count, read_string, read_u32};
+use super::scene::{SceneBlocks, scene_bytes};
 use crate::container::bytes::ByteReader;
 use crate::decode::DecodeError;
 

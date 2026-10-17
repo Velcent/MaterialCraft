@@ -1,4 +1,4 @@
-use super::test_writer::{compressed_file, file, header, TestMesh};
+use super::test_writer::{TestMesh, compressed_file, file, header};
 use super::*;
 
 fn two_meshes() -> [TestMesh<'static>; 2] {

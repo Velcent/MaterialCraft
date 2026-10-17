@@ -21,14 +21,7 @@ pub fn converted_path(source: &Path, importer: &Path) -> PathBuf {
             m.modified().ok().hash(&mut h);
         }
     }
-    let stem: String = source
-        .file_stem()
-        .map(|s| {
-            s.to_string_lossy()
-                .chars()
-                .filter(|c| c.is_alphanumeric() || "-_".contains(*c))
-                .collect()
-        })
-        .unwrap_or_default();
+    let stem: String =
+        source.file_stem().map(|s| s.to_string_lossy().chars().filter(|c| c.is_alphanumeric() || "-_".contains(*c)).collect()).unwrap_or_default();
     dir().join(format!("{stem}-{:016x}.mcpaint", h.finish()))
 }

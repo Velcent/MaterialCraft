@@ -52,18 +52,9 @@ impl Header {
             chlist.extend_from_slice(&1i32.to_le_bytes()); // ySampling
         }
         chlist.push(0);
-        let window: Vec<u8> = self
-            .data_window
-            .iter()
-            .flat_map(|v| v.to_le_bytes())
-            .collect();
+        let window: Vec<u8> = self.data_window.iter().flat_map(|v| v.to_le_bytes()).collect();
         attribute(out, "channels", "chlist", &chlist);
-        attribute(
-            out,
-            "compression",
-            "compression",
-            &[self.compression.code()],
-        );
+        attribute(out, "compression", "compression", &[self.compression.code()]);
         attribute(out, "dataWindow", "box2i", &window);
         attribute(out, "displayWindow", "box2i", &window);
         attribute(out, "lineOrder", "lineOrder", &[0]); // INCREASING_Y
@@ -85,11 +76,7 @@ impl Header {
         if flags & (FLAG_TILED | FLAG_DEEP | FLAG_MULTIPART) != 0 {
             return Err("only single-part scanline OpenEXR files are supported".into());
         }
-        let name_max = if flags & FLAG_LONG_NAMES != 0 {
-            LONG_NAME_MAX
-        } else {
-            SHORT_NAME_MAX
-        };
+        let name_max = if flags & FLAG_LONG_NAMES != 0 { LONG_NAME_MAX } else { SHORT_NAME_MAX };
         let mut pos = 8;
         let (mut channels, mut compression, mut data_window) = (None, None, None);
         loop {
@@ -98,28 +85,17 @@ impl Header {
                 break;
             }
             let kind = cstr(b, &mut pos, name_max)?;
-            let size = i32::from_le_bytes(
-                take(b, &mut pos, 4)?
-                    .try_into()
-                    .map_err(|_| "bad attribute size")?,
-            );
+            let size = i32::from_le_bytes(take(b, &mut pos, 4)?.try_into().map_err(|_| "bad attribute size")?);
             let size = usize::try_from(size).map_err(|_| "negative attribute size")?;
             let value = take(b, &mut pos, size)?;
             match (name, kind) {
                 ("channels", "chlist") => channels = Some(parse_chlist(value, name_max)?),
-                ("compression", "compression") if size == 1 => {
-                    compression = Some(Compression::from_code(value[0])?)
-                }
+                ("compression", "compression") if size == 1 => compression = Some(Compression::from_code(value[0])?),
                 ("dataWindow", "box2i") if size == 16 => {
-                    let v: Vec<i32> = value
-                        .chunks_exact(4)
-                        .map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                        .collect();
+                    let v: Vec<i32> = value.chunks_exact(4).map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
                     data_window = Some([v[0], v[1], v[2], v[3]]);
                 }
-                ("type", "string") if value != b"scanlineimage" => {
-                    return Err("only scanline images are supported".into())
-                }
+                ("type", "string") if value != b"scanlineimage" => return Err("only scanline images are supported".into()),
                 _ => {}
             }
         }
@@ -132,14 +108,7 @@ impl Header {
         if channels.is_empty() {
             return Err("no channels".into());
         }
-        Ok((
-            Header {
-                channels,
-                compression,
-                data_window,
-            },
-            pos,
-        ))
+        Ok((Header { channels, compression, data_window }, pos))
     }
 }
 
@@ -153,9 +122,7 @@ fn attribute(out: &mut Vec<u8>, name: &str, kind: &str, value: &[u8]) {
 }
 
 fn take<'a>(b: &'a [u8], pos: &mut usize, n: usize) -> Result<&'a [u8], String> {
-    let s = b
-        .get(*pos..pos.checked_add(n).ok_or("bad length")?)
-        .ok_or("truncated header")?;
+    let s = b.get(*pos..pos.checked_add(n).ok_or("bad length")?).ok_or("truncated header")?;
     *pos += n;
     Ok(s)
 }
@@ -163,11 +130,7 @@ fn take<'a>(b: &'a [u8], pos: &mut usize, n: usize) -> Result<&'a [u8], String> 
 /// A NUL-terminated name of at most `max` bytes.
 fn cstr<'a>(b: &'a [u8], pos: &mut usize, max: usize) -> Result<&'a str, String> {
     let rest = b.get(*pos..).ok_or("truncated header")?;
-    let len = rest
-        .iter()
-        .take(max + 1)
-        .position(|&c| c == 0)
-        .ok_or("truncated header or name too long")?;
+    let len = rest.iter().take(max + 1).position(|&c| c == 0).ok_or("truncated header or name too long")?;
     let s = std::str::from_utf8(&rest[..len]).map_err(|_| "name is not UTF-8")?;
     *pos += len + 1;
     Ok(s)
@@ -183,12 +146,9 @@ fn parse_chlist(v: &[u8], name_max: usize) -> Result<Vec<(String, SampleKind)>, 
         }
         let f = take(v, &mut pos, 16)?;
         let word = |i: usize| i32::from_le_bytes([f[i], f[i + 1], f[i + 2], f[i + 3]]);
-        let kind = SampleKind::from_code(word(0))
-            .ok_or_else(|| format!("channel '{name}': unknown pixel type"))?;
+        let kind = SampleKind::from_code(word(0)).ok_or_else(|| format!("channel '{name}': unknown pixel type"))?;
         if word(8) != 1 || word(12) != 1 {
-            return Err(format!(
-                "channel '{name}': subsampled channels are not supported"
-            ));
+            return Err(format!("channel '{name}': subsampled channels are not supported"));
         }
         out.push((name.to_string(), kind));
     }
@@ -207,11 +167,7 @@ mod tests {
     #[test]
     fn header_round_trip() {
         let h = Header {
-            channels: vec![
-                ("B".into(), SampleKind::Half),
-                ("G".into(), SampleKind::Float),
-                ("R".into(), SampleKind::Uint),
-            ],
+            channels: vec![("B".into(), SampleKind::Half), ("G".into(), SampleKind::Float), ("R".into(), SampleKind::Uint)],
             compression: Compression::Zip,
             data_window: [0, 0, 99, 49],
         };
@@ -220,10 +176,7 @@ mod tests {
         let (back, end) = Header::read(&b).unwrap();
         assert_eq!(back, h);
         assert_eq!(end, b.len());
-        assert_eq!(
-            (back.width(), back.height(), back.line_bytes()),
-            (100, 50, 1000)
-        );
+        assert_eq!((back.width(), back.height(), back.line_bytes()), (100, 50, 1000));
         for n in 0..b.len() {
             assert!(Header::read(&b[..n]).is_err());
         }

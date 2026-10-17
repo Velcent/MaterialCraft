@@ -25,7 +25,7 @@ mod texture_sets;
 pub use baked_maps::{BakedImage, BakedMaps, BakedSource};
 pub use error::{ImportError, PartError};
 pub use foreign::FOREIGN_ROOT;
-pub use importer::{import_spp, Importer};
+pub use importer::{Importer, import_spp};
 pub use layers::{PAINTER_RESULT_NAME, REFERENCE_NAME};
 pub use set_layers::{DEFAULTS_LAYER_ID, DEFAULTS_LAYER_NAME, PAINTER_RESULT_ID};
 pub use texture_sets::{SetBinding, SetSource};

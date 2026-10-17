@@ -1,5 +1,5 @@
 //! CPU side of the material maps: graph outputs converted into upload-ready buffers.
-use crate::tex::{lum, par_map, Tex};
+use crate::tex::{Tex, lum, par_map};
 
 /// Texture data prepared on the CPU (resampled to one size, packed, converted) and ready to upload.
 pub struct GpuMaps {

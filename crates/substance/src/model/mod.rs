@@ -28,7 +28,7 @@ mod summary;
 mod tests;
 mod texture_set;
 
-pub use blending::{blending_for, ChannelBlending, PainterBlendMode};
+pub use blending::{ChannelBlending, PainterBlendMode, blending_for};
 pub use channel::{ChannelMask, PainterChannel};
 pub use document::PainterDocument;
 pub use effect::{

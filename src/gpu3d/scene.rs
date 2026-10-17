@@ -1,9 +1,9 @@
 //! Custom scenes: several meshes, each with its own maps (a model's parts / texture sets), drawn instead of the
 //! built-in shape. Changes are queued on the UI side and applied on the GL thread at the next paint.
-use super::mesh::{uv_density, GpuMesh};
+use super::GpuMaps;
+use super::mesh::{GpuMesh, uv_density};
 use super::pass::Drawable;
 use super::textures::MapTextures;
-use super::GpuMaps;
 use crate::render3d::Mesh;
 use eframe::egui_glow::glow;
 
@@ -38,22 +38,26 @@ struct GpuPart {
 // SAFETY (GpuPart and Scene): GL calls on the current context (module invariant); parts are uploaded and freed
 // only by the scene that owns them.
 impl GpuPart {
-    unsafe fn upload(gl: &glow::Context, p: &ScenePart, aniso: f32) -> Result<GpuPart, String> { unsafe {
-        let mesh = GpuMesh::upload(gl, &p.mesh, &p.tangent_w)?;
-        let maps = match MapTextures::upload(gl, &p.maps, aniso) {
-            Ok(m) => m,
-            Err(e) => {
-                mesh.free(gl);
-                return Err(e);
-            }
-        };
-        Ok(GpuPart { mesh, maps, density: uv_density(&p.mesh) })
-    }}
+    unsafe fn upload(gl: &glow::Context, p: &ScenePart, aniso: f32) -> Result<GpuPart, String> {
+        unsafe {
+            let mesh = GpuMesh::upload(gl, &p.mesh, &p.tangent_w)?;
+            let maps = match MapTextures::upload(gl, &p.maps, aniso) {
+                Ok(m) => m,
+                Err(e) => {
+                    mesh.free(gl);
+                    return Err(e);
+                }
+            };
+            Ok(GpuPart { mesh, maps, density: uv_density(&p.mesh) })
+        }
+    }
 
-    unsafe fn free(&self, gl: &glow::Context) { unsafe {
-        self.mesh.free(gl);
-        self.maps.free(gl);
-    }}
+    unsafe fn free(&self, gl: &glow::Context) {
+        unsafe {
+            self.mesh.free(gl);
+            self.maps.free(gl);
+        }
+    }
 }
 
 #[derive(Default)]
@@ -94,27 +98,29 @@ impl Scene {
     }
 
     /// Apply queued changes: upload new parts / maps and free what they replace.
-    pub unsafe fn sync(&mut self, gl: &glow::Context, aniso: f32) -> Result<(), String> { unsafe {
-        match std::mem::take(&mut self.pending) {
-            Pending::Nothing => {}
-            Pending::Replace(parts) => {
-                self.free(gl);
-                self.parts.reserve(parts.len());
-                for p in &parts {
-                    self.parts.push(GpuPart::upload(gl, p, aniso)?);
+    pub unsafe fn sync(&mut self, gl: &glow::Context, aniso: f32) -> Result<(), String> {
+        unsafe {
+            match std::mem::take(&mut self.pending) {
+                Pending::Nothing => {}
+                Pending::Replace(parts) => {
+                    self.free(gl);
+                    self.parts.reserve(parts.len());
+                    for p in &parts {
+                        self.parts.push(GpuPart::upload(gl, p, aniso)?);
+                    }
                 }
-            }
-            Pending::Maps(list) => {
-                for (i, maps) in list {
-                    if let Some(p) = self.parts.get_mut(i) {
-                        let new = MapTextures::upload(gl, &maps, aniso)?;
-                        std::mem::replace(&mut p.maps, new).free(gl);
+                Pending::Maps(list) => {
+                    for (i, maps) in list {
+                        if let Some(p) = self.parts.get_mut(i) {
+                            let new = MapTextures::upload(gl, &maps, aniso)?;
+                            std::mem::replace(&mut p.maps, new).free(gl);
+                        }
                     }
                 }
             }
+            Ok(())
         }
-        Ok(())
-    }}
+    }
 
     /// Every part with its own maps; no inside-view culling (open meshes show their back faces).
     pub fn drawables(&self) -> Vec<Drawable<'_>> {
@@ -128,9 +134,11 @@ impl Scene {
     }
 
     /// Free the GPU objects of all parts (queued changes stay queued).
-    pub unsafe fn free(&mut self, gl: &glow::Context) { unsafe {
-        for p in self.parts.drain(..) {
-            p.free(gl);
+    pub unsafe fn free(&mut self, gl: &glow::Context) {
+        unsafe {
+            for p in self.parts.drain(..) {
+                p.free(gl);
+            }
         }
-    }}
+    }
 }

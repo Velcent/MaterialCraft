@@ -1,6 +1,6 @@
 //! `DataSource*` → [`PainterSource`], `DataProcedural` → [`Procedural`] with tweaks, outputs and inputs.
 
-use super::{ModelBuilder, MAX_NESTING};
+use super::{MAX_NESTING, ModelBuilder};
 use crate::decode::document::Scalar;
 use crate::model::channel::{ChannelMask, PainterChannel};
 use crate::model::procedural::{Procedural, ProceduralInput, ProceduralOutput, Tweak, TweakValue};

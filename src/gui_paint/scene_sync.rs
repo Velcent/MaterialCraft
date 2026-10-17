@@ -90,14 +90,7 @@ impl SceneSync {
 
     fn set_scene(&mut self, parts: Vec<PartGeometry>, gpu: &Shared) {
         let part_sets = parts.iter().map(|p| p.set).collect();
-        let scene = parts
-            .into_iter()
-            .map(|p| ScenePart {
-                mesh: p.mesh,
-                tangent_w: p.tangent_w,
-                maps: placeholder(),
-            })
-            .collect();
+        let scene = parts.into_iter().map(|p| ScenePart { mesh: p.mesh, tangent_w: p.tangent_w, maps: placeholder() }).collect();
         if let Ok(mut g) = gpu.lock() {
             g.set_scene(scene);
         }
@@ -107,17 +100,11 @@ impl SceneSync {
 
 /// Gives every part painted with `set` its maps.
 fn apply_set_maps(part_sets: &[Option<usize>], set: usize, maps: GpuMaps, gpu: &Shared) {
-    let parts: Vec<usize> = (0..part_sets.len())
-        .filter(|&i| part_sets[i] == Some(set))
-        .collect();
+    let parts: Vec<usize> = (0..part_sets.len()).filter(|&i| part_sets[i] == Some(set)).collect();
     let Ok(mut g) = gpu.lock() else { return };
     let mut maps = Some(maps);
     for (k, &part) in parts.iter().enumerate() {
-        let m = if k + 1 == parts.len() {
-            maps.take()
-        } else {
-            maps.as_ref().map(copy)
-        };
+        let m = if k + 1 == parts.len() { maps.take() } else { maps.as_ref().map(copy) };
         if let Some(m) = m {
             g.set_part_maps(part, m);
         }
@@ -126,25 +113,10 @@ fn apply_set_maps(part_sets: &[Option<usize>], set: usize, maps: GpuMaps, gpu: &
 
 /// Neutral grey maps shown until a set's own maps are ready.
 fn placeholder() -> GpuMaps {
-    gpu3d::prepare(&MapInputs {
-        base: None,
-        normal: None,
-        rough: None,
-        metal: None,
-        ao: None,
-        emissive: None,
-        height: None,
-    })
+    gpu3d::prepare(&MapInputs { base: None, normal: None, rough: None, metal: None, ao: None, emissive: None, height: None })
 }
 
 /// `GpuMaps` is not `Clone`; parts sharing a texture set each need their own copy.
 fn copy(m: &GpuMaps) -> GpuMaps {
-    GpuMaps {
-        size: m.size,
-        base: m.base.clone(),
-        normal: m.normal.clone(),
-        rma: m.rma.clone(),
-        emissive: m.emissive.clone(),
-        height: m.height.clone(),
-    }
+    GpuMaps { size: m.size, base: m.base.clone(), normal: m.normal.clone(), rma: m.rma.clone(), emissive: m.emissive.clone(), height: m.height.clone() }
 }

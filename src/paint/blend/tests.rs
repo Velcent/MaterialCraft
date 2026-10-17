@@ -83,11 +83,7 @@ fn nonseparable_modes() {
 fn normal_map_modes() {
     let flat = [0.5, 0.5, 1.0, 1.0];
     let tilted = normal::encode(normal::normalize([0.4, 0.0, 1.0]));
-    for m in [
-        BlendMode::NormalMapCombine,
-        BlendMode::NormalMapDetail,
-        BlendMode::NormalMapInverseDetail,
-    ] {
+    for m in [BlendMode::NormalMapCombine, BlendMode::NormalMapDetail, BlendMode::NormalMapInverseDetail] {
         let a = m.apply(flat, tilted);
         let b = m.apply(tilted, flat);
         for i in 0..3 {
@@ -105,19 +101,12 @@ fn mix_uses_opacity_times_coverage() {
     assert!(close(m[3], 0.25));
     let m2 = BlendMode::Normal.mix([0.0, 0.0, 0.0, 0.5], [1.0, 1.0, 1.0, 1.0], 0.5);
     assert!(close(m2[3], 0.75));
-    assert_eq!(
-        BlendMode::Multiply.mix(base, [0.5, 0.5, 0.5, 0.0], 1.0),
-        base
-    );
+    assert_eq!(BlendMode::Multiply.mix(base, [0.5, 0.5, 0.5, 0.0], 1.0), base);
     assert_eq!(BlendMode::Normal.mix(base, top, f32::NAN), base);
     let rep = BlendMode::Replace.mix([0.2, 0.2, 0.2, 1.0], [1.0, 1.0, 1.0, 0.0], 1.0);
     assert_eq!(rep, [1.0, 1.0, 1.0, 0.0]);
     assert_eq!(BlendMode::Disable.mix(base, top, 1.0), base);
-    let n = BlendMode::NormalMapDetail.mix(
-        [0.5, 0.5, 1.0, 0.0],
-        normal::encode(normal::normalize([1.0, 0.0, 1.0])),
-        0.5,
-    );
+    let n = BlendMode::NormalMapDetail.mix([0.5, 0.5, 1.0, 0.0], normal::encode(normal::normalize([1.0, 0.0, 1.0])), 0.5);
     let d = normal::decode(n);
     assert!(close(d[0] * d[0] + d[1] * d[1] + d[2] * d[2], 1.0));
 }

@@ -3,10 +3,7 @@
 
 use super::bits::BitWriter;
 use super::huffman::{canonical_codes, code_lengths};
-use super::tables::{
-    dist_code, fixed_literal_lengths, length_code, CODE_LENGTH_ORDER, DIST_BASE, DIST_EXTRA,
-    END_OF_BLOCK, LENGTH_BASE, LENGTH_EXTRA,
-};
+use super::tables::{CODE_LENGTH_ORDER, DIST_BASE, DIST_EXTRA, END_OF_BLOCK, LENGTH_BASE, LENGTH_EXTRA, dist_code, fixed_literal_lengths, length_code};
 
 /// A literal byte (`dist == 0`) or a back-reference of `len` bytes at distance `dist`.
 #[derive(Clone, Copy)]
@@ -31,12 +28,7 @@ pub(super) struct Block {
 
 impl Block {
     pub fn with_capacity(cap: usize) -> Self {
-        Block {
-            tokens: Vec::with_capacity(cap),
-            lit_freq: [0; NUM_LIT],
-            dist_freq: [0; NUM_DIST],
-            bytes: 0,
-        }
+        Block { tokens: Vec::with_capacity(cap), lit_freq: [0; NUM_LIT], dist_freq: [0; NUM_DIST], bytes: 0 }
     }
 
     pub fn len(&self) -> usize {
@@ -49,20 +41,14 @@ impl Block {
 
     #[inline]
     pub fn literal(&mut self, b: u8) {
-        self.tokens.push(Token {
-            len_or_byte: b as u16,
-            dist: 0,
-        });
+        self.tokens.push(Token { len_or_byte: b as u16, dist: 0 });
         self.lit_freq[b as usize] += 1;
         self.bytes += 1;
     }
 
     #[inline]
     pub fn copy(&mut self, len: usize, dist: usize) {
-        self.tokens.push(Token {
-            len_or_byte: len as u16,
-            dist: dist as u16,
-        });
+        self.tokens.push(Token { len_or_byte: len as u16, dist: dist as u16 });
         self.lit_freq[257 + length_code(len)] += 1;
         self.dist_freq[dist_code(dist)] += 1;
         self.bytes += len;
@@ -78,8 +64,7 @@ impl Block {
         let dynamic_bits = dynamic.cost() + self.data_cost(&dynamic.lit_lens, &dynamic.dist_lens);
         let fixed_bits = 3 + self.data_cost(&fixed_lit, &fixed_dist);
         // Header, alignment to a byte (worst case), LEN/NLEN, payload; repeated per 64 KiB chunk.
-        let stored_bits =
-            raw.len().div_ceil(MAX_STORED).max(1) as u64 * (3 + 7 + 32) + raw.len() as u64 * 8;
+        let stored_bits = raw.len().div_ceil(MAX_STORED).max(1) as u64 * (3 + 7 + 32) + raw.len() as u64 * 8;
 
         if stored_bits <= fixed_bits.min(dynamic_bits) {
             write_stored(w, raw, last);
@@ -104,11 +89,7 @@ impl Block {
     fn data_cost(&self, lit_lens: &[u8], dist_lens: &[u8]) -> u64 {
         let mut bits = 0u64;
         for (s, &f) in self.lit_freq.iter().enumerate() {
-            let extra = if s > END_OF_BLOCK {
-                LENGTH_EXTRA[s - 257] as u64
-            } else {
-                0
-            };
+            let extra = if s > END_OF_BLOCK { LENGTH_EXTRA[s - 257] as u64 } else { 0 };
             bits += f as u64 * (lit_lens[s] as u64 + extra);
         }
         for (s, &f) in self.dist_freq.iter().enumerate() {
@@ -128,23 +109,14 @@ impl Block {
                 let len = t.len_or_byte as usize;
                 let lc = length_code(len);
                 w.put(lit_codes[257 + lc] as u32, lit_lens[257 + lc] as u32);
-                w.put(
-                    (len - LENGTH_BASE[lc] as usize) as u32,
-                    LENGTH_EXTRA[lc] as u32,
-                );
+                w.put((len - LENGTH_BASE[lc] as usize) as u32, LENGTH_EXTRA[lc] as u32);
                 let dist = t.dist as usize;
                 let dc = dist_code(dist);
                 w.put(dist_codes[dc] as u32, dist_lens[dc] as u32);
-                w.put(
-                    (dist - DIST_BASE[dc] as usize) as u32,
-                    DIST_EXTRA[dc] as u32,
-                );
+                w.put((dist - DIST_BASE[dc] as usize) as u32, DIST_EXTRA[dc] as u32);
             }
         }
-        w.put(
-            lit_codes[END_OF_BLOCK] as u32,
-            lit_lens[END_OF_BLOCK] as u32,
-        );
+        w.put(lit_codes[END_OF_BLOCK] as u32, lit_lens[END_OF_BLOCK] as u32);
     }
 }
 
@@ -186,11 +158,7 @@ impl DynamicHeader {
     fn new(lit_freq: &[u32; NUM_LIT], dist_freq: &[u32; NUM_DIST]) -> Self {
         let lit_lens = code_lengths(lit_freq, 15);
         let dist_lens = code_lengths(dist_freq, 15);
-        let hlit = 257
-            + lit_lens[257..]
-                .iter()
-                .rposition(|&l| l != 0)
-                .map_or(0, |p| p + 1);
+        let hlit = 257 + lit_lens[257..].iter().rposition(|&l| l != 0).map_or(0, |p| p + 1);
         let hdist = 1 + dist_lens.iter().rposition(|&l| l != 0).unwrap_or(0);
         let mut all = lit_lens[..hlit].to_vec();
         all.extend_from_slice(&dist_lens[..hdist]);
@@ -200,21 +168,8 @@ impl DynamicHeader {
             cl_freq[s as usize] += 1;
         }
         let cl_lens = code_lengths(&cl_freq, 7);
-        let hclen = 4.max(
-            1 + CODE_LENGTH_ORDER
-                .iter()
-                .rposition(|&s| cl_lens[s] != 0)
-                .unwrap_or(0),
-        );
-        DynamicHeader {
-            lit_lens,
-            dist_lens,
-            hlit,
-            hdist,
-            rle,
-            cl_lens,
-            hclen,
-        }
+        let hclen = 4.max(1 + CODE_LENGTH_ORDER.iter().rposition(|&s| cl_lens[s] != 0).unwrap_or(0));
+        DynamicHeader { lit_lens, dist_lens, hlit, hdist, rle, cl_lens, hclen }
     }
 
     /// Header size in bits, including the 3-bit block header.

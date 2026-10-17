@@ -52,10 +52,18 @@ impl StackStrategy {
 
     pub fn describe(self) -> &'static str {
         match self {
-            StackStrategy::RealStack => "layers reproduce Painter exactly and are the result; Painter's flattened result kept hidden as a reference",
-            StackStrategy::PainterResultOnTop => "not every layer is computable: Painter's flattened result is shown on top of the imported layers",
-            StackStrategy::CacheDisagrees => "every layer is computable, but Painter's cache disagrees with the stored layers: Painter's flattened result is shown on top of the imported layers",
-            StackStrategy::BestEffort => "not every layer is computable and there is no texture cache: the imported layers show what can be computed",
+            StackStrategy::RealStack => {
+                "layers reproduce Painter exactly and are the result; Painter's flattened result kept hidden as a reference"
+            }
+            StackStrategy::PainterResultOnTop => {
+                "not every layer is computable: Painter's flattened result is shown on top of the imported layers"
+            }
+            StackStrategy::CacheDisagrees => {
+                "every layer is computable, but Painter's cache disagrees with the stored layers: Painter's flattened result is shown on top of the imported layers"
+            }
+            StackStrategy::BestEffort => {
+                "not every layer is computable and there is no texture cache: the imported layers show what can be computed"
+            }
         }
     }
 }

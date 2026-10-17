@@ -1,6 +1,6 @@
 //! `DataStackLayers` → [`PainterLayer`]s: layers, folders, per-channel blending and masks.
 
-use super::{ModelBuilder, MAX_NESTING};
+use super::{MAX_NESTING, ModelBuilder};
 use crate::model::blending::{ChannelBlending, PainterBlendMode};
 use crate::model::channel::ChannelMask;
 use crate::model::effect::PainterEffect;

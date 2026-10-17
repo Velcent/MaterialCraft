@@ -9,7 +9,7 @@ mod request;
 mod tests;
 
 pub use mapping::Unmapped;
-pub use painter::{MaterialBaking, PainterBaking, TweakList, TweakValue, BAKING_INI};
+pub use painter::{BAKING_INI, MaterialBaking, PainterBaking, TweakList, TweakValue};
 pub use request::HighPolyRequest;
 
 use materialcraft::bake::BakeSettings;

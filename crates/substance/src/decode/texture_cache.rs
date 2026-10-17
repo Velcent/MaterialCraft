@@ -4,10 +4,10 @@
 //! (OpenGL enum; uint before 2023, int since), `compression` (`lz4`), `bufferSize` (uint, decompressed
 //! size), `version` (`v1`); then a big-endian u32 with the payload length, then the LZ4 block.
 
-use super::image::Compression;
-use super::lz4_payload::{self, RecordHeader};
 use super::DecodeError;
 use super::Decompressed;
+use super::image::Compression;
+use super::lz4_payload::{self, RecordHeader};
 use crate::container::bytes::ByteReader;
 
 const RECORD: &str = "texture cache entry";

@@ -15,11 +15,7 @@ fn exr_names(layout: PixelLayout) -> &'static [&'static str] {
 }
 
 fn exr_kind(sample: SampleType) -> SampleKind {
-    if sample == SampleType::F32 {
-        SampleKind::Float
-    } else {
-        SampleKind::Half
-    }
+    if sample == SampleType::F32 { SampleKind::Float } else { SampleKind::Half }
 }
 
 pub(super) fn encode(img: &TiledImage) -> Result<Vec<u8>, String> {
@@ -31,58 +27,32 @@ pub(super) fn encode(img: &TiledImage) -> Result<Vec<u8>, String> {
         .iter()
         .enumerate()
         .map(|(c, name)| {
-            let data = raw
-                .chunks_exact(n * size)
-                .map(|px| read_float(f.sample, &px[c * size..]))
-                .collect();
+            let data = raw.chunks_exact(n * size).map(|px| read_float(f.sample, &px[c * size..])).collect();
             ExrChannel::new(name, exr_kind(f.sample), data)
         })
         .collect();
     drop(raw);
-    exr::encode_with(
-        &ExrImage {
-            width: w,
-            height: h,
-            channels,
-        },
-        Compression::Zip,
-    )
+    exr::encode_with(&ExrImage { width: w, height: h, channels }, Compression::Zip)
 }
 
-pub(super) fn decode(
-    bytes: &[u8],
-    format: PixelFormat,
-    size: (u32, u32),
-) -> Result<Vec<u8>, String> {
+pub(super) fn decode(bytes: &[u8], format: PixelFormat, size: (u32, u32)) -> Result<Vec<u8>, String> {
     let found = exr_size(bytes).ok_or("not a readable OpenEXR header")?;
     if found != (size.0 as u64, size.1 as u64) {
-        return Err(format!(
-            "EXR is {}x{}, expected {}x{}",
-            found.0, found.1, size.0, size.1
-        ));
+        return Err(format!("EXR is {}x{}, expected {}x{}", found.0, found.1, size.0, size.1));
     }
     let img = exr::decode(bytes)?;
     let names = exr_names(format.layout);
     let kind = exr_kind(format.sample);
     let mut channels = Vec::with_capacity(names.len());
     for name in names {
-        let ch = img
-            .channel(name)
-            .ok_or_else(|| format!("EXR lacks channel {name}"))?;
+        let ch = img.channel(name).ok_or_else(|| format!("EXR lacks channel {name}"))?;
         if ch.sample != kind {
-            return Err(format!(
-                "EXR channel {name} is {:?}, expected {kind:?}",
-                ch.sample
-            ));
+            return Err(format!("EXR channel {name} is {:?}, expected {kind:?}", ch.sample));
         }
         channels.push(&ch.data);
     }
     if img.channels.len() != names.len() {
-        return Err(format!(
-            "EXR has {} channels, expected {}",
-            img.channels.len(),
-            names.len()
-        ));
+        return Err(format!("EXR has {} channels, expected {}", img.channels.len(), names.len()));
     }
     let size = format.sample.bytes();
     let mut raw = vec![0u8; img.width * img.height * format.bytes_per_pixel()];
@@ -127,14 +97,8 @@ fn exr_size(b: &[u8]) -> Option<(u64, u64)> {
         let value = b.get(pos + 4..(pos + 4).checked_add(len)?)?;
         pos += 4 + len;
         if name == b"dataWindow" && kind == b"box2i" && len == 16 {
-            let v: Vec<i64> = value
-                .chunks_exact(4)
-                .map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]]) as i64)
-                .collect();
-            return Some((
-                (v[2] - v[0] + 1).max(0) as u64,
-                (v[3] - v[1] + 1).max(0) as u64,
-            ));
+            let v: Vec<i64> = value.chunks_exact(4).map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]]) as i64).collect();
+            return Some(((v[2] - v[0] + 1).max(0) as u64, (v[3] - v[1] + 1).max(0) as u64));
         }
     }
 }

@@ -24,14 +24,7 @@ impl Fidelity {
     }
 
     pub fn from_id(id: &str) -> Option<Fidelity> {
-        [
-            Fidelity::Exact,
-            Fidelity::Approximated,
-            Fidelity::Baked,
-            Fidelity::KeptRaw,
-        ]
-        .into_iter()
-        .find(|f| f.id() == id)
+        [Fidelity::Exact, Fidelity::Approximated, Fidelity::Baked, Fidelity::KeptRaw].into_iter().find(|f| f.id() == id)
     }
 }
 
@@ -55,26 +48,16 @@ pub struct ImportReport {
 
 impl ImportReport {
     pub fn new(source: impl Into<String>) -> ImportReport {
-        ImportReport {
-            source: source.into(),
-            entries: Vec::new(),
-        }
+        ImportReport { source: source.into(), entries: Vec::new() }
     }
 
     pub fn add(&mut self, item: impl Into<String>, fidelity: Fidelity, note: impl Into<String>) {
-        self.entries.push(ReportEntry {
-            item: item.into(),
-            fidelity,
-            note: note.into(),
-        });
+        self.entries.push(ReportEntry { item: item.into(), fidelity, note: note.into() });
     }
 
     /// Number of entries with `fidelity`.
     pub fn count(&self, fidelity: Fidelity) -> usize {
-        self.entries
-            .iter()
-            .filter(|e| e.fidelity == fidelity)
-            .count()
+        self.entries.iter().filter(|e| e.fidelity == fidelity).count()
     }
 
     /// True if everything was translated exactly.
@@ -95,9 +78,6 @@ mod tests {
         r.add("layer b", Fidelity::Baked, "procedural mask");
         assert_eq!(r.count(Fidelity::Baked), 1);
         assert!(!r.is_exact());
-        assert_eq!(
-            Fidelity::from_id(Fidelity::KeptRaw.id()),
-            Some(Fidelity::KeptRaw)
-        );
+        assert_eq!(Fidelity::from_id(Fidelity::KeptRaw.id()), Some(Fidelity::KeptRaw));
     }
 }

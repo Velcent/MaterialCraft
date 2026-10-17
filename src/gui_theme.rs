@@ -1,7 +1,7 @@
 //! Look shared by the node editor and the Paint screen: panel headers and their colours.
 //! Lives in its own module so the Paint screen does not reach into the editor.
 
-use eframe::egui::{self, vec2, Align2, Color32, FontId, Id, Rect, Sense, Stroke};
+use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, Sense, Stroke, vec2};
 
 /// Background of panel headers, status and view areas.
 pub const HEADER_BG: Color32 = Color32::from_rgb(30, 30, 30);

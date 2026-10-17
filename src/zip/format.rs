@@ -78,13 +78,11 @@ impl<'a> Fields<'a> {
     }
 
     pub fn u32(&mut self) -> Option<u32> {
-        self.bytes(4)
-            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        self.bytes(4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     }
 
     pub fn u64(&mut self) -> Option<u64> {
-        self.bytes(8)
-            .map(|b| u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))
+        self.bytes(8).map(|b| u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))
     }
 }
 
@@ -108,26 +106,16 @@ impl Zip64Extra {
             return Vec::new();
         }
         let mut payload = Le(Vec::new());
-        for v in [self.size, self.compressed_size, self.local_header_offset]
-            .into_iter()
-            .flatten()
-        {
+        for v in [self.size, self.compressed_size, self.local_header_offset].into_iter().flatten() {
             payload.u64(v);
         }
         let mut out = Le(Vec::new());
-        out.u16(ZIP64_EXTRA_TAG)
-            .u16(payload.0.len() as u16)
-            .bytes(&payload.0);
+        out.u16(ZIP64_EXTRA_TAG).u16(payload.0.len() as u16).bytes(&payload.0);
         out.0
     }
 
     /// Fill in the sentinel-valued fields from the ZIP64 record inside an extra-field block.
-    pub fn decode(
-        extra: &[u8],
-        need_size: bool,
-        need_compressed: bool,
-        need_offset: bool,
-    ) -> Option<Zip64Extra> {
+    pub fn decode(extra: &[u8], need_size: bool, need_compressed: bool, need_offset: bool) -> Option<Zip64Extra> {
         let mut f = Fields::new(extra);
         while let (Some(tag), Some(len)) = (f.u16(), f.u16()) {
             let body = f.bytes(len as usize)?;
@@ -189,11 +177,7 @@ mod tests {
 
     #[test]
     fn zip64_extra_round_trip() {
-        let z = Zip64Extra {
-            size: Some(5 << 32),
-            compressed_size: None,
-            local_header_offset: Some(7),
-        };
+        let z = Zip64Extra { size: Some(5 << 32), compressed_size: None, local_header_offset: Some(7) };
         let mut extra = vec![0x55, 0x54, 1, 0, 9];
         extra.extend_from_slice(&z.encode());
         assert_eq!(Zip64Extra::decode(&extra, true, false, true), Some(z));

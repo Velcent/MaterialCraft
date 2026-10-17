@@ -5,10 +5,7 @@
 
 /// Calls `f(index, item)` for every item, spread over the available cores.
 pub(crate) fn for_each_mut<T: Send, F: Fn(usize, &mut T) + Sync>(items: &mut [T], f: F) {
-    let threads = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1)
-        .max(1);
+    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).max(1);
     if items.len() <= 1 || threads == 1 {
         for (i, it) in items.iter_mut().enumerate() {
             f(i, it);

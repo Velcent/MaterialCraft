@@ -4,18 +4,11 @@ use crate::paint::{Fill, PaintContent, PixelFormat};
 const R: Channel = Channel::Roughness;
 
 fn set(w: u32, h: u32) -> TextureSet {
-    TextureSet::new("s", "S", (w, h))
-        .with_channel(R)
-        .with_channel(Channel::BaseColor)
+    TextureSet::new("s", "S", (w, h)).with_channel(R).with_channel(Channel::BaseColor)
 }
 
 fn fill(id: &str, v: f32, mode: BlendMode) -> Layer {
-    Layer::new(
-        id,
-        id,
-        LayerKind::Fill(Fill::uniform(vec![(R, [v, v, v, 1.0])])),
-    )
-    .with_blend(R, mode, 1.0)
+    Layer::new(id, id, LayerKind::Fill(Fill::uniform(vec![(R, [v, v, v, 1.0])]))).with_blend(R, mode, 1.0)
 }
 
 fn paint(id: &str, w: u32, h: u32, px: &[(u32, u32, f32, f32)], mode: BlendMode) -> Layer {
@@ -45,15 +38,8 @@ fn empty_stack_is_default_with_no_coverage() {
 #[test]
 fn two_paint_layers_with_coverage() {
     let mut s = set(4, 4);
-    s.layers.push(paint(
-        "a",
-        4,
-        4,
-        &[(0, 0, 1.0, 1.0), (1, 0, 1.0, 0.5)],
-        BlendMode::Normal,
-    ));
-    s.layers
-        .push(paint("b", 4, 4, &[(0, 0, 0.5, 1.0)], BlendMode::Multiply));
+    s.layers.push(paint("a", 4, 4, &[(0, 0, 1.0, 1.0), (1, 0, 1.0, 0.5)], BlendMode::Normal));
+    s.layers.push(paint("b", 4, 4, &[(0, 0, 0.5, 1.0)], BlendMode::Multiply));
     let p00 = at(&s, 0, 0);
     assert!(close(p00[0], 0.5) && close(p00[3], 1.0));
     let p10 = at(&s, 1, 0);
@@ -67,8 +53,7 @@ fn mask_hidden_opacity_and_missing_entry() {
     let mut mask = TiledImage::new(4, 4, PixelFormat::from_id("gray8").unwrap()).unwrap();
     mask.set(0, 0, [1.0; 4]);
     mask.set(1, 0, [0.5; 4]);
-    s.layers
-        .push(fill("masked", 1.0, BlendMode::Normal).with_mask(mask));
+    s.layers.push(fill("masked", 1.0, BlendMode::Normal).with_mask(mask));
     let mut hidden = fill("hidden", 0.0, BlendMode::Normal);
     hidden.visible = false;
     s.layers.push(hidden);
@@ -76,10 +61,7 @@ fn mask_hidden_opacity_and_missing_entry() {
     no_entry.blend.clear();
     s.layers.push(no_entry);
     assert!(close(at(&s, 0, 0)[0], 1.0));
-    assert!(close(
-        at(&s, 1, 0)[0],
-        0.5 + 0.5 * (0.5f32 * 255.0).round() / 255.0
-    ));
+    assert!(close(at(&s, 1, 0)[0], 0.5 + 0.5 * (0.5f32 * 255.0).round() / 255.0));
     assert_eq!(at(&s, 2, 2), [0.5, 0.5, 0.5, 0.0]);
 
     let mut s = set(4, 4);
@@ -95,35 +77,18 @@ fn mask_hidden_opacity_and_missing_entry() {
 fn uniform_fill_covers_everything_and_material_fill_warns() {
     let mut s = set(4, 4);
     s.layers.push(fill("base", 0.8, BlendMode::Normal));
-    let material = Fill {
-        source: FillSource::Material {
-            path: "materials/rust.mca".into(),
-            params: vec![],
-        },
-    };
-    s.layers.push(
-        Layer::new("rust", "Rust", LayerKind::Fill(material)).with_blend(R, BlendMode::Normal, 1.0),
-    );
+    let material = Fill { source: FillSource::Material { path: "materials/rust.mca".into(), params: vec![] } };
+    s.layers.push(Layer::new("rust", "Rust", LayerKind::Fill(material)).with_blend(R, BlendMode::Normal, 1.0));
     assert_eq!(at(&s, 3, 3), [0.8, 0.8, 0.8, 1.0]);
     let (_, warnings) = Compositor::new(&s).composite_tex(R);
-    assert_eq!(
-        warnings,
-        vec![CompositeWarning::MaterialFillSkipped {
-            layer: "rust".into()
-        }]
-    );
+    assert_eq!(warnings, vec![CompositeWarning::MaterialFillSkipped { layer: "rust".into() }]);
     assert!(Compositor::new(&s).warnings(Channel::BaseColor).is_empty());
 }
 
 #[test]
 fn groups_passthrough_and_isolated() {
     let group = |mode: BlendMode| {
-        let mut g = Layer::new(
-            "g",
-            "G",
-            LayerKind::Group(vec![fill("m", 0.5, BlendMode::Multiply)]),
-        )
-        .with_blend(R, mode, 1.0);
+        let mut g = Layer::new("g", "G", LayerKind::Group(vec![fill("m", 0.5, BlendMode::Multiply)])).with_blend(R, mode, 1.0);
         g.opacity = 0.5;
         g
     };
@@ -143,13 +108,7 @@ fn tiles_agree_across_entry_points() {
     let (w, h) = (300, 140);
     let mut s = set(w, h);
     s.layers.push(fill("base", 0.2, BlendMode::Normal));
-    s.layers.push(paint(
-        "p",
-        w,
-        h,
-        &[(0, 0, 1.0, 1.0), (299, 139, 1.0, 1.0), (150, 130, 0.9, 0.5)],
-        BlendMode::Add,
-    ));
+    s.layers.push(paint("p", w, h, &[(0, 0, 1.0, 1.0), (299, 139, 1.0, 1.0), (150, 130, 0.9, 0.5)], BlendMode::Add));
     let c = Compositor::new(&s);
     let (tex, _) = c.composite_tex(R);
     let (img, _) = c.composite_image(R).unwrap();
@@ -157,10 +116,7 @@ fn tiles_agree_across_entry_points() {
     for (x, y) in [(0, 0), (299, 139), (150, 130), (10, 10)] {
         let a = tex.px[y * w as usize + x];
         let b = img.get(x as u32, y as u32);
-        assert!(
-            (0..4).all(|i| (a[i].min(1.0) - b[i]).abs() < 0.5 / 255.0 + 1e-3),
-            "{x},{y}: {a:?} vs {b:?}"
-        );
+        assert!((0..4).all(|i| (a[i].min(1.0) - b[i]).abs() < 0.5 / 255.0 + 1e-3), "{x},{y}: {a:?} vs {b:?}");
     }
     assert!(close(tex.px[139 * w as usize + 299][0], 1.2));
     let mut target = TiledImage::new(w, h, PixelFormat::from_id("rgba32f").unwrap()).unwrap();
@@ -193,22 +149,12 @@ fn srgb_channels_blend_in_linear_light() {
     let red = d + (1.0 - d) * 0.5;
     let expect = [enc(red * 0.5), enc(d * 0.25), enc(d * 0.25 + 0.5), 0.75];
     let p = color_at(&s);
-    assert!(
-        (0..4).all(|i| close(p[i], expect[i])),
-        "{p:?} vs {expect:?}"
-    );
+    assert!((0..4).all(|i| close(p[i], expect[i])), "{p:?} vs {expect:?}");
     assert!(!close(p[0], 0.375)); // the sRGB-space result
 
     // Multiply and a uniform fill: values are decoded, multiplied, re-encoded.
     let mut s = set(2, 2);
-    let fill_c = |v: f32, mode| {
-        Layer::new(
-            "f",
-            "f",
-            LayerKind::Fill(Fill::uniform(vec![(C, [v, v, v, 1.0])])),
-        )
-        .with_blend(C, mode, 1.0)
-    };
+    let fill_c = |v: f32, mode| Layer::new("f", "f", LayerKind::Fill(Fill::uniform(vec![(C, [v, v, v, 1.0])]))).with_blend(C, mode, 1.0);
     s.layers.push(fill_c(0.6, BlendMode::Normal));
     s.layers.push(fill_c(0.5, BlendMode::Multiply));
     assert!(close(color_at(&s)[1], enc(dec(0.6) * dec(0.5))));
@@ -221,24 +167,14 @@ fn srgb_channels_blend_in_linear_light() {
 fn channel_space_follows_the_spec() {
     let mut s = set(2, 2);
     assert_eq!(Compositor::new(&s).working_space(R), WorkingSpace::Stored);
-    assert_eq!(
-        Compositor::new(&s).working_space(C),
-        WorkingSpace::LinearLight
-    );
+    assert_eq!(Compositor::new(&s).working_space(C), WorkingSpace::LinearLight);
     // Linear channels keep blending stored values (half coverage of 1.0 over 0.5).
-    s.layers
-        .push(paint("p", 2, 2, &[(0, 0, 1.0, 0.5)], BlendMode::Normal));
+    s.layers.push(paint("p", 2, 2, &[(0, 0, 1.0, 0.5)], BlendMode::Normal));
     assert!(close(at(&s, 0, 0)[0], 0.75));
     // A channel declared sRGB composites in linear light.
     s.channels[0].color_space = crate::paint::ColorSpace::Srgb;
-    assert_eq!(
-        Compositor::new(&s).working_space(R),
-        WorkingSpace::LinearLight
-    );
+    assert_eq!(Compositor::new(&s).working_space(R), WorkingSpace::LinearLight);
     let p = at(&s, 0, 0)[0];
     use crate::paint::working_space::{linear_to_srgb, srgb_to_linear};
-    assert!(
-        close(p, linear_to_srgb(srgb_to_linear(0.5) * 0.5 + 0.5)),
-        "{p}"
-    );
+    assert!(close(p, linear_to_srgb(srgb_to_linear(0.5) * 0.5 + 0.5)), "{p}");
 }

@@ -5,7 +5,7 @@
 use super::header::DocumentHeader;
 use super::tag::ValueTag;
 use super::value::Scalar;
-use super::walker::{walk, Visitor};
+use super::walker::{Visitor, walk};
 use crate::decode::DecodeError;
 
 /// Painter's `normalMapSyscoord` values (Verified on exports: Grappling, AS = 0; Zubzub, Sload Final = 1).

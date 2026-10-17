@@ -3,9 +3,9 @@
 //! Layout: `u64` size, `u32` flags, root node block, `u32` mesh count + mesh blocks,
 //! `u32` material count + material blocks, then animations, textures, lights, cameras (not read).
 
+use super::RECORD;
 use super::block::{read_block, read_count, read_u32};
 use super::header::AssbinHeader;
-use super::RECORD;
 use crate::container::bytes::ByteReader;
 use crate::decode::DecodeError;
 use std::borrow::Cow;

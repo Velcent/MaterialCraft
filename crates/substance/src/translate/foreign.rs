@@ -5,7 +5,7 @@
 //! translated into the document.
 
 use super::error::PartError;
-use crate::project::{paths, SppProject};
+use crate::project::{SppProject, paths};
 use materialcraft::paint::ForeignFile;
 use std::collections::BTreeSet;
 

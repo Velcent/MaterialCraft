@@ -1,4 +1,4 @@
-use super::test_writer::{header, node, scene_from, Buf, IDENTITY};
+use super::test_writer::{Buf, IDENTITY, header, node, scene_from};
 use super::*;
 use materialcraft::mesh::MeshPart;
 

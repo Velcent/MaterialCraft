@@ -74,19 +74,10 @@ impl TiledImage {
     /// An empty image (every pixel reads as zero samples). No memory is used until pixels are written.
     pub fn new(width: u32, height: u32, format: PixelFormat) -> Result<TiledImage, ImageError> {
         if width > MAX_DIMENSION || height > MAX_DIMENSION {
-            return Err(ImageError::TooLarge {
-                width: width as u64,
-                height: height as u64,
-            });
+            return Err(ImageError::TooLarge { width: width as u64, height: height as u64 });
         }
         let n = (width.div_ceil(TILE_SIZE) * height.div_ceil(TILE_SIZE)) as usize;
-        Ok(TiledImage {
-            width,
-            height,
-            format,
-            tiles: vec![None; n],
-            dirty: vec![false; n],
-        })
+        Ok(TiledImage { width, height, format, tiles: vec![None; n], dirty: vec![false; n] })
     }
 
     pub fn width(&self) -> u32 {
@@ -122,9 +113,7 @@ impl TiledImage {
     /// Every tile coordinate, row by row.
     pub fn all_tiles(&self) -> Vec<(u32, u32)> {
         let tx = self.tiles_x();
-        (0..self.tiles.len() as u32)
-            .map(|i| (i % tx, i / tx))
-            .collect()
+        (0..self.tiles.len() as u32).map(|i| (i % tx, i / tx)).collect()
     }
 
     fn tile_index(&self, tx: u32, ty: u32) -> Option<usize> {
@@ -167,8 +156,7 @@ impl TiledImage {
 
     /// True if tile (tx, ty) holds pixel data.
     pub fn tile_allocated(&self, tx: u32, ty: u32) -> bool {
-        self.tile_index(tx, ty)
-            .is_some_and(|i| self.tiles[i].is_some())
+        self.tile_index(tx, ty).is_some_and(|i| self.tiles[i].is_some())
     }
 
     /// True if any tile overlapping `r` holds pixel data.
@@ -177,20 +165,13 @@ impl TiledImage {
         if r.x >= x1 || r.y >= y1 {
             return false;
         }
-        (r.y / TILE_SIZE..=(y1 - 1) / TILE_SIZE).any(|ty| {
-            (r.x / TILE_SIZE..=(x1 - 1) / TILE_SIZE).any(|tx| self.tile_allocated(tx, ty))
-        })
+        (r.y / TILE_SIZE..=(y1 - 1) / TILE_SIZE).any(|ty| (r.x / TILE_SIZE..=(x1 - 1) / TILE_SIZE).any(|tx| self.tile_allocated(tx, ty)))
     }
 
     /// Tiles written since the last [`Self::clear_dirty`], row by row.
     pub fn dirty_tiles(&self) -> Vec<(u32, u32)> {
         let tx = self.tiles_x();
-        self.dirty
-            .iter()
-            .enumerate()
-            .filter(|(_, d)| **d)
-            .map(|(i, _)| (i as u32 % tx, i as u32 / tx))
-            .collect()
+        self.dirty.iter().enumerate().filter(|(_, d)| **d).map(|(i, _)| (i as u32 % tx, i as u32 / tx)).collect()
     }
 
     pub fn clear_dirty(&mut self) {
@@ -225,25 +206,12 @@ impl TiledImage {
 
 fn tile_rect(width: u32, height: u32, tx: u32, ty: u32) -> Option<Rect> {
     let (x, y) = (tx.checked_mul(TILE_SIZE)?, ty.checked_mul(TILE_SIZE)?);
-    (x < width && y < height).then(|| Rect {
-        x,
-        y,
-        w: (width - x).min(TILE_SIZE),
-        h: (height - y).min(TILE_SIZE),
-    })
+    (x < width && y < height).then(|| Rect { x, y, w: (width - x).min(TILE_SIZE), h: (height - y).min(TILE_SIZE) })
 }
 
 impl fmt::Debug for TiledImage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "TiledImage({}x{} {}, {}/{} tiles)",
-            self.width,
-            self.height,
-            self.format.id(),
-            self.allocated_tiles(),
-            self.tile_count()
-        )
+        write!(f, "TiledImage({}x{} {}, {}/{} tiles)", self.width, self.height, self.format.id(), self.allocated_tiles(), self.tile_count())
     }
 }
 
@@ -251,9 +219,7 @@ impl fmt::Debug for TiledImage {
 /// Dirty flags are ignored.
 impl PartialEq for TiledImage {
     fn eq(&self, other: &TiledImage) -> bool {
-        self.size() == other.size()
-            && self.format == other.format
-            && self.to_raw() == other.to_raw()
+        self.size() == other.size() && self.format == other.format && self.to_raw() == other.to_raw()
     }
 }
 

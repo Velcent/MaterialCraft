@@ -1,6 +1,6 @@
 //! Loading an exported texture as a float image, and resampling it to our resolution.
 
-use materialcraft::png::{decode_raw, ColorType};
+use materialcraft::png::{ColorType, decode_raw};
 use materialcraft::tex::Tex;
 use std::path::Path;
 

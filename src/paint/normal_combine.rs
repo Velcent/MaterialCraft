@@ -19,7 +19,7 @@ pub fn combine(baked: Vec3, height: Vec3, channel: Vec3) -> Vec3 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paint::normal::{normalize, FLAT};
+    use crate::paint::normal::{FLAT, normalize};
 
     fn close(a: Vec3, b: Vec3) -> bool {
         (0..3).all(|i| (a[i] - b[i]).abs() < 1e-5)
@@ -36,17 +36,10 @@ mod tests {
     #[test]
     fn height_is_laid_on_baked_before_the_channel() {
         // RNM is not associative: the order is part of what Painter does.
-        let (b, h, c) = (
-            normalize([0.6, 0.1, 1.0]),
-            normalize([0.0, 0.5, 1.0]),
-            normalize([-0.4, 0.2, 1.0]),
-        );
+        let (b, h, c) = (normalize([0.6, 0.1, 1.0]), normalize([0.0, 0.5, 1.0]), normalize([-0.4, 0.2, 1.0]));
         let painter = combine(b, h, c);
         let other = normal::reoriented(b, normal::reoriented(h, c));
         assert!(!close(painter, other));
-        assert!(close(
-            painter,
-            normal::reoriented(normal::reoriented(b, h), c)
-        ));
+        assert!(close(painter, normal::reoriented(normal::reoriented(b, h), c)));
     }
 }

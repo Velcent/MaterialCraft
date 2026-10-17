@@ -34,12 +34,28 @@ const TEMPLATES: &[Template] = &[
     Template {
         name: "Metallic Roughness - Emissive",
         desc: "Metal/roughness plus an emissive output.",
-        outs: &[("basecolor", G5), ("normal", [0.5, 0.5, 1.0]), ("roughness", G5), ("metallic", [0.0; 3]), ("height", G5), ("ambient_occlusion", [1.0; 3]), ("emissive", [0.0; 3])],
+        outs: &[
+            ("basecolor", G5),
+            ("normal", [0.5, 0.5, 1.0]),
+            ("roughness", G5),
+            ("metallic", [0.0; 3]),
+            ("height", G5),
+            ("ambient_occlusion", [1.0; 3]),
+            ("emissive", [0.0; 3]),
+        ],
     },
     Template {
         name: "Metallic Roughness - Opacity",
         desc: "Metal/roughness plus an opacity output.",
-        outs: &[("basecolor", G5), ("normal", [0.5, 0.5, 1.0]), ("roughness", G5), ("metallic", [0.0; 3]), ("height", G5), ("ambient_occlusion", [1.0; 3]), ("opacity", [1.0; 3])],
+        outs: &[
+            ("basecolor", G5),
+            ("normal", [0.5, 0.5, 1.0]),
+            ("roughness", G5),
+            ("metallic", [0.0; 3]),
+            ("height", G5),
+            ("ambient_occlusion", [1.0; 3]),
+            ("opacity", [1.0; 3]),
+        ],
     },
     Template {
         name: "Specular Glossiness",
@@ -105,11 +121,7 @@ fn fmt_time(t: std::time::SystemTime) -> String {
 }
 
 fn fmt_size(b: u64) -> String {
-    if b >= 1 << 20 {
-        format!("{:.2} MB", b as f64 / (1u64 << 20) as f64)
-    } else {
-        format!("{} KB", (b + 1023) / 1024)
-    }
+    if b >= 1 << 20 { format!("{:.2} MB", b as f64 / (1u64 << 20) as f64) } else { format!("{} KB", (b + 1023) / 1024) }
 }
 
 // ---------------------------------------------------------------- background asset generation
@@ -237,7 +249,12 @@ fn draw_icon(p: &egui::Painter, c: Pos2, ic: Ic, col: Color32) {
         }
         Ic::Sphere => {
             p.circle_stroke(c, 6.0, st);
-            let pts: Vec<Pos2> = (0..=20).map(|k| { let a = k as f32 / 20.0 * std::f32::consts::TAU; pos2(c.x + a.cos() * 6.0, c.y + a.sin() * 2.4) }).collect();
+            let pts: Vec<Pos2> = (0..=20)
+                .map(|k| {
+                    let a = k as f32 / 20.0 * std::f32::consts::TAU;
+                    pos2(c.x + a.cos() * 6.0, c.y + a.sin() * 2.4)
+                })
+                .collect();
             p.add(egui::Shape::line(pts, Stroke::new(1.0_f32, col)));
         }
         Ic::Dot => {
@@ -299,16 +316,14 @@ fn graph_row(ui: &mut egui::Ui, name: &str, outs: &[String], selected: bool, key
             head(ui, &mut resp);
         });
     } else {
-        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false)
-            .show_header(ui, |ui| head(ui, &mut resp))
-            .body(|ui| {
-                for o in outs {
-                    ui.horizontal(|ui| {
-                        ui.add_space(14.0);
-                        ui.small(usage_label(o));
-                    });
-                }
-            });
+        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false).show_header(ui, |ui| head(ui, &mut resp)).body(|ui| {
+            for o in outs {
+                ui.horizontal(|ui| {
+                    ui.add_space(14.0);
+                    ui.small(usage_label(o));
+                });
+            }
+        });
     }
     resp.unwrap_or_else(|| ui.label(""))
 }
@@ -363,17 +378,70 @@ fn size_handle(ui: &mut egui::Ui, id: &str, panel: Rect, edge: u8) -> f32 {
 
 fn lib_group(kind: &str) -> (&'static str, &'static str) {
     match kind {
-        "white_noise" | "gaussian_noise" | "perlin" | "fbm" | "clouds" | "voronoi" | "voronoi_fractal" | "bnw_spots" | "crystal" | "directional_noise" | "grunge" | "grunge_map" | "plasma" | "cells" | "fractal_sum" | "waveform" | "gaussian_spots" => ("Texture generators", "Noises"),
+        "white_noise" | "gaussian_noise" | "perlin" | "fbm" | "clouds" | "voronoi" | "voronoi_fractal" | "bnw_spots" | "crystal" | "directional_noise"
+        | "grunge" | "grunge_map" | "plasma" | "cells" | "fractal_sum" | "waveform" | "gaussian_spots" => ("Texture generators", "Noises"),
         "triangle_grid" | "starburst" | "gradient_reflected" => ("Texture generators", "Patterns"),
-        "color" | "gradient" | "gradient_axial" | "gradient_circular" | "checker" | "bricks" | "stripes" | "weave" | "weave_generator" | "tile_sampler" | "tile_generator" | "splatter" | "splatter_circular" | "pixel_processor" => ("Texture generators", "Patterns"),
+        "color" | "gradient" | "gradient_axial" | "gradient_circular" | "checker" | "bricks" | "stripes" | "weave" | "weave_generator" | "tile_sampler"
+        | "tile_generator" | "splatter" | "splatter_circular" | "pixel_processor" => ("Texture generators", "Patterns"),
         "shape" | "circle" | "rect" | "polygon" | "star" => ("Texture generators", "Shapes"),
         "sdf_shape" | "sdf_op" | "sdf_mask" | "sdf_form" => ("Texture generators", "SDF"),
-        "levels" | "adjust" | "invert" | "threshold" | "histogram_scan" | "histogram_range" | "quantize" | "quantize_color" | "clamp" | "hsl" | "colorize" | "tint" | "to_gray" | "channel" | "merge" | "switch" | "color_match" | "highpass" | "auto_levels" | "channel_mixer" | "alpha_merge" | "color_to_mask" | "replace_color" | "pow" | "histogram_shift" | "grayscale_conversion" | "chrominance_extract" => ("Filters", "Adjustments"),
-        "blur" | "blur_hq" | "directional_blur" | "sharpen" | "warp" | "directional_warp" | "vector_warp" | "slope_blur" | "swirl" | "non_uniform_blur" | "radial_blur" | "anisotropic_blur" | "non_uniform_directional_warp" | "multi_directional_warp" => ("Filters", "Blur and warp"),
+        "levels"
+        | "adjust"
+        | "invert"
+        | "threshold"
+        | "histogram_scan"
+        | "histogram_range"
+        | "quantize"
+        | "quantize_color"
+        | "clamp"
+        | "hsl"
+        | "colorize"
+        | "tint"
+        | "to_gray"
+        | "channel"
+        | "merge"
+        | "switch"
+        | "color_match"
+        | "highpass"
+        | "auto_levels"
+        | "channel_mixer"
+        | "alpha_merge"
+        | "color_to_mask"
+        | "replace_color"
+        | "pow"
+        | "histogram_shift"
+        | "grayscale_conversion"
+        | "chrominance_extract" => ("Filters", "Adjustments"),
+        "blur"
+        | "blur_hq"
+        | "directional_blur"
+        | "sharpen"
+        | "warp"
+        | "directional_warp"
+        | "vector_warp"
+        | "slope_blur"
+        | "swirl"
+        | "non_uniform_blur"
+        | "radial_blur"
+        | "anisotropic_blur"
+        | "non_uniform_directional_warp"
+        | "multi_directional_warp" => ("Filters", "Blur and warp"),
         "transform" | "mirror" | "make_it_tile_photo" | "make_it_tile_patch" | "symmetry" | "skew" => ("Filters", "Transform"),
         "glow" | "mosaic" | "shape_drop_shadow" | "shape_stroke" | "shape_glow" | "sobel" => ("Filters", "Effects"),
-        "distance" | "bevel" | "edge_detect" | "emboss" | "flood_fill" | "flood_fill_random" | "flood_fill_color" | "flood_fill_gradient" => ("Filters", "Masks and regions"),
-        "normal" | "normal_blend" | "normal_combine" | "normal_invert" | "normal_normalize" | "normal_vector_rotation" | "normal_to_height" | "ao" | "curvature" | "curvature_smooth" | "height_blend" => ("Material filters", ""),
+        "distance" | "bevel" | "edge_detect" | "emboss" | "flood_fill" | "flood_fill_random" | "flood_fill_color" | "flood_fill_gradient" => {
+            ("Filters", "Masks and regions")
+        }
+        "normal"
+        | "normal_blend"
+        | "normal_combine"
+        | "normal_invert"
+        | "normal_normalize"
+        | "normal_vector_rotation"
+        | "normal_to_height"
+        | "ao"
+        | "curvature"
+        | "curvature_smooth"
+        | "height_blend" => ("Material filters", ""),
         "edge_wear" | "dirt" | "dust" => ("Mesh-based generators", ""),
         "bitmap" | "input" | "subgraph" | "comment" | "frame" | "dot" | "output" => ("Graph items", ""),
         _ => ("Filters", "Adjustments"),
@@ -533,13 +601,20 @@ impl App {
                 ui.label(egui::RichText::new("MaterialCraft").size(15.0).color(Color32::from_gray(210)));
             });
         });
-        egui::SidePanel::left("home_left")
-            .exact_width(200.0)
-            .frame(egui::Frame::none().fill(bg).inner_margin(egui::Margin::symmetric(18.0, 0.0)))
-            .show(ctx, |ui| {
+        egui::SidePanel::left("home_left").exact_width(200.0).frame(egui::Frame::none().fill(bg).inner_margin(egui::Margin::symmetric(18.0, 0.0))).show(
+            ctx,
+            |ui| {
                 ui.add_space(38.0);
                 let w = ui.available_width();
-                if ui.add(egui::Button::new(egui::RichText::new("New graph...").color(Color32::WHITE).strong()).fill(Color32::from_rgb(20, 115, 230)).rounding(16.0).min_size(vec2(w, 32.0))).clicked() {
+                if ui
+                    .add(
+                        egui::Button::new(egui::RichText::new("New graph...").color(Color32::WHITE).strong())
+                            .fill(Color32::from_rgb(20, 115, 230))
+                            .rounding(16.0)
+                            .min_size(vec2(w, 32.0)),
+                    )
+                    .clicked()
+                {
                     self.new_dlg.open = true;
                 }
                 ui.add_space(6.0);
@@ -556,10 +631,14 @@ impl App {
                     self.screen = Screen::Editor;
                     self.bake.open = true;
                 }
-                if ui.add(egui::Button::new(egui::RichText::new("Open in Paint mode...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked() && self.paint.pick(gui_paint::Pick::Any) {
+                if ui.add(egui::Button::new(egui::RichText::new("Open in Paint mode...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked()
+                    && self.paint.pick(gui_paint::Pick::Any)
+                {
                     self.screen = Screen::Paint;
                 }
-                if ui.add(egui::Button::new(egui::RichText::new("Import Painter project...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked() && self.paint.pick(gui_paint::Pick::Substance) {
+                if ui.add(egui::Button::new(egui::RichText::new("Import Painter project...").strong()).frame(false).min_size(vec2(w, 28.0))).clicked()
+                    && self.paint.pick(gui_paint::Pick::Substance)
+                {
                     self.screen = Screen::Paint;
                 }
                 ui.add_space(6.0);
@@ -567,7 +646,14 @@ impl App {
                 ui.add_space(6.0);
                 for (i, label) in ["Home", "Learn"].iter().enumerate() {
                     let sel = self.home_page == i as u8;
-                    if ui.add(egui::Button::new(egui::RichText::new(*label).size(13.0)).fill(if sel { Color32::from_rgb(52, 52, 52) } else { Color32::TRANSPARENT }).min_size(vec2(w, 32.0))).clicked() {
+                    if ui
+                        .add(
+                            egui::Button::new(egui::RichText::new(*label).size(13.0))
+                                .fill(if sel { Color32::from_rgb(52, 52, 52) } else { Color32::TRANSPARENT })
+                                .min_size(vec2(w, 32.0)),
+                        )
+                        .clicked()
+                    {
                         self.home_page = i as u8;
                     }
                 }
@@ -585,9 +671,14 @@ impl App {
                         self.show_about = true;
                     }
                     ui.add_space(2.0);
-                    ui.label(egui::RichText::new(format!("MaterialCraft {}  -  pure Rust CPU engine", env!("CARGO_PKG_VERSION"))).size(11.0).color(Color32::from_gray(130)));
+                    ui.label(
+                        egui::RichText::new(format!("MaterialCraft {}  -  pure Rust CPU engine", env!("CARGO_PKG_VERSION")))
+                            .size(11.0)
+                            .color(Color32::from_gray(130)),
+                    );
                 });
-            });
+            },
+        );
         egui::CentralPanel::default().frame(egui::Frame::none().fill(bg).inner_margin(egui::Margin::symmetric(26.0, 0.0))).show(ctx, |ui| {
             ui.add_space(26.0);
             if self.home_page == 1 {
@@ -747,108 +838,127 @@ impl App {
         let mut open = true;
         let mut create = false;
         let mut cancel = false;
-        egui::Window::new(if self.new_dlg.dest.is_some() { "New Material Graph" } else { "New Package" }).open(&mut open).collapsible(false).resizable(false).anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0)).fixed_size(vec2(780.0, 470.0)).show(ctx, |ui| {
-            ui.horizontal_top(|ui| {
-                ui.allocate_ui_with_layout(vec2(340.0, 400.0), egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                    ui.label(egui::RichText::new("TEMPLATES").size(12.0).color(Color32::from_gray(200)));
-                    ui.add_space(4.0);
-                    egui::Frame::none().fill(Color32::from_rgb(32, 32, 32)).stroke(Stroke::new(1.0_f32, Color32::from_rgb(60, 60, 60))).show(ui, |ui| {
-                        ui.set_min_size(vec2(334.0, 366.0));
-                        egui::ScrollArea::vertical().id_salt("tmpl").max_height(366.0).show(ui, |ui| {
-                            for (i, t) in TEMPLATES.iter().enumerate() {
-                                let sel = self.new_dlg.sel == i;
-                                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 21.0), Sense::click());
-                                if sel {
-                                    ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(40, 62, 100));
-                                    ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(60, 120, 230)));
-                                } else if resp.hovered() {
-                                    ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(44, 44, 44));
+        egui::Window::new(if self.new_dlg.dest.is_some() { "New Material Graph" } else { "New Package" })
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(Align2::CENTER_CENTER, vec2(0.0, 0.0))
+            .fixed_size(vec2(780.0, 470.0))
+            .show(ctx, |ui| {
+                ui.horizontal_top(|ui| {
+                    ui.allocate_ui_with_layout(vec2(340.0, 400.0), egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                        ui.label(egui::RichText::new("TEMPLATES").size(12.0).color(Color32::from_gray(200)));
+                        ui.add_space(4.0);
+                        egui::Frame::none().fill(Color32::from_rgb(32, 32, 32)).stroke(Stroke::new(1.0_f32, Color32::from_rgb(60, 60, 60))).show(ui, |ui| {
+                            ui.set_min_size(vec2(334.0, 366.0));
+                            egui::ScrollArea::vertical().id_salt("tmpl").max_height(366.0).show(ui, |ui| {
+                                for (i, t) in TEMPLATES.iter().enumerate() {
+                                    let sel = self.new_dlg.sel == i;
+                                    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 21.0), Sense::click());
+                                    if sel {
+                                        ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(40, 62, 100));
+                                        ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(60, 120, 230)));
+                                    } else if resp.hovered() {
+                                        ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(44, 44, 44));
+                                    }
+                                    draw_icon(ui.painter(), rect.left_center() + vec2(14.0, 0.0), Ic::Layout, Color32::from_gray(190));
+                                    ui.painter().text(
+                                        rect.left_center() + vec2(30.0, 0.0),
+                                        Align2::LEFT_CENTER,
+                                        t.name,
+                                        FontId::proportional(12.5),
+                                        Color32::from_gray(225),
+                                    );
+                                    if resp.clicked() {
+                                        self.new_dlg.sel = i;
+                                    }
+                                    if resp.double_clicked() {
+                                        self.new_dlg.sel = i;
+                                    }
                                 }
-                                draw_icon(ui.painter(), rect.left_center() + vec2(14.0, 0.0), Ic::Layout, Color32::from_gray(190));
-                                ui.painter().text(rect.left_center() + vec2(30.0, 0.0), Align2::LEFT_CENTER, t.name, FontId::proportional(12.5), Color32::from_gray(225));
-                                if resp.clicked() {
-                                    self.new_dlg.sel = i;
+                            });
+                        });
+                    });
+                    ui.separator();
+                    ui.vertical(|ui| {
+                        ui.set_width(380.0);
+                        ui.label(egui::RichText::new("PROPERTIES").size(12.0).color(Color32::from_gray(200)));
+                        ui.add_space(8.0);
+                        ui.strong("Graph Name:");
+                        ui.add(egui::TextEdit::singleline(&mut self.new_dlg.name).desired_width(f32::INFINITY));
+                        ui.add_space(8.0);
+                        ui.strong("Parent size (initial working resolution)");
+                        ui.horizontal(|ui| {
+                            egui::ComboBox::from_id_salt("nd_w").width(150.0).selected_text(format!("{} px", self.new_dlg.size)).show_ui(ui, |ui| {
+                                for s in [128usize, 256, 512, 1024, 2048, 4096, 8192] {
+                                    ui.selectable_value(&mut self.new_dlg.size, s, format!("{s} px"));
                                 }
-                                if resp.double_clicked() {
-                                    self.new_dlg.sel = i;
+                            });
+                            let (r, resp) = ui.allocate_exact_size(vec2(26.0, 24.0), Sense::hover());
+                            ui.painter().rect_filled(r, 3.0, Color32::from_rgb(60, 60, 60));
+                            draw_icon(ui.painter(), r.center(), Ic::Link, Color32::WHITE);
+                            resp.on_hover_text("Width and height are linked (non-square graphs are not supported yet)");
+                            ui.add_enabled(false, egui::Button::new(format!("{} px", self.new_dlg.size)).min_size(vec2(150.0, 20.0)));
+                        });
+                        ui.add_space(8.0);
+                        ui.strong("Output format");
+                        egui::ComboBox::from_id_salt("nd_fmt")
+                            .width(380.0)
+                            .selected_text(if self.new_dlg.depth16 { "16 bits per channel" } else { "8 bits per channel" })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.new_dlg.depth16, false, "8 bits per channel");
+                                ui.selectable_value(&mut self.new_dlg.depth16, true, "16 bits per channel");
+                            });
+                        ui.add_space(8.0);
+                        ui.strong("Create graph in package");
+                        let names: Vec<String> =
+                            if self.screen == Screen::Editor { (0..self.pkgs.len()).map(|i| self.pkg_title(i)).collect() } else { Vec::new() };
+                        let shown = match self.new_dlg.dest {
+                            Some(i) => names.get(i).cloned().unwrap_or_else(|| "New package".into()),
+                            None => "New package".into(),
+                        };
+                        egui::ComboBox::from_id_salt("nd_pkg").width(380.0).selected_text(shown).show_ui(ui, |ui| {
+                            for (i, n) in names.iter().enumerate() {
+                                if ui.selectable_label(self.new_dlg.dest == Some(i), n).clicked() {
+                                    self.new_dlg.dest = Some(i);
                                 }
+                            }
+                            if ui.selectable_label(self.new_dlg.dest.is_none(), "New package").clicked() {
+                                self.new_dlg.dest = None;
+                            }
+                        });
+                        ui.add_space(12.0);
+                        egui::CollapsingHeader::new(egui::RichText::new("Template details").strong()).default_open(true).show(ui, |ui| {
+                            let t = &TEMPLATES[self.new_dlg.sel.min(TEMPLATES.len() - 1)];
+                            ui.label(t.desc);
+                            if !t.outs.is_empty() {
+                                ui.add_space(4.0);
+                                ui.small(format!("Outputs: {}", t.outs.iter().map(|o| o.0).collect::<Vec<_>>().join(", ")));
                             }
                         });
                     });
                 });
-                ui.separator();
-                ui.vertical(|ui| {
-                    ui.set_width(380.0);
-                    ui.label(egui::RichText::new("PROPERTIES").size(12.0).color(Color32::from_gray(200)));
-                    ui.add_space(8.0);
-                    ui.strong("Graph Name:");
-                    ui.add(egui::TextEdit::singleline(&mut self.new_dlg.name).desired_width(f32::INFINITY));
-                    ui.add_space(8.0);
-                    ui.strong("Parent size (initial working resolution)");
-                    ui.horizontal(|ui| {
-                        egui::ComboBox::from_id_salt("nd_w").width(150.0).selected_text(format!("{} px", self.new_dlg.size)).show_ui(ui, |ui| {
-                            for s in [128usize, 256, 512, 1024, 2048, 4096, 8192] {
-                                ui.selectable_value(&mut self.new_dlg.size, s, format!("{s} px"));
-                            }
-                        });
-                        let (r, resp) = ui.allocate_exact_size(vec2(26.0, 24.0), Sense::hover());
-                        ui.painter().rect_filled(r, 3.0, Color32::from_rgb(60, 60, 60));
-                        draw_icon(ui.painter(), r.center(), Ic::Link, Color32::WHITE);
-                        resp.on_hover_text("Width and height are linked (non-square graphs are not supported yet)");
-                        ui.add_enabled(false, egui::Button::new(format!("{} px", self.new_dlg.size)).min_size(vec2(150.0, 20.0)));
-                    });
-                    ui.add_space(8.0);
-                    ui.strong("Output format");
-                    egui::ComboBox::from_id_salt("nd_fmt").width(380.0).selected_text(if self.new_dlg.depth16 { "16 bits per channel" } else { "8 bits per channel" }).show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.new_dlg.depth16, false, "8 bits per channel");
-                        ui.selectable_value(&mut self.new_dlg.depth16, true, "16 bits per channel");
-                    });
-                    ui.add_space(8.0);
-                    ui.strong("Create graph in package");
-                    let names: Vec<String> = if self.screen == Screen::Editor { (0..self.pkgs.len()).map(|i| self.pkg_title(i)).collect() } else { Vec::new() };
-                    let shown = match self.new_dlg.dest {
-                        Some(i) => names.get(i).cloned().unwrap_or_else(|| "New package".into()),
-                        None => "New package".into(),
-                    };
-                    egui::ComboBox::from_id_salt("nd_pkg").width(380.0).selected_text(shown).show_ui(ui, |ui| {
-                        for (i, n) in names.iter().enumerate() {
-                            if ui.selectable_label(self.new_dlg.dest == Some(i), n).clicked() {
-                                self.new_dlg.dest = Some(i);
-                            }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if ui.button("RESET").clicked() {
+                        self.new_dlg.name = "Graph".into();
+                        self.new_dlg.size = 2048;
+                        self.new_dlg.sel = 1;
+                        self.new_dlg.depth16 = false;
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(egui::Button::new("CANCEL").min_size(vec2(90.0, 24.0))).clicked() {
+                            cancel = true;
                         }
-                        if ui.selectable_label(self.new_dlg.dest.is_none(), "New package").clicked() {
-                            self.new_dlg.dest = None;
-                        }
-                    });
-                    ui.add_space(12.0);
-                    egui::CollapsingHeader::new(egui::RichText::new("Template details").strong()).default_open(true).show(ui, |ui| {
-                        let t = &TEMPLATES[self.new_dlg.sel.min(TEMPLATES.len() - 1)];
-                        ui.label(t.desc);
-                        if !t.outs.is_empty() {
-                            ui.add_space(4.0);
-                            ui.small(format!("Outputs: {}", t.outs.iter().map(|o| o.0).collect::<Vec<_>>().join(", ")));
+                        if ui
+                            .add(egui::Button::new(egui::RichText::new("OK").strong()).fill(Color32::from_rgb(20, 90, 190)).min_size(vec2(90.0, 24.0)))
+                            .clicked()
+                        {
+                            create = true;
                         }
                     });
                 });
             });
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                if ui.button("RESET").clicked() {
-                    self.new_dlg.name = "Graph".into();
-                    self.new_dlg.size = 2048;
-                    self.new_dlg.sel = 1;
-                    self.new_dlg.depth16 = false;
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.add(egui::Button::new("CANCEL").min_size(vec2(90.0, 24.0))).clicked() {
-                        cancel = true;
-                    }
-                    if ui.add(egui::Button::new(egui::RichText::new("OK").strong()).fill(Color32::from_rgb(20, 90, 190)).min_size(vec2(90.0, 24.0))).clicked() {
-                        create = true;
-                    }
-                });
-            });
-        });
         if create {
             self.create_from_dialog();
         }
@@ -1007,7 +1117,13 @@ impl App {
                         }
                         if is_active {
                             let root = self.parents.first().map(|p| &p.0).unwrap_or(&self.g);
-                            let files: BTreeSet<String> = root.nodes.values().filter(|n| n.kind == "bitmap").filter_map(|n| n.strs.get("file")).map(|f| std::path::Path::new(f).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| f.clone())).collect();
+                            let files: BTreeSet<String> = root
+                                .nodes
+                                .values()
+                                .filter(|n| n.kind == "bitmap")
+                                .filter_map(|n| n.strs.get("file"))
+                                .map(|f| std::path::Path::new(f).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| f.clone()))
+                                .collect();
                             if !files.is_empty() {
                                 ui.add_space(4.0);
                                 ui.small("Resources");
@@ -1071,14 +1187,17 @@ impl App {
                             }
                         } else {
                             let open = self.lib_cat.starts_with(name);
-                            egui::CollapsingHeader::new(egui::RichText::new(*name).strong()).default_open(true).open(if open { Some(true) } else { None }).show(ui, |ui| {
-                                for sub in *subs {
-                                    let full = format!("{name}/{sub}");
-                                    if ui.selectable_label(self.lib_cat == full, format!("   {sub}")).clicked() {
-                                        self.lib_cat = full;
+                            egui::CollapsingHeader::new(egui::RichText::new(*name).strong())
+                                .default_open(true)
+                                .open(if open { Some(true) } else { None })
+                                .show(ui, |ui| {
+                                    for sub in *subs {
+                                        let full = format!("{name}/{sub}");
+                                        if ui.selectable_label(self.lib_cat == full, format!("   {sub}")).clicked() {
+                                            self.lib_cat = full;
+                                        }
                                     }
-                                }
-                            });
+                                });
                             let hdr_resp = ui.interact(ui.min_rect(), Id::new(("libcat", *name)), Sense::hover());
                             let _ = hdr_resp;
                             if sel {
@@ -1093,11 +1212,14 @@ impl App {
                 egui::ScrollArea::vertical().id_salt("libgrid").auto_shrink([false, false]).show(ui, |ui| {
                     if items.is_empty() {
                         ui.add_space(10.0);
-                        ui.label(egui::RichText::new(match self.lib_cat.as_str() {
-                            "FxMap nodes" | "Function nodes" => "Not available in this version.",
-                            "Favorites" => "Right-click a node to add it to favorites.",
-                            _ => "Nothing here.",
-                        }).color(Color32::from_gray(130)));
+                        ui.label(
+                            egui::RichText::new(match self.lib_cat.as_str() {
+                                "FxMap nodes" | "Function nodes" => "Not available in this version.",
+                                "Favorites" => "Right-click a node to add it to favorites.",
+                                _ => "Nothing here.",
+                            })
+                            .color(Color32::from_gray(130)),
+                        );
                     }
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing = vec2(4.0, 6.0);
@@ -1201,7 +1323,12 @@ impl App {
         }
         ui.horizontal(|ui| {
             ui.add_space(4.0);
-            ui.small(format!("{} x {} (RGBA, {}bpc)", self.tex2d_size.0, self.tex2d_size.1, if self.g.meta.get("output_format").map(|s| s == "16").unwrap_or(false) { 16 } else { 8 }));
+            ui.small(format!(
+                "{} x {} (RGBA, {}bpc)",
+                self.tex2d_size.0,
+                self.tex2d_size.1,
+                if self.g.meta.get("output_format").map(|s| s == "16").unwrap_or(false) { 16 } else { 8 }
+            ));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(6.0);
                 let px = if self.tex2d_size.0 > 0 { side / self.tex2d_size.0 as f32 * 100.0 } else { 100.0 };
@@ -1397,7 +1524,13 @@ impl App {
         } else if let Some(t) = &self.tex3d {
             ui.painter().image(t.id(), img_rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
         }
-        ui.painter().text(rect.left_bottom() + vec2(6.0, -5.0), Align2::LEFT_BOTTOM, "drag: orbit   Alt+drag / middle: move   Shift+drag: light   wheel: zoom", FontId::proportional(10.0), Color32::from_gray(110));
+        ui.painter().text(
+            rect.left_bottom() + vec2(6.0, -5.0),
+            Align2::LEFT_BOTTOM,
+            "drag: orbit   Alt+drag / middle: move   Shift+drag: light   wheel: zoom",
+            FontId::proportional(10.0),
+            Color32::from_gray(110),
+        );
         ui.horizontal(|ui| {
             ui.add_space(4.0);
             ui.small("sRGB (default)");
@@ -1439,14 +1572,17 @@ impl App {
             ui.add_space(6.0);
             ui.strong("Output Format");
             let cur = meta.get("output_format").cloned().unwrap_or_else(|| "8".into());
-            egui::ComboBox::from_id_salt("ofmt").width(220.0).selected_text(if cur == "16" { "16 Bits per Channel" } else { "8 Bits per Channel" }).show_ui(ui, |ui| {
-                if ui.selectable_label(cur != "16", "8 Bits per Channel").clicked() {
-                    meta.insert("output_format".into(), "8".into());
-                }
-                if ui.selectable_label(cur == "16", "16 Bits per Channel").clicked() {
-                    meta.insert("output_format".into(), "16".into());
-                }
-            });
+            egui::ComboBox::from_id_salt("ofmt").width(220.0).selected_text(if cur == "16" { "16 Bits per Channel" } else { "8 Bits per Channel" }).show_ui(
+                ui,
+                |ui| {
+                    if ui.selectable_label(cur != "16", "8 Bits per Channel").clicked() {
+                        meta.insert("output_format".into(), "8".into());
+                    }
+                    if ui.selectable_label(cur == "16", "16 Bits per Channel").clicked() {
+                        meta.insert("output_format".into(), "16".into());
+                    }
+                },
+            );
             ui.add_space(6.0);
             ui.strong("Tiling Mode");
             ui.add_enabled(false, egui::Button::new("H and V Tiling").min_size(vec2(220.0, 20.0)));
@@ -1479,7 +1615,10 @@ impl App {
             }
             ui.add_space(4.0);
             ui.strong("Package");
-            ui.add_enabled(false, egui::TextEdit::singleline(&mut self.file.as_ref().map(|p| p.display().to_string()).unwrap_or_default()).desired_width(f32::INFINITY));
+            ui.add_enabled(
+                false,
+                egui::TextEdit::singleline(&mut self.file.as_ref().map(|p| p.display().to_string()).unwrap_or_default()).desired_width(f32::INFINITY),
+            );
             ui.add_space(4.0);
             for (label, key) in [("Exposed in package", "exposed"), ("Show in library", "show_in_library")] {
                 ui.strong(label);
@@ -1516,140 +1655,153 @@ impl App {
         let (can_undo, can_redo, has_sel, has_clip) = (!self.undo.is_empty(), !self.redo.is_empty(), !self.sel.is_empty(), !self.clip.is_empty());
         let panel_fill = Color32::from_rgb(40, 40, 40);
 
-        egui::TopBottomPanel::top("menu").frame(egui::Frame::none().fill(Color32::from_rgb(34, 34, 34)).inner_margin(egui::Margin::symmetric(6.0, 2.0))).show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    ui.menu_button("New", |ui| {
-                        if ui.button("Material Graph...   Ctrl+N").clicked() {
-                            acts.push(Act::NewGraph);
-                            ui.close_menu();
+        egui::TopBottomPanel::top("menu").frame(egui::Frame::none().fill(Color32::from_rgb(34, 34, 34)).inner_margin(egui::Margin::symmetric(6.0, 2.0))).show(
+            ctx,
+            |ui| {
+                egui::menu::bar(ui, |ui| {
+                    ui.menu_button("File", |ui| {
+                        ui.menu_button("New", |ui| {
+                            if ui.button("Material Graph...   Ctrl+N").clicked() {
+                                acts.push(Act::NewGraph);
+                                ui.close_menu();
+                            }
+                            if ui.button("Empty Package...").clicked() {
+                                acts.push(Act::NewPackage);
+                                ui.close_menu();
+                            }
+                        });
+                        for (label, a) in [("Open package(s)...   Ctrl+O", Act::Open), ("Save   Ctrl+S", Act::Save), ("Save as...", Act::SaveAs)] {
+                            if ui.button(label).clicked() {
+                                acts.push(a);
+                                ui.close_menu();
+                            }
                         }
-                        if ui.button("Empty Package...").clicked() {
-                            acts.push(Act::NewPackage);
+                        ui.separator();
+                        for (label, a) in
+                            [("Import bitmap...", Act::ImportBitmap), ("Export textures...", Act::Export), ("Publish package (.mca)...", Act::Publish)]
+                        {
+                            if ui.button(label).clicked() {
+                                acts.push(a);
+                                ui.close_menu();
+                            }
+                        }
+                        ui.separator();
+                        if ui.button("Home screen").clicked() {
+                            acts.push(Act::Home);
                             ui.close_menu();
                         }
                     });
-                    for (label, a) in [("Open package(s)...   Ctrl+O", Act::Open), ("Save   Ctrl+S", Act::Save), ("Save as...", Act::SaveAs)] {
-                        if ui.button(label).clicked() {
-                            acts.push(a);
+                    ui.menu_button("Edit", |ui| {
+                        if ui.add_enabled(can_undo, egui::Button::new("Undo   Ctrl+Z")).clicked() {
+                            acts.push(Act::Undo);
                             ui.close_menu();
                         }
-                    }
-                    ui.separator();
-                    for (label, a) in [("Import bitmap...", Act::ImportBitmap), ("Export textures...", Act::Export), ("Publish package (.mca)...", Act::Publish)] {
-                        if ui.button(label).clicked() {
-                            acts.push(a);
+                        if ui.add_enabled(can_redo, egui::Button::new("Redo   Ctrl+Y")).clicked() {
+                            acts.push(Act::Redo);
                             ui.close_menu();
                         }
-                    }
-                    ui.separator();
-                    if ui.button("Home screen").clicked() {
-                        acts.push(Act::Home);
-                        ui.close_menu();
-                    }
+                        ui.separator();
+                        for (label, a, en) in [
+                            ("Cut   Ctrl+X", Act::Cut, has_sel),
+                            ("Copy   Ctrl+C", Act::Copy, has_sel),
+                            ("Paste   Ctrl+V", Act::Paste(None), has_clip),
+                            ("Duplicate   Ctrl+D", Act::Duplicate, has_sel),
+                            ("Delete   Del", Act::Delete, true),
+                            ("Select all   Ctrl+A", Act::SelectAll, true),
+                        ] {
+                            if ui.add_enabled(en, egui::Button::new(label)).clicked() {
+                                acts.push(a);
+                                ui.close_menu();
+                            }
+                        }
+                        ui.separator();
+                        if ui.button("Add node...   Tab").clicked() {
+                            acts.push(Act::Search(None));
+                            ui.close_menu();
+                        }
+                        if ui.button("Comment frame   C").clicked() {
+                            acts.push(Act::Comment);
+                            ui.close_menu();
+                        }
+                        if ui.add_enabled(has_sel, egui::Button::new("Create subgraph from selection")).clicked() {
+                            acts.push(Act::Subgraph);
+                            ui.close_menu();
+                        }
+                    });
+                    ui.menu_button("Tools", |ui| {
+                        if ui.button("Mesh map baker...").clicked() {
+                            acts.push(Act::Bake);
+                            ui.close_menu();
+                        }
+                        if ui.button("Frame all   F").clicked() {
+                            acts.push(Act::FrameAll);
+                            ui.close_menu();
+                        }
+                        if ui.button("Auto-layout").clicked() {
+                            acts.push(Act::AutoLayout);
+                            ui.close_menu();
+                        }
+                    });
+                    ui.menu_button("Windows", |ui| {
+                        for (i, n) in ["Explorer", "Library", "3D View", "2D View", "Properties"].iter().enumerate() {
+                            ui.checkbox(&mut self.show[i], *n);
+                        }
+                        ui.separator();
+                        if ui.button("Reset layout").clicked() {
+                            self.show = [true; 5];
+                            self.left_split = 0.33;
+                            ui.close_menu();
+                        }
+                    });
+                    ui.menu_button("Help", |ui| {
+                        if ui.button("Keyboard shortcuts").clicked() {
+                            self.show_about = true;
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        ui.small(self.logo_note.as_str());
+                    });
                 });
-                ui.menu_button("Edit", |ui| {
-                    if ui.add_enabled(can_undo, egui::Button::new("Undo   Ctrl+Z")).clicked() {
-                        acts.push(Act::Undo);
-                        ui.close_menu();
-                    }
-                    if ui.add_enabled(can_redo, egui::Button::new("Redo   Ctrl+Y")).clicked() {
-                        acts.push(Act::Redo);
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    for (label, a, en) in [
-                        ("Cut   Ctrl+X", Act::Cut, has_sel),
-                        ("Copy   Ctrl+C", Act::Copy, has_sel),
-                        ("Paste   Ctrl+V", Act::Paste(None), has_clip),
-                        ("Duplicate   Ctrl+D", Act::Duplicate, has_sel),
-                        ("Delete   Del", Act::Delete, true),
-                        ("Select all   Ctrl+A", Act::SelectAll, true),
+            },
+        );
+        egui::TopBottomPanel::top("toolbar")
+            .frame(egui::Frame::none().fill(Color32::from_rgb(38, 38, 38)).inner_margin(egui::Margin::symmetric(6.0, 1.0)))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    for (ic, tip, a, en) in [
+                        (Ic::New, "New material graph (Ctrl+N)", Act::NewGraph, true),
+                        (Ic::Open, "Open (Ctrl+O)", Act::Open, true),
+                        (Ic::Save, "Save (Ctrl+S)", Act::Save, true),
                     ] {
-                        if ui.add_enabled(en, egui::Button::new(label)).clicked() {
+                        if icon_btn(ui, ic, tip, en).clicked() {
                             acts.push(a);
-                            ui.close_menu();
                         }
                     }
                     ui.separator();
-                    if ui.button("Add node...   Tab").clicked() {
-                        acts.push(Act::Search(None));
-                        ui.close_menu();
+                    if icon_btn(ui, Ic::Undo, "Undo (Ctrl+Z)", can_undo).clicked() {
+                        acts.push(Act::Undo);
                     }
-                    if ui.button("Comment frame   C").clicked() {
-                        acts.push(Act::Comment);
-                        ui.close_menu();
+                    if icon_btn(ui, Ic::Redo, "Redo (Ctrl+Y)", can_redo).clicked() {
+                        acts.push(Act::Redo);
                     }
-                    if ui.add_enabled(has_sel, egui::Button::new("Create subgraph from selection")).clicked() {
-                        acts.push(Act::Subgraph);
-                        ui.close_menu();
-                    }
-                });
-                ui.menu_button("Tools", |ui| {
-                    if ui.button("Mesh map baker...").clicked() {
-                        acts.push(Act::Bake);
-                        ui.close_menu();
-                    }
-                    if ui.button("Frame all   F").clicked() {
-                        acts.push(Act::FrameAll);
-                        ui.close_menu();
-                    }
-                    if ui.button("Auto-layout").clicked() {
-                        acts.push(Act::AutoLayout);
-                        ui.close_menu();
-                    }
-                });
-                ui.menu_button("Windows", |ui| {
-                    for (i, n) in ["Explorer", "Library", "3D View", "2D View", "Properties"].iter().enumerate() {
-                        ui.checkbox(&mut self.show[i], *n);
-                    }
-                    ui.separator();
-                    if ui.button("Reset layout").clicked() {
-                        self.show = [true; 5];
-                        self.left_split = 0.33;
-                        ui.close_menu();
-                    }
-                });
-                ui.menu_button("Help", |ui| {
-                    if ui.button("Keyboard shortcuts").clicked() {
-                        self.show_about = true;
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    ui.small(self.logo_note.as_str());
                 });
             });
-        });
-        egui::TopBottomPanel::top("toolbar").frame(egui::Frame::none().fill(Color32::from_rgb(38, 38, 38)).inner_margin(egui::Margin::symmetric(6.0, 1.0))).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                for (ic, tip, a, en) in [
-                    (Ic::New, "New material graph (Ctrl+N)", Act::NewGraph, true),
-                    (Ic::Open, "Open (Ctrl+O)", Act::Open, true),
-                    (Ic::Save, "Save (Ctrl+S)", Act::Save, true),
-                ] {
-                    if icon_btn(ui, ic, tip, en).clicked() {
-                        acts.push(a);
-                    }
-                }
-                ui.separator();
-                if icon_btn(ui, Ic::Undo, "Undo (Ctrl+Z)", can_undo).clicked() {
-                    acts.push(Act::Undo);
-                }
-                if icon_btn(ui, Ic::Redo, "Redo (Ctrl+Y)", can_redo).clicked() {
-                    acts.push(Act::Redo);
-                }
-            });
-        });
-        egui::TopBottomPanel::bottom("status").frame(egui::Frame::none().fill(Color32::from_rgb(30, 30, 30)).inner_margin(egui::Margin::symmetric(8.0, 2.0))).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                let (msg, ok) = &self.status;
-                ui.colored_label(if *ok { Color32::from_gray(170) } else { Color32::from_rgb(255, 120, 110) }, msg);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
-                    ui.label(format!("MaterialCraft Engine: CPU ({threads} threads){}    Version: {}", if self.job.is_some() { "   computing..." } else { "" }, env!("CARGO_PKG_VERSION")));
+        egui::TopBottomPanel::bottom("status")
+            .frame(egui::Frame::none().fill(Color32::from_rgb(30, 30, 30)).inner_margin(egui::Margin::symmetric(8.0, 2.0)))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let (msg, ok) = &self.status;
+                    ui.colored_label(if *ok { Color32::from_gray(170) } else { Color32::from_rgb(255, 120, 110) }, msg);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+                        ui.label(format!(
+                            "MaterialCraft Engine: CPU ({threads} threads){}    Version: {}",
+                            if self.job.is_some() { "   computing..." } else { "" },
+                            env!("CARGO_PKG_VERSION")
+                        ));
+                    });
                 });
             });
-        });
 
         let (mut d_props, mut d_left, mut d_views, mut d_split) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
         if self.show[4] {
@@ -2100,7 +2252,12 @@ fn window_icon() -> egui::IconData {
                 rgba.extend_from_slice(&[0, 0, 0, 0]);
             } else {
                 let p = t.sample(px / sw, py / sh);
-                rgba.extend_from_slice(&[(p[0].clamp(0.0, 1.0) * 255.0) as u8, (p[1].clamp(0.0, 1.0) * 255.0) as u8, (p[2].clamp(0.0, 1.0) * 255.0) as u8, (p[3].clamp(0.0, 1.0) * 255.0) as u8]);
+                rgba.extend_from_slice(&[
+                    (p[0].clamp(0.0, 1.0) * 255.0) as u8,
+                    (p[1].clamp(0.0, 1.0) * 255.0) as u8,
+                    (p[2].clamp(0.0, 1.0) * 255.0) as u8,
+                    (p[3].clamp(0.0, 1.0) * 255.0) as u8,
+                ]);
             }
         }
     }

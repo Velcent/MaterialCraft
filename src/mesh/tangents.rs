@@ -14,13 +14,7 @@ impl MeshPart {
     /// Replaces `tangents` with tangents derived from UV set `uv_set`, generating normals first if there are none.
     pub fn generate_tangents(&mut self, uv_set: usize) -> Result<(), MeshError> {
         let available = self.uv_sets.len();
-        let uvs = self
-            .uv_sets
-            .get(uv_set)
-            .ok_or(MeshError::new(MeshErrorKind::MissingUvSet {
-                set: uv_set,
-                available,
-            }))?;
+        let uvs = self.uv_sets.get(uv_set).ok_or(MeshError::new(MeshErrorKind::MissingUvSet { set: uv_set, available }))?;
         if self.normals.len() != self.positions.len() {
             self.normals = smooth_normals(&self.positions, &self.triangles);
         }
@@ -39,12 +33,7 @@ impl MeshPart {
 
 /// Unit tangents orthogonal to `normals`, with handedness in w. Vertices whose triangles all have degenerate UVs
 /// get an arbitrary tangent perpendicular to their normal and w = 1. Missing normals or UVs count as degenerate.
-pub(super) fn tangent_frames(
-    positions: &[Vec3],
-    normals: &[Vec3],
-    uvs: &[[f32; 2]],
-    triangles: &[[u32; 3]],
-) -> Vec<[f32; 4]> {
+pub(super) fn tangent_frames(positions: &[Vec3], normals: &[Vec3], uvs: &[[f32; 2]], triangles: &[[u32; 3]]) -> Vec<[f32; 4]> {
     let n = positions.len();
     let mut along_u = vec![[0.0f32; 3]; n];
     let mut along_v = vec![[0.0f32; 3]; n];
@@ -80,11 +69,7 @@ fn vertex_tangent(normal: Vec3, along_u: Vec3, along_v: Vec3) -> [f32; 4] {
     if t == [0.0; 3] {
         t = any_perpendicular(normal);
     }
-    let w = if dot(cross(normal, t), up) < 0.0 {
-        -1.0
-    } else {
-        1.0
-    };
+    let w = if dot(cross(normal, t), up) < 0.0 { -1.0 } else { 1.0 };
     [t[0], t[1], t[2], w]
 }
 
@@ -95,11 +80,7 @@ fn reject(v: Vec3, n: Vec3) -> Vec3 {
 
 /// A unit vector perpendicular to the unit vector `n`.
 fn any_perpendicular(n: Vec3) -> Vec3 {
-    let axis = if n[0].abs() < 0.9 {
-        [1.0, 0.0, 0.0]
-    } else {
-        [0.0, 1.0, 0.0]
-    };
+    let axis = if n[0].abs() < 0.9 { [1.0, 0.0, 0.0] } else { [0.0, 1.0, 0.0] };
     unit_or(reject(axis, n), [1.0, 0.0, 0.0])
 }
 
@@ -149,13 +130,7 @@ mod tests {
     fn missing_uv_set() {
         let mut q = quad();
         let e = q.generate_tangents(2).unwrap_err();
-        assert_eq!(
-            e.kind,
-            MeshErrorKind::MissingUvSet {
-                set: 2,
-                available: 1
-            }
-        );
+        assert_eq!(e.kind, MeshErrorKind::MissingUvSet { set: 2, available: 1 });
     }
 
     #[test]

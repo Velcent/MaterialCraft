@@ -1,8 +1,8 @@
 //! Damaged archives give errors, never panics.
 
-use super::fixtures::{full_document, Rng};
+use super::fixtures::{Rng, full_document};
 use super::round_trip::{from_bytes, to_bytes};
-use crate::paint::format::{load_with, FormatError, LoadOptions};
+use crate::paint::format::{FormatError, LoadOptions, load_with};
 use crate::zip::{Method, ZipReader, ZipWriter};
 use std::io::Cursor;
 
@@ -62,12 +62,7 @@ fn flipped_bytes_never_panic() {
 #[test]
 fn damaged_entries_error() {
     let bytes = small();
-    let names: Vec<String> = ZipReader::open(Cursor::new(&bytes))
-        .unwrap()
-        .entries()
-        .iter()
-        .map(|e| e.name.clone())
-        .collect();
+    let names: Vec<String> = ZipReader::open(Cursor::new(&bytes)).unwrap().entries().iter().map(|e| e.name.clone()).collect();
     for name in names.iter().filter(|n| *n != "thumbnail.png") {
         // Missing entry.
         let dropped = rewrite(&bytes, |n, d| (n != name).then_some(d));
@@ -100,13 +95,8 @@ fn damaged_entries_error() {
 #[test]
 fn image_budget_is_enforced() {
     let bytes = small();
-    let tight = LoadOptions {
-        max_image_bytes: 1000,
-    };
-    assert!(matches!(
-        load_with(Cursor::new(&bytes), &tight),
-        Err(FormatError::TooLarge { .. })
-    ));
+    let tight = LoadOptions { max_image_bytes: 1000 };
+    assert!(matches!(load_with(Cursor::new(&bytes), &tight), Err(FormatError::TooLarge { .. })));
     assert!(load_with(Cursor::new(&bytes), &LoadOptions::default()).is_ok());
 }
 
@@ -116,7 +106,5 @@ fn not_a_document() {
     let mut z = ZipWriter::in_memory();
     z.add("other.txt", b"x", Method::Stored).unwrap();
     let bytes = z.finish_bytes().unwrap();
-    assert!(
-        matches!(from_bytes(&bytes), Err(FormatError::MissingEntry(n)) if n == "document.json")
-    );
+    assert!(matches!(from_bytes(&bytes), Err(FormatError::MissingEntry(n)) if n == "document.json"));
 }

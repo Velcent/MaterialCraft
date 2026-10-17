@@ -9,10 +9,10 @@
 //! Older files (format 12, Painter 2020) differ; [`super::reader`] reads both.
 
 use super::reader::read;
-use materialcraft_substance::decode::document::Scalar;
 use materialcraft_substance::decode::DecodeError;
-use materialcraft_substance::model::raw::RawObject;
+use materialcraft_substance::decode::document::Scalar;
 use materialcraft_substance::model::RawTree;
+use materialcraft_substance::model::raw::RawObject;
 
 /// Where the settings live inside a `.spp`.
 pub const BAKING_INI: &str = "/baking/baking.ini";

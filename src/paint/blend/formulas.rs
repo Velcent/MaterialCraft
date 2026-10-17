@@ -3,39 +3,15 @@
 use super::BlendMode;
 
 fn dodge(b: f32, t: f32) -> f32 {
-    if t >= 1.0 {
-        if b > 0.0 {
-            1.0
-        } else {
-            0.0
-        }
-    } else {
-        (b / (1.0 - t)).min(1.0)
-    }
+    if t >= 1.0 { if b > 0.0 { 1.0 } else { 0.0 } } else { (b / (1.0 - t)).min(1.0) }
 }
 
 fn burn(b: f32, t: f32) -> f32 {
-    if t <= 0.0 {
-        if b >= 1.0 {
-            1.0
-        } else {
-            0.0
-        }
-    } else {
-        (1.0 - (1.0 - b) / t).max(0.0)
-    }
+    if t <= 0.0 { if b >= 1.0 { 1.0 } else { 0.0 } } else { (1.0 - (1.0 - b) / t).max(0.0) }
 }
 
 fn div(a: f32, b: f32) -> f32 {
-    if b.abs() <= 1e-6 {
-        if a > 0.0 {
-            1.0
-        } else {
-            0.0
-        }
-    } else {
-        a / b
-    }
+    if b.abs() <= 1e-6 { if a > 0.0 { 1.0 } else { 0.0 } } else { a / b }
 }
 
 pub(super) fn separable(mode: BlendMode, b: f32, t: f32) -> f32 {
@@ -64,11 +40,7 @@ pub(super) fn separable(mode: BlendMode, b: f32, t: f32) -> f32 {
             if t <= 0.5 {
                 b - (1.0 - 2.0 * t) * b * (1.0 - b)
             } else {
-                let d = if b <= 0.25 {
-                    ((16.0 * b - 12.0) * b + 4.0) * b
-                } else {
-                    b.max(0.0).sqrt()
-                };
+                let d = if b <= 0.25 { ((16.0 * b - 12.0) * b + 4.0) * b } else { b.max(0.0).sqrt() };
                 b + (2.0 * t - 1.0) * (d - b)
             }
         }

@@ -16,10 +16,7 @@ fn entries_and_methods() {
     }
     let mut zip = ZipReader::open(Cursor::new(bytes)).unwrap();
     let names: Vec<String> = zip.entries().iter().map(|e| e.name.clone()).collect();
-    assert_eq!(
-        names[..3],
-        ["document.json", "import-report.json", "mesh/model.glb"]
-    );
+    assert_eq!(names[..3], ["document.json", "import-report.json", "mesh/model.glb"]);
     assert_eq!(names.last().map(String::as_str), Some("thumbnail.png"));
     assert!(names.contains(&"textures/body/layers/p0/base_color.png".to_string()));
     assert!(names.contains(&"textures/body/layers/p2/user3.exr".to_string()));
@@ -32,28 +29,16 @@ fn entries_and_methods() {
             assert_eq!(e.method(), Some(Method::Stored), "{}", e.name);
         }
     }
-    assert_eq!(
-        zip.find("document.json").unwrap().method(),
-        Some(Method::Deflate)
-    );
+    assert_eq!(zip.find("document.json").unwrap().method(), Some(Method::Deflate));
 
     let text = String::from_utf8(zip.read("document.json").unwrap()).unwrap();
     assert!(text.starts_with("{\n  \"format\": \"mcpaint\",\n  \"format_version\": \"0.2\",\n"));
     assert!(text.contains("\n  \"mesh\": \"mesh/model.glb\",\n  \"height_filter\": \"sobel\",\n"));
     assert!(text.ends_with("}\n"));
     let root = json::parse(&text).unwrap();
-    assert_eq!(
-        root["texture_sets"][0]["resolution"].to_string(),
-        "[150,130]"
-    );
-    assert_eq!(
-        root["texture_sets"][0]["layers"][0]["opacity"].as_f64(),
-        Some(0.37)
-    );
-    assert_eq!(
-        Mesh::from_glb(&zip.read("mesh/model.glb").unwrap()).unwrap(),
-        doc.mesh
-    );
+    assert_eq!(root["texture_sets"][0]["resolution"].to_string(), "[150,130]");
+    assert_eq!(root["texture_sets"][0]["layers"][0]["opacity"].as_f64(), Some(0.37));
+    assert_eq!(Mesh::from_glb(&zip.read("mesh/model.glb").unwrap()).unwrap(), doc.mesh);
     // 16-bit samples are big-endian in the PNG: an independent decoder sees the model's values.
     let png = crate::png::decode(&zip.read("textures/body/layers/p1/height.png").unwrap()).unwrap();
     let layer = doc.texture_sets[0].layer("p1").unwrap();

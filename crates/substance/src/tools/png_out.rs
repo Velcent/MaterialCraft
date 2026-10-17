@@ -1,7 +1,7 @@
 //! [`PngMap`]: one float texture written as an 8- or 16-bit gray or RGB PNG.
 
 use materialcraft::deflate::Level;
-use materialcraft::png::{encode_raw, ColorType};
+use materialcraft::png::{ColorType, encode_raw};
 use materialcraft::tex::Tex;
 use std::io;
 use std::path::Path;

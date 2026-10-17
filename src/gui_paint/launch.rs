@@ -48,8 +48,5 @@ fn parse_channel(id: &str) -> Option<ChannelView> {
         return Some(ChannelView::Material);
     }
     let c = Channel::from_id(id)?;
-    ChannelView::ALL
-        .iter()
-        .map(|(v, _)| *v)
-        .find(|v| *v == ChannelView::Single(c))
+    ChannelView::ALL.iter().map(|(v, _)| *v).find(|v| *v == ChannelView::Single(c))
 }

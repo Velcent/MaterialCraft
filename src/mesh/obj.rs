@@ -10,10 +10,7 @@ impl Mesh {
         writeln!(out, "# written by MaterialCraft")?;
         let mut base = ObjOffsets::default();
         for part in &self.parts {
-            let material = self
-                .materials
-                .get(part.material)
-                .map_or("default", String::as_str);
+            let material = self.materials.get(part.material).map_or("default", String::as_str);
             write_part(out, part, material, &base)?;
             base.advance(part);
         }
@@ -47,24 +44,15 @@ impl ObjOffsets {
 
 /// UV set 0 when it matches the vertex count.
 fn uvs(part: &MeshPart) -> Option<&[[f32; 2]]> {
-    part.uv_sets
-        .first()
-        .filter(|uv| uv.len() == part.positions.len())
-        .map(Vec::as_slice)
+    part.uv_sets.first().filter(|uv| uv.len() == part.positions.len()).map(Vec::as_slice)
 }
 
 /// The normals when they match the vertex count.
 fn normals(part: &MeshPart) -> Option<&[[f32; 3]]> {
-    (!part.normals.is_empty() && part.normals.len() == part.positions.len())
-        .then_some(part.normals.as_slice())
+    (!part.normals.is_empty() && part.normals.len() == part.positions.len()).then_some(part.normals.as_slice())
 }
 
-fn write_part(
-    out: &mut impl Write,
-    part: &MeshPart,
-    material: &str,
-    base: &ObjOffsets,
-) -> io::Result<()> {
+fn write_part(out: &mut impl Write, part: &MeshPart, material: &str, base: &ObjOffsets) -> io::Result<()> {
     writeln!(out, "o {}", obj_name(&part.name))?;
     writeln!(out, "usemtl {}", obj_name(material))?;
     for p in &part.positions {
@@ -79,22 +67,12 @@ fn write_part(
         writeln!(out, "vn {} {} {}", n[0], n[1], n[2])?;
     }
     let count = part.positions.len();
-    for tri in part
-        .triangles
-        .iter()
-        .filter(|t| t.iter().all(|&i| (i as usize) < count))
-    {
+    for tri in part.triangles.iter().filter(|t| t.iter().all(|&i| (i as usize) < count)) {
         write!(out, "f")?;
         for &i in tri {
             let i = i as usize;
             match (uv.is_some(), nrm.is_some()) {
-                (true, true) => write!(
-                    out,
-                    " {}/{}/{}",
-                    base.v + i + 1,
-                    base.vt + i + 1,
-                    base.vn + i + 1
-                )?,
+                (true, true) => write!(out, " {}/{}/{}", base.v + i + 1, base.vt + i + 1, base.vn + i + 1)?,
                 (true, false) => write!(out, " {}/{}", base.v + i + 1, base.vt + i + 1)?,
                 (false, true) => write!(out, " {}//{}", base.v + i + 1, base.vn + i + 1)?,
                 (false, false) => write!(out, " {}", base.v + i + 1)?,
@@ -107,15 +85,8 @@ fn write_part(
 
 /// OBJ names end at whitespace; replace it so names survive.
 fn obj_name(name: &str) -> String {
-    let n: String = name
-        .chars()
-        .map(|c| if c.is_whitespace() { '_' } else { c })
-        .collect();
-    if n.is_empty() {
-        "unnamed".into()
-    } else {
-        n
-    }
+    let n: String = name.chars().map(|c| if c.is_whitespace() { '_' } else { c }).collect();
+    if n.is_empty() { "unnamed".into() } else { n }
 }
 
 #[cfg(test)]
@@ -129,10 +100,7 @@ mod tests {
         second.name = "second part".into();
         second.normals.clear();
         second.material = 1;
-        let mesh = Mesh {
-            materials: vec!["Body".into(), "Head".into()],
-            parts: vec![quad(), second],
-        };
+        let mesh = Mesh { materials: vec!["Body".into(), "Head".into()], parts: vec![quad(), second] };
         let text = mesh.to_obj_string();
         let lines: Vec<&str> = text.lines().collect();
         assert!(lines.contains(&"o second_part"));

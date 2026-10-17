@@ -19,25 +19,15 @@ impl Version {
     /// Parses `major.minor` (decimal, no sign, no leading zeros except `0` itself).
     pub fn parse(text: &str) -> Option<Version> {
         let (major, minor) = text.split_once('.')?;
-        Some(Version {
-            major: number(major)?,
-            minor: number(minor)?,
-        })
+        Some(Version { major: number(major)?, minor: number(minor)? })
     }
 
     /// Checks that a file of version `text` can be read by this code.
     pub fn check_readable(text: &str) -> Result<Version, FormatError> {
-        let v = Version::parse(text).ok_or_else(|| {
-            FormatError::manifest("format_version", format!("{text:?} is not major.minor"))
-        })?;
+        let v = Version::parse(text).ok_or_else(|| FormatError::manifest("format_version", format!("{text:?} is not major.minor")))?;
         match v.major.cmp(&Version::CURRENT.major) {
-            Ordering::Greater => Err(FormatError::NewerVersion {
-                found: text.to_string(),
-                supported: format!("{}.x", Version::CURRENT.major),
-            }),
-            Ordering::Less => Err(FormatError::Unsupported(format!(
-                "format version {text} is older than this program reads"
-            ))),
+            Ordering::Greater => Err(FormatError::NewerVersion { found: text.to_string(), supported: format!("{}.x", Version::CURRENT.major) }),
+            Ordering::Less => Err(FormatError::Unsupported(format!("format version {text} is older than this program reads"))),
             Ordering::Equal => Ok(v),
         }
     }
@@ -50,8 +40,7 @@ impl fmt::Display for Version {
 }
 
 fn number(s: &str) -> Option<u32> {
-    let ok =
-        !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) && (s == "0" || !s.starts_with('0'));
+    let ok = !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) && (s == "0" || !s.starts_with('0'));
     ok.then(|| s.parse().ok()).flatten()
 }
 
@@ -67,17 +56,8 @@ mod tests {
             assert_eq!(Version::parse(bad), None, "{bad}");
         }
         assert!(Version::check_readable("0.1").is_ok());
-        assert!(
-            Version::check_readable("0.7").is_ok(),
-            "newer minor is read"
-        );
-        assert!(matches!(
-            Version::check_readable("1.0"),
-            Err(FormatError::NewerVersion { .. })
-        ));
-        assert!(matches!(
-            Version::check_readable("x"),
-            Err(FormatError::Manifest { .. })
-        ));
+        assert!(Version::check_readable("0.7").is_ok(), "newer minor is read");
+        assert!(matches!(Version::check_readable("1.0"), Err(FormatError::NewerVersion { .. })));
+        assert!(matches!(Version::check_readable("x"), Err(FormatError::Manifest { .. })));
     }
 }

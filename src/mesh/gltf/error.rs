@@ -20,10 +20,7 @@ pub enum GltfError {
 
 impl GltfError {
     pub(crate) fn invalid(at: impl Into<String>, message: impl Into<String>) -> GltfError {
-        GltfError::Invalid {
-            at: at.into(),
-            message: message.into(),
-        }
+        GltfError::Invalid { at: at.into(), message: message.into() }
     }
 }
 

@@ -16,12 +16,7 @@ pub enum SampleType {
 }
 
 impl SampleType {
-    pub const ALL: [SampleType; 4] = [
-        SampleType::U8,
-        SampleType::U16,
-        SampleType::F16,
-        SampleType::F32,
-    ];
+    pub const ALL: [SampleType; 4] = [SampleType::U8, SampleType::U16, SampleType::F16, SampleType::F32];
 
     pub fn bytes(self) -> usize {
         match self {
@@ -53,9 +48,7 @@ impl SampleType {
     pub fn encode(self, v: f32, b: &mut [u8]) {
         match self {
             SampleType::U8 => b[0] = (unit(v) * 255.0).round() as u8,
-            SampleType::U16 => {
-                b[..2].copy_from_slice(&((unit(v) * 65535.0).round() as u16).to_le_bytes())
-            }
+            SampleType::U16 => b[..2].copy_from_slice(&((unit(v) * 65535.0).round() as u16).to_le_bytes()),
             SampleType::F16 => b[..2].copy_from_slice(&f32_to_f16(v).to_le_bytes()),
             SampleType::F32 => b[..4].copy_from_slice(&v.to_le_bytes()),
         }
@@ -63,11 +56,7 @@ impl SampleType {
 }
 
 fn unit(v: f32) -> f32 {
-    if v.is_nan() {
-        0.0
-    } else {
-        v.clamp(0.0, 1.0)
-    }
+    if v.is_nan() { 0.0 } else { v.clamp(0.0, 1.0) }
 }
 
 /// Which components a pixel has.
@@ -80,12 +69,7 @@ pub enum PixelLayout {
 }
 
 impl PixelLayout {
-    pub const ALL: [PixelLayout; 4] = [
-        PixelLayout::Gray,
-        PixelLayout::GrayAlpha,
-        PixelLayout::Rgb,
-        PixelLayout::Rgba,
-    ];
+    pub const ALL: [PixelLayout; 4] = [PixelLayout::Gray, PixelLayout::GrayAlpha, PixelLayout::Rgb, PixelLayout::Rgba];
 
     pub fn components(self) -> usize {
         match self {
@@ -160,12 +144,7 @@ impl PixelFormat {
                 [v, v, v, s.decode(&b[n..])]
             }
             PixelLayout::Rgb => [s.decode(b), s.decode(&b[n..]), s.decode(&b[2 * n..]), 1.0],
-            PixelLayout::Rgba => [
-                s.decode(b),
-                s.decode(&b[n..]),
-                s.decode(&b[2 * n..]),
-                s.decode(&b[3 * n..]),
-            ],
+            PixelLayout::Rgba => [s.decode(b), s.decode(&b[n..]), s.decode(&b[2 * n..]), s.decode(&b[3 * n..])],
         }
     }
 
@@ -283,23 +262,11 @@ mod tests {
     fn layouts_expand_and_fill_alpha() {
         let p = [0.2, 0.4, 0.6, 0.5];
         let f32fmt = |l| PixelFormat::new(l, SampleType::F32);
-        assert_eq!(
-            round_trip(f32fmt(PixelLayout::Gray), p),
-            [0.2, 0.2, 0.2, 1.0]
-        );
-        assert_eq!(
-            round_trip(f32fmt(PixelLayout::GrayAlpha), p),
-            [0.2, 0.2, 0.2, 0.5]
-        );
-        assert_eq!(
-            round_trip(f32fmt(PixelLayout::Rgb), p),
-            [0.2, 0.4, 0.6, 1.0]
-        );
+        assert_eq!(round_trip(f32fmt(PixelLayout::Gray), p), [0.2, 0.2, 0.2, 1.0]);
+        assert_eq!(round_trip(f32fmt(PixelLayout::GrayAlpha), p), [0.2, 0.2, 0.2, 0.5]);
+        assert_eq!(round_trip(f32fmt(PixelLayout::Rgb), p), [0.2, 0.4, 0.6, 1.0]);
         assert_eq!(round_trip(f32fmt(PixelLayout::Rgba), p), p);
-        assert_eq!(
-            PixelFormat::new(PixelLayout::Rgba, SampleType::U16).bytes_per_pixel(),
-            8
-        );
+        assert_eq!(PixelFormat::new(PixelLayout::Rgba, SampleType::U16).bytes_per_pixel(), 8);
     }
 
     #[test]
@@ -310,10 +277,7 @@ mod tests {
                 assert_eq!(PixelFormat::from_id(&f.id()), Some(f));
             }
         }
-        assert_eq!(
-            PixelFormat::from_id("rgb8").map(|f| f.layout),
-            Some(PixelLayout::Rgb)
-        );
+        assert_eq!(PixelFormat::from_id("rgb8").map(|f| f.layout), Some(PixelLayout::Rgb));
         assert_eq!(PixelFormat::from_id("cmyk8"), None);
         assert_eq!(PixelFormat::from_id("rgb"), None);
     }

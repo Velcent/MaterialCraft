@@ -1,7 +1,7 @@
 //! [`FormatError`]: everything that can go wrong reading or writing a `.mcpaint` file.
 
-use crate::mesh::gltf::GltfError;
 use crate::mesh::MeshError;
+use crate::mesh::gltf::GltfError;
 use crate::paint::validate::DocError;
 use crate::zip::ZipError;
 use std::fmt;
@@ -51,17 +51,11 @@ pub enum FormatError {
 
 impl FormatError {
     pub(crate) fn manifest(at: impl Into<String>, message: impl Into<String>) -> FormatError {
-        FormatError::Manifest {
-            at: at.into(),
-            message: message.into(),
-        }
+        FormatError::Manifest { at: at.into(), message: message.into() }
     }
 
     pub(crate) fn image(entry: impl Into<String>, message: impl Into<String>) -> FormatError {
-        FormatError::Image {
-            entry: entry.into(),
-            message: message.into(),
-        }
+        FormatError::Image { entry: entry.into(), message: message.into() }
     }
 }
 

@@ -12,7 +12,7 @@ use super::set_builder::SetBuilder;
 use super::set_layers::SetLayers;
 use super::texture_sets::SetBinding;
 use crate::decode::assbin::{AssbinGeometry, AssbinScene};
-use crate::project::{paths, SppProject};
+use crate::project::{SppProject, paths};
 use materialcraft::mesh::Mesh;
 use materialcraft::paint::{Document, Fidelity};
 use std::collections::BTreeSet;

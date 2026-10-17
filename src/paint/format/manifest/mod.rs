@@ -15,7 +15,7 @@ pub mod texture_set;
 use super::paths::{self, ImagePlan};
 use super::slot::ImageSlot;
 use super::version::Version;
-use super::{FormatError, FORMAT_VERSION};
+use super::{FORMAT_VERSION, FormatError};
 use crate::json::Value;
 use crate::paint::height_normal::HeightFilter;
 use crate::paint::{Document, PixelFormat};
@@ -64,12 +64,7 @@ pub struct Manifest {
 
 /// The manifest of `doc`. `thumbnail` says whether a thumbnail entry is written.
 pub fn write(doc: &Document, ctx: &WriteCtx, thumbnail: bool) -> Value {
-    let sets: Value = doc
-        .texture_sets
-        .iter()
-        .enumerate()
-        .map(|(i, s)| texture_set::write(i, s, ctx))
-        .collect();
+    let sets: Value = doc.texture_sets.iter().enumerate().map(|(i, s)| texture_set::write(i, s, ctx)).collect();
     let foreign: Value = doc.foreign.iter().map(|f| f.path.as_str()).collect();
     let mut v = Value::object()
         .with("format", FORMAT_NAME)
@@ -99,10 +94,7 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
     o.opt("generator");
     o.opt("thumbnail");
     let mut ctx = ReadCtx::default();
-    let mut doc = Document {
-        height_filter: height_filter(&mut o)?,
-        ..Document::default()
-    };
+    let mut doc = Document { height_filter: height_filter(&mut o)?, ..Document::default() };
     for (i, s) in o.array("texture_sets")?.iter().enumerate() {
         doc.texture_sets.push(texture_set::read(i, s, &mut ctx)?);
     }
@@ -122,18 +114,13 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
         extras: Extras::default(),
     };
     ctx.extras.record("", &o);
-    Ok(Manifest {
-        images: ctx.images,
-        extras: ctx.extras,
-        ..manifest
-    })
+    Ok(Manifest { images: ctx.images, extras: ctx.extras, ..manifest })
 }
 
 /// `height_filter`, optional since 0.2 (default `backward`).
 fn height_filter(o: &mut Obj) -> Result<HeightFilter, FormatError> {
     match o.opt_str("height_filter")? {
         None => Ok(HeightFilter::default()),
-        Some(id) => HeightFilter::from_id(id)
-            .ok_or_else(|| o.error("height_filter", format!("unknown height filter {id:?}"))),
+        Some(id) => HeightFilter::from_id(id).ok_or_else(|| o.error("height_filter", format!("unknown height filter {id:?}"))),
     }
 }

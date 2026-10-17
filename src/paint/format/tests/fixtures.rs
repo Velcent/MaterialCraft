@@ -3,21 +3,13 @@
 use crate::mesh::{Mesh, MeshPart};
 use crate::paint::height_normal::HeightFilter;
 use crate::paint::{
-    BakedKind, BakedMap, BlendMode, Channel, ChannelSpec, ColorSpace, Document, Fidelity, Fill,
-    FillSource, ForeignFile, ImportReport, Layer, LayerKind, PaintContent, PixelFormat,
-    PixelLayout, SampleType, TextureSet, TiledImage,
+    BakedKind, BakedMap, BlendMode, Channel, ChannelSpec, ColorSpace, Document, Fidelity, Fill, FillSource, ForeignFile, ImportReport, Layer, LayerKind,
+    PaintContent, PixelFormat, PixelLayout, SampleType, TextureSet, TiledImage,
 };
 
 /// Every pixel format.
 pub fn all_formats() -> Vec<PixelFormat> {
-    PixelLayout::ALL
-        .into_iter()
-        .flat_map(|l| {
-            SampleType::ALL
-                .into_iter()
-                .map(move |s| PixelFormat::new(l, s))
-        })
-        .collect()
+    PixelLayout::ALL.into_iter().flat_map(|l| SampleType::ALL.into_iter().map(move |s| PixelFormat::new(l, s))).collect()
 }
 
 /// A pseudo-random generator, deterministic per seed.
@@ -53,11 +45,7 @@ pub fn noisy(w: u32, h: u32, format: PixelFormat, seed: u32) -> TiledImage {
             .map(|_| {
                 std::array::from_fn(|_| {
                     let v = rng.unit();
-                    if float {
-                        v * 8.0 - 2.0
-                    } else {
-                        v
-                    }
+                    if float { v * 8.0 - 2.0 } else { v }
                 })
             })
             .collect();
@@ -71,37 +59,17 @@ fn quad(name: &str, material: usize, uv_sets: usize, z: f32) -> MeshPart {
     MeshPart {
         name: name.into(),
         material,
-        positions: vec![
-            [-1.0, -1.0, z],
-            [1.0, -1.0, z],
-            [1.0, 1.0, z],
-            [-1.0, 1.0, z],
-        ],
+        positions: vec![[-1.0, -1.0, z], [1.0, -1.0, z], [1.0, 1.0, z], [-1.0, 1.0, z]],
         normals: vec![[0.0, 0.0, 1.0]; 4],
         tangents: vec![[1.0, 0.0, 0.0, 1.0]; 4],
-        uv_sets: (0..uv_sets)
-            .map(|s| {
-                uv.iter()
-                    .map(|p| [p[0] * 0.5 + s as f32 * 0.5, p[1]])
-                    .collect()
-            })
-            .collect(),
+        uv_sets: (0..uv_sets).map(|s| uv.iter().map(|p| [p[0] * 0.5 + s as f32 * 0.5, p[1]]).collect()).collect(),
         triangles: vec![[0, 1, 2], [0, 2, 3]],
     }
 }
 
 fn paint(id: &str, images: Vec<(Channel, TiledImage)>) -> Layer {
-    let mut l = Layer::new(
-        id,
-        format!("Paint {id}"),
-        LayerKind::Paint(PaintContent { images }),
-    );
-    for c in l
-        .images()
-        .into_iter()
-        .filter_map(|(c, _)| c)
-        .collect::<Vec<_>>()
-    {
+    let mut l = Layer::new(id, format!("Paint {id}"), LayerKind::Paint(PaintContent { images }));
+    for c in l.images().into_iter().filter_map(|(c, _)| c).collect::<Vec<_>>() {
         l.set_blend(c, BlendMode::Normal, 1.0);
     }
     l
@@ -111,22 +79,10 @@ fn paint(id: &str, images: Vec<(Channel, TiledImage)>) -> Layer {
 fn body_set() -> TextureSet {
     let (w, h) = (150, 130);
     let mut set = TextureSet::new("body", "Body / Main", (w, h));
-    set.channels = Channel::STANDARD
-        .into_iter()
-        .map(ChannelSpec::new)
-        .collect();
-    set.channels.push(ChannelSpec {
-        channel: Channel::User(3),
-        format: PixelFormat::from_id("rgb32f").unwrap(),
-        color_space: ColorSpace::Linear,
-    });
+    set.channels = Channel::STANDARD.into_iter().map(ChannelSpec::new).collect();
+    set.channels.push(ChannelSpec { channel: Channel::User(3), format: PixelFormat::from_id("rgb32f").unwrap(), color_space: ColorSpace::Linear });
     for (i, f) in all_formats().into_iter().enumerate() {
-        let c = [
-            Channel::BaseColor,
-            Channel::Height,
-            Channel::User(3),
-            Channel::Emissive,
-        ][i % 4];
+        let c = [Channel::BaseColor, Channel::Height, Channel::User(3), Channel::Emissive][i % 4];
         let mut l = paint(&format!("p{i}"), vec![(c, noisy(w, h, f, i as u32))]);
         if i % 5 == 0 {
             let mask_format = all_formats()[(i * 7) % 16];
@@ -139,45 +95,36 @@ fn body_set() -> TextureSet {
         (Channel::Roughness, [0.7, 0.7, 0.7, 1.0]),
         (Channel::Height, [-0.0, 1e-7, 3.5, 0.1]),
     ]);
-    let mut fill = Layer::new("fill", "Base", LayerKind::Fill(base))
-        .with_blend(Channel::BaseColor, BlendMode::Multiply, 0.8)
-        .with_blend(Channel::Height, BlendMode::SignedAdd, 0.25);
+    let mut fill = Layer::new("fill", "Base", LayerKind::Fill(base)).with_blend(Channel::BaseColor, BlendMode::Multiply, 0.8).with_blend(
+        Channel::Height,
+        BlendMode::SignedAdd,
+        0.25,
+    );
     fill.opacity = 0.37;
     let material = Fill {
         source: FillSource::Material {
             path: "materials/rust.mca".into(),
-            params: vec![
-                ("Amount".into(), "0.4".into()),
-                ("Farbe \"äöü\"".into(), "#ff0000".into()),
-            ],
+            params: vec![("Amount".into(), "0.4".into()), ("Farbe \"äöü\"".into(), "#ff0000".into())],
         },
     };
-    let mut rust = Layer::new("rust", "Rust", LayerKind::Fill(material))
-        .with_blend(Channel::Metallic, BlendMode::Overlay, 1.0)
-        .with_mask(noisy(w, h, PixelFormat::from_id("gray8").unwrap(), 7));
+    let mut rust = Layer::new("rust", "Rust", LayerKind::Fill(material)).with_blend(Channel::Metallic, BlendMode::Overlay, 1.0).with_mask(noisy(
+        w,
+        h,
+        PixelFormat::from_id("gray8").unwrap(),
+        7,
+    ));
     rust.visible = false;
     let inner = Layer::new(
         "inner",
         "Inner",
-        LayerKind::Group(vec![paint(
-            "deep",
-            vec![(
-                Channel::Normal,
-                noisy(w, h, ChannelSpec::new(Channel::Normal).layer_format(), 9),
-            )],
-        )]),
+        LayerKind::Group(vec![paint("deep", vec![(Channel::Normal, noisy(w, h, ChannelSpec::new(Channel::Normal).layer_format(), 9))])]),
     )
     .with_blend(Channel::Normal, BlendMode::NormalMapDetail, 0.5);
-    let group = Layer::new(
-        "group",
-        "Group",
-        LayerKind::Group(vec![
-            rust,
-            inner,
-            Layer::new("empty-group", "", LayerKind::Group(vec![])),
-        ]),
-    )
-    .with_blend(Channel::BaseColor, BlendMode::Passthrough, 1.0);
+    let group = Layer::new("group", "Group", LayerKind::Group(vec![rust, inner, Layer::new("empty-group", "", LayerKind::Group(vec![]))])).with_blend(
+        Channel::BaseColor,
+        BlendMode::Passthrough,
+        1.0,
+    );
     set.layers.insert(0, fill);
     set.layers.push(group);
     for (kind, size, f) in [
@@ -189,10 +136,7 @@ fn body_set() -> TextureSet {
         (BakedKind::Other("bent normal/x".into()), (3, 3), "rgba8"),
     ] {
         let f = PixelFormat::from_id(f).unwrap();
-        set.baked.push(BakedMap {
-            kind,
-            image: noisy(size.0, size.1, f, size.0),
-        });
+        set.baked.push(BakedMap { kind, image: noisy(size.0, size.1, f, size.0) });
     }
     set
 }
@@ -200,14 +144,7 @@ fn body_set() -> TextureSet {
 /// The full test document: two material slots, a second UV set, an empty texture set, ids that
 /// collide once made path-safe, foreign files and an import report.
 pub fn full_document() -> Document {
-    let mesh = Mesh {
-        materials: vec!["Body".into(), "Trim".into()],
-        parts: vec![
-            quad("body", 0, 1, 0.0),
-            quad("trim", 1, 2, 1.0),
-            quad("trim 2", 1, 3, 2.0),
-        ],
-    };
+    let mesh = Mesh { materials: vec!["Body".into(), "Trim".into()], parts: vec![quad("body", 0, 1, 0.0), quad("trim", 1, 2, 1.0), quad("trim 2", 1, 3, 2.0)] };
     let mut doc = Document::new(mesh);
     doc.height_filter = HeightFilter::Sobel;
     doc.texture_sets.push(body_set());
@@ -217,34 +154,15 @@ pub fn full_document() -> Document {
     doc.texture_sets.push(trim);
     let mut odd = TextureSet::new("odd/../id", "Odd", (17, 300)).with_channel(Channel::Roughness);
     let fmt = ChannelSpec::new(Channel::Roughness).layer_format();
-    odd.layers.push(paint(
-        "x y",
-        vec![(Channel::Roughness, noisy(17, 300, fmt, 1))],
-    ));
-    odd.layers.push(paint(
-        "x_y",
-        vec![(Channel::Roughness, noisy(17, 300, fmt, 2))],
-    ));
+    odd.layers.push(paint("x y", vec![(Channel::Roughness, noisy(17, 300, fmt, 1))]));
+    odd.layers.push(paint("x_y", vec![(Channel::Roughness, noisy(17, 300, fmt, 2))]));
     doc.texture_sets.push(odd);
     let mut rng = Rng::new(3);
-    doc.foreign.push(ForeignFile {
-        path: "foreign/substance/document.bin".into(),
-        bytes: (0..50_000).map(|_| rng.next() as u8).collect(),
-    });
-    doc.foreign.push(ForeignFile {
-        path: "foreign/substance/resources/0a1b.sbsar".into(),
-        bytes: b"sbsar".repeat(1000),
-    });
-    doc.foreign.push(ForeignFile {
-        path: "foreign/empty".into(),
-        bytes: vec![],
-    });
+    doc.foreign.push(ForeignFile { path: "foreign/substance/document.bin".into(), bytes: (0..50_000).map(|_| rng.next() as u8).collect() });
+    doc.foreign.push(ForeignFile { path: "foreign/substance/resources/0a1b.sbsar".into(), bytes: b"sbsar".repeat(1000) });
+    doc.foreign.push(ForeignFile { path: "foreign/empty".into(), bytes: vec![] });
     let mut report = ImportReport::new("substance-painter 9.0.0: robot.spp");
-    report.add(
-        "texture set \"Body\" / layer \"Rust\"",
-        Fidelity::Approximated,
-        "blend mode",
-    );
+    report.add("texture set \"Body\" / layer \"Rust\"", Fidelity::Approximated, "blend mode");
     report.add("layer \"Dirt\"", Fidelity::Baked, "");
     report.add("layer \"Exact\"", Fidelity::Exact, "ok");
     report.add("anchor", Fidelity::KeptRaw, "kept in foreign/");

@@ -6,9 +6,9 @@
 //! `ICCdataSize` (uint, only in newer files, always 0 so far), `version` (`v1`/`v2`).
 //! The payload follows the header directly.
 
-use super::lz4_payload::{self, RecordHeader};
 use super::DecodeError;
 use super::Decompressed;
+use super::lz4_payload::{self, RecordHeader};
 use crate::container::qds::QVariant;
 
 const RECORD: &str = "resource image";

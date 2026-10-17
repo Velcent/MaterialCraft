@@ -1,26 +1,18 @@
 //! Bulk conversion of [`TiledImage`]s: raw bytes, float textures and other pixel formats.
 
-use super::{decode_tile, encode_tile, tile_rect, ImageError, Rect, TiledImage, MAX_DIMENSION, T};
+use super::{ImageError, MAX_DIMENSION, Rect, T, TiledImage, decode_tile, encode_tile, tile_rect};
 use crate::paint::par::for_each_mut;
 use crate::paint::pixel::PixelFormat;
 use crate::tex::Tex;
 
 impl TiledImage {
     /// Reads row-major, little-endian pixel data. All-zero tiles stay unallocated.
-    pub fn from_raw(
-        width: u32,
-        height: u32,
-        format: PixelFormat,
-        raw: &[u8],
-    ) -> Result<TiledImage, ImageError> {
+    pub fn from_raw(width: u32, height: u32, format: PixelFormat, raw: &[u8]) -> Result<TiledImage, ImageError> {
         let mut img = TiledImage::new(width, height, format)?;
         let bpp = format.bytes_per_pixel();
         let expected = width as usize * height as usize * bpp;
         if raw.len() != expected {
-            return Err(ImageError::WrongDataSize {
-                expected,
-                found: raw.len(),
-            });
+            return Err(ImageError::WrongDataSize { expected, found: raw.len() });
         }
         let tiles_x = img.tiles_x();
         for_each_mut(&mut img.tiles, |i, tile| {
@@ -31,8 +23,7 @@ impl TiledImage {
             let row_bytes = r.w as usize * bpp;
             for row in 0..r.h as usize {
                 let src = ((r.y as usize + row) * width as usize + r.x as usize) * bpp;
-                buf[row * T * bpp..row * T * bpp + row_bytes]
-                    .copy_from_slice(&raw[src..src + row_bytes]);
+                buf[row * T * bpp..row * T * bpp + row_bytes].copy_from_slice(&raw[src..src + row_bytes]);
             }
             if buf.iter().any(|&b| b != 0) {
                 *tile = Some(buf.into_boxed_slice());
@@ -52,17 +43,13 @@ impl TiledImage {
         let mut bands: Vec<&mut [u8]> = out.chunks_mut(band_bytes).collect();
         for_each_mut(&mut bands, |ty, band| {
             for tx in 0..self.tiles_x() {
-                let (Some(r), Some(Some(t))) = (
-                    self.tile_rect(tx, ty as u32),
-                    self.tiles.get(ty * self.tiles_x() as usize + tx as usize),
-                ) else {
+                let (Some(r), Some(Some(t))) = (self.tile_rect(tx, ty as u32), self.tiles.get(ty * self.tiles_x() as usize + tx as usize)) else {
                     continue;
                 };
                 let row_bytes = r.w as usize * bpp;
                 for row in 0..r.h as usize {
                     let dst = (row * self.width as usize + r.x as usize) * bpp;
-                    band[dst..dst + row_bytes]
-                        .copy_from_slice(&t[row * T * bpp..row * T * bpp + row_bytes]);
+                    band[dst..dst + row_bytes].copy_from_slice(&t[row * T * bpp..row * T * bpp + row_bytes]);
                 }
             }
         });
@@ -72,16 +59,10 @@ impl TiledImage {
     /// Converts a float RGBA texture, encoding it in `format`. All-zero tiles stay unallocated.
     pub fn from_tex(tex: &Tex, format: PixelFormat) -> Result<TiledImage, ImageError> {
         if tex.w > MAX_DIMENSION as usize || tex.h > MAX_DIMENSION as usize {
-            return Err(ImageError::TooLarge {
-                width: tex.w as u64,
-                height: tex.h as u64,
-            });
+            return Err(ImageError::TooLarge { width: tex.w as u64, height: tex.h as u64 });
         }
         if tex.px.len() != tex.w * tex.h {
-            return Err(ImageError::WrongDataSize {
-                expected: tex.w * tex.h,
-                found: tex.px.len(),
-            });
+            return Err(ImageError::WrongDataSize { expected: tex.w * tex.h, found: tex.px.len() });
         }
         let (w, h) = (tex.w as u32, tex.h as u32);
         let mut img = TiledImage::new(w, h, format)?;
@@ -111,12 +92,7 @@ impl TiledImage {
         if w > 0 {
             let mut bands: Vec<&mut [[f32; 4]]> = px.chunks_mut(T * w).collect();
             for_each_mut(&mut bands, |ty, band| {
-                let r = Rect {
-                    x: 0,
-                    y: (ty * T) as u32,
-                    w: w as u32,
-                    h: (band.len() / w) as u32,
-                };
+                let r = Rect { x: 0, y: (ty * T) as u32, w: w as u32, h: (band.len() / w) as u32 };
                 self.read_region(r, band);
             });
         }
@@ -125,13 +101,7 @@ impl TiledImage {
 
     /// The same pixels re-encoded in another format.
     pub fn converted(&self, format: PixelFormat) -> TiledImage {
-        let mut out = TiledImage {
-            width: self.width,
-            height: self.height,
-            format,
-            tiles: vec![None; self.tiles.len()],
-            dirty: self.dirty.clone(),
-        };
+        let mut out = TiledImage { width: self.width, height: self.height, format, tiles: vec![None; self.tiles.len()], dirty: self.dirty.clone() };
         let tiles_x = self.tiles_x();
         for_each_mut(&mut out.tiles, |i, tile| {
             let Some(src) = &self.tiles[i] else { return };

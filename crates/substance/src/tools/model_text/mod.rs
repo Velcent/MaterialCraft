@@ -6,7 +6,7 @@ mod blend;
 mod effects;
 
 use crate::model::{LayerKind, ModelReport, PainterDocument, PainterLayer, PainterTextureSet, StackSummary};
-use blend::{blending_text, BlendContext};
+use blend::{BlendContext, blending_text};
 use effects::{effect_lines, short_list};
 use std::fmt::{self, Write};
 

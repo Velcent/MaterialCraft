@@ -6,7 +6,7 @@ use super::cache_channels::{CacheChannels, CacheImage};
 use super::channel_table::{channel_for_bit, channel_spec, painter_channel_name};
 use super::normal_conventions::NormalConventions;
 use super::report::Reporter;
-use super::set_layers::{painter_result_layer, Flattened, SetLayers};
+use super::set_layers::{Flattened, SetLayers, painter_result_layer};
 use super::texture_sets::SetSource;
 use materialcraft::paint::{BlendMode, Channel, Fidelity, Layer, LayerKind, PaintContent, TextureSet};
 use std::collections::BTreeSet;

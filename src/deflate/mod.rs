@@ -35,27 +35,9 @@ impl Level {
     fn params(self) -> Option<Params> {
         match self {
             Level::Store => None,
-            Level::Fast => Some(Params {
-                max_chain: 8,
-                nice_len: 32,
-                good_len: 0,
-                max_lazy: 0,
-                max_insert: 6,
-            }),
-            Level::Default => Some(Params {
-                max_chain: 128,
-                nice_len: 128,
-                good_len: 8,
-                max_lazy: 16,
-                max_insert: 0,
-            }),
-            Level::Best => Some(Params {
-                max_chain: 4096,
-                nice_len: 258,
-                good_len: 32,
-                max_lazy: 258,
-                max_insert: 0,
-            }),
+            Level::Fast => Some(Params { max_chain: 8, nice_len: 32, good_len: 0, max_lazy: 0, max_insert: 6 }),
+            Level::Default => Some(Params { max_chain: 128, nice_len: 128, good_len: 8, max_lazy: 16, max_insert: 0 }),
+            Level::Best => Some(Params { max_chain: 4096, nice_len: 258, good_len: 32, max_lazy: 258, max_insert: 0 }),
         }
     }
 
@@ -85,8 +67,7 @@ struct BlockSink<'a> {
 impl BlockSink<'_> {
     fn flush(&mut self, last: bool) {
         let end = self.start + self.block.bytes();
-        self.block
-            .write(&mut self.out, &self.data[self.start..end], last);
+        self.block.write(&mut self.out, &self.data[self.start..end], last);
         self.start = end;
     }
 }
@@ -114,12 +95,7 @@ pub fn compress(data: &[u8], level: Level) -> Vec<u8> {
         block::write_stored(&mut w, data, true);
         return w.finish();
     };
-    let mut sink = BlockSink {
-        data,
-        out: BitWriter::with_capacity(data.len() / 3 + 64),
-        block: Block::with_capacity(BLOCK_TOKENS),
-        start: 0,
-    };
+    let mut sink = BlockSink { data, out: BitWriter::with_capacity(data.len() / 3 + 64), block: Block::with_capacity(BLOCK_TOKENS), start: 0 };
     lz77::parse(data, params, &mut sink);
     // Always end with a final block, even if it is empty.
     sink.flush(true);
@@ -158,21 +134,7 @@ mod tests {
     }
 
     fn text(n: usize) -> Vec<u8> {
-        let words = [
-            "material",
-            "craft",
-            "paint",
-            "layer",
-            "mask",
-            "the",
-            "of",
-            "roughness",
-            "normal",
-            "height",
-            " ",
-            ", ",
-            ".\n",
-        ];
+        let words = ["material", "craft", "paint", "layer", "mask", "the", "of", "roughness", "normal", "height", " ", ", ", ".\n"];
         let r = noise(n, 7);
         let mut out = Vec::with_capacity(n + 16);
         let mut i = 0;
@@ -187,12 +149,7 @@ mod tests {
     fn roundtrip(data: &[u8]) {
         for level in LEVELS {
             let z = compress(data, level);
-            assert_eq!(
-                inflate(&z).expect("inflate"),
-                data,
-                "{level:?}, {} bytes",
-                data.len()
-            );
+            assert_eq!(inflate(&z).expect("inflate"), data, "{level:?}, {} bytes", data.len());
         }
     }
 
@@ -216,10 +173,7 @@ mod tests {
         for i in 0..3000 {
             let n = r[k] as usize + (i % 3) * 200;
             let alphabet = r[k + 1] % 8 + 1;
-            let d: Vec<u8> = r[k + 2..k + 2 + n]
-                .iter()
-                .map(|&b| (b % alphabet).wrapping_mul(37))
-                .collect();
+            let d: Vec<u8> = r[k + 2..k + 2 + n].iter().map(|&b| (b % alphabet).wrapping_mul(37)).collect();
             k += n + 2;
             roundtrip(&d);
         }
@@ -239,26 +193,15 @@ mod tests {
         w.extend_from_within(..);
         roundtrip(&w);
         let z = compress(&w, Level::Default);
-        assert!(
-            z.len() < 40_000,
-            "window-sized period should be found: {}",
-            z.len()
-        );
+        assert!(z.len() < 40_000, "window-sized period should be found: {}", z.len());
     }
 
     #[test]
     fn ratios_are_sensible() {
         assert!(compress(&[0u8; 1 << 20], Level::Default).len() < 2_000);
         let t = text(200_000);
-        let (fast, def, best) = (
-            compress(&t, Level::Fast).len(),
-            compress(&t, Level::Default).len(),
-            compress(&t, Level::Best).len(),
-        );
-        assert!(
-            best <= def && def <= fast && fast < t.len() / 2,
-            "{fast} {def} {best}"
-        );
+        let (fast, def, best) = (compress(&t, Level::Fast).len(), compress(&t, Level::Default).len(), compress(&t, Level::Best).len());
+        assert!(best <= def && def <= fast && fast < t.len() / 2, "{fast} {def} {best}");
         // Incompressible data falls back to stored blocks: tiny overhead.
         let r = noise(200_000, 9);
         assert!(compress(&r, Level::Default).len() <= r.len() + r.len() / 1000 + 16);
@@ -271,10 +214,7 @@ mod tests {
             assert_eq!(z[0], 0x78);
             assert_eq!((z[0] as u16 * 256 + z[1] as u16) % 31, 0);
             assert_eq!(inflate(&z[2..z.len() - 4]).unwrap(), b"hello hello hello");
-            assert_eq!(
-                &z[z.len() - 4..],
-                &adler32(b"hello hello hello").to_be_bytes()
-            );
+            assert_eq!(&z[z.len() - 4..], &adler32(b"hello hello hello").to_be_bytes());
         }
     }
 }

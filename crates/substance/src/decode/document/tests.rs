@@ -1,4 +1,4 @@
-use super::test_writer::{sample, DocWriter};
+use super::test_writer::{DocWriter, sample};
 use super::*;
 use crate::decode::DecodeError;
 

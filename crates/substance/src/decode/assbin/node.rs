@@ -5,9 +5,9 @@
 //! (`u32` count + child node blocks), then metadata (not read; Painter stores its
 //! normalisation there, e.g. `ALG_PRE_NORMALIZATION_CENTER` / `_RADIUS`).
 
+use super::RECORD;
 use super::block::{read_block, read_count, read_string, read_u32};
 use super::transform::Transform;
-use super::RECORD;
 use crate::container::bytes::ByteReader;
 use crate::decode::DecodeError;
 

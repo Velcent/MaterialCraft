@@ -1,6 +1,6 @@
 //! Plain-text tables for the terminal: one row per measured case, the skip reasons, and a summary per subject.
 
-use super::summary::{fmt_opt, SubjectSummary};
+use super::summary::{SubjectSummary, fmt_opt};
 use crate::run::survey::generalise;
 use crate::run::{CaseResult, Outcome};
 use std::fmt::Write;
@@ -75,7 +75,7 @@ fn reasons(results: &[CaseResult]) -> Vec<((&'static str, &'static str, String),
             None => counts.push((key, 1)),
         }
     }
-    counts.sort_by(|a, b| a.0 .0.cmp(b.0 .0).then(b.1.cmp(&a.1)));
+    counts.sort_by(|a, b| a.0.0.cmp(b.0.0).then(b.1.cmp(&a.1)));
     counts
 }
 

@@ -1,7 +1,7 @@
 //! One text line per effect (fills with their values, paint with stroke counts, filters by `.sbsar`
 //! name, …); effect groups are expanded below their line. Effects are listed top → bottom.
 
-use super::blend::{blending_text, BlendContext};
+use super::blend::{BlendContext, blending_text};
 use crate::model::{FillEffect, PaintEffect, PainterEffect, PainterSource};
 use std::fmt::Write;
 

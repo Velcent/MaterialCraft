@@ -5,7 +5,7 @@ use crate::model::PainterTextureSet;
 use crate::project::CacheEntryRef;
 use crate::translate::cache_channels::CacheChannels;
 use crate::translate::channel_table::{channel_for_bit, channel_spec};
-use crate::translate::layers::cache_score::{score, Score};
+use crate::translate::layers::cache_score::{Score, score};
 use crate::translate::layers::{BlendTable, ImageSource, ImportedStack, LayerImport, SetChannels};
 use crate::translate::set_layers::defaults_layer;
 use materialcraft::paint::{Channel, Compositor, TextureSet, TiledImage};

@@ -22,20 +22,8 @@ pub struct OpenDocument {
 
 impl OpenDocument {
     pub fn new(doc: Document, source: PathBuf, summary: Option<String>) -> OpenDocument {
-        let sets = doc
-            .texture_sets
-            .iter()
-            .map(|_| SetState {
-                visible: true,
-                maps_ready: false,
-            })
-            .collect();
-        OpenDocument {
-            doc: Arc::new(doc),
-            source,
-            summary,
-            sets,
-        }
+        let sets = doc.texture_sets.iter().map(|_| SetState { visible: true, maps_ready: false }).collect();
+        OpenDocument { doc: Arc::new(doc), source, summary, sets }
     }
 
     pub fn doc(&self) -> &Document {
@@ -53,10 +41,7 @@ impl OpenDocument {
 
     /// File name for titles.
     pub fn name(&self) -> String {
-        self.source
-            .file_name()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_default()
+        self.source.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()
     }
 
     /// Visibility of each texture set, by index.
@@ -66,12 +51,7 @@ impl OpenDocument {
 
     /// Indices of the visible texture sets.
     pub fn visible_sets(&self) -> Vec<usize> {
-        self.sets
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| s.visible)
-            .map(|(i, _)| i)
-            .collect()
+        self.sets.iter().enumerate().filter(|(_, s)| s.visible).map(|(i, _)| i).collect()
     }
 
     pub fn set_visible(&mut self, set: usize, visible: bool) {

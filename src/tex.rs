@@ -39,11 +39,7 @@ pub struct Tex {
 #[inline(always)]
 pub fn ffloor(x: f32) -> f32 {
     let i = x as i32 as f32;
-    if i > x {
-        i - 1.0
-    } else {
-        i
-    }
+    if i > x { i - 1.0 } else { i }
 }
 
 pub fn lum(p: [f32; 4]) -> f32 {
@@ -51,11 +47,7 @@ pub fn lum(p: [f32; 4]) -> f32 {
 }
 
 fn san(v: f32) -> f32 {
-    if v.is_finite() {
-        v
-    } else {
-        0.0
-    }
+    if v.is_finite() { v } else { 0.0 }
 }
 
 impl Tex {
@@ -158,11 +150,7 @@ impl Tex {
         let inside = xi >= 1 && yi >= 1 && xi + 2 < self.w as i64 && yi + 2 < self.h as i64;
         for j in 0..4 {
             for i in 0..4 {
-                let p = if inside {
-                    self.px[(yi as usize + j - 1) * self.w + xi as usize + i - 1]
-                } else {
-                    self.at(xi + i as i64 - 1, yi + j as i64 - 1)
-                };
+                let p = if inside { self.px[(yi as usize + j - 1) * self.w + xi as usize + i - 1] } else { self.at(xi + i as i64 - 1, yi + j as i64 - 1) };
                 let w = wx[i] * wy[j];
                 for c in 0..4 {
                     o[c] += p[c] * w;

@@ -9,9 +9,7 @@ use crate::mesh::MeshPart;
 pub(super) struct Transform([f64; 16]);
 
 impl Transform {
-    pub const IDENTITY: Transform = Transform([
-        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    ]);
+    pub const IDENTITY: Transform = Transform([1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]);
 
     /// The local transform of `node` (`at` names it in errors).
     pub fn of_node(node: &Value, at: &str) -> Result<Transform, GltfError> {
@@ -19,15 +17,8 @@ impl Transform {
             let Some(v) = node.get(key) else {
                 return Ok(None);
             };
-            let list: Option<Vec<f64>> = v
-                .as_array()
-                .filter(|a| a.len() == n)
-                .and_then(|a| a.iter().map(Value::as_f64).collect());
-            list.filter(|l| l.iter().all(|x| x.is_finite()))
-                .map(Some)
-                .ok_or_else(|| {
-                    GltfError::invalid(format!("{at}.{key}"), format!("expected {n} numbers"))
-                })
+            let list: Option<Vec<f64>> = v.as_array().filter(|a| a.len() == n).and_then(|a| a.iter().map(Value::as_f64).collect());
+            list.filter(|l| l.iter().all(|x| x.is_finite())).map(Some).ok_or_else(|| GltfError::invalid(format!("{at}.{key}"), format!("expected {n} numbers")))
         };
         if let Some(m) = nums("matrix", 16)? {
             let mut t = [0.0; 16];
@@ -39,21 +30,9 @@ impl Transform {
         let s = nums("scale", 3)?.unwrap_or(vec![1.0; 3]);
         let (x, y, z, w) = (q[0], q[1], q[2], q[3]);
         let r = [
-            [
-                1.0 - 2.0 * (y * y + z * z),
-                2.0 * (x * y + z * w),
-                2.0 * (x * z - y * w),
-            ],
-            [
-                2.0 * (x * y - z * w),
-                1.0 - 2.0 * (x * x + z * z),
-                2.0 * (y * z + x * w),
-            ],
-            [
-                2.0 * (x * z + y * w),
-                2.0 * (y * z - x * w),
-                1.0 - 2.0 * (x * x + y * y),
-            ],
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y + z * w), 2.0 * (x * z - y * w)],
+            [2.0 * (x * y - z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z + x * w)],
+            [2.0 * (x * z + y * w), 2.0 * (y * z - x * w), 1.0 - 2.0 * (x * x + y * y)],
         ];
         let mut t = Transform::IDENTITY.0;
         for col in 0..3 {
@@ -116,8 +95,7 @@ impl Transform {
 
     fn det3(&self) -> f64 {
         let a = |r, c| self.at(r, c);
-        a(0, 0) * (a(1, 1) * a(2, 2) - a(1, 2) * a(2, 1))
-            - a(0, 1) * (a(1, 0) * a(2, 2) - a(1, 2) * a(2, 0))
+        a(0, 0) * (a(1, 1) * a(2, 2) - a(1, 2) * a(2, 1)) - a(0, 1) * (a(1, 0) * a(2, 2) - a(1, 2) * a(2, 0))
             + a(0, 2) * (a(1, 0) * a(2, 1) - a(1, 1) * a(2, 0))
     }
 
@@ -127,21 +105,13 @@ impl Transform {
         let a = |r: usize, c: usize| self.at(r % 3, c % 3);
         let det = self.det3();
         let k = if det != 0.0 { 1.0 / det } else { 1.0 };
-        std::array::from_fn(|r| {
-            std::array::from_fn(|c| {
-                (a(r + 1, c + 1) * a(r + 2, c + 2) - a(r + 1, c + 2) * a(r + 2, c + 1)) * k
-            })
-        })
+        std::array::from_fn(|r| std::array::from_fn(|c| (a(r + 1, c + 1) * a(r + 2, c + 2) - a(r + 1, c + 2) * a(r + 2, c + 1)) * k))
     }
 }
 
 fn normalized(v: [f64; 3]) -> [f64; 3] {
     let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    if l > 0.0 && l.is_finite() {
-        [v[0] / l, v[1] / l, v[2] / l]
-    } else {
-        v
-    }
+    if l > 0.0 && l.is_finite() { [v[0] / l, v[1] / l, v[2] / l] } else { v }
 }
 
 #[cfg(test)]
@@ -160,10 +130,7 @@ mod tests {
 
     #[test]
     fn trs_and_mirroring() {
-        let node = crate::json::parse(
-            r#"{"translation": [1, 2, 3], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [2, 2, 2]}"#,
-        )
-        .unwrap();
+        let node = crate::json::parse(r#"{"translation": [1, 2, 3], "rotation": [0, 0, 0.7071067811865476, 0.7071067811865476], "scale": [2, 2, 2]}"#).unwrap();
         let t = Transform::of_node(&node, "nodes[0]").unwrap();
         let mut p = part();
         t.apply(&mut p);
@@ -182,8 +149,6 @@ mod tests {
         let mut p = part();
         Transform::IDENTITY.apply(&mut p);
         assert_eq!(p, part());
-        assert!(
-            Transform::of_node(&crate::json::parse(r#"{"scale": [1]}"#).unwrap(), "n").is_err()
-        );
+        assert!(Transform::of_node(&crate::json::parse(r#"{"scale": [1]}"#).unwrap(), "n").is_err());
     }
 }

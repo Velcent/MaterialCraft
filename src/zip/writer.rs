@@ -45,14 +45,7 @@ impl ZipWriter<Cursor<Vec<u8>>> {
 impl<W: Write> ZipWriter<W> {
     /// Start an archive at the current position of `out` (offsets are counted from there).
     pub fn new(out: W) -> Self {
-        ZipWriter {
-            out,
-            pos: 0,
-            entries: Vec::new(),
-            level: Level::Default,
-            dos_time: dos_datetime(0),
-            force_zip64: false,
-        }
+        ZipWriter { out, pos: 0, entries: Vec::new(), level: Level::Default, dos_time: dos_datetime(0), force_zip64: false }
     }
 
     /// Effort used for `Method::Deflate` entries (default `Level::Default`).
@@ -84,20 +77,14 @@ impl<W: Write> ZipWriter<W> {
     /// Add a file. `name` uses '/' separators; a trailing '/' makes a directory entry (pass empty data).
     /// A `Deflate` entry that would not shrink is stored instead.
     pub fn add(&mut self, name: &str, data: &[u8], method: Method) -> Result<(), ZipError> {
-        if name.is_empty()
-            || name.len() > u16::MAX as usize
-            || name.starts_with('/')
-            || name.contains('\\')
-        {
+        if name.is_empty() || name.len() > u16::MAX as usize || name.starts_with('/') || name.contains('\\') {
             return Err(ZipError::Format(format!("invalid entry name '{name}'")));
         }
         if self.entries.iter().any(|e| e.name == name) {
             return Err(ZipError::Format(format!("duplicate entry name '{name}'")));
         }
         let compressed = match method {
-            Method::Deflate => {
-                Some(deflate::compress(data, self.level)).filter(|z| z.len() < data.len())
-            }
+            Method::Deflate => Some(deflate::compress(data, self.level)).filter(|z| z.len() < data.len()),
             Method::Stored => None,
         };
         let (method, payload) = match &compressed {
@@ -129,19 +116,9 @@ impl<W: Write> ZipWriter<W> {
     fn local_header(&self, e: &Written) -> Vec<u8> {
         let big = self.needs_zip64(e.size) || self.needs_zip64(e.compressed_size);
         // The local ZIP64 field, when present, must hold both sizes.
-        let extra = if big {
-            Zip64Extra {
-                size: Some(e.size),
-                compressed_size: Some(e.compressed_size),
-                local_header_offset: None,
-            }
-            .encode()
-        } else {
-            Vec::new()
-        };
-        let mut h = Le(Vec::with_capacity(
-            LOCAL_HEADER_LEN + e.name.len() + extra.len(),
-        ));
+        let extra =
+            if big { Zip64Extra { size: Some(e.size), compressed_size: Some(e.compressed_size), local_header_offset: None }.encode() } else { Vec::new() };
+        let mut h = Le(Vec::with_capacity(LOCAL_HEADER_LEN + e.name.len() + extra.len()));
         h.u32(LOCAL_HEADER_SIG)
             .u16(if big { VERSION_ZIP64 } else { VERSION_DEFLATE })
             .u16(e.flags)
@@ -149,16 +126,8 @@ impl<W: Write> ZipWriter<W> {
             .u16(e.time)
             .u16(e.date)
             .u32(e.crc)
-            .u32(if big {
-                U32_SENTINEL as u32
-            } else {
-                e.compressed_size as u32
-            })
-            .u32(if big {
-                U32_SENTINEL as u32
-            } else {
-                e.size as u32
-            })
+            .u32(if big { U32_SENTINEL as u32 } else { e.compressed_size as u32 })
+            .u32(if big { U32_SENTINEL as u32 } else { e.size as u32 })
             .u16(e.name.len() as u16)
             .u16(extra.len() as u16)
             .bytes(e.name.as_bytes())
@@ -169,27 +138,15 @@ impl<W: Write> ZipWriter<W> {
     fn central_header(&self, e: &Written) -> Vec<u8> {
         let z = Zip64Extra {
             size: self.needs_zip64(e.size).then_some(e.size),
-            compressed_size: self
-                .needs_zip64(e.compressed_size)
-                .then_some(e.compressed_size),
+            compressed_size: self.needs_zip64(e.compressed_size).then_some(e.compressed_size),
             local_header_offset: self.needs_zip64(e.offset).then_some(e.offset),
         };
         let extra = z.encode();
-        let version = if z.is_empty() {
-            VERSION_DEFLATE
-        } else {
-            VERSION_ZIP64
-        };
+        let version = if z.is_empty() { VERSION_DEFLATE } else { VERSION_ZIP64 };
         let is_dir = e.name.ends_with('/');
         // Unix mode in the high half of the external attributes; MS-DOS directory bit in the low byte.
-        let attrs: u32 = if is_dir {
-            (0o040755 << 16) | 0x10
-        } else {
-            0o100644 << 16
-        };
-        let mut h = Le(Vec::with_capacity(
-            CENTRAL_HEADER_LEN + e.name.len() + extra.len(),
-        ));
+        let attrs: u32 = if is_dir { (0o040755 << 16) | 0x10 } else { 0o100644 << 16 };
+        let mut h = Le(Vec::with_capacity(CENTRAL_HEADER_LEN + e.name.len() + extra.len()));
         h.u32(CENTRAL_HEADER_SIG)
             .u16(MADE_BY_UNIX | version)
             .u16(version)
@@ -198,10 +155,7 @@ impl<W: Write> ZipWriter<W> {
             .u16(e.time)
             .u16(e.date)
             .u32(e.crc)
-            .u32(
-                z.compressed_size
-                    .map_or(e.compressed_size as u32, |_| U32_SENTINEL as u32),
-            )
+            .u32(z.compressed_size.map_or(e.compressed_size as u32, |_| U32_SENTINEL as u32))
             .u32(z.size.map_or(e.size as u32, |_| U32_SENTINEL as u32))
             .u16(e.name.len() as u16)
             .u16(extra.len() as u16)
@@ -209,10 +163,7 @@ impl<W: Write> ZipWriter<W> {
             .u16(0) // disk number start
             .u16(0) // internal attributes
             .u32(attrs)
-            .u32(
-                z.local_header_offset
-                    .map_or(e.offset as u32, |_| U32_SENTINEL as u32),
-            )
+            .u32(z.local_header_offset.map_or(e.offset as u32, |_| U32_SENTINEL as u32))
             .bytes(e.name.as_bytes())
             .bytes(&extra);
         h.0
@@ -227,20 +178,13 @@ impl<W: Write> ZipWriter<W> {
     /// Write the central directory and end records, flush, and return the underlying writer.
     pub fn finish(mut self) -> Result<W, ZipError> {
         let cd_offset = self.pos;
-        let headers: Vec<Vec<u8>> = self
-            .entries
-            .iter()
-            .map(|e| self.central_header(e))
-            .collect();
+        let headers: Vec<Vec<u8>> = self.entries.iter().map(|e| self.central_header(e)).collect();
         for h in &headers {
             self.emit(h)?;
         }
         let cd_size = self.pos - cd_offset;
         let count = self.entries.len() as u64;
-        let zip64 = self.force_zip64
-            || count >= U16_SENTINEL
-            || cd_size >= U32_SENTINEL
-            || cd_offset >= U32_SENTINEL;
+        let zip64 = self.force_zip64 || count >= U16_SENTINEL || cd_size >= U32_SENTINEL || cd_offset >= U32_SENTINEL;
         if zip64 {
             let eocd64_offset = self.pos;
             let mut r = Le(Vec::with_capacity(ZIP64_EOCD_LEN + ZIP64_LOCATOR_LEN));
@@ -260,14 +204,7 @@ impl<W: Write> ZipWriter<W> {
         // Values that do not fit are saturated to the sentinel; the ZIP64 record above then holds them.
         let mut r = Le(Vec::with_capacity(EOCD_LEN));
         let count16 = count.min(U16_SENTINEL) as u16;
-        r.u32(EOCD_SIG)
-            .u16(0)
-            .u16(0)
-            .u16(count16)
-            .u16(count16)
-            .u32(cd_size.min(U32_SENTINEL) as u32)
-            .u32(cd_offset.min(U32_SENTINEL) as u32)
-            .u16(0);
+        r.u32(EOCD_SIG).u16(0).u16(0).u16(count16).u16(count16).u32(cd_size.min(U32_SENTINEL) as u32).u32(cd_offset.min(U32_SENTINEL) as u32).u16(0);
         self.emit(&r.0)?;
         self.out.flush()?;
         Ok(self.out)

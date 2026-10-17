@@ -45,11 +45,7 @@ fn corrupt_entries_error() {
         let f = PixelFormat::from_id(id).unwrap();
         let bytes = encode(&noisy(f, 20, 9)).unwrap();
         // A PNG cut inside its final IEND chunk still holds all pixels; the ZIP CRC catches that.
-        let end = if id == "rgba16" {
-            bytes.len() - 12
-        } else {
-            bytes.len()
-        };
+        let end = if id == "rgba16" { bytes.len() - 12 } else { bytes.len() };
         for n in (0..end).step_by(5) {
             assert!(decode(&bytes[..n], f, (20, 9)).is_err(), "{id} prefix {n}");
         }

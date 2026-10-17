@@ -61,25 +61,15 @@ impl Compression {
     pub(super) fn compress(self, raw: &[u8]) -> Vec<u8> {
         let packed = match self {
             Compression::None | Compression::Rle => return raw.to_vec(),
-            Compression::Zips | Compression::Zip => {
-                deflate::zlib_compress(&predict(&interleave(raw)), Level::Default)
-            }
+            Compression::Zips | Compression::Zip => deflate::zlib_compress(&predict(&interleave(raw)), Level::Default),
         };
-        if packed.len() < raw.len() {
-            packed
-        } else {
-            raw.to_vec()
-        }
+        if packed.len() < raw.len() { packed } else { raw.to_vec() }
     }
 
     /// Inverse of `compress`; `expected` is the raw block size.
     pub(super) fn decompress(self, data: &[u8], expected: usize) -> Result<Vec<u8>, String> {
         if data.len() == expected || self == Compression::None {
-            return if data.len() == expected {
-                Ok(data.to_vec())
-            } else {
-                Err("block size mismatch".into())
-            };
+            return if data.len() == expected { Ok(data.to_vec()) } else { Err("block size mismatch".into()) };
         }
         let mut t = match self {
             Compression::Rle => rle_decode(data, expected)?,
@@ -110,11 +100,7 @@ fn deinterleave(t: &[u8]) -> Vec<u8> {
     let half = t.len().div_ceil(2);
     let mut out = vec![0u8; t.len()];
     for (i, o) in out.iter_mut().enumerate() {
-        *o = if i % 2 == 0 {
-            t[i / 2]
-        } else {
-            t[half + i / 2]
-        };
+        *o = if i % 2 == 0 { t[i / 2] } else { t[half + i / 2] };
     }
     out
 }
@@ -141,9 +127,7 @@ fn rle_decode(data: &[u8], expected: usize) -> Result<Vec<u8>, String> {
         let n = data[i] as i8;
         i += 1;
         if n < 0 {
-            let run = data
-                .get(i..i + (-(n as i32)) as usize)
-                .ok_or("truncated RLE block")?;
+            let run = data.get(i..i + (-(n as i32)) as usize).ok_or("truncated RLE block")?;
             out.extend_from_slice(run);
             i += run.len();
         } else {
@@ -184,9 +168,7 @@ mod tests {
 
     #[test]
     fn zip_block_round_trip() {
-        let raw: Vec<u8> = (0..4096)
-            .map(|i| ((i / 64) as u8).wrapping_mul(3))
-            .collect();
+        let raw: Vec<u8> = (0..4096).map(|i| ((i / 64) as u8).wrapping_mul(3)).collect();
         for c in [Compression::Zips, Compression::Zip] {
             let z = c.compress(&raw);
             assert!(z.len() < raw.len() / 4);

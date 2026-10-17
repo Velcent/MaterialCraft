@@ -36,10 +36,7 @@ impl<'a> Glb<'a> {
                 return Err(bad("truncated chunk header"));
             };
             let start = pos + 8;
-            let end = start
-                .checked_add(len as usize)
-                .filter(|&e| e <= bytes.len())
-                .ok_or_else(|| bad("chunk extends past the end of the file"))?;
+            let end = start.checked_add(len as usize).filter(|&e| e <= bytes.len()).ok_or_else(|| bad("chunk extends past the end of the file"))?;
             chunks.push((kind, &bytes[start..end]));
             pos = end;
         }
@@ -61,8 +58,7 @@ impl<'a> Glb<'a> {
         let json_len = json.len() + pad(json.len());
         let bin_len = bin.len() + pad(bin.len());
         let total = 12 + 8 + json_len + if bin.is_empty() { 0 } else { 8 + bin_len };
-        let total32 = u32::try_from(total)
-            .map_err(|_| GltfError::Unsupported("meshes of 4 GiB or more".into()))?;
+        let total32 = u32::try_from(total).map_err(|_| GltfError::Unsupported("meshes of 4 GiB or more".into()))?;
         let mut out = Vec::with_capacity(total);
         out.extend_from_slice(MAGIC);
         out.extend_from_slice(&VERSION.to_le_bytes());

@@ -248,7 +248,8 @@ fn unfilter_passes(p: &Parsed) -> Result<Vec<Pass>, String> {
     let raw = inflate(&p.idat[2..])?;
     let bits_pp = p.ch * p.depth as usize;
     let bpp = bits_pp.div_ceil(8).max(1);
-    let layout: &[(usize, usize, usize, usize)] = if p.inter == 0 { &[(0, 0, 1, 1)] } else { &[(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)] };
+    let layout: &[(usize, usize, usize, usize)] =
+        if p.inter == 0 { &[(0, 0, 1, 1)] } else { &[(0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)] };
     let mut passes = Vec::new();
     let mut off = 0usize;
     for &(x0, y0, dx, dy) in layout {
@@ -319,7 +320,12 @@ pub fn decode(b: &[u8]) -> Result<Tex, String> {
                         if i * 3 + 2 >= p.plte.len() {
                             return Err("palette index out of range".into());
                         }
-                        [p.plte[i * 3] as f32 / 255.0, p.plte[i * 3 + 1] as f32 / 255.0, p.plte[i * 3 + 2] as f32 / 255.0, p.trns.get(i).map(|a| *a as f32 / 255.0).unwrap_or(1.0)]
+                        [
+                            p.plte[i * 3] as f32 / 255.0,
+                            p.plte[i * 3 + 1] as f32 / 255.0,
+                            p.plte[i * 3 + 2] as f32 / 255.0,
+                            p.trns.get(i).map(|a| *a as f32 / 255.0).unwrap_or(1.0),
+                        ]
                     }
                 };
                 px[(pass.y0 + py * pass.dy) * w + pass.x0 + pxi * pass.dx] = c;
@@ -333,7 +339,9 @@ pub fn decode(b: &[u8]) -> Result<Tex, String> {
 /// Palette and 1/2/4-bit images are rejected; ancillary chunks (gamma, colour profiles, tRNS) are ignored.
 pub fn decode_raw(b: &[u8]) -> Result<RawImage, String> {
     let p = parse(b)?;
-    let color = ColorType::from_code(p.ctype).filter(|_| p.depth >= 8).ok_or_else(|| format!("decode_raw: unsupported PNG format (colour type {}, {}-bit)", p.ctype, p.depth))?;
+    let color = ColorType::from_code(p.ctype)
+        .filter(|_| p.depth >= 8)
+        .ok_or_else(|| format!("decode_raw: unsupported PNG format (colour type {}, {}-bit)", p.ctype, p.depth))?;
     let bpp = p.ch * (p.depth / 8) as usize;
     let mut samples = vec![0u8; p.w * p.h * bpp];
     for pass in unfilter_passes(&p)? {

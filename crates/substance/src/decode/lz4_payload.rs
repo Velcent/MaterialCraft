@@ -1,8 +1,8 @@
 //! What Painter's pixel records share: a bare `QVariantMap` header followed by the pixel payload, which is
 //! an LZ4 *block* (no frame) or raw bytes. Used by [`super::image`] and [`super::texture_cache`].
 
-use super::image::Compression;
 use super::DecodeError;
+use super::image::Compression;
 use crate::container::qds::{QDataStream, QVariant, QVariantMap};
 
 /// Largest decompressed payload accepted: an 8K RGBA32F texture. Anything larger is treated as corrupt.

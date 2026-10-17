@@ -10,7 +10,7 @@ use super::context::Context;
 use super::header::DocumentHeader;
 use super::tag::ValueTag;
 use super::value::Scalar;
-use super::walker::{walk, Visitor};
+use super::walker::{Visitor, walk};
 use crate::decode::DecodeError;
 
 const MATERIAL: &str = "DataMaterial";

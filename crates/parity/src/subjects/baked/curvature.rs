@@ -1,10 +1,10 @@
 //! [`Curvature`]: Curvature (ours: from the baked normal map's derivatives; Painter: from mesh samples).
 //! Both use 0.5 for flat and brighter for convex; compared as stored.
 
-use super::{baked_map, NEEDS};
+use super::{NEEDS, baked_map};
 use crate::inputs::Inputs;
 use crate::settings::Params;
-use crate::subject::{CaseError, Component, Need, ReferenceKind, Subject, GRAY};
+use crate::subject::{CaseError, Component, GRAY, Need, ReferenceKind, Subject};
 use materialcraft::paint::BakedKind;
 use materialcraft::tex::Tex;
 

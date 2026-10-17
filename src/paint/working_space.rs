@@ -28,20 +28,12 @@ impl WorkingSpace {
 
 /// sRGB electro-optical transfer function (IEC 61966-2-1): encoded → linear. Mirrors below zero.
 pub fn srgb_to_linear(v: f32) -> f32 {
-    if v <= 0.04045 {
-        v / 12.92
-    } else {
-        ((v + 0.055) / 1.055).powf(2.4)
-    }
+    if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
 }
 
 /// Inverse of [`srgb_to_linear`]: linear → encoded.
 pub fn linear_to_srgb(v: f32) -> f32 {
-    if v <= 0.003_130_8 {
-        v * 12.92
-    } else {
-        1.055 * v.powf(1.0 / 2.4) - 0.055
-    }
+    if v <= 0.003_130_8 { v * 12.92 } else { 1.055 * v.powf(1.0 / 2.4) - 0.055 }
 }
 
 /// Converts pixels between stored encoding and working space. Decoding uses a table for values that are
@@ -71,12 +63,7 @@ impl SpaceConverter {
     pub fn to_working(&self, p: [f32; 4]) -> [f32; 4] {
         match self.space {
             WorkingSpace::Stored => p,
-            WorkingSpace::LinearLight => [
-                self.decode(p[0]),
-                self.decode(p[1]),
-                self.decode(p[2]),
-                p[3],
-            ],
+            WorkingSpace::LinearLight => [self.decode(p[0]), self.decode(p[1]), self.decode(p[2]), p[3]],
         }
     }
 
@@ -93,12 +80,7 @@ impl SpaceConverter {
     pub fn to_stored_all(&self, px: &mut [[f32; 4]]) {
         if self.space == WorkingSpace::LinearLight {
             for p in px {
-                *p = [
-                    linear_to_srgb(p[0]),
-                    linear_to_srgb(p[1]),
-                    linear_to_srgb(p[2]),
-                    p[3],
-                ];
+                *p = [linear_to_srgb(p[0]), linear_to_srgb(p[1]), linear_to_srgb(p[2]), p[3]];
             }
         }
     }
@@ -135,10 +117,7 @@ mod tests {
     fn known_values_and_rule() {
         assert!((srgb_to_linear(0.735_357) - 0.5).abs() < 1e-5);
         assert!((linear_to_srgb(0.5) - 0.735_357).abs() < 1e-5);
-        assert_eq!(
-            WorkingSpace::of(ColorSpace::Srgb),
-            WorkingSpace::LinearLight
-        );
+        assert_eq!(WorkingSpace::of(ColorSpace::Srgb), WorkingSpace::LinearLight);
         assert_eq!(WorkingSpace::of(ColorSpace::Linear), WorkingSpace::Stored);
         let c = SpaceConverter::new(WorkingSpace::LinearLight);
         let off_grid = 0.123_456;

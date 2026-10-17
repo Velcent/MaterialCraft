@@ -51,11 +51,7 @@ pub fn save(doc: &Document, out: impl Write) -> Result<(), FormatError> {
 }
 
 /// [`save`] with explicit options.
-pub fn save_with(
-    doc: &Document,
-    out: impl Write,
-    options: &SaveOptions,
-) -> Result<(), FormatError> {
+pub fn save_with(doc: &Document, out: impl Write, options: &SaveOptions) -> Result<(), FormatError> {
     writer::DocumentWriter::new(options).write(doc, out)
 }
 
