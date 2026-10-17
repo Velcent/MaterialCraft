@@ -7,6 +7,7 @@ pub mod channel_bar;
 mod dock_content;
 pub mod import_report;
 pub mod import_review;
+mod import_review_materials;
 mod interface_settings;
 pub mod layers;
 pub mod layout;

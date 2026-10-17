@@ -46,13 +46,13 @@ impl PaintMode {
     }
 
     /// Like [`PaintMode::open`], but a `.spp` first goes through the import review (which Substance
-    /// procedurals become MaterialCraft generators).
+    /// procedurals become MaterialCraft generators, which material fills become materials from the tray).
     pub fn open_reviewed(&mut self, path: PathBuf) {
         if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("spp")) {
             return self.open(path);
         }
         self.diag.info(Area::Import, format!("Analysing {}", path.display()));
-        self.review = Some(ImportReview::start(path));
+        self.review = Some(ImportReview::start(path, self.tray.material_folders()));
     }
 
     /// Advances the import review and starts the import once the user decided.
@@ -66,9 +66,10 @@ impl PaintMode {
             }
             ReviewOutcome::Import(plan) => {
                 let path = review.source().to_path_buf();
+                let library = review.library().to_vec();
                 self.review = None;
                 self.diag.info(Area::Project, format!("Opening {}", path.display()));
-                self.loader = Some(Loader::start_with(path, plan));
+                self.loader = Some(Loader::start_with(path, plan, library));
             }
         }
     }

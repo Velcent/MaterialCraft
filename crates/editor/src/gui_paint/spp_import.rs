@@ -6,11 +6,13 @@
 
 use super::cache;
 use super::job::CancelToken;
+use materialcraft::material_fill::{FolderResolver, MaterialResolver};
 use materialcraft::paint::Document;
 use materialcraft::paint::format::save_path;
 use materialcraft_substance::translate::replacements::ProceduralPlan;
-use materialcraft_substance::translate::{Cancel, ImportError, import_spp_with};
+use materialcraft_substance::translate::{Cancel, ImportError, import_spp_planned, import_spp_with};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 
 /// Share of the progress bar for the import; the rest is saving to the cache.
@@ -32,6 +34,8 @@ pub struct SppImport {
     cache_dir: PathBuf,
     /// Which Substance procedurals become MaterialCraft generators (part of the cache key).
     plan: ProceduralPlan,
+    /// Asset library folders the materials the plan picks are embedded from.
+    library: Vec<PathBuf>,
 }
 
 impl SppImport {
@@ -41,12 +45,18 @@ impl SppImport {
 
     /// An importer caching its conversions in `cache_dir`.
     pub fn with_cache(cache_dir: PathBuf) -> SppImport {
-        SppImport { build: std::env::current_exe().unwrap_or_default(), cache_dir, plan: ProceduralPlan::default() }
+        SppImport { build: std::env::current_exe().unwrap_or_default(), cache_dir, plan: ProceduralPlan::default(), library: Vec::new() }
     }
 
     /// Builder: import with the procedural replacements of `plan`.
     pub fn with_plan(mut self, plan: ProceduralPlan) -> SppImport {
         self.plan = plan;
+        self
+    }
+
+    /// Builder: embed the materials the plan picks from these asset library folders.
+    pub fn with_library(mut self, folders: Vec<PathBuf>) -> SppImport {
+        self.library = folders;
         self
     }
 
@@ -61,7 +71,15 @@ impl SppImport {
         }
         let start = Instant::now();
         let asked = || cancel.is_cancelled();
-        let document = match import_spp_with(spp, &self.plan, &mut |f, m| progress(f * IMPORT_SHARE, m), Cancel::new(&asked)) {
+        let mut on = |f: f32, m: &str| progress(f * IMPORT_SHARE, m);
+        let imported = match self.plan.materials.is_empty() {
+            true => import_spp_with(spp, &self.plan, &mut on, Cancel::new(&asked)),
+            false => {
+                let library: Arc<dyn MaterialResolver> = Arc::new(FolderResolver::new(self.library.iter().cloned()));
+                import_spp_planned(spp, &self.plan, library, &mut on, Cancel::new(&asked))
+            }
+        };
+        let document = match imported {
             Ok(d) => d,
             Err(ImportError::Cancelled) => return Err(CANCELLED.into()),
             Err(e) => return Err(format!("Import failed: {e}")),
