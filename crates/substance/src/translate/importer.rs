@@ -1,6 +1,7 @@
 //! [`import_spp`]: the translate stage's façade. Opens a project, binds texture sets, builds each one and keeps
 //! the untranslated parts; the report goes into [`Document::import_report`].
 
+use super::bake_settings::ProjectBaking;
 use super::baked_maps::BakedMaps;
 use super::cache_channels::CacheChannels;
 use super::cancel::Cancel;
@@ -87,6 +88,7 @@ impl Importer {
         };
         let cache = CacheChannels::new(&self.project);
         let baked = BakedMaps::new(&self.project);
+        let bake_settings = ProjectBaking::read(&self.project, &scene);
         let binding = SetBinding::bind(&materials, &records, &cache.sets());
         let builder = SetBuilder {
             cache: &cache,
@@ -110,7 +112,17 @@ impl Importer {
                 &mut report,
                 &source.record.name,
             );
-            sets.push(builder.build(source, &mesh, &mut report, &mut translated)?);
+            let mut set = builder.build(source, &mesh, &mut report, &mut translated)?;
+            let (config, unmapped) = bake_settings.config(&source.record, set.resolution);
+            set.bake = config;
+            if !unmapped.is_empty() {
+                report.set_problem(
+                    &source.record.name,
+                    Fidelity::Approximated,
+                    format!("bake settings not taken over: {}", unmapped.join("; ")),
+                );
+            }
+            sets.push(set);
         }
         for r in &binding.unused {
             report.unused_material(&r.name);

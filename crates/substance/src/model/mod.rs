@@ -3,6 +3,7 @@
 //! paint model is `translate`'s job. Field meanings and evidence: `interop/painter-document-catalogue.md`.
 //!
 //! Entry point: [`PainterDocument::from_bytes`] → ([`PainterDocument`], [`ModelReport`]).
+//! - [`baking`]: the baking settings (`/baking/baking.ini`), a separate object tree.
 //! - [`raw`]: the generic tree ([`RawTree`]) the builder reads.
 //! - [`PainterDocument`] → [`PainterTextureSet`]s → [`PainterLayer`]s (bottom → top), each with
 //!   [`ChannelBlending`] entries, an optional [`PainterMask`] and a content stack of [`PainterEffect`]s.
@@ -10,6 +11,7 @@
 //!   effects hold their brush strokes ([`PainterStroke`]).
 //! - Unknown classes become [`RawEntry`]s; [`ModelReport`] counts recognised, raw and unmirrored objects.
 
+pub mod baking;
 mod blending;
 mod builder;
 mod channel;

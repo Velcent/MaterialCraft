@@ -1,12 +1,26 @@
-//! [`Params::from_painter`]: Painter's baking settings for one set mapped onto our [`BakeSettings`], with
-//! every setting we cannot reproduce listed as [`Unmapped`] (so reports say what limits parity). The per-baker
-//! settings are mapped in [`super::bakers`].
+//! Painter's baking settings for one texture set mapped onto ours: [`MappedBake::of`] turns a
+//! [`MaterialBaking`] into the baker's [`BakeSettings`] (and the document's [`SetBakeConfig`]), listing every
+//! setting we cannot reproduce as [`Unmapped`]. The importer stores the result in each texture set; `mcparity`
+//! bakes with the very same mapping, so there is one table only. Per-baker settings are mapped in [`bakers`], the
+//! high-poly source in [`high`].
 
-use super::Params;
-use super::bakers::{flag, map_baker};
-use super::painter::{MaterialBaking, TweakList, TweakValue};
-use materialcraft::bake::BakeSettings;
+mod bakers;
+mod high;
+mod project;
+#[cfg(test)]
+mod tests;
+mod uids;
+
+pub use bakers::flag;
+pub use high::HighPolyRequest;
+pub use project::ProjectBaking;
+pub use uids::material_uids;
+
+use crate::model::baking::{MaterialBaking, TweakList, TweakValue};
+use bakers::map_baker;
+use materialcraft::bake::{BakeSettings, MapKind};
 use materialcraft::paint::BakedKind;
+use materialcraft::paint::bake_config::{HighPlacement, SetBakeConfig};
 
 /// Painter's map usages (`DataAdditionalMap.usage`, `BakingDefinition.usage`).
 pub mod usage {
@@ -33,6 +47,20 @@ pub fn baked_usage(kind: &BakedKind) -> Option<u64> {
     })
 }
 
+/// Our map kind of Painter's baker `usage`.
+pub fn usage_kind(usage: u64) -> Option<MapKind> {
+    Some(match usage {
+        usage::ID => MapKind::Id,
+        usage::AO => MapKind::AmbientOcclusion,
+        usage::CURVATURE => MapKind::Curvature,
+        usage::WORLD_NORMAL => MapKind::WorldNormal,
+        usage::POSITION => MapKind::Position,
+        usage::THICKNESS => MapKind::Thickness,
+        usage::NORMAL => MapKind::Normal,
+        _ => return None,
+    })
+}
+
 /// A Painter setting our baker has no counterpart for. `usage` = the baker it belongs to (`None` = all).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Unmapped {
@@ -53,9 +81,21 @@ const NO_EFFECT: &[&str] = &[
 /// Our samples per texel side for Painter's antialiasing setting (`Detail.SubSampling` > 0).
 const ANTIALIASED_SAMPLES: u32 = 2;
 
-impl Params {
+/// One set's settings mapped onto ours.
+#[derive(Debug, Clone)]
+pub struct MappedBake {
+    /// What our baker runs with (every map selected; [`Self::config`] keeps which bakers Painter had on).
+    pub settings: BakeSettings,
+    /// Bakers Painter had enabled (all when the project has no settings).
+    pub enabled: Vec<MapKind>,
+    /// Where Painter took the high-poly mesh from.
+    pub high: HighPolyRequest,
+    pub unmapped: Vec<Unmapped>,
+}
+
+impl MappedBake {
     /// Maps `painter` (the set's settings, or none) onto a bake of `size`² texels.
-    pub fn from_painter(painter: Option<&MaterialBaking>, size: usize) -> Params {
+    pub fn of(painter: Option<&MaterialBaking>, size: usize) -> MappedBake {
         let mut bake = BakeSettings {
             size,
             ..BakeSettings::default()
@@ -64,7 +104,12 @@ impl Params {
         let mut note = |usage: Option<u64>, text: String| unmapped.push(Unmapped { usage, text });
         let Some(p) = painter else {
             note(None, "no baking settings in the project; our defaults used".into());
-            return Params::new(bake, unmapped);
+            return MappedBake {
+                settings: bake,
+                enabled: MapKind::ALL.to_vec(),
+                high: HighPolyRequest::default(),
+                unmapped,
+            };
         };
         if let Some(w) = p.common.f32("Common.DilationWidth") {
             bake.padding = w.max(0.0) as usize;
@@ -81,7 +126,29 @@ impl Params {
                 }
             }
         }
-        Params::new(bake, unmapped)
+        let enabled = p
+            .bakers
+            .iter()
+            .filter(|b| b.enabled)
+            .filter_map(|b| usage_kind(b.usage?))
+            .collect();
+        MappedBake {
+            settings: bake,
+            enabled,
+            high: HighPolyRequest::of(p),
+            unmapped,
+        }
+    }
+
+    /// The document's configuration of the set: our settings, Painter's enabled bakers included, the high-poly
+    /// source moved into the document's space by `placement` (the mesh's normalisation).
+    pub fn config(&self, placement: Option<HighPlacement>) -> SetBakeConfig {
+        let mut config = SetBakeConfig::from_settings(&self.settings);
+        for kind in MapKind::ALL {
+            config.maps.flags_mut(kind).include = self.enabled.contains(&kind);
+        }
+        config.common.high = self.high.to_high(placement);
+        config
     }
 }
 

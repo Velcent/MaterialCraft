@@ -3,10 +3,9 @@
 
 use materialcraft_substance::decode::assbin::AssbinScene;
 use materialcraft_substance::decode::document::BitmapRef;
-use materialcraft_substance::model::RawTree;
 use materialcraft_substance::project::SppProject;
 use materialcraft_substance::translate::SetBinding;
-use std::collections::BTreeMap;
+use materialcraft_substance::translate::bake_settings::material_uids;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SetCase {
@@ -36,19 +35,4 @@ pub fn discover(project: &SppProject, scene: &[u8]) -> Result<Vec<SetCase>, Stri
             refs: s.record.baked.clone(),
         })
         .collect())
-}
-
-/// `sceneMaterialUID` → `DataMaterial` uid, from the document's object tree (empty if unreadable).
-fn material_uids(project: &SppProject) -> BTreeMap<u64, u64> {
-    let Ok(data) = project.read(materialcraft_substance::project::paths::DOCUMENT) else {
-        return BTreeMap::new();
-    };
-    let Ok(tree) = RawTree::parse(&data) else {
-        return BTreeMap::new();
-    };
-    tree.root
-        .iter()
-        .flat_map(|root| root.objects("materials"))
-        .filter_map(|m| Some((m.u64("sceneMaterialUID")?, m.uid()?)))
-        .collect()
 }

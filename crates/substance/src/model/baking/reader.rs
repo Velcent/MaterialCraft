@@ -7,8 +7,8 @@
 //!   detailParameters }` for all materials, each a plain list of tweaks; definitions hold `bakerId` and their
 //!   tweaks inline; which bakers are on is in the root's `usageBakerTable.usageBakerAssoc[]`.
 
-use super::painter::{BakerSettings, MaterialBaking, PainterBaking, TweakList};
-use materialcraft_substance::model::raw::{RawObject, RawValue};
+use super::{BakerSettings, MaterialBaking, PainterBaking, TweakList};
+use crate::model::raw::{RawObject, RawValue};
 use std::collections::BTreeMap;
 
 pub fn read(root: &RawObject) -> PainterBaking {
@@ -88,7 +88,7 @@ impl Reader<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use materialcraft_substance::decode::document::Scalar;
+    use crate::decode::document::Scalar;
 
     fn obj(class: &str, fields: Vec<(&str, RawValue)>) -> RawObject {
         RawObject {

@@ -1,18 +1,21 @@
 //! [`PainterBaking`]: Painter's baking settings from `/baking/baking.ini`, read with the generic object walker
-//! of the substance crate (the file is Painter's object serialisation, not an `.ini`).
+//! ([`super::RawTree`]; the file is Painter's object serialisation, not an `.ini`). A faithful mirror; the mapping
+//! onto MaterialCraft's bake settings is `translate::bake_settings`'s job.
 //!
 //! Layout (Observed on VASE, format 20): root `BakingMaterials` with `materials[]` (`BakingMaterial`:
 //! `materialUID` = the `DataMaterial` uid in `document.bin`, `enabled`, `materialParameters` with
 //! `commonParameters`/`detailParameters`, `definitions[]` = one `BakingDefinition { usage, enabled,
 //! parameters }` per baker), where parameters are references into `tweakLists[]` (`BakingTweakList { bakerId,
 //! tweaks[] }`, each tweak `DataTweak* { identifier, value }`). `materialTemplate` holds the same inline.
-//! Older files (format 12, Painter 2020) differ; [`super::reader`] reads both.
+//! Older files (format 12, Painter 2020) differ; [`reader`] reads both.
 
-use super::reader::read;
-use materialcraft_substance::decode::DecodeError;
-use materialcraft_substance::decode::document::Scalar;
-use materialcraft_substance::model::RawTree;
-use materialcraft_substance::model::raw::RawObject;
+mod reader;
+
+use super::RawTree;
+use super::raw::RawObject;
+use crate::decode::DecodeError;
+use crate::decode::document::Scalar;
+use reader::read;
 
 /// Where the settings live inside a `.spp`.
 pub const BAKING_INI: &str = "/baking/baking.ini";

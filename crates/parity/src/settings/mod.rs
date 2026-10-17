@@ -1,17 +1,17 @@
-//! Baking settings: Painter's ([`painter`]), what they ask for as high-poly input ([`HighPolyRequest`]),
-//! and how they map onto ours ([`Params`], [`mapping`]).
+//! Baking settings: Painter's (read by the importer's model, [`PainterBaking`]), what they ask for as high-poly
+//! input ([`HighPolyRequest`]) and what a case runs with ([`Params`]). The mapping onto ours is the importer's
+//! (`translate::bake_settings`), so a parity bake and an imported document's bake run with the same settings.
 
-mod bakers;
-pub mod mapping;
-pub mod painter;
-mod reader;
-mod request;
 #[cfg(test)]
 mod tests;
 
-pub use mapping::Unmapped;
-pub use painter::{BAKING_INI, MaterialBaking, PainterBaking, TweakList, TweakValue};
-pub use request::HighPolyRequest;
+pub use materialcraft_substance::model::baking::{BAKING_INI, MaterialBaking, PainterBaking, TweakList, TweakValue};
+pub use materialcraft_substance::translate::bake_settings::{HighPolyRequest, MappedBake, Unmapped};
+
+/// Painter's map usages and our kinds' usage.
+pub mod mapping {
+    pub use materialcraft_substance::translate::bake_settings::{baked_usage, usage};
+}
 
 use materialcraft::bake::BakeSettings;
 
@@ -28,6 +28,12 @@ pub struct Params {
 }
 
 impl Params {
+    /// Maps `painter` (the set's settings, or none) onto a bake of `size`² texels (the importer's mapping).
+    pub fn from_painter(painter: Option<&MaterialBaking>, size: usize) -> Params {
+        let mapped = MappedBake::of(painter, size);
+        Params::new(mapped.settings, mapped.unmapped)
+    }
+
     fn new(bake: BakeSettings, unmapped: Vec<Unmapped>) -> Params {
         Params {
             size: bake.size,

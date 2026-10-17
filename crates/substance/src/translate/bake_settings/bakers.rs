@@ -2,8 +2,8 @@
 //! modes each number means was decided by measuring against the user's bakes (parity README), not from any
 //! documentation.
 
-use super::mapping::usage;
-use super::painter::TweakValue;
+use super::usage;
+use crate::model::baking::TweakValue;
 use materialcraft::bake::{Attenuation, BakeSettings, CurvatureRange, PositionBounds, PositionMode, RayDistribution};
 
 /// A boolean as Painter stores it (a bool, or 0/1 in older files).

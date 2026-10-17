@@ -1,6 +1,7 @@
 //! [`HighPolyRequest`]: which mesh Painter baked a set from, as its settings record it.
 
-use super::painter::MaterialBaking;
+use crate::model::baking::MaterialBaking;
+use materialcraft::paint::bake_config::{HighPlacement, HighPoly};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HighPolyRequest {
@@ -20,6 +21,15 @@ impl HighPolyRequest {
                 .text("Detail.HipolyMesh")
                 .map(file_names)
                 .unwrap_or_default(),
+        }
+    }
+
+    /// The document's high-poly source; `placement` moves the files into the document's space.
+    pub fn to_high(&self, placement: Option<HighPlacement>) -> HighPoly {
+        HighPoly {
+            low_as_high: self.low_as_high,
+            files: self.files.clone(),
+            placement: (!self.files.is_empty()).then_some(placement).flatten(),
         }
     }
 }
