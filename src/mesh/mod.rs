@@ -16,7 +16,7 @@ mod obj_read;
 mod surface;
 mod tangents;
 #[cfg(test)]
-mod test_util;
+pub(crate) mod test_util;
 mod topology;
 mod validate;
 mod viewer;

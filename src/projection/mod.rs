@@ -11,6 +11,9 @@
 //! space and UV work in UV space alone; the volume modes need the mesh (a [`crate::mesh::SurfaceMap`]) and are data
 //! only in this version: preparing one reports [`NotComputable::NotImplemented`].
 //!
+//! [`view`] maps between the screen and the mesh for one camera ([`ViewProjector`]) and places images on screen
+//! ([`ScreenImageTransform`], [`ScreenProjector`]) for projection painting and stencils.
+//!
 //! [`sampling`] samples images with a [`Filter`] and [`Repeat`] from a prefiltered level chain ([`ImageLevels`]).
 //!
 //! Design: `MaterialCraft-docs/requirements/projections.md` (section 3); decisions in ADR 0006–0008.
@@ -25,6 +28,7 @@ mod projector;
 pub mod sampling;
 #[cfg(test)]
 mod tests;
+pub mod view;
 
 pub use data::{Filter, ImagePlacement, Projection, Repeat, SizeMode};
 pub use frame::SceneFrame;
@@ -32,3 +36,4 @@ pub use modes::{Cylindrical, FacingFalloff, Falloff, Planar, ProjectionMode, Sph
 pub use placement::UvPlacement;
 pub use projector::{NotComputable, Prepared, Projector, SurfacePoint, Tap, Taps};
 pub use sampling::{ImageLevels, LevelChain, Texels};
+pub use view::{CpuViewProjector, ScreenImageTransform, ScreenPoint, ScreenProjector, SurfaceHit, ViewProjector, ViewScene};
