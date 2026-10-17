@@ -26,10 +26,7 @@ pub fn procedural(p: Option<&PainterProcedural>) -> Procedural {
         .iter()
         .filter_map(|t| tweak_text(&t.value).map(|v| (t.identifier.clone(), v)))
         .collect();
-    Procedural {
-        id: format!("{SUBSTANCE_PREFIX}{}", p.name()),
-        params,
-    }
+    Procedural::new(format!("{SUBSTANCE_PREFIX}{}", p.name())).with_params(params)
 }
 
 /// A tweak value as text: numbers comma-separated, text as is; classes we do not know are left out.

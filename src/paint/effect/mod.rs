@@ -16,7 +16,7 @@ pub mod kinds;
 pub mod registry;
 
 pub use kinds::{Anchor, ColorSelection, Levels, Pick, PickMode, PolygonFill, Procedural, Reference, Selection, UnknownEffect};
-pub use registry::{EffectRegistry, EvalRequest, EvalTarget, FilterInput, FilterKernel, GeneratorSource};
+pub use registry::{EffectRegistry, EvalRequest, EvalTarget, FilterInput, FilterKernel, GeneratorSource, StackContext};
 
 use super::blend::BlendMode;
 use super::channel::Channel;

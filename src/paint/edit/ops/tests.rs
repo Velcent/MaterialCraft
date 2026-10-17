@@ -171,6 +171,9 @@ fn mask_states() {
     for start in MaskStart::ALL {
         step(&mut d, |tx| add_mask(tx, &lr("a"), start));
     }
+    step(&mut d, |tx| add_mask(tx, &lr("a"), MaskStart::Generator("heights")));
+    let generated = d.texture_sets[0].layer("a").unwrap().mask.as_ref().unwrap();
+    assert!(matches!(&generated.effects[0].kind, EffectKind::Generator(p) if p.id == "heights"));
     step(&mut d, |tx| invert_mask(tx, &lr("a")));
     assert_eq!(d.texture_sets[0].layer("a").unwrap().mask.as_ref().unwrap().initial, 1.0);
     step(&mut d, |tx| set_mask_enabled(tx, &lr("a"), false));

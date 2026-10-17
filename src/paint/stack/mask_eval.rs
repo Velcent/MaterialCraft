@@ -2,6 +2,7 @@
 //! effects blended on top (see [`crate::paint::mask`]); effects the compositor cannot evaluate are left out.
 
 use super::Compositor;
+use super::below::LayerStack;
 use super::pass::Weights;
 use super::procedural::{FilterRun, generate};
 use crate::paint::effect::{EffectKind, EvalTarget, MaskEffect};
@@ -22,7 +23,7 @@ impl Compositor<'_> {
         if let Some(v) = mask.constant_value() {
             return (v > 0.0).then_some(Weights::Uniform(v * strength));
         }
-        let grey = self.mask_values(mask, mask.effects.len(), r);
+        let grey = self.mask_values(l, mask, mask.effects.len(), r);
         if grey.iter().all(|g| *g <= 0.0) {
             return None;
         }
@@ -39,12 +40,12 @@ impl Compositor<'_> {
         }
     }
 
-    /// The mask's grey values over `r` with its first `upto` effects.
-    pub(super) fn mask_values(&self, mask: &Mask, upto: usize, r: Rect) -> Vec<f32> {
+    /// The grey values of `layer`'s mask over `r` with its first `upto` effects.
+    pub(super) fn mask_values(&self, layer: &Layer, mask: &Mask, upto: usize, r: Rect) -> Vec<f32> {
         let initial = if mask.initial.is_finite() { mask.initial.clamp(0.0, 1.0) } else { 0.0 };
         let mut grey = vec![initial; r.area()];
         for (index, e) in mask.effects.iter().enumerate().take(upto).filter(|(_, e)| e.enabled) {
-            let Some(top) = self.mask_top(mask, index, e, r, &grey) else { continue };
+            let Some(top) = self.mask_top(layer, mask, index, e, r, &grey) else { continue };
             for (g, t) in grey.iter_mut().zip(top) {
                 *g = mix_grey(e.blend, *g, t);
             }
@@ -53,7 +54,7 @@ impl Compositor<'_> {
     }
 
     /// What mask effect `index` puts on top over `r` (grey in red, alpha = coverage); `below` is the mask so far.
-    fn mask_top(&self, mask: &Mask, index: usize, e: &MaskEffect, r: Rect, below: &[f32]) -> Option<Vec<[f32; 4]>> {
+    fn mask_top(&self, layer: &Layer, mask: &Mask, index: usize, e: &MaskEffect, r: Rect, below: &[f32]) -> Option<Vec<[f32; 4]>> {
         match &e.kind {
             EffectKind::Paint(p) => {
                 if p.image.format().layout.has_alpha() && !p.image.region_allocated(r) {
@@ -64,11 +65,11 @@ impl Compositor<'_> {
                 Some(px)
             }
             EffectKind::Fill(v) => Some(vec![[*v, *v, *v, 1.0]; r.area()]),
-            EffectKind::Generator(p) => generate(self, p, EvalTarget::Mask, r),
+            EffectKind::Generator(p) => generate(self, p, EvalTarget::Mask, r, Some(&LayerStack { compositor: self, layer })),
             EffectKind::Filter(p) => {
                 let run = FilterRun { compositor: self, procedural: p, target: EvalTarget::Mask, r };
                 run.run(|input| {
-                    let grey = if input == r { below.to_vec() } else { self.mask_values(mask, index, input) };
+                    let grey = if input == r { below.to_vec() } else { self.mask_values(layer, mask, index, input) };
                     grey.into_iter().map(|g| [g, g, g, 1.0]).collect()
                 })
             }

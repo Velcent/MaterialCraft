@@ -9,7 +9,8 @@ use crate::paint::{
 };
 
 fn procedural(id: &str) -> Procedural {
-    Procedural { id: id.into(), params: vec![("amount".into(), "0.25".into()), ("seed".into(), "7".into())] }
+    let original = Procedural::new(format!("substance:{id}")).with_params(vec![("level".into(), "0.5,1".into())]);
+    Procedural::new(id).with_params(vec![("amount".into(), "0.25".into()), ("seed".into(), "7".into())]).replacing(original)
 }
 
 fn grey(mode: BlendMode, opacity: f32, kind: EffectKind<crate::paint::effect::Grey>) -> MaskEffect {

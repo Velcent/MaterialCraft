@@ -89,7 +89,7 @@ impl Compositor<'_> {
                 Some(top) => top.into_pixels(pass.r.area()),
                 None => return,
             },
-            EffectKind::Generator(p) => match generate(self, p, EvalTarget::Channel(pass.channel), pass.r) {
+            EffectKind::Generator(p) => match generate(self, p, EvalTarget::Channel(pass.channel), pass.r, None) {
                 Some(px) => px,
                 None => return,
             },

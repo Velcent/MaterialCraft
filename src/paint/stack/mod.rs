@@ -31,6 +31,7 @@ use super::validate::MAX_GROUP_DEPTH;
 use super::working_space::{SpaceConverter, WorkingSpace};
 use pass::{Pass, Scratch, affects};
 
+mod below;
 mod content;
 mod fill_context;
 mod fill_eval;

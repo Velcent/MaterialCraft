@@ -27,6 +27,19 @@ pub struct EvalRequest<'a> {
     pub target: EvalTarget,
     pub rect: Rect,
     pub params: &'a [(String, String)],
+    /// The layer stack around the effect, for generators that compare against it (height-comparison masks);
+    /// `None` when the effect is evaluated on its own.
+    pub stack: Option<&'a dyn StackContext>,
+}
+
+/// What an effect may read from the layer stack it sits in, over any rectangle of the texture set. Heights
+/// are the Height channel's stored values.
+pub trait StackContext: fmt::Debug + Sync {
+    /// The height the effect's layer itself writes: (value, coverage) per texel, row by row.
+    fn layer_height(&self, rect: Rect) -> Vec<[f32; 2]>;
+
+    /// The composited height of everything below the effect's layer, row by row.
+    fn height_below(&self, rect: Rect) -> Vec<f32>;
 }
 
 /// Produces values from nothing but its parameters and the texture set (baked maps, resolution).

@@ -181,3 +181,39 @@ fn group_effects_and_data_only_parts_are_reported() {
     assert!(w.contains(&CompositeWarning::GroupEffectsSkipped { layer: "g".into() }), "{w:?}");
     assert!(w.contains(&CompositeWarning::GeometryMaskIgnored { layer: "g".into() }), "{w:?}");
 }
+
+/// Mask value 1 where the layer's own height is above the height below it, else 0.
+struct Higher;
+impl GeneratorSource for Higher {
+    fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
+        let stack = request.stack.ok_or("no stack")?;
+        let (own, below) = (stack.layer_height(request.rect), stack.height_below(request.rect));
+        for ((o, h), b) in out.iter_mut().zip(own).zip(below) {
+            let v = if h[1] > 0.0 && h[0] > b { 1.0 } else { 0.0 };
+            *o = [v, v, v, 1.0];
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn mask_generators_see_the_height_of_their_layer_and_below() {
+    let mut s = set(2, 1).with_channel(Channel::Height);
+    let height = |id: &str, v: f32, r: f32| {
+        Layer::new(id, id, LayerKind::Fill(Fill::uniform(vec![(Channel::Height, [v, v, v, 1.0]), (R, [r, r, r, 1.0])])))
+            .with_blend(Channel::Height, BlendMode::Normal, 1.0)
+            .with_blend(R, BlendMode::Normal, 1.0)
+    };
+    s.layers.push(height("low", 0.3, 0.1));
+    let mut top = height("top", 0.6, 0.9);
+    top.mask = Some(Mask::new(0.0).with_effect(grey(BlendMode::Normal, 1.0, EffectKind::Generator(Procedural::new("higher")))));
+    // Inside a pass-through folder, so the walk to the layer has to descend.
+    let folder =
+        Layer::new("g", "G", LayerKind::Group(vec![top])).with_blend(R, BlendMode::Passthrough, 1.0).with_blend(Channel::Height, BlendMode::Passthrough, 1.0);
+    s.layers.push(folder);
+    let mut registry = EffectRegistry::new();
+    registry.add_generator("higher", Box::new(Higher));
+    assert!(close(px(&Compositor::with_effects(&s, &registry), 0, 0)[0], 0.9), "0.6 is above 0.3: the mask lets the layer through");
+    s.layers[0] = height("low", 0.8, 0.1);
+    assert!(close(px(&Compositor::with_effects(&s, &registry), 0, 0)[0], 0.1), "0.6 is below 0.8");
+}

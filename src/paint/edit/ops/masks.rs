@@ -3,7 +3,7 @@
 
 use super::super::{Edit, EditError, LayerProperty, LayerRef, Transaction};
 use super::layer;
-use crate::paint::effect::{ColorSelection, EffectKind, GreyBlend, MaskEffect};
+use crate::paint::effect::{ColorSelection, EffectKind, GreyBlend, MaskEffect, Procedural};
 use crate::paint::mask::Mask;
 use crate::paint::texture_set::BakedKind;
 
@@ -16,6 +16,9 @@ pub enum MaskStart {
     Black,
     /// Black with a colour selection on the ID map on top.
     ColorSelection,
+    /// Black with a generator on top, by its registered id (e.g. a height-comparison mask). The application
+    /// offers the ids it registers; the paint model names none.
+    Generator(&'static str),
 }
 
 impl MaskStart {
@@ -26,6 +29,7 @@ impl MaskStart {
             MaskStart::White => "White mask",
             MaskStart::Black => "Black mask",
             MaskStart::ColorSelection => "Mask from colour selection",
+            MaskStart::Generator(_) => "Mask from a generator",
         }
     }
 
@@ -37,6 +41,7 @@ impl MaskStart {
                 let pick = ColorSelection { map: BakedKind::Id, colors: Vec::new(), tolerance: 0.1, hardness: 1.0 };
                 Mask::new(0.0).with_effect(MaskEffect::new(GreyBlend::default(), EffectKind::ColorSelection(pick)))
             }
+            MaskStart::Generator(id) => Mask::new(0.0).with_effect(MaskEffect::new(GreyBlend::default(), EffectKind::Generator(Procedural::new(id)))),
         }
     }
 }

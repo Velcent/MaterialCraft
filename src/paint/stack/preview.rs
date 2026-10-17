@@ -25,7 +25,7 @@ impl Compositor<'_> {
     /// switched on; `None` if the layer has no mask.
     pub fn mask_rect(&self, layer: &Layer, r: Rect, out: &mut [f32]) -> Option<()> {
         let mask = layer.mask.as_ref()?;
-        let grey = self.mask_values(mask, mask.effects.len(), r);
+        let grey = self.mask_values(layer, mask, mask.effects.len(), r);
         for (o, g) in out.iter_mut().zip(grey) {
             *o = g;
         }

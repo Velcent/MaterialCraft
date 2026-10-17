@@ -10,11 +10,26 @@ use crate::paint::BakedKind;
 pub struct Procedural {
     pub id: String,
     pub params: Vec<(String, String)>,
+    /// The procedural this one stands in for (e.g. an imported Substance procedural replaced by one of ours),
+    /// kept unchanged so that a later, better replacement can convert it again.
+    pub original: Option<Box<Procedural>>,
 }
 
 impl Procedural {
     pub fn new(id: impl Into<String>) -> Procedural {
-        Procedural { id: id.into(), params: Vec::new() }
+        Procedural { id: id.into(), params: Vec::new(), original: None }
+    }
+
+    /// Builder: the parameters.
+    pub fn with_params(mut self, params: Vec<(String, String)>) -> Procedural {
+        self.params = params;
+        self
+    }
+
+    /// `self` standing in for `original`.
+    pub fn replacing(mut self, original: Procedural) -> Procedural {
+        self.original = Some(Box::new(original));
+        self
     }
 
     /// The value of parameter `name`, if set.

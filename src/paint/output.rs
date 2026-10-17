@@ -14,6 +14,8 @@
 
 use super::channel::Channel;
 use super::doc::Document;
+use super::effect::EffectRegistry;
+use super::effect::registry::EMPTY_REGISTRY;
 use super::height_normal::{self, HeightFilter};
 use super::normal;
 use super::normal_combine;
@@ -62,14 +64,20 @@ pub struct MaterialMaps {
 }
 
 impl MaterialMaps {
+    /// The maps without generator or filter implementations (those effects are left out).
     pub fn build(set: &TextureSet, options: &OutputOptions) -> MaterialMaps {
-        MaterialMaps::build_with_fills(set, options, &NO_FILL_CONTEXT)
+        MaterialMaps::build_with(set, options, &EMPTY_REGISTRY, &NO_FILL_CONTEXT)
     }
 
     /// Like [`MaterialMaps::build`], evaluating fills through `fills` (material sources, the mesh's surface).
     pub fn build_with_fills(set: &TextureSet, options: &OutputOptions, fills: &FillContext) -> MaterialMaps {
+        MaterialMaps::build_with(set, options, &EMPTY_REGISTRY, fills)
+    }
+
+    /// The maps with generators and filters evaluated through `effects` and fills through `fills`.
+    pub fn build_with(set: &TextureSet, options: &OutputOptions, effects: &EffectRegistry, fills: &FillContext) -> MaterialMaps {
         let (w, h) = (set.resolution.0 as usize, set.resolution.1 as usize);
-        let compositor = Compositor::new(set).with_fills(fills);
+        let compositor = Compositor::with_effects(set, effects).with_fills(fills);
         let mut warnings = Vec::new();
         let mut channel = |c: Channel| {
             if !set.has_channel(c) {

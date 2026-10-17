@@ -1,6 +1,7 @@
 //! The fields of the effect kinds that are the same in content and mask stacks:
 //!
-//! - generator, filter: `"id"`, `"params"` (name → string, in order);
+//! - generator, filter: `"id"`, `"params"` (name → string, in order), and `"original"` (`{"id", "params"}`)
+//!   when it stands in for another procedural;
 //! - levels: `"input_min"`, `"input_max"`, `"gamma"`, `"output_min"`, `"output_max"` (3 numbers each), `"clamp"`;
 //! - color_selection: `"map"` (baked map kind), `"colors"` (arrays of 3 numbers), `"tolerance"`, `"hardness"`;
 //! - polygon_fill: `"mode"` and `"picks"` (`[{"part", "triangles"}]`), plus the values of the stack's fills;
@@ -21,6 +22,11 @@ pub fn write_procedural(p: &Procedural, v: &mut Value) {
     let params = p.params.iter().map(|(k, val)| (k.clone(), Value::from(val.as_str()))).collect();
     v.insert("id", p.id.as_str());
     v.insert("params", Value::Object(params));
+    if let Some(original) = &p.original {
+        let mut o = Value::object();
+        write_procedural(original, &mut o);
+        v.insert("original", o);
+    }
 }
 
 pub fn read_procedural(o: &mut Obj) -> Result<Procedural, FormatError> {
@@ -30,7 +36,11 @@ pub fn read_procedural(o: &mut Obj) -> Result<Procedural, FormatError> {
         let val = val.as_str().ok_or_else(|| o.error("params", format!("{k:?}: expected a string")))?;
         params.push((k.clone(), val.to_string()));
     }
-    Ok(Procedural { id, params })
+    let original = match o.opt("original") {
+        Some(v) => Some(Box::new(read_procedural(&mut Obj::new(v, o.path("original"))?)?)),
+        None => None,
+    };
+    Ok(Procedural { id, params, original })
 }
 
 pub fn write_levels(l: &Levels, v: &mut Value) {
