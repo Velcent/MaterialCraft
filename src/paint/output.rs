@@ -18,7 +18,7 @@ use super::height_normal::{self, HeightFilter};
 use super::normal;
 use super::normal_combine;
 use super::par::for_each_mut;
-use super::stack::{CompositeWarning, Compositor};
+use super::stack::{CompositeWarning, Compositor, FillContext, NO_FILL_CONTEXT};
 use super::texture_set::{BakedKind, TextureSet};
 use crate::tex::Tex;
 
@@ -63,8 +63,13 @@ pub struct MaterialMaps {
 
 impl MaterialMaps {
     pub fn build(set: &TextureSet, options: &OutputOptions) -> MaterialMaps {
+        MaterialMaps::build_with_fills(set, options, &NO_FILL_CONTEXT)
+    }
+
+    /// Like [`MaterialMaps::build`], evaluating fills through `fills` (material sources, the mesh's surface).
+    pub fn build_with_fills(set: &TextureSet, options: &OutputOptions, fills: &FillContext) -> MaterialMaps {
         let (w, h) = (set.resolution.0 as usize, set.resolution.1 as usize);
-        let compositor = Compositor::new(set);
+        let compositor = Compositor::new(set).with_fills(fills);
         let mut warnings = Vec::new();
         let mut channel = |c: Channel| {
             if !set.has_channel(c) {

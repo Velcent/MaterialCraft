@@ -16,6 +16,7 @@ pub mod half;
 pub mod history;
 pub mod jpeg;
 pub mod json;
+pub mod material_fill;
 pub mod mesh;
 pub mod nodes2;
 pub mod noise;
