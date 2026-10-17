@@ -80,6 +80,26 @@ impl CopyTransform {
         [f(p[0], center[0], self.flip[0]), f(p[1], center[1], self.flip[1])]
     }
 
+    /// The copy whose positions move by the 4 × 4 column-major `m` (its last row ignored), without flips; `None`
+    /// if an element is not finite. The inverse of [`CopyTransform::matrix`], bit for bit.
+    pub fn from_matrix(m: &[f32; 16]) -> Option<CopyTransform> {
+        if !m.iter().all(|v| v.is_finite()) {
+            return None;
+        }
+        let at = |r: usize, c: usize| m.get(c * 4 + r).copied().unwrap_or(0.0);
+        let linear = [[at(0, 0), at(0, 1), at(0, 2)], [at(1, 0), at(1, 1), at(1, 2)], [at(2, 0), at(2, 1), at(2, 2)]];
+        Some(CopyTransform { linear, translate: [at(0, 3), at(1, 3), at(2, 3)], flip: [false; 2] })
+    }
+
+    /// `self` after `first`: positions move by `first`, then by `self` (flips are not combined; the result has
+    /// none).
+    pub fn after(&self, first: &CopyTransform) -> CopyTransform {
+        let [r0, r1, r2] = first.linear;
+        let [c0, c1, c2] = [[r0[0], r1[0], r2[0]], [r0[1], r1[1], r2[1]], [r0[2], r1[2], r2[2]]].map(|c| apply(&self.linear, c));
+        let linear = [[c0[0], c1[0], c2[0]], [c0[1], c1[1], c2[1]], [c0[2], c1[2], c2[2]]];
+        CopyTransform { linear, translate: self.point(first.translate), flip: [false; 2] }
+    }
+
     /// The 4 × 4 column-major matrix of the position transform (translation in elements 12 … 14).
     pub fn matrix(&self) -> [f32; 16] {
         let mut out = [0.0; 16];

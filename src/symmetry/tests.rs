@@ -61,3 +61,18 @@ fn guides_span_the_bounds_and_meet_the_mesh() {
     let hit = meeting(SymmetrySpec::Radial { axis: 2, point: [0.2, 0.1, 5.0], count: 3, flip: Flip::None }, &mesh);
     assert!(!hit.points.is_empty() && hit.points.iter().all(|p| (p[0] - 0.2).abs() < 1e-6 && p[2] == 0.0));
 }
+
+#[test]
+fn copies_rebuilt_from_the_step_matrix_are_the_same_bits() {
+    for spec in [
+        SymmetrySpec::Mirror { axis: 1, offset: 0.37 },
+        SymmetrySpec::Radial { axis: 0, point: [0.1, -0.33, 0.71], count: 7, flip: Flip::V },
+        SymmetrySpec::Radial { axis: 2, point: [0.0; 3], count: 4, flip: Flip::None },
+    ] {
+        let (step, n, flip) = spec.step().unwrap();
+        let rebuilt = repeat(&CopyTransform::from_matrix(&step.matrix()).unwrap(), n, flip);
+        assert_eq!(rebuilt, spec.copies(), "{spec:?}");
+    }
+    assert!(CopyTransform::from_matrix(&[f32::NAN; 16]).is_none());
+    assert_eq!(repeat(&CopyTransform::IDENTITY, 1000, [false; 2]).len(), MAX_RADIAL_COPIES as usize);
+}

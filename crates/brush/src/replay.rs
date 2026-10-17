@@ -5,7 +5,6 @@
 use crate::BrushError;
 use crate::engine::InputPoint;
 use crate::session::{Finished, SessionScene, StrokeSession, StrokeSetup};
-use crate::symmetry::from_record;
 use crate::target::PaintValues;
 use materialcraft::mesh::{Mesh, Sphere, SurfaceMap};
 use materialcraft::paint::brush::RecordedBrush;
@@ -41,7 +40,7 @@ pub fn replay(stroke: &Stroke, scene: &ReplayScene, targets: &mut [ChannelTarget
         preset: brush.preset.clone(),
         tool: stroke.tool,
         seed: stroke.seed,
-        symmetry: from_record(&stroke.symmetry),
+        symmetry: stroke.symmetry,
         view: stroke.view,
         values: recorded_values(&brush),
         model,

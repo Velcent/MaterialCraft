@@ -9,6 +9,8 @@
 //!   values.
 //! - [`document`]: [`DocumentStroke`], a stroke into a document with the inverses for one undo step.
 //! - [`replay`]: painting a recorded stroke again, bit for bit.
+//! - [`stroke`]: input transforms in front of a session: [`LazyMouse`], straight lines ([`LineAnchor`]).
+//! - [`symmetry`]: symmetric copies in a stroke record's form, built the same way live and on replay.
 //!
 //! Rule: the std-only core never depends on this crate; it sees only plain dabs and coverage grids.
 
@@ -18,6 +20,7 @@ pub mod document;
 pub mod engine;
 pub mod replay;
 pub mod session;
+pub mod stroke;
 pub mod symmetry;
 pub mod target;
 
@@ -25,6 +28,7 @@ pub use document::{DocumentStroke, Ended, Prepared};
 pub use engine::{DabEngine, InputPoint};
 pub use replay::{ReplayScene, recorded_brush, recorded_values, replay};
 pub use session::{Finished, SessionScene, StrokeSession, StrokeSetup};
+pub use stroke::{LazyMouse, LineAnchor};
 pub use target::{PaintTarget, PaintValues, Resolved, TargetPart};
 
 use materialcraft::paint::edit::EditError;

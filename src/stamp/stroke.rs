@@ -119,6 +119,15 @@ impl StampStroke {
     /// A stroke into `targets` (all of one texture set's size) with the copies `symmetry` asks for. 3D-view dabs
     /// repeat on the mesh through the view; texture-space dabs repeat through the mesh (see `through_mesh`).
     pub fn new(symmetry: SymmetrySpec, targets: &[ChannelTarget]) -> Result<StampStroke, StampError> {
+        StampStroke::with_copies(symmetry.copies(), targets)
+    }
+
+    /// A stroke into `targets` with the given symmetric copies (the direct copy among them; a recorded stroke's
+    /// copies come from [`crate::symmetry::repeat`]). Without any copy the direct one is used.
+    pub fn with_copies(mut copies: Vec<CopyTransform>, targets: &[ChannelTarget]) -> Result<StampStroke, StampError> {
+        if copies.is_empty() {
+            copies.push(CopyTransform::IDENTITY);
+        }
         let size = targets.first().map_or((0, 0), |t| t.image.size());
         if targets.iter().any(|t| t.image.size() != size) {
             return Err(StampError::SizeMismatch);
@@ -126,7 +135,7 @@ impl StampStroke {
         let (w, h) = (size.0 as usize, size.1 as usize);
         Ok(StampStroke {
             size: (w, h),
-            copies: symmetry.copies(),
+            copies,
             before: targets.iter().map(|t| (t.image.clone(), Blend::new(t))).collect(),
             tiles: BTreeMap::new(),
             tiles_x: w.div_ceil(T),

@@ -53,30 +53,43 @@ impl SymmetrySpec {
         self.copies().len() > 1
     }
 
-    /// Every copy a stamp is applied with, the direct one first. Invalid settings (an axis past z, a non-finite
-    /// offset or point, fewer than two radial copies) give the direct copy alone; radial counts above
-    /// [`MAX_RADIAL_COPIES`] are clamped.
-    pub fn copies(self) -> Vec<CopyTransform> {
-        let mut out = vec![CopyTransform::IDENTITY];
+    /// The copies as a stroke record stores them: one step transform, how many times it repeats, and the flips
+    /// of odd copies; `None` without copies. Invalid settings (an axis past z, a non-finite offset or point, fewer
+    /// than two radial copies) make none; radial counts above [`MAX_RADIAL_COPIES`] are clamped.
+    pub fn step(self) -> Option<(CopyTransform, u32, [bool; 2])> {
         match self {
-            SymmetrySpec::None => {}
-            SymmetrySpec::Mirror { axis, offset } => {
-                if let Some(m) = CopyTransform::mirror(axis, offset) {
-                    out.push(m);
-                }
-            }
+            SymmetrySpec::None => None,
+            SymmetrySpec::Mirror { axis, offset } => Some((CopyTransform::mirror(axis, offset)?, 1, [false; 2])),
             SymmetrySpec::Radial { axis, point, count, flip } => {
                 let n = count.min(MAX_RADIAL_COPIES);
-                for k in 1..n {
-                    let degrees = k as f64 * 360.0 / f64::from(n);
-                    let flips = if k % 2 == 1 { flip.axes() } else { [false; 2] };
-                    match CopyTransform::rotation(axis, point, degrees) {
-                        Some(r) => out.push(CopyTransform { flip: flips, ..r }),
-                        None => return vec![CopyTransform::IDENTITY],
-                    }
+                if n < 2 {
+                    return None;
                 }
+                Some((CopyTransform::rotation(axis, point, 360.0 / f64::from(n))?, n - 1, flip.axes()))
             }
         }
-        out
     }
+
+    /// Every copy a stamp is applied with, the direct one first (see [`SymmetrySpec::step`] and [`repeat`]).
+    pub fn copies(self) -> Vec<CopyTransform> {
+        match self.step() {
+            Some((step, n, flip)) => repeat(&step, n, flip),
+            None => vec![CopyTransform::IDENTITY],
+        }
+    }
+}
+
+/// The direct copy and `copies` more, copy `i` being `step` applied `i` times; odd copies flip as `flip` says.
+/// Copies past [`MAX_RADIAL_COPIES`] − 1 are dropped. Live strokes and replays of their records both build their
+/// copies here, so they agree bit for bit.
+pub fn repeat(step: &CopyTransform, copies: u32, flip: [bool; 2]) -> Vec<CopyTransform> {
+    let n = copies.min(MAX_RADIAL_COPIES - 1);
+    let mut out = vec![CopyTransform::IDENTITY];
+    let mut current = CopyTransform { flip: [false; 2], ..*step };
+    for i in 1..=n {
+        let flips = if i % 2 == 1 { flip } else { [false; 2] };
+        out.push(CopyTransform { flip: flips, ..current });
+        current = step.after(&current);
+    }
+    out
 }

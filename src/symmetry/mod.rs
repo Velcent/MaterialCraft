@@ -22,4 +22,4 @@ mod spec;
 mod tests;
 
 pub use copy::CopyTransform;
-pub use spec::{Flip, MAX_RADIAL_COPIES, SymmetrySpec};
+pub use spec::{Flip, MAX_RADIAL_COPIES, SymmetrySpec, repeat};

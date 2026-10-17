@@ -9,9 +9,8 @@ use materialcraft::camera::Camera;
 use materialcraft::mesh::Sphere;
 use materialcraft::paint::Document;
 use materialcraft::paint::brush::BrushPreset;
-use materialcraft::paint::stroke::{StrokeTool, ViewKind};
+use materialcraft::paint::stroke::{StrokeTool, Symmetry, ViewKind};
 use materialcraft::projection::ViewProjector;
-use materialcraft::stamp::SymmetrySpec;
 use materialcraft_brush::{BrushError, DocumentStroke, Ended, InputPoint, PaintTarget, PaintValues, SessionScene, StrokeSetup};
 use std::sync::Arc;
 
@@ -55,7 +54,7 @@ impl ActiveStroke {
             preset: start.preset,
             tool: start.tool,
             seed: start.seed,
-            symmetry: SymmetrySpec::None,
+            symmetry: Symmetry::default(),
             view: ViewKind::Mesh,
             values: start.values.clone(),
             model,
