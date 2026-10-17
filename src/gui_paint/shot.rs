@@ -49,7 +49,7 @@ impl ShotJob {
             (true, None) => self.settled_at = Some(frames),
             (true, Some(at)) if frames >= at + SETTLE_FRAMES => {
                 self.requested = true;
-                ctx.send_viewport_cmd(ViewportCommand::Screenshot);
+                ctx.send_viewport_cmd(ViewportCommand::Screenshot(egui::UserData::default()));
             }
             _ => {}
         }

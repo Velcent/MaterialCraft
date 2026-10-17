@@ -109,8 +109,9 @@ struct App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _f: &mut eframe::Frame) {
-        egui::CentralPanel::default().frame(egui::Frame::none()).show(ctx, |ui| {
+    fn ui(&mut self, ui: &mut egui::Ui, _f: &mut eframe::Frame) {
+        let ctx = &ui.ctx().clone();
+        egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {
             let rect = ui.max_rect();
             let (g, v) = (self.gpu.clone(), self.view.clone());
             ui.painter()

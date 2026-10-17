@@ -188,20 +188,20 @@ fn draw_icon(p: &egui::Painter, c: Pos2, ic: Ic, col: Color32) {
     let l = |a: (f32, f32), b: (f32, f32)| p.line_segment([pos2(c.x + a.0, c.y + a.1), pos2(c.x + b.0, c.y + b.1)], st);
     match ic {
         Ic::New => {
-            p.rect_stroke(r(-5.0, -7.0, 10.0, 14.0), 1.0, st);
+            p.rect_stroke(r(-5.0, -7.0, 10.0, 14.0), 1.0, st, egui::StrokeKind::Outside);
             l((-2.0, 0.0), (2.0, 0.0));
             l((0.0, -2.0), (0.0, 2.0));
         }
         Ic::Open => {
-            p.rect_stroke(r(-7.0, -4.0, 14.0, 10.0), 1.0, st);
+            p.rect_stroke(r(-7.0, -4.0, 14.0, 10.0), 1.0, st, egui::StrokeKind::Outside);
             l((-7.0, -4.0), (-7.0, -7.0));
             l((-7.0, -7.0), (-2.0, -7.0));
             l((-2.0, -7.0), (0.0, -4.0));
         }
         Ic::Save => {
-            p.rect_stroke(r(-6.0, -6.0, 12.0, 12.0), 1.0, st);
-            p.rect_stroke(r(-3.5, -6.0, 7.0, 4.0), 0.0, st);
-            p.rect_stroke(r(-3.5, 1.0, 7.0, 5.0), 0.0, st);
+            p.rect_stroke(r(-6.0, -6.0, 12.0, 12.0), 1.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-3.5, -6.0, 7.0, 4.0), 0.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-3.5, 1.0, 7.0, 5.0), 0.0, st, egui::StrokeKind::Outside);
         }
         Ic::Undo | Ic::Redo => {
             let s = if matches!(ic, Ic::Undo) { 1.0 } else { -1.0 };
@@ -222,24 +222,24 @@ fn draw_icon(p: &egui::Painter, c: Pos2, ic: Ic, col: Color32) {
             }
         }
         Ic::Layout => {
-            p.rect_stroke(r(-7.0, -6.0, 4.0, 4.0), 0.0, st);
-            p.rect_stroke(r(-7.0, 2.0, 4.0, 4.0), 0.0, st);
-            p.rect_stroke(r(3.0, -2.0, 4.0, 4.0), 0.0, st);
+            p.rect_stroke(r(-7.0, -6.0, 4.0, 4.0), 0.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-7.0, 2.0, 4.0, 4.0), 0.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(3.0, -2.0, 4.0, 4.0), 0.0, st, egui::StrokeKind::Outside);
             l((-3.0, -4.0), (0.0, 0.0));
             l((-3.0, 4.0), (0.0, 0.0));
             l((0.0, 0.0), (3.0, 0.0));
         }
         Ic::Comment => {
-            p.rect_stroke(r(-7.0, -6.0, 14.0, 12.0), 1.0, st);
+            p.rect_stroke(r(-7.0, -6.0, 14.0, 12.0), 1.0, st, egui::StrokeKind::Outside);
             l((-7.0, -2.5), (7.0, -2.5));
         }
         Ic::Subgraph => {
-            p.rect_stroke(r(-7.0, -7.0, 14.0, 14.0), 1.0, st);
-            p.rect_stroke(r(-3.0, -3.0, 6.0, 6.0), 0.0, st);
+            p.rect_stroke(r(-7.0, -7.0, 14.0, 14.0), 1.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-3.0, -3.0, 6.0, 6.0), 0.0, st, egui::StrokeKind::Outside);
         }
         Ic::Link => {
-            p.rect_stroke(r(-8.0, -3.0, 9.0, 6.0), 3.0, st);
-            p.rect_stroke(r(-1.0, -3.0, 9.0, 6.0), 3.0, st);
+            p.rect_stroke(r(-8.0, -3.0, 9.0, 6.0), 3.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-1.0, -3.0, 9.0, 6.0), 3.0, st, egui::StrokeKind::Outside);
         }
         Ic::Grid => {
             for k in [-3.0f32, 3.0] {
@@ -262,7 +262,7 @@ fn draw_icon(p: &egui::Painter, c: Pos2, ic: Ic, col: Color32) {
             p.circle_filled(c, 1.8, col);
         }
         Ic::Input => {
-            p.rect_stroke(r(-2.0, -6.0, 8.0, 12.0), 1.0, st);
+            p.rect_stroke(r(-2.0, -6.0, 8.0, 12.0), 1.0, st, egui::StrokeKind::Outside);
             l((-8.0, 0.0), (1.0, 0.0));
             l((-3.5, -3.5), (1.0, 0.0));
             l((-3.5, 3.5), (1.0, 0.0));
@@ -277,9 +277,9 @@ fn draw_icon(p: &egui::Painter, c: Pos2, ic: Ic, col: Color32) {
             l((6.5, 3.5), (0.0, 7.0));
         }
         Ic::GraphIcon => {
-            p.rect_stroke(r(-7.0, -6.0, 5.0, 4.0), 1.0, st);
-            p.rect_stroke(r(-7.0, 2.0, 5.0, 4.0), 1.0, st);
-            p.rect_stroke(r(3.0, -2.0, 5.0, 4.0), 1.0, st);
+            p.rect_stroke(r(-7.0, -6.0, 5.0, 4.0), 1.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(-7.0, 2.0, 5.0, 4.0), 1.0, st, egui::StrokeKind::Outside);
+            p.rect_stroke(r(3.0, -2.0, 5.0, 4.0), 1.0, st, egui::StrokeKind::Outside);
             l((-2.0, -4.0), (0.5, 0.0));
             l((-2.0, 4.0), (0.5, 0.0));
             l((0.5, 0.0), (3.0, 0.0));
@@ -587,9 +587,9 @@ impl App {
     }
 
     // ------------------------------------------------------------ home screen
-    fn home_ui(&mut self, ctx: &egui::Context) {
+    fn home_ui(&mut self, ui: &mut egui::Ui) {
         let bg = Color32::from_rgb(26, 26, 26);
-        egui::TopBottomPanel::top("home_top").exact_height(58.0).frame(egui::Frame::none().fill(Color32::from_rgb(45, 45, 45))).show(ctx, |ui| {
+        egui::Panel::top("home_top").exact_size(58.0).frame(egui::Frame::NONE.fill(Color32::from_rgb(45, 45, 45))).show(ui, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.add_space(22.0);
                 if let Some(t) = &self.logo {
@@ -601,8 +601,8 @@ impl App {
                 ui.label(egui::RichText::new("MaterialCraft").size(15.0).color(Color32::from_gray(210)));
             });
         });
-        egui::SidePanel::left("home_left").exact_width(200.0).frame(egui::Frame::none().fill(bg).inner_margin(egui::Margin::symmetric(18.0, 0.0))).show(
-            ctx,
+        egui::Panel::left("home_left").exact_size(200.0).frame(egui::Frame::NONE.fill(bg).inner_margin(egui::Margin::symmetric(18, 0))).show(
+            ui,
             |ui| {
                 ui.add_space(38.0);
                 let w = ui.available_width();
@@ -610,7 +610,7 @@ impl App {
                     .add(
                         egui::Button::new(egui::RichText::new("New graph...").color(Color32::WHITE).strong())
                             .fill(Color32::from_rgb(20, 115, 230))
-                            .rounding(16.0)
+                            .corner_radius(16)
                             .min_size(vec2(w, 32.0)),
                     )
                     .clicked()
@@ -663,7 +663,7 @@ impl App {
                         self.save_settings();
                     }
                     ui.add_space(6.0);
-                    if ui.add(egui::Button::new("Close home screen").rounding(14.0).min_size(vec2(w - 20.0, 30.0))).clicked() {
+                    if ui.add(egui::Button::new("Close home screen").corner_radius(14).min_size(vec2(w - 20.0, 30.0))).clicked() {
                         self.screen = Screen::Editor;
                     }
                     ui.add_space(14.0);
@@ -679,7 +679,7 @@ impl App {
                 });
             },
         );
-        egui::CentralPanel::default().frame(egui::Frame::none().fill(bg).inner_margin(egui::Margin::symmetric(26.0, 0.0))).show(ctx, |ui| {
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(bg).inner_margin(egui::Margin::symmetric(26, 0))).show(ui, |ui| {
             ui.add_space(26.0);
             if self.home_page == 1 {
                 self.learn_page(ui);
@@ -727,7 +727,7 @@ impl App {
                 );
                 let br = Rect::from_min_size(rect.left_top() + vec2(40.0, 170.0), vec2(92.0, 32.0));
                 let resp = ui.interact(br, Id::new("go_learn"), Sense::click());
-                p.rect_stroke(br, 16.0, Stroke::new(2.0_f32, Color32::WHITE));
+                p.rect_stroke(br, 16.0, Stroke::new(2.0_f32, Color32::WHITE), egui::StrokeKind::Outside);
                 if resp.hovered() {
                     p.rect_filled(br, 16.0, Color32::from_white_alpha(30));
                 }
@@ -783,7 +783,7 @@ impl App {
                     resp.context_menu(|ui| {
                         if ui.button("Remove from recent").clicked() {
                             remove = Some(p.clone());
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                 }
@@ -849,7 +849,7 @@ impl App {
                     ui.allocate_ui_with_layout(vec2(340.0, 400.0), egui::Layout::top_down(egui::Align::LEFT), |ui| {
                         ui.label(egui::RichText::new("TEMPLATES").size(12.0).color(Color32::from_gray(200)));
                         ui.add_space(4.0);
-                        egui::Frame::none().fill(Color32::from_rgb(32, 32, 32)).stroke(Stroke::new(1.0_f32, Color32::from_rgb(60, 60, 60))).show(ui, |ui| {
+                        egui::Frame::NONE.fill(Color32::from_rgb(32, 32, 32)).stroke(Stroke::new(1.0_f32, Color32::from_rgb(60, 60, 60))).show(ui, |ui| {
                             ui.set_min_size(vec2(334.0, 366.0));
                             egui::ScrollArea::vertical().id_salt("tmpl").max_height(366.0).show(ui, |ui| {
                                 for (i, t) in TEMPLATES.iter().enumerate() {
@@ -857,7 +857,7 @@ impl App {
                                     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 21.0), Sense::click());
                                     if sel {
                                         ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(40, 62, 100));
-                                        ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(60, 120, 230)));
+                                        ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0_f32, Color32::from_rgb(60, 120, 230)), egui::StrokeKind::Outside);
                                     } else if resp.hovered() {
                                         ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(44, 44, 44));
                                     }
@@ -1021,16 +1021,16 @@ impl App {
         bg.context_menu(|ui| {
             if ui.button("New Package").clicked() {
                 self.acts.push(Act::NewPackage);
-                ui.close_menu();
+                ui.close();
             }
             if ui.button("New Material Graph").clicked() {
                 self.acts.push(Act::NewGraphIn(self.pkg_sel));
-                ui.close_menu();
+                ui.close();
             }
             ui.separator();
             if ui.button("Open Package(s)...").clicked() {
                 self.acts.push(Act::Open);
-                ui.close_menu();
+                ui.close();
             }
         });
         let current = self.parents.last().map(|(_, n)| n.clone());
@@ -1073,16 +1073,16 @@ impl App {
                             ui.menu_button("New", |ui| {
                                 if ui.button("Material Graph").clicked() {
                                     self.acts.push(Act::NewGraphIn(i));
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             });
                             if ui.button("Save Package").clicked() {
                                 self.acts.push(Act::SavePkg(i));
-                                ui.close_menu();
+                                ui.close();
                             }
                             if ui.button("Close Package").clicked() {
                                 self.acts.push(Act::ClosePkg(i));
-                                ui.close_menu();
+                                ui.close();
                             }
                         });
                     })
@@ -1258,7 +1258,7 @@ impl App {
                                 let fav = self.favorites.contains(&e.label);
                                 if ui.button(if fav { "Remove from favorites" } else { "Add to favorites" }).clicked() {
                                     fav_toggle = Some(e.label.clone());
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             });
                         }
@@ -1295,7 +1295,7 @@ impl App {
         painter.rect_filled(rect, 0.0, Color32::from_rgb(34, 34, 34));
         let fit = rect.width().min(rect.height()) - 20.0;
         if resp.hovered() {
-            let sc = ui.input(|i| i.raw_scroll_delta.y);
+            let sc = ui.input(|i| crate::gui_input::raw_scroll_delta(i).y);
             if sc != 0.0 {
                 self.z2d = (self.z2d * (1.0 + sc * 0.0015)).clamp(0.1, 16.0);
             }
@@ -1317,7 +1317,7 @@ impl App {
             } else {
                 painter.image(t.id(), img, uv, Color32::WHITE);
             }
-            painter.rect_stroke(img, 0.0, Stroke::new(1.0_f32, Color32::from_gray(70)));
+            painter.rect_stroke(img, 0.0, Stroke::new(1.0_f32, Color32::from_gray(70)), egui::StrokeKind::Outside);
         } else {
             painter.text(rect.center(), Align2::CENTER_CENTER, "select a node to view its result", FontId::proportional(12.5), Color32::from_gray(120));
         }
@@ -1365,7 +1365,7 @@ impl App {
             self.show[2] = false;
         }
         let mut ch = false;
-        egui::menu::bar(ui, |ui| {
+        egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("Scene", |ui| {
                 for (k, (n, id)) in render3d::SHAPES.iter().enumerate() {
                     if k == 7 {
@@ -1374,7 +1374,7 @@ impl App {
                     if ui.selectable_label(self.view3d.shape == *id, *n).clicked() {
                         self.view3d.shape = *id;
                         ch = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                 }
                 ui.separator();
@@ -1437,7 +1437,7 @@ impl App {
                     self.view3d.light_yaw = d.light_yaw;
                     self.view3d.light_pitch = d.light_pitch;
                     ch = true;
-                    ui.close_menu();
+                    ui.close();
                 }
             });
             ui.menu_button("Environment", |ui| {
@@ -1509,7 +1509,7 @@ impl App {
             self.dirty3d = true;
         }
         if resp.hovered() {
-            let sc = ui.input(|i| i.raw_scroll_delta.y);
+            let sc = ui.input(|i| crate::gui_input::raw_scroll_delta(i).y);
             if sc != 0.0 {
                 self.view3d.dist = (self.view3d.dist * (1.0 - sc * 0.001)).clamp(1.6, 9.0);
                 self.dirty3d = true;
@@ -1649,31 +1649,32 @@ impl App {
     }
 
     // ------------------------------------------------------------ editor layout
-    fn editor_ui(&mut self, ctx: &egui::Context) {
+    fn editor_ui(&mut self, ui: &mut egui::Ui) {
+        let ctx = &ui.ctx().clone();
         let mut acts: Vec<Act> = Vec::new();
         let in_sub = !self.parents.is_empty();
         let (can_undo, can_redo, has_sel, has_clip) = (!self.undo.is_empty(), !self.redo.is_empty(), !self.sel.is_empty(), !self.clip.is_empty());
         let panel_fill = Color32::from_rgb(40, 40, 40);
 
-        egui::TopBottomPanel::top("menu").frame(egui::Frame::none().fill(Color32::from_rgb(34, 34, 34)).inner_margin(egui::Margin::symmetric(6.0, 2.0))).show(
-            ctx,
+        egui::Panel::top("menu").frame(egui::Frame::NONE.fill(Color32::from_rgb(34, 34, 34)).inner_margin(egui::Margin::symmetric(6, 2))).show(
+            ui,
             |ui| {
-                egui::menu::bar(ui, |ui| {
+                egui::MenuBar::new().ui(ui, |ui| {
                     ui.menu_button("File", |ui| {
                         ui.menu_button("New", |ui| {
                             if ui.button("Material Graph...   Ctrl+N").clicked() {
                                 acts.push(Act::NewGraph);
-                                ui.close_menu();
+                                ui.close();
                             }
                             if ui.button("Empty Package...").clicked() {
                                 acts.push(Act::NewPackage);
-                                ui.close_menu();
+                                ui.close();
                             }
                         });
                         for (label, a) in [("Open package(s)...   Ctrl+O", Act::Open), ("Save   Ctrl+S", Act::Save), ("Save as...", Act::SaveAs)] {
                             if ui.button(label).clicked() {
                                 acts.push(a);
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                         ui.separator();
@@ -1682,23 +1683,23 @@ impl App {
                         {
                             if ui.button(label).clicked() {
                                 acts.push(a);
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                         ui.separator();
                         if ui.button("Home screen").clicked() {
                             acts.push(Act::Home);
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                     ui.menu_button("Edit", |ui| {
                         if ui.add_enabled(can_undo, egui::Button::new("Undo   Ctrl+Z")).clicked() {
                             acts.push(Act::Undo);
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui.add_enabled(can_redo, egui::Button::new("Redo   Ctrl+Y")).clicked() {
                             acts.push(Act::Redo);
-                            ui.close_menu();
+                            ui.close();
                         }
                         ui.separator();
                         for (label, a, en) in [
@@ -1711,35 +1712,35 @@ impl App {
                         ] {
                             if ui.add_enabled(en, egui::Button::new(label)).clicked() {
                                 acts.push(a);
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                         ui.separator();
                         if ui.button("Add node...   Tab").clicked() {
                             acts.push(Act::Search(None));
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui.button("Comment frame   C").clicked() {
                             acts.push(Act::Comment);
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui.add_enabled(has_sel, egui::Button::new("Create subgraph from selection")).clicked() {
                             acts.push(Act::Subgraph);
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                     ui.menu_button("Tools", |ui| {
                         if ui.button("Mesh map baker...").clicked() {
                             acts.push(Act::Bake);
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui.button("Frame all   F").clicked() {
                             acts.push(Act::FrameAll);
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui.button("Auto-layout").clicked() {
                             acts.push(Act::AutoLayout);
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                     ui.menu_button("Windows", |ui| {
@@ -1750,13 +1751,13 @@ impl App {
                         if ui.button("Reset layout").clicked() {
                             self.show = [true; 5];
                             self.left_split = 0.33;
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                     ui.menu_button("Help", |ui| {
                         if ui.button("Keyboard shortcuts").clicked() {
                             self.show_about = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         ui.separator();
                         ui.small(self.logo_note.as_str());
@@ -1764,9 +1765,9 @@ impl App {
                 });
             },
         );
-        egui::TopBottomPanel::top("toolbar")
-            .frame(egui::Frame::none().fill(Color32::from_rgb(38, 38, 38)).inner_margin(egui::Margin::symmetric(6.0, 1.0)))
-            .show(ctx, |ui| {
+        egui::Panel::top("toolbar")
+            .frame(egui::Frame::NONE.fill(Color32::from_rgb(38, 38, 38)).inner_margin(egui::Margin::symmetric(6, 1)))
+            .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     for (ic, tip, a, en) in [
                         (Ic::New, "New material graph (Ctrl+N)", Act::NewGraph, true),
@@ -1786,9 +1787,9 @@ impl App {
                     }
                 });
             });
-        egui::TopBottomPanel::bottom("status")
-            .frame(egui::Frame::none().fill(Color32::from_rgb(30, 30, 30)).inner_margin(egui::Margin::symmetric(8.0, 2.0)))
-            .show(ctx, |ui| {
+        egui::Panel::bottom("status")
+            .frame(egui::Frame::NONE.fill(Color32::from_rgb(30, 30, 30)).inner_margin(egui::Margin::symmetric(8, 2)))
+            .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     let (msg, ok) = &self.status;
                     ui.colored_label(if *ok { Color32::from_gray(170) } else { Color32::from_rgb(255, 120, 110) }, msg);
@@ -1805,7 +1806,7 @@ impl App {
 
         let (mut d_props, mut d_left, mut d_views, mut d_split) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
         if self.show[4] {
-            egui::SidePanel::right("props").resizable(false).exact_width(self.w_props).frame(egui::Frame::none().fill(panel_fill)).show(ctx, |ui| {
+            egui::Panel::right("props").resizable(false).exact_size(self.w_props).frame(egui::Frame::NONE.fill(panel_fill)).show(ui, |ui| {
                 let prect = ui.max_rect();
                 let title = match self.active.filter(|a| self.sel.contains(a)).and_then(|a| self.g.nodes.get(&a).map(|n| n.kind.replace('_', " "))) {
                     Some(k) => format!("{} - PROPERTIES", k.to_uppercase()),
@@ -1816,14 +1817,14 @@ impl App {
                 }
                 egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                     ui.add_space(4.0);
-                    egui::Frame::none().inner_margin(egui::Margin::symmetric(8.0, 0.0)).show(ui, |ui| self.inspector(ui));
+                    egui::Frame::NONE.inner_margin(egui::Margin::symmetric(8, 0)).show(ui, |ui| self.inspector(ui));
                 });
                 d_props = size_handle(ui, "h_props", prect, 1);
             });
         }
 
         if self.show[0] || self.show[1] {
-            egui::SidePanel::left("left").resizable(false).exact_width(self.w_left).frame(egui::Frame::none().fill(panel_fill)).show(ctx, |ui| {
+            egui::Panel::left("left").resizable(false).exact_size(self.w_left).frame(egui::Frame::NONE.fill(panel_fill)).show(ui, |ui| {
                 let lrect = ui.max_rect();
                 let total = ui.available_height();
                 let w = ui.available_width();
@@ -1853,7 +1854,7 @@ impl App {
         }
 
         if self.show[2] || self.show[3] {
-            egui::TopBottomPanel::bottom("views").resizable(false).exact_height(self.h_views).frame(egui::Frame::none().fill(panel_fill)).show(ctx, |ui| {
+            egui::Panel::bottom("views").resizable(false).exact_size(self.h_views).frame(egui::Frame::NONE.fill(panel_fill)).show(ui, |ui| {
                 let vrect = ui.max_rect();
                 let both = self.show[2] && self.show[3];
                 let (total, hh) = (ui.available_width(), ui.available_height());
@@ -1887,14 +1888,14 @@ impl App {
         }
 
         {
-            let sw = ctx.screen_rect().width();
-            let sh = ctx.screen_rect().height();
+            let sw = ctx.content_rect().width();
+            let sh = ctx.content_rect().height();
             self.w_props = (self.w_props + d_props).clamp(240.0, (sw * 0.45).max(260.0));
             self.w_left = (self.w_left + d_left).clamp(240.0, (sw * 0.5).max(260.0));
             self.h_views = (self.h_views + d_views).clamp(140.0, (sh * 0.7).max(160.0));
             self.view_split = (self.view_split + d_split).clamp(0.2, 0.8);
         }
-        egui::CentralPanel::default().frame(egui::Frame::none().fill(panel_fill)).show(ctx, |ui| {
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(panel_fill)).show(ui, |ui| {
             panel_header(ui, &format!("{} - GRAPH", self.gname()), false);
             ui.horizontal(|ui| {
                 ui.add_space(4.0);
@@ -1972,16 +1973,17 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = &ui.ctx().clone();
         if self.screen == Screen::Paint {
-            if self.paint.ui(ctx) == gui_paint::PaintAction::Home {
+            if self.paint.ui(ui) == gui_paint::PaintAction::Home {
                 self.screen = Screen::Home;
                 self.last_title.clear();
             }
             return;
         }
         // graph files dropped from the OS onto the window: import as a node (editor) or open (home screen)
-        let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().filter_map(|f| f.path.clone()).collect());
+        let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
         for p in dropped {
             if !matches!(p.extension().and_then(|e| e.to_str()), Some("mcg" | "mca")) {
                 continue;
@@ -2021,13 +2023,13 @@ impl eframe::App for App {
         }
 
         if self.screen == Screen::Home {
-            self.home_ui(ctx);
+            self.home_ui(ui);
             self.new_dialog(ctx);
             self.windows(ctx);
             if self.screen == Screen::Editor {
                 ctx.request_repaint();
             }
-            self.text_focus = ctx.wants_keyboard_input();
+            self.text_focus = ctx.egui_wants_keyboard_input();
             return;
         }
 
@@ -2126,7 +2128,7 @@ impl eframe::App for App {
             }
         }
 
-        self.editor_ui(ctx);
+        self.editor_ui(ui);
         self.new_dialog(ctx);
         self.confirm_close_ui(ctx);
         if let Some(t) = self.copy_out.take() {
@@ -2151,7 +2153,7 @@ impl eframe::App for App {
         if self.job.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(30));
         }
-        self.text_focus = ctx.wants_keyboard_input();
+        self.text_focus = ctx.egui_wants_keyboard_input();
     }
 }
 

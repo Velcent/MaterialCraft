@@ -119,7 +119,8 @@ impl PaintMode {
     }
 
     /// Draws the screen and handles its input.
-    pub fn ui(&mut self, ctx: &egui::Context) -> PaintAction {
+    pub fn ui(&mut self, ui: &mut egui::Ui) -> PaintAction {
+        let ctx = &ui.ctx().clone();
         if let Some(p) = window::dropped_document(ctx) {
             self.open(p);
         }
@@ -130,7 +131,7 @@ impl PaintMode {
                 self.status = Status::error(e);
             }
         }
-        let events = self.draw(ctx);
+        let events = self.draw(ui);
         let mut action = PaintAction::Stay;
         for ev in events {
             if self.apply(ev) == PaintAction::Home {
@@ -149,7 +150,7 @@ impl PaintMode {
         action
     }
 
-    fn draw(&mut self, ctx: &egui::Context) -> Vec<PanelEvent> {
+    fn draw(&mut self, ui: &mut egui::Ui) -> Vec<PanelEvent> {
         let screen = Screen {
             document: self.document.as_ref(),
             report: &mut self.report,
@@ -158,7 +159,7 @@ impl PaintMode {
             status: &self.status,
             activity: Activity { loading: self.loader.as_ref().map(|l| l.progress()), maps: self.scene.progress() },
         };
-        panels::layout::show(ctx, screen)
+        panels::layout::show(ui, screen)
     }
 
     fn apply(&mut self, ev: PanelEvent) -> PaintAction {

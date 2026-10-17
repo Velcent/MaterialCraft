@@ -27,9 +27,9 @@ pub struct Activity<'a> {
     pub maps: Option<(usize, usize)>,
 }
 
-pub fn show(ctx: &egui::Context, status: &Status, activity: &Activity, events: &mut Vec<PanelEvent>) {
-    let frame = egui::Frame::none().fill(crate::gui_theme::HEADER_BG).inner_margin(egui::Margin::symmetric(8.0, 2.0));
-    egui::TopBottomPanel::bottom("paint_status").frame(frame).show(ctx, |ui| {
+pub fn show(ui: &mut egui::Ui, status: &Status, activity: &Activity, events: &mut Vec<PanelEvent>) {
+    let frame = egui::Frame::NONE.fill(crate::gui_theme::HEADER_BG).inner_margin(egui::Margin::symmetric(8, 2));
+    egui::Panel::bottom("paint_status").frame(frame).show(ui, |ui| {
         ui.horizontal(|ui| {
             let col = if status.ok { Color32::from_gray(170) } else { Color32::from_rgb(255, 120, 110) };
             ui.colored_label(col, &status.text);

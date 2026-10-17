@@ -1,8 +1,8 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 //! MaterialCraft visual editor. Run: cargo run --release --features gui --bin materialcraft-gui
 use eframe::egui::{
-    self, Align2, Color32, ColorImage, FontId, Id, Key, Modifiers, PointerButton, Pos2, Rect, Rounding, Sense, Stroke, TextStyle, Vec2,
-    epaint::CubicBezierShape, pos2, vec2,
+    self, Align2, Color32, ColorImage, FontId, Id, Key, Modifiers, PointerButton, Pos2, Rect, Sense, Stroke, TextStyle, Vec2, epaint::CubicBezierShape, pos2,
+    vec2,
 };
 use materialcraft::bake::{self, BakeSettings};
 use materialcraft::export::{self, Format};
@@ -18,6 +18,7 @@ use std::sync::mpsc::{Receiver, TryRecvError, channel};
 mod logo_data {
     include!(concat!(env!("OUT_DIR"), "/logo.rs"));
 }
+mod gui_input;
 #[path = "gui_paint/mod.rs"]
 mod gui_paint;
 mod gui_theme;
@@ -1463,7 +1464,7 @@ fn auto_layout_if_unplaced(g: &mut Graph) {
 }
 
 fn apply_theme(ctx: &egui::Context) {
-    let mut style = (*ctx.style()).clone();
+    let mut style = (*ctx.global_style()).clone();
     let mut v = egui::Visuals::dark();
     v.panel_fill = Color32::from_rgb(46, 46, 46);
     v.window_fill = Color32::from_rgb(52, 52, 52);
@@ -1478,8 +1479,14 @@ fn apply_theme(ctx: &egui::Context) {
     v.widgets.active.weak_bg_fill = Color32::from_rgb(235, 130, 20);
     v.selection.bg_fill = Color32::from_rgb(220, 120, 20);
     v.selection.stroke = Stroke::new(1.0_f32, Color32::WHITE);
-    v.window_rounding = Rounding::same(3.0);
-    v.menu_rounding = Rounding::same(3.0);
+    v.window_corner_radius = egui::CornerRadius::same(3);
+    v.menu_corner_radius = egui::CornerRadius::same(3);
+    // Defaults egui changed after 0.29, kept at their old values so the editor looks as before.
+    v.text_options.color_transfer_function = egui::epaint::FontColorTransferFunction::Gamma(0.55);
+    v.weak_text_color = Some(egui::ecolor::tint_color_towards(v.text_color(), v.widgets.noninteractive.weak_bg_fill));
+    v.handle_shape = egui::style::HandleShape::Circle;
+    v.widgets.hovered.expansion = 1.0;
+    v.widgets.active.expansion = 1.0;
     style.visuals = v;
     style.text_styles.insert(TextStyle::Body, FontId::proportional(12.5));
     style.text_styles.insert(TextStyle::Button, FontId::proportional(12.5));
@@ -1488,7 +1495,7 @@ fn apply_theme(ctx: &egui::Context) {
     style.spacing.item_spacing = vec2(6.0, 4.0);
     style.spacing.button_padding = vec2(6.0, 2.0);
     style.spacing.slider_width = 150.0;
-    ctx.set_style(style);
+    ctx.set_global_style(style);
 }
 
 include!("gui_params.rs");

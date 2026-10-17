@@ -20,24 +20,24 @@ pub struct Screen<'a> {
 }
 
 /// Draws the screen and returns what the user asked for.
-pub fn show(ctx: &egui::Context, s: Screen) -> Vec<PanelEvent> {
+pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
     let mut events = Vec::new();
     let title = s.document.map(|d| d.name()).unwrap_or_default();
-    menu_bar::show(ctx, &title, s.document.is_some(), &mut events);
-    status_bar::show(ctx, s.status, &s.activity, &mut events);
-    let side = egui::Frame::none().fill(PANEL_FILL).inner_margin(egui::Margin::same(4.0));
+    menu_bar::show(ui, &title, s.document.is_some(), &mut events);
+    status_bar::show(ui, s.status, &s.activity, &mut events);
+    let side = egui::Frame::NONE.fill(PANEL_FILL).inner_margin(egui::Margin::same(4));
     if let Some(doc) = s.document {
-        egui::SidePanel::left("paint_left").frame(side).default_width(300.0).show(ctx, |ui| {
+        egui::Panel::left("paint_left").frame(side).default_size(300.0).show(ui, |ui| {
             texture_sets::show(ui, doc, &mut events);
             ui.add_space(8.0);
             s.report.show(ui, doc.doc().import_report.as_ref(), doc.summary.as_deref());
         });
-        egui::SidePanel::right("paint_right").frame(side).default_width(250.0).show(ctx, |ui| {
+        egui::Panel::right("paint_right").frame(side).default_size(250.0).show(ui, |ui| {
             let (view, gpu) = s.viewport.settings_mut();
             view_settings::show(ui, view, gpu);
         });
     }
-    egui::CentralPanel::default().frame(egui::Frame::none().fill(PANEL_FILL)).show(ctx, |ui| {
+    egui::CentralPanel::default().frame(egui::Frame::NONE.fill(PANEL_FILL)).show(ui, |ui| {
         if s.document.is_some() {
             channel_bar::show(ui, s.display, &mut events);
             s.viewport.ui(ui, s.display);

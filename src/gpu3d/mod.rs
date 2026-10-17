@@ -175,7 +175,7 @@ fn read_back(gl: &glow::Context, info: &PaintCallbackInfo) -> (usize, usize, Vec
     let (w, h) = (vp_px.width_px as usize, vp_px.height_px as usize);
     let mut buf = vec![0u8; w * h * 4];
     unsafe {
-        gl.read_pixels(vp_px.left_px, vp_px.from_bottom_px, w as i32, h as i32, glow::RGBA, glow::UNSIGNED_BYTE, glow::PixelPackData::Slice(&mut buf));
+        gl.read_pixels(vp_px.left_px, vp_px.from_bottom_px, w as i32, h as i32, glow::RGBA, glow::UNSIGNED_BYTE, glow::PixelPackData::Slice(Some(&mut buf)));
     }
     // flip: GL rows start at the bottom
     let mut top = vec![0u8; w * h * 4];

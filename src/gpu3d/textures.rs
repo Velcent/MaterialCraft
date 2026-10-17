@@ -35,7 +35,7 @@ impl Tx {
             let id = gl.create_texture()?;
             gl.bind_texture(glow::TEXTURE_2D, Some(id));
             gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
-            gl.tex_image_2d(glow::TEXTURE_2D, 0, internal as i32, w as i32, h as i32, 0, fmt, ty, Some(data));
+            gl.tex_image_2d(glow::TEXTURE_2D, 0, internal as i32, w as i32, h as i32, 0, fmt, ty, glow::PixelUnpackData::Slice(Some(data)));
             gl.generate_mipmap(glow::TEXTURE_2D);
             gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::REPEAT as i32);
             gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::REPEAT as i32);

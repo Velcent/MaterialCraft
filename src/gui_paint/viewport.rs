@@ -83,7 +83,7 @@ impl Viewport {
             }
         }
         if resp.hovered() {
-            let scroll = ui.input(|i| i.raw_scroll_delta.y);
+            let scroll = ui.input(|i| crate::gui_input::raw_scroll_delta(i).y);
             if scroll != 0.0 {
                 v.dist = (v.dist * (1.0 - scroll * 0.001)).clamp(1.6, 9.0);
             }

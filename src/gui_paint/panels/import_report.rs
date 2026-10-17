@@ -73,5 +73,5 @@ fn badge_text(f: Fidelity, n: usize) -> RichText {
 
 fn badge(ui: &mut egui::Ui, f: Fidelity) {
     let text = RichText::new(label(f)).small().strong().color(Color32::WHITE);
-    egui::Frame::none().fill(color(f)).rounding(3.0).inner_margin(egui::Margin::symmetric(4.0, 0.0)).show(ui, |ui| ui.label(text));
+    egui::Frame::NONE.fill(color(f)).corner_radius(3).inner_margin(egui::Margin::symmetric(4, 0)).show(ui, |ui| ui.label(text));
 }
