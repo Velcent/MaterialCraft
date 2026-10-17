@@ -9,6 +9,7 @@
 //! - [`target`]: [`PaintTarget`], what a tool paints (a paint layer's channels or a mask, ADR 0008) and with which
 //!   values.
 //! - [`document`]: [`DocumentStroke`], a stroke into a document with the inverses for one undo step.
+//! - [`quick_mask`]: [`QuickMask`], the session mask every stroke honours, and [`QuickMaskStroke`] to paint it.
 //! - [`replay`]: painting a recorded stroke again, bit for bit.
 //! - [`stroke`]: input transforms in front of a session: [`LazyMouse`], straight lines ([`LineAnchor`]).
 //! - [`symmetry`]: symmetric copies in a stroke record's form, built the same way live and on replay.
@@ -19,6 +20,7 @@
 
 pub mod document;
 pub mod engine;
+pub mod quick_mask;
 pub mod replay;
 pub mod session;
 pub mod stroke;
@@ -27,6 +29,7 @@ pub mod target;
 
 pub use document::{DocumentStroke, Ended, Prepared};
 pub use engine::{DabEngine, InputPoint, PROCEDURAL_TIPS, TipInfo, procedural_tip};
+pub use quick_mask::{QuickMask, QuickMaskState, QuickMaskStroke};
 pub use replay::{ReplayScene, recorded_brush, recorded_values, replay};
 pub use session::{Finished, SessionScene, StrokeSession, StrokeSetup};
 pub use stroke::{LazyMouse, LineAnchor};
