@@ -52,6 +52,7 @@ impl DiskCache {
             ThumbSource::None => return None,
             ThumbSource::Image(p) => (1, p),
             ThumbSource::Material(p) => (2, p),
+            ThumbSource::Fragment(p) => (3, p),
         };
         let mut h = Fnv::new();
         h.write(&VERSION.to_le_bytes());

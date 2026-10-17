@@ -54,6 +54,12 @@ impl Ours {
         self
     }
 
+    /// A text value (an id).
+    pub fn text(mut self, name: &str, v: &str) -> Ours {
+        self.out.push((name.to_string(), v.to_string()));
+        self
+    }
+
     /// Several numbers at once: `(ours, Painter's)` pairs.
     pub fn nums(self, p: &Painter, pairs: &[(&str, &str)]) -> Ours {
         pairs.iter().fold(self, |o, (ours, theirs)| o.num(ours, p.f(theirs)))

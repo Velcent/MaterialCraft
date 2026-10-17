@@ -3,13 +3,14 @@
 //!     materialcraft-gui --paint <file.mcpaint|file.spp> [--channel <id>] [--shot <out.png>]
 //!     materialcraft-gui --paint-demo [--channel <id>] [--shot <out.png>]
 //!     materialcraft-gui --paint <file> --occlusion-check <map.png>
-//!     materialcraft-gui --paint <file> --stroke-test --shot <out.png>
+//!     materialcraft-gui --paint <file> --stroke-test [--stroke-helpers] --shot <out.png>
 //!
 //! `--channel` takes a channel id (`base_color`, `roughness`, ...) or `material`; `--shot` saves the
 //! window once every map is on the GPU and then quits. `--occlusion-check` compares the CPU view projector
 //! with the GPU's depth buffer once the scene has settled, prints the agreement, saves a map of it and quits
 //! (use it without `--shot`). `--stroke-test` paints one stroke on a new paint layer once the document has
-//! settled (before `--shot` saves the window).
+//! settled (before `--shot` saves the window); with `--stroke-helpers` it does so with mirror symmetry across X and
+//! the lazy mouse on, and adds a straight line in angle steps from the stroke's end.
 
 use super::channel_view::ChannelView;
 use materialcraft::paint::Channel;
@@ -30,6 +31,7 @@ pub struct Launch {
     pub shot: Option<PathBuf>,
     pub occlusion_check: Option<PathBuf>,
     pub stroke_test: bool,
+    pub stroke_helpers: bool,
 }
 
 impl Launch {
@@ -44,6 +46,7 @@ impl Launch {
                 "--shot" => launch.shot = it.next().map(PathBuf::from),
                 "--occlusion-check" => launch.occlusion_check = it.next().map(PathBuf::from),
                 "--stroke-test" => launch.stroke_test = true,
+                "--stroke-helpers" => launch.stroke_helpers = true,
                 "--channel" => launch.channel = it.next().and_then(|c| parse_channel(&c)),
                 _ => {}
             }

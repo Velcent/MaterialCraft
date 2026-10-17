@@ -28,6 +28,6 @@ mod tests;
 
 pub use cache::{DEFAULT_BUDGET, MaterialCache};
 pub use material::{Material, MaterialError, MaterialKey};
-pub use reference::{FolderResolver, MAX_GRAPH_BYTES, MaterialResolver, MemoryResolver, ResolveError};
+pub use reference::{ChainResolver, FolderResolver, MAX_GRAPH_BYTES, MaterialResolver, MemoryResolver, ResolveError};
 pub use render::{ChannelTexture, MAX_RENDER_SIZE, RenderedMaterial};
 pub use sources::MaterialFills;

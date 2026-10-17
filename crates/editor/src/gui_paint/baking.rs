@@ -84,7 +84,7 @@ impl PaintMode {
         }
     }
 
-    fn start_bake(&mut self, sets: &[String], maps: Option<MapSelection>) {
+    pub(super) fn start_bake(&mut self, sets: &[String], maps: Option<MapSelection>) {
         let Some(doc) = &self.document else { return };
         if self.baking.queue.is_some() {
             self.diag.info(Area::Bake, "A bake is running; it has to finish or be cancelled first.");

@@ -1,5 +1,5 @@
-//! The brush tools' part of a Paint-screen frame: the viewport's stroke gesture goes to [`tools::Painting`], and
-//! what it painted is recomposited.
+//! The brush tools' part of a Paint-screen frame: the viewport's stroke gesture goes to [`tools::Painting`], what
+//! it painted is recomposited, and the tools' visual aids are drawn over the view.
 
 use super::PaintMode;
 use super::panels::PanelEvent;
@@ -19,6 +19,10 @@ impl PaintMode {
         let frame = PaintFrame { doc, picking: &self.picking, camera: self.viewport.camera(), tool: self.shell.tools.current, target };
         let report = self.painting.frame(input, frame);
         self.after_painting(report);
+        if let (Some(doc), Some(painter), Some(rect)) = (self.document.as_ref(), self.viewport.overlay_painter(ctx), self.viewport.rect()) {
+            let overlay = self.painting.overlay(doc, &self.picking, self.viewport.camera(), self.viewport.hover(), self.shell.tools.current);
+            overlay.draw(&painter, rect.min);
+        }
         if self.painting.is_stroking() || self.viewport.stroking() {
             ctx.request_repaint();
         }

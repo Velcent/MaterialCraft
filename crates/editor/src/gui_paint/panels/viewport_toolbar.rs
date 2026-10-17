@@ -35,8 +35,8 @@ pub fn show(
             }
         }),
         Group::new(Side::Left, |ui: &mut Ui| {
-            if let Some(preset) = brush.preset_mut(tool).filter(|_| unavailable.is_none()) {
-                quick_bar::show(ui, preset);
+            if let Some((preset, helpers)) = brush.quick_mut(tool).filter(|_| unavailable.is_none()) {
+                quick_bar::show(ui, preset, helpers);
             }
         }),
         Group::new(Side::Right, |ui: &mut Ui| {

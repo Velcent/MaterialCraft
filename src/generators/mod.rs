@@ -1,7 +1,8 @@
 //! MaterialCraft's own mask generators, driven by a texture set's baked mesh maps (ambient occlusion,
 //! curvature, world-space normal, position, thickness) and by the layer stack. They plug into the paint
 //! model behind [`crate::paint::effect::GeneratorSource`]; [`register`] adds them to an
-//! [`EffectRegistry`] under the ids in [`GENERATORS`], and [`builtin`] is a registry holding all of them.
+//! [`EffectRegistry`] under the ids in [`GENERATORS`], and [`builtin`] is a registry holding all of them plus the
+//! procedural textures. Texture inputs are [`crate::proc_textures`] looks.
 //!
 //! Everything here is written from scratch: the generators stand in for the smart-mask generators Substance
 //! Painter projects use (the importer's replacement table maps those onto these ids), shaped after what those
@@ -23,7 +24,7 @@ mod height_combination;
 mod maps;
 mod mask_builder;
 mod mask_editor;
-mod params;
+use crate::paint::effect::params;
 mod parts;
 mod pyramid;
 mod texel;
@@ -35,6 +36,7 @@ mod tests;
 
 pub use tone::Layering;
 
+use crate::paint::BakedKind;
 use crate::paint::effect::{EffectRegistry, GeneratorSource};
 use std::sync::OnceLock;
 use texel::Cached;
@@ -87,6 +89,22 @@ pub fn generator(id: &str) -> Option<Box<dyn GeneratorSource>> {
     })
 }
 
+/// The baked maps the generator `id` reads (AS-05: what a smart material or smart mask using it needs baked).
+/// Maps read only by optional settings (tri-planar placement of breakup noise reads world normal and position)
+/// are not listed. Nothing for unknown ids.
+pub fn baked_maps(id: &str) -> Vec<BakedKind> {
+    use BakedKind::{AmbientOcclusion, Curvature, Position, Thickness, WorldSpaceNormal};
+    match id {
+        DIRT | METAL_EDGE_WEAR => vec![AmbientOcclusion, Curvature],
+        MASK_EDITOR => vec![AmbientOcclusion, WorldSpaceNormal, Position, Thickness],
+        AMBIENT_OCCLUSION => vec![AmbientOcclusion],
+        CURVATURE => vec![Curvature],
+        MASK_BUILDER => vec![AmbientOcclusion, Curvature, WorldSpaceNormal, Position],
+        UV_BORDER_DISTANCE => vec![Position],
+        _ => Vec::new(),
+    }
+}
+
 /// Adds every generator to `registry`.
 pub fn register(registry: &mut EffectRegistry) {
     for info in GENERATORS {
@@ -96,12 +114,13 @@ pub fn register(registry: &mut EffectRegistry) {
     }
 }
 
-/// A registry with every generator (built once).
+/// A registry with every generator and every procedural texture ([`crate::proc_textures`]), built once.
 pub fn builtin() -> &'static EffectRegistry {
     static REGISTRY: OnceLock<EffectRegistry> = OnceLock::new();
     REGISTRY.get_or_init(|| {
         let mut r = EffectRegistry::new();
         register(&mut r);
+        crate::proc_textures::register(&mut r);
         r
     })
 }

@@ -1,7 +1,7 @@
 //! Fresh ids for new layers and anchors, and new ids for a copied layer tree (layer ids and anchor ids are
 //! unique within a texture set; see [`crate::paint::validate`]).
 
-use crate::paint::effect::{Anchor, EffectDomain, EffectKind};
+use crate::paint::effect::{Anchor, Effect, EffectDomain, EffectKind};
 use crate::paint::layer::{Layer, LayerKind};
 use crate::paint::texture_set::TextureSet;
 use std::collections::{HashMap, HashSet};
@@ -44,6 +44,25 @@ impl IdPool {
         let mut renamed = HashMap::new();
         self.reid_tree(layer, &mut renamed);
         relink(layer, &renamed);
+    }
+
+    /// Gives the anchors among `effects` (a stack dropped onto a layer, e.g. a smart mask's) new ids; references
+    /// among them follow, references to anchors elsewhere are kept.
+    pub fn reid_effects<D: EffectDomain>(&mut self, effects: &mut [Effect<D>]) {
+        let mut renamed = HashMap::new();
+        for e in effects.iter_mut() {
+            if let EffectKind::Anchor(a) = &mut e.kind {
+                let new = self.anchor(&stem(&a.id));
+                renamed.insert(std::mem::replace(&mut a.id, new.clone()), new);
+            }
+        }
+        for e in effects {
+            if let EffectKind::Reference(r) = &mut e.kind
+                && let Some(new) = renamed.get(r.anchor.as_str())
+            {
+                r.anchor = new.clone();
+            }
+        }
     }
 
     fn reid_tree(&mut self, layer: &mut Layer, renamed: &mut HashMap<String, String>) {

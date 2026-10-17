@@ -2,7 +2,12 @@
 //! Our own grunge map family (fifteen procedural looks: specks, drips, blotches, scratches, crazing, cracks).
 //! Each recipe builds a tileable "dirt" field from our noise primitives; `GrungeP` then thresholds it with balance /
 //! contrast like a grunge map. The recipes are our own procedural designs.
+//! [`GrungeVariant`] holds the four looks of the `grunge` node (concrete, scratches, spots, smudges).
 use crate::noise;
+
+mod variants;
+
+pub use variants::{GrungeVariant, Variant};
 
 #[derive(Clone, Copy)]
 pub struct GrungeP {

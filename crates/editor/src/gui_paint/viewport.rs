@@ -29,6 +29,20 @@ pub struct Viewport {
     rect: Option<egui::Rect>,
     /// The stroke gesture's input, for the brush tools.
     pointer: PointerLog,
+    /// Where the pointer hovers over the view this frame (view coordinates) and the stroke kind its modifiers
+    /// would start, for the brush overlays.
+    hover: Option<Hover>,
+    /// The layer the view is drawn on, so overlays drawn later in the frame land on top of it.
+    layer: Option<egui::LayerId>,
+}
+
+/// The pointer over the view.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Hover {
+    /// View coordinates (from the view's top-left corner).
+    pub pos: [f32; 2],
+    /// `Some(snap)` while the modifiers held would start a straight line.
+    pub line: Option<bool>,
 }
 
 impl Viewport {
@@ -41,6 +55,8 @@ impl Viewport {
             diag,
             rect: None,
             pointer: PointerLog::default(),
+            hover: None,
+            layer: None,
         }
     }
 
@@ -75,6 +91,16 @@ impl Viewport {
         self.pointer.take()
     }
 
+    /// The pointer over the view this frame.
+    pub fn hover(&self) -> Option<Hover> {
+        self.hover
+    }
+
+    /// A painter over the view, for overlays drawn after it this frame.
+    pub fn overlay_painter(&self, ctx: &egui::Context) -> Option<egui::Painter> {
+        Some(ctx.layer_painter(self.layer?).with_clip_rect(self.rect?))
+    }
+
     /// True while the stroke gesture is held.
     pub fn stroking(&self) -> bool {
         self.pointer.is_down()
@@ -91,6 +117,7 @@ impl Viewport {
     pub fn ui(&mut self, ui: &mut egui::Ui, display: ChannelView, keys: &ShortcutTable) {
         let (rect, resp) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
         self.rect = (rect.width() > 0.0 && rect.height() > 0.0).then_some(rect);
+        self.layer = Some(ui.layer_id());
         ui.painter().rect_filled(rect, 0.0, BACKGROUND);
         self.camera_input(ui, &resp, keys);
         self.stroke_input(ui, &resp, rect, keys);
@@ -110,15 +137,24 @@ impl Viewport {
         ui.painter().text(corner, Align2::LEFT_BOTTOM, hint(keys), FontId::proportional(10.0), Color32::from_gray(110));
     }
 
-    /// Records the stroke gesture (by default a left drag, or a click for a single stamp).
+    /// Records the stroke gesture (by default a left drag, or a click for a single stamp; with Shift a straight
+    /// line).
     fn stroke_input(&mut self, ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect, keys: &ShortcutTable) {
         let mods = ui.input(|i| i.modifiers);
-        let is_stroke = keys.drag(mods, PointerButton::Primary) == Some(actions::STROKE);
+        let gesture = keys.drag(mods, PointerButton::Primary);
+        let line = match gesture {
+            Some(actions::STROKE_LINE) => Some(false),
+            Some(actions::STROKE_LINE_SNAP) => Some(true),
+            _ => None,
+        };
+        let hover = resp.hover_pos().filter(|p| rect.contains(*p));
+        self.hover = hover.map(|p| Hover { pos: [p.x - rect.min.x, p.y - rect.min.y], line });
+        let is_stroke = gesture == Some(actions::STROKE) || line.is_some();
         let held = is_stroke && resp.dragged_by(PointerButton::Primary);
         let clicked = is_stroke && resp.clicked_by(PointerButton::Primary);
         let started = (is_stroke && resp.drag_started_by(PointerButton::Primary)) || clicked;
         let stopped = resp.drag_stopped_by(PointerButton::Primary) || clicked;
-        ui.input(|i| self.pointer.record(i, rect, held, started, stopped));
+        ui.input(|i| self.pointer.record(i, rect, held, started, stopped, line));
     }
 
     fn camera_input(&mut self, ui: &egui::Ui, resp: &egui::Response, keys: &ShortcutTable) {

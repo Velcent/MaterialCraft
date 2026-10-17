@@ -6,10 +6,12 @@ use materialcraft::mesh::{Mesh, MeshPart, SurfaceKey, SurfaceMap};
 use materialcraft::paint::brush::{BrushPreset, Jitter};
 use materialcraft::paint::edit::ops::{MaskStart, NewLayer, add_mask, create};
 use materialcraft::paint::edit::{LayerRef, Transaction};
-use materialcraft::paint::stroke::{StrokeData, StrokeTool, ViewKind};
+use materialcraft::paint::stroke::{StrokeData, StrokeTool, Symmetry, ViewKind};
 use materialcraft::paint::{Channel, Document, LayerKind, TextureSet};
 use materialcraft::projection::{ViewProjector, ViewScene};
-use materialcraft::stamp::{SymmetrySpec, TexelIndex};
+use materialcraft::stamp::TexelIndex;
+use materialcraft::symmetry::{Flip, SymmetrySpec};
+use materialcraft_brush::symmetry::to_record;
 use materialcraft_brush::{DocumentStroke, InputPoint, PaintTarget, PaintValues, ReplayScene, SessionScene, StrokeSetup, TargetPart, replay};
 
 const SIZE: u32 = 256;
@@ -45,7 +47,7 @@ fn setup(doc: &Document, tool: StrokeTool) -> StrokeSetup {
         preset,
         tool,
         seed: 11,
-        symmetry: SymmetrySpec::None,
+        symmetry: Symmetry::default(),
         view: ViewKind::Mesh,
         values: values(),
         model: doc.mesh.bounding_sphere().unwrap(),
@@ -61,13 +63,14 @@ fn paint(
     view: &ViewScene,
     target: PaintTarget,
     tool: StrokeTool,
+    symmetry: Symmetry,
 ) -> Vec<materialcraft::paint::edit::Edit> {
     let prepared = DocumentStroke::prepare(doc, target, &values()).unwrap();
     let Document { mesh, texture_sets, .. } = doc;
     let projector = view.projector(mesh, camera()).unwrap();
     let scene = SessionScene { surface: map, index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
     let set = &mut texture_sets[0];
-    let mut stroke = prepared.start(setup_for(mesh, tool), &scene, mesh, &|_| true, set).map_err(|b| b.1).unwrap();
+    let mut stroke = prepared.start(StrokeSetup { symmetry, ..setup_for(mesh, tool) }, &scene, mesh, &|_| true, set).map_err(|b| b.1).unwrap();
     for i in 0..40 {
         let t = i as f32 / 39.0;
         let p = InputPoint { pressure: 0.5 + 0.5 * t, ..InputPoint::at([120.0 + 240.0 * t, 180.0 + 40.0 * (t * 6.0).sin()], f64::from(t)) };
@@ -102,7 +105,7 @@ fn a_stroke_is_one_undo_step_with_a_record_and_replays_bit_for_bit() {
     let target = PaintTarget { layer: LayerRef::new("s", &layer), part: TargetPart::Content };
 
     let mut history = PaintHistory::default();
-    let inverses = paint(&mut doc, &map, &index, &view, target.clone(), StrokeTool::Paint);
+    let inverses = paint(&mut doc, &map, &index, &view, target.clone(), StrokeTool::Paint, Symmetry::default());
     history.record_all(&doc, "Paint", Some(CoalesceKey(1)), inverses);
     history.close();
     let painted = base(&doc, &layer);
@@ -153,7 +156,7 @@ fn masks_get_a_paint_effect_and_the_eraser_paints_them_black() {
     let view = ViewScene::new(&doc.mesh, doc.mesh.fit());
     let before = doc.clone();
     let target = PaintTarget { layer: r.clone(), part: TargetPart::Mask };
-    let inverses = paint(&mut doc, &map, &index, &view, target.clone(), StrokeTool::Eraser);
+    let inverses = paint(&mut doc, &map, &index, &view, target.clone(), StrokeTool::Eraser, Symmetry::default());
     let mask = doc.texture_sets[0].layer(&layer).unwrap().mask.clone().unwrap();
     assert_eq!(mask.effects.len(), before.texture_sets[0].layer(&layer).unwrap().mask.as_ref().unwrap().effects.len() + 1);
     let Some(materialcraft::paint::EffectKind::Paint(px)) = mask.effects.last().map(|e| &e.kind) else { panic!("no paint effect") };
@@ -164,4 +167,49 @@ fn masks_get_a_paint_effect_and_the_eraser_paints_them_black() {
     history.record_all(&doc, "Erase", None, inverses);
     history.undo(&mut doc).unwrap();
     assert_eq!(doc, before);
+}
+
+/// Step 30's gate: a symmetric stroke records its symmetry, and replaying the record paints the same bits again
+/// (the copies are built from the record's form live and on replay alike).
+#[test]
+fn symmetric_strokes_record_their_symmetry_and_replay_bit_for_bit() {
+    for spec in [SymmetrySpec::Mirror { axis: 0, offset: 0.0 }, SymmetrySpec::Radial { axis: 1, point: [0.0; 3], count: 5, flip: Flip::U }] {
+        let (mut doc, layer) = document();
+        let map = SurfaceMap::build(&doc.mesh, SurfaceKey::square(&doc.mesh, 0, SIZE)).unwrap();
+        let index = TexelIndex::build(&map);
+        let view = ViewScene::new(&doc.mesh, doc.mesh.fit());
+        let clean = doc.clone();
+        let target = PaintTarget { layer: LayerRef::new("s", &layer), part: TargetPart::Content };
+        paint(&mut doc, &map, &index, &view, target.clone(), StrokeTool::Paint, to_record(spec));
+        let painted = base(&doc, &layer);
+        let plain = {
+            let mut d = clean.clone();
+            paint(&mut d, &map, &index, &view, target.clone(), StrokeTool::Paint, Symmetry::default());
+            base(&d, &layer)
+        };
+        let touched = |img: &[u8]| img.iter().filter(|b| **b != 0).count();
+        assert!(touched(&painted) > touched(&plain) * 3 / 2, "{spec:?}: the copies painted more");
+        let Some(StrokeData::Record(record)) = (match &doc.texture_sets[0].layer(&layer).unwrap().kind {
+            LayerKind::Paint(p) => p.strokes.clone(),
+            _ => None,
+        }) else {
+            panic!("no stroke record")
+        };
+        assert_eq!(record.strokes[0].symmetry, to_record(spec));
+        let replayed = || {
+            let mut d = clean.clone();
+            let set = &mut d.texture_sets[0];
+            let stroke = &record.strokes[0];
+            let resolved = target.resolve(set, &materialcraft_brush::recorded_values(&materialcraft_brush::recorded_brush(stroke).unwrap())).unwrap();
+            let mut targets = target.channel_targets(set, &resolved, false).unwrap();
+            let scene = ReplayScene { mesh: &clean.mesh, view: &view, surface: &map, index: &index, factors: &[] };
+            replay(stroke, &scene, &mut targets).unwrap();
+            drop(targets);
+            base(&d, &layer)
+        };
+        let a = replayed();
+        assert_eq!(a, replayed(), "{spec:?}");
+        let differing = a.iter().zip(&painted).filter(|(x, y)| x != y).count();
+        assert!(differing * 200 < a.len(), "{spec:?}: replay differs from the live stroke in {differing} of {} bytes", a.len());
+    }
 }

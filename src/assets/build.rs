@@ -7,6 +7,8 @@ use std::path::Path;
 use super::format::{SIDECAR_SUFFIX, THUMBNAIL_SUFFIX, folder_of};
 use super::{Asset, Format, Listing, Sidecar, Thumbnail, Usage};
 use crate::diag::{Area, Level, Sink, SinkExt, Target};
+use crate::paint::FragmentKind;
+use crate::paint::format::fragment;
 
 /// Sidecars larger than this are not read (they are tiny; anything bigger is a mistake).
 pub const MAX_SIDECAR_BYTES: u64 = 256 * 1024;
@@ -27,6 +29,9 @@ impl AssetBuilder<'_> {
             asset.modified = stamp.modified;
             asset.size = stamp.len;
         }
+        if format == Format::Fragment {
+            self.apply_fragment(&mut asset);
+        }
         let thumb = format!("{path}{THUMBNAIL_SUFFIX}");
         if self.listing.contains(&thumb) {
             asset.thumbnail = Thumbnail::File(thumb);
@@ -39,6 +44,27 @@ impl AssetBuilder<'_> {
         }
         asset.reindex();
         asset
+    }
+
+    /// What a fragment's own header says (AS-05): its usage (smart material or smart mask, whatever folder it
+    /// sits in), name, needed baked maps and embedded thumbnail. A sidecar still overrides each of them.
+    fn apply_fragment(&self, asset: &mut Asset) {
+        match fragment::read_info_path(&self.root_dir.join(&asset.path)) {
+            Ok(info) => {
+                asset.usage = match info.kind {
+                    FragmentKind::SmartMaterial => Usage::SmartMaterial,
+                    FragmentKind::SmartMask => Usage::SmartMask,
+                };
+                if !info.name.trim().is_empty() {
+                    asset.name = info.name;
+                }
+                asset.needs = info.needs.iter().map(|k| k.id().to_string()).collect();
+                if info.thumbnail.is_some() {
+                    asset.thumbnail = Thumbnail::Embedded;
+                }
+            }
+            Err(e) => self.sink.about(Level::Warning, Area::Assets, Target::Asset(asset.path.clone()), format!("can't read the fragment: {e}")),
+        }
     }
 
     fn read_sidecar(&self, rel: &str) -> Option<Sidecar> {
@@ -73,7 +99,9 @@ impl AssetBuilder<'_> {
         }
         asset.tags = s.tags;
         asset.description = s.description;
-        asset.needs = s.needs;
+        if !s.needs.is_empty() {
+            asset.needs = s.needs;
+        }
         asset.provenance = s.provenance;
         if let Some(t) = s.thumbnail {
             match resolve_relative(folder_of(&asset.path), &t) {
@@ -99,6 +127,7 @@ pub(crate) fn default_usage(format: Format) -> Usage {
     match format {
         Format::Graph | Format::Sbsar => Usage::Material,
         Format::Png | Format::Exr => Usage::Texture,
+        Format::Fragment => Usage::SmartMaterial,
     }
 }
 

@@ -1,5 +1,6 @@
 //! [`ActiveStroke`]: the stroke under the pointer, from pen down to pen up: the brush crate's
-//! [`DocumentStroke`] plus what it paints through (the set's surface, the camera at pen down).
+//! [`DocumentStroke`] plus what it paints through (the set's surface, the camera at pen down), the lazy mouse in
+//! front of it, and where it ended (the next straight line's start).
 
 use super::super::document_state::OpenDocument;
 use super::super::view_pick::ViewPicking;
@@ -9,10 +10,9 @@ use materialcraft::camera::Camera;
 use materialcraft::mesh::Sphere;
 use materialcraft::paint::Document;
 use materialcraft::paint::brush::BrushPreset;
-use materialcraft::paint::stroke::{StrokeTool, ViewKind};
+use materialcraft::paint::stroke::{StrokeTool, Symmetry, ViewKind};
 use materialcraft::projection::ViewProjector;
-use materialcraft::stamp::SymmetrySpec;
-use materialcraft_brush::{BrushError, DocumentStroke, Ended, InputPoint, PaintTarget, PaintValues, SessionScene, StrokeSetup};
+use materialcraft_brush::{BrushError, DocumentStroke, Ended, InputPoint, LazyMouse, LineAnchor, PaintTarget, PaintValues, SessionScene, StrokeSetup};
 use std::sync::Arc;
 
 /// How to start a stroke.
@@ -26,6 +26,10 @@ pub struct StrokeStart {
     pub seed: u32,
     pub camera: Camera,
     pub surface: Arc<Surface>,
+    /// Symmetric copies in the record's form.
+    pub symmetry: Symmetry,
+    /// The lazy mouse, if on (never for straight lines).
+    pub lazy: Option<LazyMouse>,
 }
 
 pub struct ActiveStroke {
@@ -36,6 +40,17 @@ pub struct ActiveStroke {
     /// Pen-down time, so samples are recorded in seconds since the stroke started.
     t0: f64,
     pub label: &'static str,
+    lazy: Option<LazyMouse>,
+    /// The last point painted (view coordinates).
+    last: Option<[f32; 2]>,
+}
+
+/// How a stroke ended.
+pub struct StrokeEnd {
+    /// A problem to report.
+    pub problem: Option<String>,
+    /// Where it ended, for the next straight line.
+    pub anchor: Option<LineAnchor>,
 }
 
 /// The pieces of a document a stroke needs at once: the mesh to look through, the set to paint.
@@ -55,7 +70,7 @@ impl ActiveStroke {
             preset: start.preset,
             tool: start.tool,
             seed: start.seed,
-            symmetry: SymmetrySpec::None,
+            symmetry: start.symmetry,
             view: ViewKind::Mesh,
             values: start.values.clone(),
             model,
@@ -77,7 +92,8 @@ impl ActiveStroke {
                 return Err(e);
             }
         };
-        let mut active = ActiveStroke { stroke, set: start.set, camera: start.camera, surface: start.surface, t0: at.time, label };
+        let mut active =
+            ActiveStroke { stroke, set: start.set, camera: start.camera, surface: start.surface, t0: at.time, label, lazy: start.lazy, last: None };
         active.add(doc, picking, &[at])?;
         Ok(active)
     }
@@ -92,20 +108,32 @@ impl ActiveStroke {
         if samples.is_empty() {
             return Ok(false);
         }
-        let points: Vec<InputPoint> =
+        let mut points: Vec<InputPoint> =
             samples.iter().map(|s| InputPoint { pressure: s.pressure, ..InputPoint::at(s.pos, (s.time - self.t0).max(0.0)) }).collect();
+        if let Some(lazy) = &mut self.lazy {
+            points = lazy.push(&points);
+        }
+        let Some(last) = points.last() else { return Ok(false) };
+        self.last = Some(last.pos);
         let (mesh, set) = split(doc.doc_for_strokes(), self.set)?;
         let projector = picking.projector_on(mesh, self.camera).ok_or(BrushError::NoView)?;
         let scene = SessionScene { surface: &self.surface.map, index: &self.surface.index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
         Ok(!self.stroke.add(&scene, &points, set)?.is_empty())
     }
 
-    /// Pen up: paints the last stamps and records the stroke as one history step. Returns an error to report, if any.
-    pub fn end(self, doc: &mut OpenDocument, picking: &ViewPicking) -> Option<String> {
-        let ActiveStroke { stroke, set, camera, surface, label, .. } = self;
+    /// The lazy mouse's string `(brush, pointer)` while the brush lags behind.
+    pub fn string(&self) -> Option<([f32; 2], [f32; 2])> {
+        self.lazy.as_ref().and_then(LazyMouse::string)
+    }
+
+    /// Pen up: paints the last stamps and records the stroke as one history step.
+    pub fn end(self, doc: &mut OpenDocument, picking: &ViewPicking) -> StrokeEnd {
+        let ActiveStroke { stroke, set, camera, surface, label, last, .. } = self;
+        let mut anchor = None;
         let (ended, mut problem) = match split(doc.doc_for_strokes(), set) {
             Ok((mesh, set_ref)) => match picking.projector_on(mesh, camera) {
                 Some(projector) => {
+                    anchor = last.map(|end| LineAnchor::at(end, Some(&projector as &dyn ViewProjector)));
                     let scene = SessionScene { surface: &surface.map, index: &surface.index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
                     let (ended, result) = stroke.finish(&scene, set_ref);
                     (ended, result.err().map(|e| e.to_string()))
@@ -118,7 +146,7 @@ impl ActiveStroke {
         if let Some(e) = record(doc, ended, label) {
             problem.get_or_insert(e);
         }
-        problem
+        StrokeEnd { problem, anchor }
     }
 }
 

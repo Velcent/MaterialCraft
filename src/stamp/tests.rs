@@ -8,22 +8,22 @@ use crate::projection::{ViewProjector, ViewScene};
 
 const SIZE: u32 = 256;
 
-fn mesh_of(parts: Vec<MeshPart>) -> Mesh {
+pub(super) fn mesh_of(parts: Vec<MeshPart>) -> Mesh {
     Mesh { materials: vec!["m".into()], parts }
 }
 
-fn surface(mesh: &Mesh) -> (SurfaceMap, TexelIndex) {
+pub(super) fn surface(mesh: &Mesh) -> (SurfaceMap, TexelIndex) {
     let map = SurfaceMap::build(mesh, SurfaceKey::square(mesh, 0, SIZE)).unwrap();
     let index = TexelIndex::build(&map);
     (map, index)
 }
 
-fn image() -> TiledImage {
+pub(super) fn image() -> TiledImage {
     TiledImage::new(SIZE, SIZE, PixelFormat::from_id("rgba32f").unwrap()).unwrap()
 }
 
 /// A hard round dab of `radius` at `center`, coverage 1 inside.
-fn disc(center: [f32; 2], radius: f32, index: u64, flow: f32, opacity: f32) -> DabSample {
+pub(super) fn disc(center: [f32; 2], radius: f32, index: u64, flow: f32, opacity: f32) -> DabSample {
     let r = radius.ceil() as i32 + 1;
     let (x0, y0) = (center[0].floor() as i32 - r, center[1].floor() as i32 - r);
     let n = (2 * r + 1) as usize;
@@ -41,7 +41,7 @@ fn erase(img: &mut TiledImage) -> ChannelTarget<'_> {
     ChannelTarget { image: img, value: [0.0; 4], mode: StampMode::Erase, srgb: false }
 }
 
-fn red(img: &mut TiledImage) -> ChannelTarget<'_> {
+pub(super) fn red(img: &mut TiledImage) -> ChannelTarget<'_> {
     ChannelTarget { image: img, value: [1.0, 0.0, 0.0, 1.0], mode: StampMode::Paint, srgb: false }
 }
 
@@ -119,7 +119,7 @@ fn the_same_dabs_give_the_same_bits() {
 }
 
 /// A camera looking at `target` from `dir` (unit sphere of the fitted model at the origin).
-fn camera(dir: [f32; 3], target: [f32; 3]) -> Camera {
+pub(super) fn camera(dir: [f32; 3], target: [f32; 3]) -> Camera {
     let lens = Lens::Perspective { fov_y: 40f32.to_radians(), near: 0.03, far: 60.0 };
     let d = crate::v3::norm(dir);
     let eye = crate::v3::add(target, crate::v3::mul(d, 3.0));

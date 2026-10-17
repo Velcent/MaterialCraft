@@ -1,12 +1,12 @@
 //! [`Breakup`]: the noise generators use to break up their masks (where a smart mask's dirt or wear is
-//! patchy), and [`Texture`]: a grunge look from MaterialCraft's own grunge family ([`crate::grunge`]) used
-//! where a generator takes a texture input. Both are tileable in UV and can be projected tri-planar from the
+//! patchy), and [`Texture`]: one of MaterialCraft's procedural textures ([`crate::proc_textures`]: a grunge
+//! map by number, or any texture by id) used where a generator takes a texture input. Both are tileable in UV and can be projected tri-planar from the
 //! position map instead, which hides UV seams.
 
 use super::maps::SetMaps;
 use super::texel::Texel;
-use crate::grunge::{GrungeP, T0, grunge_map};
 use crate::noise::Fbm;
+use crate::proc_textures::{self, ProcTexture};
 
 /// Lattice cells across the texture at scale 1.
 const BASE_CELLS: f32 = 3.0;
@@ -64,10 +64,9 @@ impl Breakup {
     }
 }
 
-/// One of our grunge looks as a generator's texture input.
+/// One of our procedural textures as a generator's texture input.
 pub struct Texture {
-    look: GrungeP,
-    threshold: f32,
+    look: ProcTexture,
     scale: f32,
     placement: Placement,
 }
@@ -75,15 +74,22 @@ pub struct Texture {
 impl Texture {
     /// `look` 1..=15 selects the grunge map.
     pub fn new(look: u32, scale: f32, seed: u32, placement: Placement) -> Texture {
-        let map = look.clamp(1, 15);
-        let threshold = T0.get(map as usize - 1).copied().unwrap_or(0.5);
-        let look = GrungeP { map, seed, balance: 0.5, contrast: 0.5, brush: 0.0, cracks: 1.0, disorder: 0.0 };
-        Texture { look, threshold, scale: scale.clamp(0.05, 64.0), placement }
+        Texture::of(proc_textures::grunge_look(look.clamp(1, 15), seed), scale, placement)
     }
 
-    /// White where clean, black where dirty (as a grunge map).
+    /// The procedural texture `id` with its default settings, if there is one.
+    pub fn by_id(id: &str, scale: f32, seed: u32, placement: Placement) -> Option<Texture> {
+        let params = vec![("seed".to_string(), seed.to_string())];
+        Some(Texture::of(proc_textures::texture(id, &params)?, scale, placement))
+    }
+
+    fn of(look: ProcTexture, scale: f32, placement: Placement) -> Texture {
+        Texture { look, scale: scale.clamp(0.05, 64.0), placement }
+    }
+
+    /// The texture's value; for a grunge map white where clean, black where dirty.
     pub fn value(&self, t: &Texel, maps: &SetMaps) -> f32 {
-        self.placement.read(t, maps, self.scale, |u, v| grunge_map(&self.look, u, v, self.threshold))
+        self.placement.read(t, maps, self.scale, |u, v| self.look.value(u, v))
     }
 }
 
@@ -105,5 +111,21 @@ mod tests {
             seen.push(n);
         }
         assert!(seen.iter().any(|v| (v - seen[0]).abs() > 0.01));
+    }
+
+    #[test]
+    fn looks_by_number_are_the_grunge_maps_and_ids_resolve() {
+        use crate::grunge::{GrungeP, T0, grunge_map};
+        let maps = SetMaps::of(&TextureSet::new("s", "S", (4, 4)));
+        for look in 1..=15u32 {
+            let t = Texture::new(look, 1.0, 9, Placement::Uv);
+            let p = GrungeP { map: look, seed: 9, balance: 0.5, contrast: 0.5, brush: 0.0, cracks: 1.0, disorder: 0.0 };
+            for i in 0..16 {
+                let texel = Texel::at(i % 4, i / 4, 4, 4);
+                assert_eq!(t.value(&texel, &maps), grunge_map(&p, texel.u, texel.v, T0[look as usize - 1]));
+            }
+        }
+        assert!(Texture::by_id("clouds_2", 1.0, 0, Placement::Uv).is_some());
+        assert!(Texture::by_id("nope", 1.0, 0, Placement::Uv).is_none());
     }
 }

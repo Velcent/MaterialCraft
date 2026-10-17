@@ -14,7 +14,8 @@
 //!
 //! `generator.<id>` subjects measure MaterialCraft's replacements for Substance procedurals against Painter's
 //! texture cache (channels where that generator is the only replaced procedural); `mcsub analyze` and the
-//! import review read their median MAE from the history.
+//! import review read their median MAE from the history. `texture.<id>` subjects measure the procedural
+//! textures the same way; for those look-alikes read the histogram and spectrum distances, not the MAE.
 
 mod args;
 

@@ -13,9 +13,11 @@
 //! computable*: the compositor leaves it out and reports it ([`super::CompositeWarning`]).
 
 pub mod kinds;
+pub mod params;
 pub mod registry;
 
 pub use kinds::{Anchor, ColorSelection, Levels, Pick, PickMode, PolygonFill, Procedural, Reference, Selection, UnknownEffect};
+pub use params::Params;
 pub use registry::{EffectRegistry, EvalRequest, EvalTarget, FilterInput, FilterKernel, GeneratorSource, StackContext};
 
 use super::blend::BlendMode;

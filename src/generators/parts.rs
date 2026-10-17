@@ -2,8 +2,9 @@
 //! parameters with a common prefix:
 //!
 //! - [`Finish`] (no prefix): `invert`, `blur`, `balance`, `contrast` applied to the result;
-//! - [`TextureLayer`] (`<p>_…`): `opacity`, `blend`, `look`, `scale`, `contrast`, `brightness`, `invert`,
-//!   `triplanar`, `triplanar_contrast`;
+//! - [`TextureLayer`] (`<p>_…`): `opacity`, `blend`, `texture` (a [`crate::proc_textures`] id) or `look` (a
+//!   grunge map by number, used when `texture` is missing or unknown), `scale`, `contrast`, `brightness`,
+//!   `invert`, `triplanar`, `triplanar_contrast`;
 //! - [`MultiScale`] (`<p>_…`): curvature at seven radii (`sharp`, `fine`, `soft`, `medium`, `large`, `big`,
 //!   `huge` weights) and a `mode` (1 both, 2 convex, 3 concave, 4 both as brightness).
 //!
@@ -64,10 +65,12 @@ impl TextureLayer {
         }
         let placement = Placement::of(p.on(&key("triplanar"), false), p.f(&key("triplanar_contrast"), 0.5));
         let look = p.int(&key("look"), 1).clamp(1, 15) as u32;
+        let scale = p.range(&key("scale"), 1.0, 0.05, 64.0);
+        let by_id = p.text(&key("texture")).and_then(|id| Texture::by_id(id, scale, seed, placement));
         Some(TextureLayer {
             opacity,
             blend: Layering::from_index(p.int(&key("blend"), 3)),
-            texture: Texture::new(look, p.range(&key("scale"), 1.0, 0.05, 64.0), seed, placement),
+            texture: by_id.unwrap_or_else(|| Texture::new(look, scale, seed, placement)),
             contrast: p.range(&key("contrast"), 0.0, -1.0, 1.0),
             brightness: p.range(&key("brightness"), 0.0, -1.0, 1.0),
             invert: p.on(&key("invert"), false),

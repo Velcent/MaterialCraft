@@ -110,6 +110,12 @@ impl AssetTray {
         }
     }
 
+    /// The user's own library folder, where saved smart materials and smart masks go (none when settings live in
+    /// memory).
+    pub fn user_library(&self) -> Option<&Path> {
+        self.user.as_deref()
+    }
+
     /// The folders material references are looked up in: every library root, in tray order.
     pub fn material_folders(&self) -> Vec<PathBuf> {
         self.service.roots().iter().filter_map(|r| r.path.clone()).collect()

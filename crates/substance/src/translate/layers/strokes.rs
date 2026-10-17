@@ -61,6 +61,7 @@ fn stroke(effect: &PaintEffect, s: &PainterStroke) -> Stroke {
         symmetry: Symmetry {
             copies: s.duplicate_count,
             transform: s.duplicate_matrix,
+            flip: [false; 2],
         },
         samples: s
             .points

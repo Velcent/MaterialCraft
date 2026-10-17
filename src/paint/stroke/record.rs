@@ -116,16 +116,18 @@ impl Default for Camera {
 }
 
 /// Symmetry copies of a stroke: copy `i` (1 … `copies`) is the stroke transformed `i` times by `transform`
-/// (a mirror for one copy, a rotation step for radial symmetry). No copies: no symmetry.
+/// (a mirror for one copy, a rotation step for radial symmetry). No copies: no symmetry. Odd copies flip their
+/// stamps along `[u, v]` where `flip` says so (radial lettering).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Symmetry {
     pub copies: u32,
     pub transform: Mat4,
+    pub flip: [bool; 2],
 }
 
 impl Default for Symmetry {
     fn default() -> Symmetry {
-        Symmetry { copies: 0, transform: IDENTITY }
+        Symmetry { copies: 0, transform: IDENTITY, flip: [false; 2] }
     }
 }
 

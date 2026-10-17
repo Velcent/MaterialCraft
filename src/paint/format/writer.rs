@@ -1,12 +1,12 @@
 //! [`DocumentWriter`]: validates a document and writes its archive entries in a fixed order:
 //! `document.json`, `import-report.json`, `mesh/model.glb`, images, stroke records, foreign files,
-//! `thumbnail.png`. JSON, glTF and stroke records are deflated; PNG and EXR are stored (already compressed).
+//! embedded assets, `thumbnail.png`. JSON, glTF and stroke records are deflated; PNG and EXR are stored (already compressed).
 
 use super::batch::{batch_size, par_map};
 use super::manifest::{self, WriteCtx, extras::Extras, report};
 use super::paths::{self, ImagePlan};
 use super::strokes::{self, StrokePlan};
-use super::{FormatError, Thumbnail, images};
+use super::{FormatError, Thumbnail, embedded, images};
 use crate::deflate::Level;
 use crate::paint::Document;
 use crate::zip::{Method, ZipWriter};
@@ -36,13 +36,11 @@ impl<'o> DocumentWriter<'o> {
         for f in &doc.foreign {
             paths::check_foreign_path(&f.path)?;
         }
+        embedded::check(&doc.assets)?;
         let extras = Extras::of_document(doc)?;
         let plan = ImagePlan::new(doc);
         let stroke_plan = StrokePlan::new(doc, &plan);
-        let stroke_entries = stroke_plan
-            .entries()
-            .map(|(path, data)| strokes::entry_bytes(data).map(|bytes| (path, bytes)).map_err(|m| FormatError::Unsupported(format!("{path}: {m}"))))
-            .collect::<Result<Vec<_>, FormatError>>()?;
+        let stroke_entries = stroke_entries(&stroke_plan)?;
         let glb = doc.mesh.to_glb()?;
         let thumbnail = self.options.thumbnail.render(doc);
         let ctx = WriteCtx { plan: &plan, strokes: &stroke_plan, extras: &extras };
@@ -63,6 +61,7 @@ impl<'o> DocumentWriter<'o> {
         for f in &doc.foreign {
             zip.add(&f.path, &f.bytes, Method::Deflate)?;
         }
+        embedded::write(&doc.assets, &mut zip)?;
         if let Some(png) = thumbnail {
             zip.add(paths::THUMBNAIL, &png, Method::Stored)?;
         }
@@ -71,15 +70,22 @@ impl<'o> DocumentWriter<'o> {
     }
 }
 
+/// The bytes of every stroke record entry, in plan order.
+pub(super) fn stroke_entries<'p>(plan: &'p StrokePlan) -> Result<Vec<(&'p str, Vec<u8>)>, FormatError> {
+    plan.entries()
+        .map(|(path, data)| strokes::entry_bytes(data).map(|bytes| (path, bytes)).map_err(|m| FormatError::Unsupported(format!("{path}: {m}"))))
+        .collect()
+}
+
 /// Pretty-printed JSON with a final newline.
-fn json_bytes(v: &crate::json::Value) -> Vec<u8> {
+pub(super) fn json_bytes(v: &crate::json::Value) -> Vec<u8> {
     let mut s = v.to_string_pretty();
     s.push('\n');
     s.into_bytes()
 }
 
 /// Encodes images a batch at a time in parallel and stores them in plan order.
-fn write_images<W: Write>(plan: &ImagePlan, zip: &mut ZipWriter<W>) -> Result<(), FormatError> {
+pub(super) fn write_images<W: Write>(plan: &ImagePlan, zip: &mut ZipWriter<W>) -> Result<(), FormatError> {
     let all: Vec<_> = plan.images().collect();
     for batch in all.chunks(batch_size()) {
         let encoded = par_map(batch, |(_, img)| images::encode(img));

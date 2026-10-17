@@ -7,16 +7,14 @@
 
 use crate::BrushError;
 use crate::engine::{DabEngine, InputPoint};
-use crate::symmetry::to_record;
+use crate::symmetry::copies;
 use crate::target::PaintValues;
 use materialcraft::camera::Camera;
 use materialcraft::mesh::{Mesh, Sphere, SurfaceMap};
 use materialcraft::paint::brush::{BrushPreset, RecordedBrush, SizeSpace};
-use materialcraft::paint::stroke::{self, Stroke, StrokeSample, StrokeTool, ViewKind};
+use materialcraft::paint::stroke::{self, Stroke, StrokeSample, StrokeTool, Symmetry, ViewKind};
 use materialcraft::projection::ViewProjector;
-use materialcraft::stamp::{
-    ChannelTarget, DabSample, DepthMap, StampContext, StampStroke, StrokeSpace, SymmetrySpec, TexelFactor, TexelIndex, ViewSpace, screen_scale_at,
-};
+use materialcraft::stamp::{ChannelTarget, DabSample, DepthMap, StampContext, StampStroke, StrokeSpace, TexelFactor, TexelIndex, ViewSpace, screen_scale_at};
 
 /// What a session paints through, lent per call.
 #[derive(Clone, Copy)]
@@ -37,7 +35,9 @@ pub struct StrokeSetup {
     pub tool: StrokeTool,
     /// Seed of the brush's random variation.
     pub seed: u32,
-    pub symmetry: SymmetrySpec,
+    /// Symmetric copies in the record's form ([`crate::symmetry::to_record`] of the settings' spec), for 3D-view
+    /// and 2D-view strokes alike; recorded with the stroke as it is.
+    pub symmetry: Symmetry,
     /// 3D view (screen positions) or 2D view (texel positions).
     pub view: ViewKind,
     /// The values painted (recorded with the stroke).
@@ -86,8 +86,8 @@ impl StrokeSession {
         shown: &dyn Fn(usize) -> bool,
         targets: &[ChannelTarget],
     ) -> Result<StrokeSession, BrushError> {
-        let symmetry = if setup.view == ViewKind::Mesh { setup.symmetry } else { SymmetrySpec::None };
-        let stamp = StampStroke::new(symmetry, targets)?;
+        // 2D-view strokes are mirrored through the mesh as well (ADR 0008 mc2-q-pt-04c)
+        let stamp = StampStroke::with_copies(copies(&setup.symmetry), targets)?;
         let (camera, depth) = match setup.view {
             ViewKind::Mesh => {
                 let projector = scene.projector.ok_or(BrushError::NoView)?;
@@ -167,7 +167,7 @@ impl StrokeSession {
             view: self.setup.view,
             camera: self.camera.map(stroke::Camera::from).unwrap_or_default(),
             seed: self.setup.seed,
-            symmetry: to_record(self.setup.symmetry),
+            symmetry: self.setup.symmetry,
             samples: self.samples,
         };
         Ok(Finished { stroke, touched: self.stamp.touched(), dabs: self.placed })

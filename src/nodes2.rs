@@ -349,39 +349,22 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
         }
         // ------------------------------------------------ generators
         "cells" => {
-            let (var, p) = (f("variant", 0.0) as u32, per("scale", 8.0));
-            let jitter = f("jitter", 1.0).clamp(0.0, 1.0);
-            let (lum_rand, edge_w, hard) =
+            let mut cells = noise::Cells::new(f("variant", 0.0) as u32, per("scale", 8.0), seed);
+            cells.jitter = f("jitter", 1.0).clamp(0.0, 1.0);
+            (cells.luminance_random, cells.edge_width, cells.hardness) =
                 (f("luminance_random", 0.0).clamp(0.0, 1.0), f("edge_width", 0.25).clamp(0.01, 1.0), f("hardness", 2.0).clamp(0.1, 16.0));
             let (src, pseed) = (f("color_source", 0.0) as u32, f("pseudorandom_seed", 0.0) as u32);
+            // cell value of Cells 4: random, pseudorandom (re-rolled with its own seed) or the input image at the cell centre
+            cells.source = if src == 1 { noise::CellSource::Pseudorandom(pseed) } else { noise::CellSource::Random };
             let img = if src == 2 { opt("color") } else { None };
-            let extra = f("_out", 0.0).round() as i32;
-            let py = if f("square_cells", 0.0) > 0.5 { ((p as f32 * hs as f32 / s as f32).round().max(1.0)) as i32 } else { p };
+            cells.output = f("_out", 0.0).round().max(0.0) as u32;
+            if f("square_cells", 0.0) > 0.5 {
+                cells.rows = ((cells.scale as f32 * hs as f32 / s as f32).round().max(1.0)) as i32;
+            }
+            let image = img.map(|t| move |x: f32, y: f32| lum(t.sample(x, y)));
             fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (u, v) = dz.warp(u, v);
-                let vr = noise::voronoi_ext(u, v, p, py, seed, jitter);
-                // cell value of Cells 4: random, pseudorandom (re-rolled with its own seed) or the input image at the cell centre
-                let cell_val = || match (src, img) {
-                    (2, Some(t)) => lum(t.sample(u + vr.dx / p as f32, v + vr.dy / p as f32)),
-                    (1, _) => noise::rnd(
-                        (((u + vr.dx / p as f32) * p as f32).floor()) as i32,
-                        (((v + vr.dy / p as f32) * p as f32).floor()) as i32,
-                        pseed.wrapping_add(4242),
-                    ),
-                    _ => vr.id1,
-                };
-                match extra {
-                    1 => return vr.id1,
-                    2 => return vr.f1,
-                    3 => return smooth(0.0, edge_w, vr.f2 - vr.f1),
-                    _ => {}
-                }
-                match var {
-                    0 => (1.0 - vr.f1) * (1.0 - lum_rand * vr.id1),
-                    1 => cell_val(),
-                    2 => smooth(0.0, edge_w, vr.f2 - vr.f1),
-                    _ => vr.id1 * (1.0 - vr.f1.powf(hard)),
-                }
+                cells.value_with(u, v, image.as_ref().map(|i| i as &dyn Fn(f32, f32) -> f32))
             }))
         }
         "fractal_sum" => {
@@ -433,23 +416,15 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
             }))
         }
         "gaussian_spots" => {
-            let p = per("scale", 8.0);
-            let (size, var) = (f("size", 0.5).clamp(0.05, 1.0), f("size_variation", 0.5).clamp(0.0, 1.0));
+            let spots = noise::GaussianSpots {
+                scale: per("scale", 8.0),
+                seed,
+                size: f("size", 0.5).clamp(0.05, 1.0),
+                size_variation: f("size_variation", 0.5).clamp(0.0, 1.0),
+            };
             fin(Tex::gray_fn(s, hs, move |u, v| {
                 let (u, v) = dz.warp(u, v);
-                // spots() blends smoothly from 1 to 0 between the inner and outer radius, i.e. a gaussian-like bump
-                noise::spots(
-                    u,
-                    v,
-                    p,
-                    p,
-                    seed,
-                    |id| {
-                        let r = size * 0.55 * (1.0 - var + var * id);
-                        (0.0, r.max(0.02))
-                    },
-                    0.0,
-                )
+                spots.value(u, v)
             }))
         }
         // ------------------------------------------------ normals and surface
@@ -617,153 +592,53 @@ pub fn compute(kind: &str, id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, s
             })
         }
         "triangle_grid" if f("style", 0.0) >= 0.5 => {
-            let (nx, ny) = (per("x_amount", 16.0).clamp(1, 64), per("y_amount", 16.0).clamp(1, 64));
-            let amp = f("random_position_multiplier", 1.0).clamp(0.0, 2.0).min(1.0) * 0.32;
-            let (qx, qy) = (f("quincunx_offset_x", 0.0).clamp(0.0, 1.0), f("quincunx_offset_y", 0.0).clamp(0.0, 1.0));
-            let (hr, tmode, omode) = (f("height_random", 1.0).clamp(0.0, 1.0), f("triangulation", 0.0).round() as i32, f("output", 0.0).round() as i32);
-            let (th, lc, lb) = (f("distance_to_edge_thickness", 0.025).clamp(0.0, 0.1), f("thin_line_color", 1.0), f("thin_line_background", 0.0));
-            let lines = f("thin_lines", 0.0) > 0.5;
-            let rot = f("rotation", 0.0).clamp(0.0, 1.0);
-            let rd = f("rotation_disorder", 0.5).clamp(0.0, 1.0);
-            fin(Tex::gray_fn(s, hs, move |u, v| {
-                let (x, y) = (u * nx as f32, v * ny as f32);
-                let (ci, cj) = (x.floor() as i32, y.floor() as i32);
-                // jittered lattice point (i, j) in grid units; indices wrap so the pattern tiles
-                let vert = |i: i32, j: i32| -> ([f32; 2], f32) {
-                    let (wi, wj) = (i.rem_euclid(nx), j.rem_euclid(ny));
-                    let jx = (noise::rnd(wi, wj, seed) - 0.5) * 2.0 * amp;
-                    let jy = (noise::rnd(wi, wj, seed.wrapping_add(7919)) - 0.5) * 2.0 * amp;
-                    let sh = if j.rem_euclid(2) == 1 { qx } else { 0.0 };
-                    let sv = if i.rem_euclid(2) == 1 { qy } else { 0.0 };
-                    let h = 0.5 + (noise::rnd(wi, wj, seed.wrapping_add(104729)) - 0.5) * hr;
-                    ([i as f32 + jx + sh * 0.5, j as f32 + jy + sv * 0.5], h)
-                };
-                let mut best = (f32::MAX, 0.0f32, 0.0f32);
-                for dj in -1..=1 {
-                    for di in -1..=1 {
-                        let (i, j) = (ci + di, cj + dj);
-                        let (wi, wj) = (i.rem_euclid(nx), j.rem_euclid(ny));
-                        let alt = match tmode {
-                            1 => ((i + j) & 1) as i32,
-                            2 => (noise::rnd(wi, wj, seed.wrapping_add(31)) > 0.5) as i32,
-                            _ => 0,
-                        };
-                        let (a, ha) = vert(i, j);
-                        let (b, hb) = vert(i + 1, j);
-                        let (c, hc) = vert(i, j + 1);
-                        let (d, hd) = vert(i + 1, j + 1);
-                        let tris: [([[f32; 2]; 3], [f32; 3]); 2] = if alt == 0 {
-                            [([a, b, d], [ha, hb, hd]), ([a, d, c], [ha, hd, hc])]
-                        } else {
-                            [([a, b, c], [ha, hb, hc]), ([b, d, c], [hb, hd, hc])]
-                        };
-                        for (t, (p, hs)) in tris.iter().enumerate() {
-                            let det = (p[1][1] - p[2][1]) * (p[0][0] - p[2][0]) + (p[2][0] - p[1][0]) * (p[0][1] - p[2][1]);
-                            if det.abs() < 1e-9 {
-                                continue;
-                            }
-                            let l0 = ((p[1][1] - p[2][1]) * (x - p[2][0]) + (p[2][0] - p[1][0]) * (y - p[2][1])) / det;
-                            let l1 = ((p[2][1] - p[0][1]) * (x - p[2][0]) + (p[0][0] - p[2][0]) * (y - p[2][1])) / det;
-                            let l2 = 1.0 - l0 - l1;
-                            let m = l0.min(l1).min(l2);
-                            if m < -1e-5 {
-                                continue;
-                            }
-                            // distance to the nearest triangle edge in grid units
-                            let mut de = f32::MAX;
-                            for k in 0..3 {
-                                let (e0, e1) = (p[k], p[(k + 1) % 3]);
-                                let (ex, ey) = (e1[0] - e0[0], e1[1] - e0[1]);
-                                let len = (ex * ex + ey * ey).sqrt().max(1e-9);
-                                de = de.min(((x - e0[0]) * ey - (y - e0[1]) * ex).abs() / len);
-                            }
-                            let tid = noise::rnd(wi, wj, seed.wrapping_add(555 + t as u32 * 13 + alt as u32 * 3));
-                            let val = match omode {
-                                1 => 0.5 + (tid - 0.5) * hr,
-                                2 => (de * 2.5).min(1.0),
-                                _ => l0 * hs[0] + l1 * hs[1] + l2 * hs[2],
-                            };
-                            let _ = (rot, rd);
-                            let cand = (-m, val, de);
-                            if cand.0 < best.0 {
-                                best = cand;
-                            }
-                        }
-                    }
-                }
-                let (val, de) = (best.1, best.2);
-                if lines && th > 0.0 {
-                    let w = th * 6.0;
-                    let k = 1.0 - smooth(w * 0.5, w, de);
-                    lerp(lerp(val, lb, 0.0), lc, k)
-                } else {
-                    val
-                }
-            }))
+            let lattice = noise::TriangleLattice {
+                nx: per("x_amount", 16.0).clamp(1, 64),
+                ny: per("y_amount", 16.0).clamp(1, 64),
+                amp: f("random_position_multiplier", 1.0).clamp(0.0, 2.0).min(1.0) * 0.32,
+                quincunx: (f("quincunx_offset_x", 0.0).clamp(0.0, 1.0), f("quincunx_offset_y", 0.0).clamp(0.0, 1.0)),
+                height_random: f("height_random", 1.0).clamp(0.0, 1.0),
+                triangulation: f("triangulation", 0.0).round() as i32,
+                output: f("output", 0.0).round() as i32,
+                line_thickness: f("distance_to_edge_thickness", 0.025).clamp(0.0, 0.1),
+                line_color: f("thin_line_color", 1.0),
+                line_background: f("thin_line_background", 0.0),
+                lines: f("thin_lines", 0.0) > 0.5,
+                seed,
+            };
+            fin(Tex::gray_fn(s, hs, move |u, v| lattice.value(u, v)))
         }
         "triangle_grid" => {
-            let (c, bw) = (per("count", 8.0), f("border", 0.06).clamp(0.0, 0.5));
-            let var = f("variation", 1.0).clamp(0.0, 1.0);
-            fin(Tex::gray_fn(s, hs, move |u, v| {
-                let (x, y) = (u * c as f32, v * c as f32);
-                let (ix, iy) = (x.floor(), y.floor());
-                let (fx, fy) = (x - ix, y - iy);
-                let tri = (fx + fy >= 1.0) as u32;
-                let d = fx.min(fy).min(1.0 - fx).min(1.0 - fy).min((fx + fy - 1.0).abs() * 0.7071);
-                let id = noise::rnd((ix as i32).rem_euclid(c), (iy as i32).rem_euclid(c), seed.wrapping_add(tri * 131));
-                (1.0 - var + var * id) * smooth(0.0, bw.max(1e-4), d)
-            }))
+            let grid = noise::TriangleGrid {
+                count: per("count", 8.0),
+                border: f("border", 0.06).clamp(0.0, 0.5),
+                variation: f("variation", 1.0).clamp(0.0, 1.0),
+                seed,
+            };
+            fin(Tex::gray_fn(s, hs, move |u, v| grid.value(u, v)))
         }
         "weave_generator" => {
-            let (tx, ty) = (per("tile_x", 1.0).clamp(1, 20), per("tile_y", 1.0).clamp(1, 20));
-            let wv = per("weave", 2.0).clamp(1, 10);
-            let (nx, ny) = ((tx * wv * 2) as f32, (ty * wv * 2) as f32);
-            let shape = f("shape", 0.5).clamp(0.0, 1.0);
-            let (gx, gy) = (f("gap_x", 0.1).clamp(0.0, 0.9), f("gap_y", 0.1).clamp(0.0, 0.9));
-            let (nxi, nyi) = (nx as i32, ny as i32);
-            let which = f("_out", 0.0).round() as i32;
-            let t = Tex::gray_fn(s, hs, move |u, v| {
-                let (x, y) = (u * nx, v * ny);
-                let (i, j) = (x.floor() as i32, y.floor() as i32);
-                let (fx, fy) = (x - i as f32, y - j as f32);
-                let (i, j) = (i.rem_euclid(nxi), j.rem_euclid(nyi));
-                let in_gx = fx < gx * 0.5 || fx > 1.0 - gx * 0.5;
-                let in_gy = fy < gy * 0.5 || fy > 1.0 - gy * 0.5;
-                let thread = !in_gx && !in_gy;
-                let horizontal = (i + j) & 1 == 0;
-                match which {
-                    1 => return (thread && horizontal) as u32 as f32,
-                    2 => return (thread && !horizontal) as u32 as f32,
-                    3 => return thread as u32 as f32,
-                    _ => {}
-                }
-                if in_gx && in_gy {
-                    return 0.0;
-                }
-                if in_gx || in_gy {
-                    return 0.5;
-                }
-                // a thread runs along the slot; it dips towards both ends where it passes under its neighbour
-                let along = if horizontal { fx } else { fy };
-                let e = (along - 0.5).abs() * 2.0;
-                if shape <= 0.0 { 1.0 } else { 1.0 - 0.5 * smooth(1.0 - shape, 1.0, e) }
-            });
-            if which == 0 { fin(t) } else { t }
+            let mut weave = noise::WeaveGenerator::new(
+                (per("tile_x", 1.0).clamp(1, 20), per("tile_y", 1.0).clamp(1, 20)),
+                per("weave", 2.0).clamp(1, 10),
+                f("shape", 0.5).clamp(0.0, 1.0),
+                (f("gap_x", 0.1).clamp(0.0, 0.9), f("gap_y", 0.1).clamp(0.0, 0.9)),
+            );
+            weave.output = f("_out", 0.0).round().max(0.0) as u32;
+            let t = Tex::gray_fn(s, hs, move |u, v| weave.value(u, v));
+            if weave.output == 0 { fin(t) } else { t }
         }
         "starburst" => {
-            let (c, rays) = (per("count", 3.0), f("rays", 8.0).round().clamp(2.0, 64.0));
-            let (sharp, size, rot) = (f("sharpness", 2.0).clamp(0.1, 16.0), f("size", 1.0).clamp(0.05, 2.0), f("rotation", 0.0));
-            let rr = f("rotation_random", 0.0).clamp(0.0, 1.0);
-            fin(Tex::gray_fn(s, hs, move |u, v| {
-                let (x, y) = (u * c as f32, v * c as f32);
-                let (ix, iy) = (x.floor(), y.floor());
-                let (dx, dy) = (x - ix - 0.5, y - iy - 0.5);
-                let r = (dx * dx + dy * dy).sqrt();
-                let off = rot + rr * noise::rnd((ix as i32).rem_euclid(c), (iy as i32).rem_euclid(c), seed);
-                let a = (dy.atan2(dx) / TAU + off) * rays;
-                let ray = 1.0 - (2.0 * (a - a.floor()) - 1.0).abs();
-                ray.powf(sharp) * (1.0 - r * 2.0 / size).clamp(0.0, 1.0)
-            }))
+            let star = noise::Starburst {
+                count: per("count", 3.0),
+                rays: f("rays", 8.0).round().clamp(2.0, 64.0),
+                sharpness: f("sharpness", 2.0).clamp(0.1, 16.0),
+                size: f("size", 1.0).clamp(0.05, 2.0),
+                rotation: f("rotation", 0.0),
+                rotation_random: f("rotation_random", 0.0).clamp(0.0, 1.0),
+                seed,
+            };
+            fin(Tex::gray_fn(s, hs, move |u, v| star.value(u, v)))
         }
         "gradient_reflected" => {
             let (a, b) = ops::tileable_wave(f("count", 1.0), f("angle", 0.0));

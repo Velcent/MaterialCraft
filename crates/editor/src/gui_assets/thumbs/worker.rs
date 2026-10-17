@@ -118,6 +118,7 @@ fn make(disk: &DiskCache, key: &ThumbKey) -> Result<Tex, String> {
         ThumbSource::None => return Err("no picture".into()),
         ThumbSource::Image(p) => render::image(p)?,
         ThumbSource::Material(p) => render::material(p)?,
+        ThumbSource::Fragment(p) => render::fragment(p)?,
     };
     disk.store(&key.source, key.stamp, &made);
     Ok(made)

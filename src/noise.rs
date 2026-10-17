@@ -1,6 +1,19 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Seeded, tileable procedural noise.
+//! Seeded, tileable procedural noise, and the cell, spot and pattern looks built on it ([`cells`], [`patterns`]).
 use std::f32::consts::TAU;
+
+pub mod cells;
+pub mod patterns;
+
+pub use cells::{BnwSpots, CellSource, Cells, Crystal, GaussianSpots, VoronoiFractal, VoronoiSettings};
+pub use patterns::{Starburst, TriangleGrid, TriangleLattice, Weave, WeaveGenerator};
+
+/// Smooth Hermite step from 0 at `a` to 1 at `b` (a hard step when `a == b`).
+pub fn smoothstep(a: f32, b: f32, x: f32) -> f32 {
+    let d = b - a;
+    let t = if d.abs() < 1e-9 { if x >= b { 1.0 } else { 0.0 } } else { ((x - a) / d).clamp(0.0, 1.0) };
+    t * t * (3.0 - 2.0 * t)
+}
 
 pub fn hash2(x: i32, y: i32, seed: u32) -> u32 {
     let mut h = (x as u32).wrapping_mul(0x27d4_eb2d) ^ (y as u32).wrapping_mul(0x1656_67b1) ^ seed.wrapping_mul(0x9e37_79b9);
@@ -349,7 +362,7 @@ pub fn tile_seed(seed: u32, tx: i32, ty: i32) -> u32 {
 }
 
 /// Distance metrics of the Voronoi node.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Metric {
     Euclidean,
     Manhattan,

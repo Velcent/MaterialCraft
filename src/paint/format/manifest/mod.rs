@@ -77,6 +77,8 @@ pub struct Manifest {
     pub strokes: Vec<StrokeRef>,
     pub mesh: String,
     pub foreign: Vec<String>,
+    /// References of the embedded assets (since 0.6).
+    pub assets: Vec<String>,
     pub import_report: Option<String>,
     pub extras: Extras,
 }
@@ -96,6 +98,9 @@ pub fn write(doc: &Document, ctx: &WriteCtx, thumbnail: bool) -> Value {
         .with("bake_links", links)
         .with("texture_sets", sets)
         .with("foreign", foreign);
+    if !doc.assets.is_empty() {
+        v.insert("assets", super::embedded::manifest(&doc.assets));
+    }
     if doc.import_report.is_some() {
         v.insert("import_report", paths::IMPORT_REPORT);
     }
@@ -127,6 +132,7 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
         .map(|p| p.as_str().map(str::to_string))
         .collect::<Option<Vec<String>>>()
         .ok_or_else(|| o.error("foreign", "expected an array of paths"))?;
+    let assets = super::embedded::references(o.array("assets")?, &o.path("assets"))?;
     let manifest = Manifest {
         version,
         mesh: o.str("mesh")?.to_string(),
@@ -135,6 +141,7 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
         images: Vec::new(),
         strokes: Vec::new(),
         foreign,
+        assets,
         extras: Extras::default(),
     };
     ctx.extras.record("", &o);

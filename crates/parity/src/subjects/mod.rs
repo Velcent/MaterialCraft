@@ -2,6 +2,7 @@
 
 pub mod baked;
 pub mod generators;
+pub mod textures;
 
 use crate::subject::Subject;
 
@@ -16,7 +17,11 @@ pub fn all() -> Vec<Box<dyn Subject>> {
         Box::new(baked::Thickness),
         Box::new(baked::IdMap),
     ];
-    baked.into_iter().chain(generators::all()).collect()
+    baked
+        .into_iter()
+        .chain(generators::all())
+        .chain(textures::all())
+        .collect()
 }
 
 /// The subjects a command-line selector names: `all`, an exact id (`baked.ao`), or an id prefix (`baked`).
@@ -48,5 +53,7 @@ mod tests {
         assert_eq!(ids.len(), all().len());
         assert!(select("generator").len() >= 7);
         assert_eq!(select("generator.dirt")[0].generator(), Some("dirt"));
+        assert_eq!(select("texture").len(), materialcraft::proc_textures::TEXTURES.len());
+        assert_eq!(select("texture.clouds_2")[0].generator(), Some("clouds_2"));
     }
 }

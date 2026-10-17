@@ -1,10 +1,13 @@
 //! Finding a material's graph from the reference a fill stores ([`crate::paint::FillSource::Material`]'s
 //! `path`): [`MaterialResolver`] and two implementations, [`FolderResolver`] (files under a list of folders: the
-//! document's folder, asset library roots) and [`MemoryResolver`] (graphs held in memory: tests, the session).
+//! document's folder, asset library roots) and [`MemoryResolver`] (graphs held in memory: tests, the session, a
+//! document's embedded assets), chained by [`ChainResolver`].
 
+use crate::paint::EmbeddedAsset;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
 /// Largest `.mca` file read (embedded resources make graphs large; anything bigger is refused).
 pub const MAX_GRAPH_BYTES: u64 = 256 << 20;
@@ -94,10 +97,55 @@ impl MemoryResolver {
     pub fn insert(&mut self, reference: impl Into<String>, graph: impl Into<String>) {
         self.graphs.insert(reference.into(), graph.into());
     }
+
+    /// The material graphs among a document's embedded assets (`.mca` references holding UTF-8 text), so a
+    /// document opens without the library it was made with (AS-21).
+    pub fn from_embedded(assets: &[EmbeddedAsset]) -> MemoryResolver {
+        let mut r = MemoryResolver::new();
+        for a in assets.iter().filter(|a| a.reference.to_ascii_lowercase().ends_with(".mca")) {
+            if let Ok(text) = std::str::from_utf8(&a.bytes) {
+                r.insert(a.reference.clone(), text);
+            }
+        }
+        r
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.graphs.is_empty()
+    }
 }
 
 impl MaterialResolver for MemoryResolver {
     fn resolve(&self, reference: &str) -> Result<String, ResolveError> {
         self.graphs.get(reference).cloned().ok_or_else(|| ResolveError::NotFound { reference: reference.to_string() })
+    }
+}
+
+/// Several resolvers asked in turn: the first that finds the reference wins. When none does, the first error
+/// other than "not found" is reported (a file that exists but cannot be read says more than a missing one).
+#[derive(Clone, Default)]
+pub struct ChainResolver {
+    resolvers: Vec<Arc<dyn MaterialResolver>>,
+}
+
+impl ChainResolver {
+    pub fn new(resolvers: impl IntoIterator<Item = Arc<dyn MaterialResolver>>) -> ChainResolver {
+        ChainResolver { resolvers: resolvers.into_iter().collect() }
+    }
+}
+
+impl MaterialResolver for ChainResolver {
+    fn resolve(&self, reference: &str) -> Result<String, ResolveError> {
+        let mut unreadable = None;
+        for r in &self.resolvers {
+            match r.resolve(reference) {
+                Ok(text) => return Ok(text),
+                Err(ResolveError::NotFound { .. }) => {}
+                Err(e) => {
+                    unreadable.get_or_insert(e);
+                }
+            }
+        }
+        Err(unreadable.unwrap_or_else(|| ResolveError::NotFound { reference: reference.to_string() }))
     }
 }

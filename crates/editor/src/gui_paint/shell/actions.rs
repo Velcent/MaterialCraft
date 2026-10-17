@@ -29,6 +29,10 @@ pub const ZOOM: &str = "paint.nav.zoom";
 pub const LIGHT: &str = "paint.nav.light";
 /// The brush tools' stroke gesture.
 pub const STROKE: &str = "paint.stroke";
+/// A straight line from the previous stroke's end (PT-31).
+pub const STROKE_LINE: &str = "paint.stroke.line";
+/// The same in 5° steps (PT-32).
+pub const STROKE_LINE_SNAP: &str = "paint.stroke.line_snap";
 
 const FILE: &str = "File";
 const EDIT: &str = "Edit";
@@ -86,8 +90,8 @@ pub const ACTIONS: &[ActionSpec] = &[
     press("paint.tool.clone", "Clone", TOOLS, &["6"]),
     press("paint.tool.material_picker", "Material picker", TOOLS, &["P"]),
     gesture(STROKE, "Paint a stroke", TOOL_KEYS, &["LeftDrag"]),
-    gesture("paint.stroke.line", "Straight line from the last stroke", TOOL_KEYS, &["Shift+LeftDrag"]),
-    gesture("paint.stroke.line_snap", "Straight line in 5° steps", TOOL_KEYS, &["Mod+Shift+LeftDrag"]),
+    gesture(STROKE_LINE, "Straight line from the last stroke", TOOL_KEYS, &["Shift+LeftDrag"]),
+    gesture(STROKE_LINE_SNAP, "Straight line in 5° steps", TOOL_KEYS, &["Mod+Shift+LeftDrag"]),
     hold("paint.tool.stencil", "Move, turn or scale the stencil or projection", TOOL_KEYS, &["S"]),
     hold("paint.tool.stencil_hide", "Hide the stencil while held", TOOL_KEYS, &["N"]),
     press("paint.tool.clone_source", "Set the clone source", TOOL_KEYS, &["V"]),
@@ -166,8 +170,6 @@ mod tests {
     /// Actions that are listed and rebindable now, and are acted on by tools not built yet.
     const RESERVED: &[&str] = &[
         "paint.stroke",
-        "paint.stroke.line",
-        "paint.stroke.line_snap",
         "paint.tool.stencil",
         "paint.tool.stencil_hide",
         "paint.tool.clone_source",

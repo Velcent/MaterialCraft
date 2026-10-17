@@ -123,3 +123,11 @@ fn height_combination_through_the_layer_panel_start() {
     let (tex, _) = Compositor::with_effects(&set, builtin()).composite_tex(R);
     assert!(tex.px[0][0] < 0.4, "{:?}", tex.px[0]);
 }
+
+#[test]
+fn generators_name_the_baked_maps_they_read() {
+    for info in GENERATORS {
+        assert_eq!(baked_maps(info.id).is_empty(), info.id == HEIGHT_COMBINATION, "{}", info.id);
+    }
+    assert!(baked_maps("substance:mg_dirt").is_empty());
+}

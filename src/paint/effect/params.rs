@@ -1,4 +1,4 @@
-//! [`Params`]: a generator's parameter values (name → text, as stored in documents) read as numbers, with
+//! [`Params`]: a procedural's parameter values (name → text, as stored in documents) read as numbers, with
 //! defaults for missing or unreadable values.
 
 pub struct Params<'a> {
@@ -12,6 +12,11 @@ impl<'a> Params<'a> {
 
     fn raw(&self, name: &str) -> Option<&'a str> {
         self.values.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
+    }
+
+    /// The value as stored (for names and ids), if set.
+    pub fn text(&self, name: &str) -> Option<&'a str> {
+        self.raw(name)
     }
 
     /// A number (the first component of a list), or `default`.

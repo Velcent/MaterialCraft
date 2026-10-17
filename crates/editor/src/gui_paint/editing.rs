@@ -11,6 +11,10 @@ use materialcraft::paint::edit::EditError;
 impl PaintMode {
     /// A layer panel request: an edit of the stack as one history step, then the set is recomposited.
     pub(super) fn edit_layers(&mut self, ev: LayerEvent) {
+        if let LayerEvent::SaveAsset(what) = ev {
+            self.save_asset(what);
+            return;
+        }
         let Some(doc) = &mut self.document else { return };
         if let LayerEvent::Isolate(layer) = ev {
             self.layers.isolated = layer.clone();

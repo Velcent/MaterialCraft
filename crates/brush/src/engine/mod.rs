@@ -27,6 +27,9 @@ impl InputPoint {
     }
 }
 
+/// The lazy mouse's smoother (PhotoCraft's pulled string), for [`crate::stroke::LazyMouse`].
+pub(crate) use photocraft::{MAX_STRING, PulledString};
+
 /// Makes one stroke's dabs. Deterministic: the same preset, size, seed and points give the same dabs, however the
 /// points are split across [`DabEngine::push`] calls.
 pub struct DabEngine {

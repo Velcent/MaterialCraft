@@ -1,11 +1,16 @@
 //! The stroke record entry (`*.mcstroke`): a small binary layout, little-endian, written and read exactly.
 //!
 //! ```text
-//! "MCSTROKE"  u16 major (1)  u16 minor (0)  u32 stroke count
+//! "MCSTROKE"  u16 major (1)  u16 minor (0 or 1)  u32 stroke count
 //! per stroke: u8 tool  u8 view  u16 preset length  preset (UTF-8)
-//!             u32 seed  u32 symmetry copies  f32×16 symmetry transform  f32×16 view  f32×16 projection
+//!             u32 seed  u32 symmetry copies  [1.1: u8 symmetry flips, bit 0 = U, bit 1 = V]
+//!             f32×16 symmetry transform  f32×16 view  f32×16 projection
 //!             u32 sample count, then six columns of that many f32: x, y, pressure, tilt x, tilt y, time
 //! ```
+//!
+//! Minor 1 adds the symmetry flips (radial copies flipped for lettering, roadmap step 30). It is written only when a
+//! stroke has a flip, so records without one keep the 1.0 layout byte for byte; a 1.1 entry without any flip is
+//! not one this writer makes and is refused.
 //!
 //! Decoding is strict (known codes, valid UTF-8, no bytes left over), so every readable entry encodes back to
 //! the same bytes. Floats keep their bits.
@@ -14,7 +19,7 @@ use crate::paint::stroke::{Camera, Mat4, Stroke, StrokeRecord, StrokeSample, Str
 
 pub const MAGIC: &[u8; 8] = b"MCSTROKE";
 pub const MAJOR: u16 = 1;
-pub const MINOR: u16 = 0;
+pub const MINOR: u16 = 1;
 /// Extension of stroke record entries.
 pub const EXTENSION: &str = "mcstroke";
 
@@ -45,8 +50,9 @@ pub fn encode(record: &StrokeRecord) -> Result<Vec<u8>, String> {
     let samples = record.sample_count();
     let mut out = Vec::with_capacity(16 + record.strokes.len() * STROKE_FIXED + samples * SAMPLE_BYTES);
     out.extend_from_slice(MAGIC);
+    let flips = record.strokes.iter().any(|s| s.symmetry.flip != [false; 2]);
     out.extend_from_slice(&MAJOR.to_le_bytes());
-    out.extend_from_slice(&MINOR.to_le_bytes());
+    out.extend_from_slice(&u16::from(flips).to_le_bytes());
     out.extend_from_slice(&count(record.strokes.len(), "strokes")?.to_le_bytes());
     for s in &record.strokes {
         out.push(tool_code(s.tool));
@@ -56,6 +62,9 @@ pub fn encode(record: &StrokeRecord) -> Result<Vec<u8>, String> {
         out.extend_from_slice(s.preset.as_bytes());
         out.extend_from_slice(&s.seed.to_le_bytes());
         out.extend_from_slice(&s.symmetry.copies.to_le_bytes());
+        if flips {
+            out.push(u8::from(s.symmetry.flip[0]) | (u8::from(s.symmetry.flip[1]) << 1));
+        }
         for m in [&s.symmetry.transform, &s.camera.view, &s.camera.projection] {
             m.iter().for_each(|v| out.extend_from_slice(&v.to_le_bytes()));
         }
@@ -79,14 +88,18 @@ pub fn decode(bytes: &[u8]) -> Result<StrokeRecord, String> {
         return Err("not a stroke record".into());
     }
     let (major, minor) = (r.u16()?, r.u16()?);
-    if (major, minor) != (MAJOR, MINOR) {
-        return Err(format!("stroke record version {major}.{minor}; this program reads {MAJOR}.{MINOR}"));
+    if major != MAJOR || minor > MINOR {
+        return Err(format!("stroke record version {major}.{minor}; this program reads {MAJOR}.0 … {MAJOR}.{MINOR}"));
     }
+    let flips = minor >= 1;
     let n = r.u32()? as usize;
     r.fits(n, STROKE_FIXED)?;
     let mut strokes = Vec::with_capacity(n);
     for _ in 0..n {
-        strokes.push(r.stroke()?);
+        strokes.push(r.stroke(flips)?);
+    }
+    if flips && strokes.iter().all(|s| s.symmetry.flip == [false; 2]) {
+        return Err("stroke record 1.1 without symmetry flips".into());
     }
     if r.pos != bytes.len() {
         return Err(format!("{} bytes after the last stroke", bytes.len() - r.pos));
@@ -146,7 +159,7 @@ impl<'a> Reader<'a> {
         }
     }
 
-    fn stroke(&mut self) -> Result<Stroke, String> {
+    fn stroke(&mut self, flips: bool) -> Result<Stroke, String> {
         let tool = match self.u8()? {
             0 => StrokeTool::Paint,
             1 => StrokeTool::Eraser,
@@ -162,7 +175,12 @@ impl<'a> Reader<'a> {
         let len = self.u16()? as usize;
         let preset = std::str::from_utf8(self.take(len)?).map_err(|_| "brush preset reference is not UTF-8")?.to_string();
         let seed = self.u32()?;
-        let symmetry = Symmetry { copies: self.u32()?, transform: self.mat4()? };
+        let copies = self.u32()?;
+        let flip = match if flips { self.u8()? } else { 0 } {
+            f @ 0..=3 => [f & 1 != 0, f & 2 != 0],
+            other => return Err(format!("unknown symmetry flips {other}")),
+        };
+        let symmetry = Symmetry { copies, transform: self.mat4()?, flip };
         let camera = Camera { view: self.mat4()?, projection: self.mat4()? };
         let n = self.u32()? as usize;
         self.fits(n, SAMPLE_BYTES)?;

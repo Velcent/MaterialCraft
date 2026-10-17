@@ -1,7 +1,7 @@
 //! The layer panel's menus: the row context menu (LS-13, LS-17, LS-21, MK-05/06/08/09) and the add-mask
 //! and add-effect menus shared with the bottom bar (MK-02, MK-14).
 
-use super::events::LayerEvent;
+use super::events::{LayerEvent, SaveAsset};
 use eframe::egui::Ui;
 use materialcraft::generators;
 use materialcraft::paint::Layer;
@@ -38,6 +38,10 @@ pub fn context(ui: &mut Ui, t: &MenuTarget, events: &mut Vec<LayerEvent>) -> Opt
         events.push(LayerEvent::Group { set: set.clone(), ids: t.ids.clone() });
         ui.close();
     }
+    if ui.button("Save as smart material").on_hover_text("Into your asset library; a single folder is saved with its contents").clicked() {
+        events.push(LayerEvent::SaveAsset(SaveAsset::SmartMaterial { set: set.clone(), ids: t.ids.clone() }));
+        ui.close();
+    }
     if ui.button("Delete").clicked() {
         events.push(LayerEvent::Delete { set, ids: t.ids.clone() });
         ui.close();
@@ -61,6 +65,10 @@ pub fn context(ui: &mut Ui, t: &MenuTarget, events: &mut Vec<LayerEvent>) -> Opt
                     ui.close();
                 }
                 add_effect(ui, "Add mask effect", &t.r, StackId::Mask, events);
+                if ui.button("Save as smart mask").on_hover_text("The mask with its effects, into your asset library").clicked() {
+                    events.push(LayerEvent::SaveAsset(SaveAsset::SmartMask(t.r.clone())));
+                    ui.close();
+                }
                 ui.separator();
                 add_mask_items(ui, "Replace with", &t.r, events);
                 if ui.button("Remove the mask").on_hover_text("Its effects go with it; Undo brings them back").clicked() {

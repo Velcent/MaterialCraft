@@ -12,7 +12,8 @@
 //! - [`TexelIndex`]: cell bounds of a surface map, to find texels near a dab.
 //! - [`DepthMap`]: the view's depth on the CPU, drawn once per stroke, for the occlusion test.
 //! - [`StampStroke`]: one stroke into a set of [`ChannelTarget`]s: placement modes (screen, wrapped, flat, UV),
-//!   occlusion, facing limit, symmetry ([`SymmetrySpec`]), factors ([`TexelFactor`]: [`QuickMask`], [`Stencil`]),
+//!   occlusion, facing limit, symmetry ([`SymmetrySpec`], from [`crate::symmetry`], for 3D-view and 2D-view
+//!   strokes alike), factors ([`TexelFactor`]: [`QuickMask`], [`Stencil`]),
 //!   flow building up under the stroke's opacity ceiling, [`StampMode::Paint`] / [`StampMode::Erase`]; it reports
 //!   the image tiles each dab changed (the caller records them in the history).
 //!
@@ -26,16 +27,18 @@ mod frame;
 mod index;
 mod occlusion;
 mod stroke;
-mod symmetry;
+#[cfg(test)]
+mod symmetry_tests;
 #[cfg(test)]
 mod tests;
+mod through_mesh;
 mod write;
 
+pub use crate::symmetry::{CopyTransform, SymmetrySpec};
 pub use dab::{DabSample, Footprint};
 pub use factors::{QuickMask, Stencil, TexelFactor};
 pub use frame::screen_scale_at;
 pub use index::{Aabb, CELL, TexelIndex};
 pub use occlusion::DepthMap;
 pub use stroke::{StampContext, StampError, StampStroke, StrokeSpace, ViewSpace};
-pub use symmetry::{CopyTransform, SymmetrySpec};
 pub use write::{ChannelTarget, StampMode};

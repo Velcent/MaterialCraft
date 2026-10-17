@@ -7,6 +7,7 @@ mod corruption;
 mod effect_fixtures;
 mod effects;
 mod fixtures;
+mod fragments;
 mod manifest_errors;
 mod projections;
 mod round_trip;

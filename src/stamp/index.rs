@@ -39,6 +39,14 @@ impl Aabb {
         }
     }
 
+    /// True if the boxes share a point.
+    pub fn overlaps(&self, other: &Aabb) -> bool {
+        (0..3).all(|k| match (self.min.get(k), self.max.get(k), other.min.get(k), other.max.get(k)) {
+            (Some(a0), Some(a1), Some(b0), Some(b1)) => a0 <= b1 && b0 <= a1,
+            _ => false,
+        })
+    }
+
     /// The eight corners.
     pub fn corners(&self) -> [Vec3; 8] {
         let (a, b) = (self.min, self.max);

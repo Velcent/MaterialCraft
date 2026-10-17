@@ -7,6 +7,7 @@
 //! - [`blend`] and [`normal`]: blend modes and normal-vector maths.
 //! - [`layer`], [`effect`], [`mask`], [`geometry_mask`], [`texture_set`], [`doc`], [`report`]: the document
 //!   model; [`validate`] its invariants.
+//! - [`embedded`]: library assets a document embeds (AS-21); [`fragment`]: smart materials and smart masks.
 //! - [`edit`]: [`edit::Edit`], every document change with its inverse (for the GUI and the history).
 //! - [`bake_config`]: per texture set bake settings with link, copy and check commands.
 //! - [`stroke`]: stroke records, the strokes behind painted pixels; [`brush`]: brush presets (our format).
@@ -24,8 +25,10 @@ pub mod diag_entries;
 pub mod doc;
 pub mod edit;
 pub mod effect;
+pub mod embedded;
 pub mod fill_image;
 pub mod format;
+pub mod fragment;
 pub mod geometry_mask;
 pub mod height_normal;
 pub mod image;
@@ -49,7 +52,9 @@ pub use blend::BlendMode;
 pub use channel::{Channel, ChannelSpec, ColorSpace};
 pub use doc::{Document, ForeignFile};
 pub use effect::{ContentEffect, Effect, EffectKind, EffectRegistry, GreyBlend, MaskEffect, MaskPixels};
+pub use embedded::EmbeddedAsset;
 pub use fill_image::{FillImage, FillImageRef, ImageFill};
+pub use fragment::{Fragment, FragmentContent, FragmentKind};
 pub use geometry_mask::GeometryMask;
 pub use image::{ImageError, Rect, TILE_SIZE, Tile, TiledImage};
 pub use layer::{ChannelBlend, Fill, FillSource, Layer, LayerImage, LayerKind, PaintContent};

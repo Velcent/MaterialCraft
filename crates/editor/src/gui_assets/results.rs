@@ -19,6 +19,8 @@ pub enum ThumbSource {
     Image(PathBuf),
     /// A material graph, rendered small.
     Material(PathBuf),
+    /// A smart material or smart mask file holding its own thumbnail.
+    Fragment(PathBuf),
 }
 
 /// One asset as the tray shows it.
@@ -41,6 +43,8 @@ pub struct Item {
     pub stamp: (Option<SystemTime>, u64),
     /// The built-in generator or filter and its preset values, if the asset was made by one (its provenance).
     pub procedural: Option<(String, Vec<(String, String)>)>,
+    /// Baked maps a smart material or smart mask needs (AS-05), by map id.
+    pub needs: Vec<String>,
 }
 
 impl Item {
@@ -59,6 +63,7 @@ impl Item {
             thumb: thumb_source(root.path.as_deref(), asset),
             stamp: (asset.modified, asset.size),
             procedural: procedural(&asset.provenance),
+            needs: asset.needs.clone(),
         }
     }
 
@@ -85,6 +90,7 @@ fn thumb_source(dir: Option<&std::path::Path>, asset: &Asset) -> ThumbSource {
     match &asset.thumbnail {
         Thumbnail::File(rel) => ThumbSource::Image(dir.join(rel)),
         Thumbnail::OwnImage => ThumbSource::Image(dir.join(&asset.path)),
+        Thumbnail::Embedded => ThumbSource::Fragment(dir.join(&asset.path)),
         Thumbnail::None if asset.format == Format::Graph => ThumbSource::Material(dir.join(&asset.path)),
         Thumbnail::None => ThumbSource::None,
     }

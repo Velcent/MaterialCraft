@@ -181,6 +181,12 @@ impl ProjectionMode {
         )
     }
 
+    /// True for the modes a fill can repeat with a [`crate::symmetry::SymmetrySpec`] (PT-40): those defined in 3D.
+    /// Texture space and UV have no place on the mesh to mirror, so their symmetry switch is unavailable.
+    pub fn takes_symmetry(&self) -> bool {
+        self.needs_mesh()
+    }
+
     /// The projection volume, for the volume-based modes.
     pub fn volume(&self) -> Option<&Volume> {
         match self {

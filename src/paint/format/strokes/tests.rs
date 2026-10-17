@@ -12,7 +12,7 @@ pub fn sample_record(seed: u32) -> StrokeRecord {
         view,
         camera: Camera { view: std::array::from_fn(|i| f(i as u32 + n)), projection: std::array::from_fn(|i| f(i as u32 * 7 + n)) },
         seed: seed.wrapping_mul(n + 1),
-        symmetry: Symmetry { copies: n % 3, transform: mirror },
+        symmetry: Symmetry { copies: n % 3, transform: mirror, flip: [false; 2] },
         samples: (0..n * 5)
             .map(|i| StrokeSample { position: [f(i), f(i + 1)], pressure: f(i + 2).abs() / 4.0, tilt: [f(i + 3), -0.0], time: i as f32 * 0.016 })
             .collect(),
@@ -80,7 +80,7 @@ fn damaged_entries_are_errors_not_panics() {
     };
     assert!(edit(0, b'X').unwrap_err().contains("not a stroke record"));
     assert!(edit(8, 2).unwrap_err().contains("version 2.0"));
-    assert!(edit(10, 1).unwrap_err().contains("version 1.1"));
+    assert!(edit(10, 2).unwrap_err().contains("version 1.2"));
     assert!(edit(16, 9).unwrap_err().contains("tool"));
     assert!(edit(17, 9).unwrap_err().contains("view"));
     assert!(edit(15, 0xff).is_err(), "a stroke count that cannot fit");
@@ -99,4 +99,26 @@ fn oversized_presets_cannot_be_encoded() {
     let mut record = sample_record(2);
     record.strokes[0].preset = "p".repeat(70_000);
     assert!(encode(&record).unwrap_err().contains("too long"));
+}
+
+#[test]
+fn symmetry_flips_use_minor_one_and_older_records_keep_their_bytes() {
+    let plain = sample_record(4);
+    let bytes = encode(&plain).unwrap();
+    assert_eq!(&bytes[10..12], &[0, 0], "no flip: still 1.0");
+    let mut flipped = plain.clone();
+    flipped.strokes[2].symmetry.flip = [false, true];
+    let fb = encode(&flipped).unwrap();
+    assert_eq!(&fb[10..12], &[1, 0]);
+    assert_eq!(fb.len(), bytes.len() + flipped.strokes.len());
+    let back = decode(&fb).unwrap();
+    assert_eq!(back, flipped);
+    assert_eq!(encode(&back).unwrap(), fb);
+    // a 1.1 entry whose strokes have no flip is not canonical
+    let mut odd = bytes.clone();
+    odd[10] = 1;
+    assert!(decode(&odd).is_err());
+    let mut newer = bytes;
+    newer[10] = 2;
+    assert!(decode(&newer).unwrap_err().contains("version 1.2"));
 }

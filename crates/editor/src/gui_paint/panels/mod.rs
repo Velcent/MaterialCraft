@@ -15,6 +15,7 @@ pub mod menu_bar;
 mod panel_strip;
 mod quick_bar;
 pub mod status_bar;
+mod symmetry_menu;
 pub mod texture_sets;
 mod timeline;
 mod tools_strip;

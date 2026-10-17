@@ -10,10 +10,10 @@
 use materialcraft::camera::{Camera, Lens};
 use materialcraft::mesh::{Mesh, SurfaceKey, SurfaceMap, Topology, UvEdgeKind, Vec3};
 use materialcraft::paint::brush::{BrushPreset, SizeSpace};
-use materialcraft::paint::stroke::{StrokeTool, ViewKind};
+use materialcraft::paint::stroke::{StrokeTool, Symmetry, ViewKind};
 use materialcraft::paint::{PixelFormat, TiledImage};
 use materialcraft::projection::{ViewProjector, ViewScene};
-use materialcraft::stamp::{ChannelTarget, StampMode, SymmetrySpec, TexelIndex};
+use materialcraft::stamp::{ChannelTarget, StampMode, TexelIndex};
 use materialcraft_brush::{InputPoint, PaintValues, ReplayScene, SessionScene, StrokeSession, StrokeSetup, replay};
 use std::time::Instant;
 
@@ -93,7 +93,7 @@ fn timing(mesh: &Mesh, map: &SurfaceMap, index: &TexelIndex, view: &ViewScene, c
         preset,
         tool: StrokeTool::Paint,
         seed: 5,
-        symmetry: SymmetrySpec::None,
+        symmetry: Symmetry::default(),
         view: ViewKind::Mesh,
         values: PaintValues { channels: Vec::new(), mask: 1.0 },
         model: mesh.bounding_sphere().unwrap_or_else(|| fail("empty mesh")),
@@ -231,7 +231,7 @@ fn seams(mesh: &Mesh, map: &SurfaceMap, index: &TexelIndex, view: &ViewScene, ma
             preset,
             tool: StrokeTool::Paint,
             seed: 1,
-            symmetry: SymmetrySpec::None,
+            symmetry: Symmetry::default(),
             view: ViewKind::Mesh,
             values: PaintValues { channels: Vec::new(), mask: 1.0 },
             model,

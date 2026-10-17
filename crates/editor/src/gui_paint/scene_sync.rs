@@ -12,7 +12,7 @@ use super::job::Job;
 use super::maps_worker::{MapsWorker, SetMaps};
 use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
-use materialcraft::material_fill::{FolderResolver, MaterialCache, MaterialFills};
+use materialcraft::material_fill::{ChainResolver, FolderResolver, MaterialCache, MaterialFills, MaterialResolver, MemoryResolver};
 use materialcraft::paint::edit::LayerRef;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -83,7 +83,7 @@ impl SceneSync {
     /// How material fills of `doc` are evaluated, as the maps the view shows evaluate them (the eyedropper's
     /// stored-value pick composites through the same).
     pub fn material_fills(&self, doc: &OpenDocument) -> MaterialFills {
-        MaterialFills::new(Arc::new(material_folders(doc, &self.library_folders)), self.materials.clone())
+        MaterialFills::new(Arc::new(material_resolver(doc, &self.library_folders)), self.materials.clone())
     }
 
     /// Shows `layer`'s mask alone in place of its set's material (`None`: the material again); recomposites.
@@ -189,7 +189,9 @@ fn copy(m: &GpuMaps) -> GpuMaps {
     GpuMaps { size: m.size, base: m.base.clone(), normal: m.normal.clone(), rma: m.rma.clone(), emissive: m.emissive.clone(), height: m.height.clone() }
 }
 
-/// Where material fill references are looked up: the document's folder, then the asset library roots.
-fn material_folders(doc: &OpenDocument, library: &[PathBuf]) -> FolderResolver {
-    FolderResolver::new(doc.source().parent().map(|p| p.to_path_buf()).into_iter().chain(library.iter().cloned()))
+/// Where material fill references are looked up: the document's embedded assets (AS-21, so it looks the same
+/// without the library), then its folder, then the asset library roots.
+fn material_resolver(doc: &OpenDocument, library: &[PathBuf]) -> ChainResolver {
+    let folders = FolderResolver::new(doc.source().parent().map(|p| p.to_path_buf()).into_iter().chain(library.iter().cloned()));
+    ChainResolver::new([Arc::new(MemoryResolver::from_embedded(&doc.doc().assets)) as Arc<dyn MaterialResolver>, Arc::new(folders)])
 }
