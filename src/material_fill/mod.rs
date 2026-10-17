@@ -18,6 +18,7 @@
 //! not handled, so the compositor leaves the fill out and reports it as not computable.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod ball;
 mod cache;
 mod material;
 mod reference;
@@ -26,6 +27,7 @@ mod sources;
 #[cfg(test)]
 mod tests;
 
+pub use ball::ball;
 pub use cache::{DEFAULT_BUDGET, MaterialCache};
 pub use material::{Material, MaterialError, MaterialKey};
 pub use reference::{ChainResolver, FolderResolver, MAX_GRAPH_BYTES, MaterialResolver, MemoryResolver, ResolveError};

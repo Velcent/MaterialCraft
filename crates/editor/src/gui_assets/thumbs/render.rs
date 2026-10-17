@@ -1,14 +1,12 @@
 //! Making one thumbnail (on a worker thread): an image asset (or an asset's thumbnail file) decoded from PNG or
-//! OpenEXR and scaled down, a fragment's own thumbnail, or a material graph evaluated small through `material_fill` and shown on a lit ball
-//! by the software renderer (`render3d`).
+//! OpenEXR and scaled down, a fragment's own thumbnail, or a material graph on a lit ball
+//! ([`material_fill::ball`]).
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
-use materialcraft::material_fill::{MAX_GRAPH_BYTES, Material};
+use materialcraft::material_fill::{self, MAX_GRAPH_BYTES, Material};
 use materialcraft::paint::format::fragment;
 use materialcraft::paint::working_space::linear_to_srgb;
-use materialcraft::render3d::{self, Maps, View};
 use materialcraft::tex::Tex;
 use materialcraft::{exr, png};
 
@@ -36,31 +34,7 @@ pub fn image(path: &Path) -> Result<Tex, String> {
 pub fn material(path: &Path) -> Result<Tex, String> {
     let text = String::from_utf8(read(path, MAX_GRAPH_BYTES)?).map_err(|_| "the graph is not UTF-8 text".to_string())?;
     let material = Material::from_text(&text, &[]).map_err(|e| e.to_string())?;
-    let graph = material.graph();
-    let mut outputs = graph.evaluate(Some(MATERIAL_EVAL)).map_err(|e| e.to_string())?;
-    let mut by_usage: BTreeMap<String, Tex> = BTreeMap::new();
-    for (usage, ident, _) in graph.output_nodes() {
-        if !by_usage.contains_key(&usage)
-            && let Some(t) = outputs.remove(&ident)
-        {
-            by_usage.insert(usage, t);
-        }
-    }
-    let s = MATERIAL_EVAL;
-    let (half, flat, one, zero) =
-        (Tex::solid(s, s, [0.5, 0.5, 0.5, 1.0]), Tex::solid(s, s, [0.5, 0.5, 1.0, 1.0]), Tex::solid(s, s, [1.0; 4]), Tex::solid(s, s, [0.0, 0.0, 0.0, 1.0]));
-    let get = |names: &[&str]| names.iter().find_map(|n| by_usage.get(*n));
-    let maps = Maps {
-        base: get(&["basecolor", "diffuse"]).unwrap_or(&half),
-        normal: get(&["normal"]).unwrap_or(&flat),
-        rough: get(&["roughness"]).unwrap_or(&half),
-        metal: get(&["metallic"]).unwrap_or(&zero),
-        ao: get(&["ambient_occlusion"]).unwrap_or(&one),
-        emissive: get(&["emissive"]),
-        height: get(&["height"]),
-    };
-    let view = View { tess: 48, relief: render3d::RELIEF_BUMP, ..View::default() };
-    Ok(render3d::render(&maps, &view, THUMB_PX, THUMB_PX))
+    material_fill::ball(&material, MATERIAL_EVAL, THUMB_PX)
 }
 
 /// The thumbnail a smart material or smart mask file holds, scaled to fit [`THUMB_PX`].
