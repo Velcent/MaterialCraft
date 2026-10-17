@@ -1,6 +1,7 @@
 //! [`Args`]: the parsed command line. Unknown flags are errors, so typos do not silently change a run.
 
 use crate::corpus::ProjectList;
+use crate::run::CacheCases;
 use std::path::PathBuf;
 
 /// Compared size when `--max-size` is not given.
@@ -20,6 +21,8 @@ pub struct Args {
     pub history: Option<PathBuf>,
     pub no_history: bool,
     pub open: bool,
+    /// `--cache-cases final|isolated|both`.
+    pub cache_cases: CacheCases,
 }
 
 impl Args {
@@ -37,6 +40,7 @@ impl Args {
             history: None,
             no_history: false,
             open: false,
+            cache_cases: CacheCases::default(),
         };
         while let Some(a) = it.next() {
             let mut value = || it.next().ok_or_else(|| format!("{a} needs a value"));
@@ -50,6 +54,11 @@ impl Args {
                 "--history" => args.history = Some(PathBuf::from(value()?)),
                 "--no-history" => args.no_history = true,
                 "--open" => args.open = true,
+                "--cache-cases" => {
+                    let v = value()?;
+                    args.cache_cases = CacheCases::from_id(&v)
+                        .ok_or(format!("--cache-cases: '{v}' is not final, isolated or both"))?;
+                }
                 f if f.starts_with("--") => return Err(format!("unknown option {f}")),
                 _ => args.words.push(a),
             }
@@ -84,5 +93,11 @@ mod tests {
         assert!(parse("run all --limit").is_err());
         assert!(parse("run all --limit x").is_err());
         assert!(parse("").is_err());
+        assert_eq!(a.cache_cases, CacheCases::Both);
+        assert_eq!(
+            parse("run all --cache-cases isolated").unwrap().cache_cases,
+            CacheCases::Isolated
+        );
+        assert!(parse("run all --cache-cases some").is_err());
     }
 }

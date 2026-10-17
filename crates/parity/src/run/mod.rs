@@ -2,6 +2,7 @@
 //! [`survey`] answers the cheaper question of which cases could run, without baking anything.
 
 mod case;
+mod isolated_run;
 mod measure;
 mod parallel;
 mod set_run;
@@ -26,6 +27,30 @@ pub struct RunOptions {
     pub max_size: usize,
     /// Projects measured at the same time.
     pub jobs: usize,
+    /// Which cases the generator and texture subjects get from the texture cache.
+    pub cache_cases: CacheCases,
+}
+
+/// Cases of the subjects measured through the imported layer stack.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CacheCases {
+    /// The channel's final look, where the effect is the only unknown (one composite).
+    Final,
+    /// The effect's own output read back through the rest of the stack, also next to other unknowns.
+    Isolated,
+    #[default]
+    Both,
+}
+
+impl CacheCases {
+    pub fn from_id(id: &str) -> Option<CacheCases> {
+        match id {
+            "final" => Some(CacheCases::Final),
+            "isolated" => Some(CacheCases::Isolated),
+            "both" => Some(CacheCases::Both),
+            _ => None,
+        }
+    }
 }
 
 pub struct Runner<'a> {
@@ -62,8 +87,12 @@ impl Runner<'_> {
             .iter()
             .map(|s| s.as_ref())
             .partition(|s| s.generator().is_some());
-        if !stack.is_empty() {
+        let cases = self.options.cache_cases;
+        if !stack.is_empty() && cases != CacheCases::Isolated {
             results.extend(stack_run::run(&stack, path, self.options.max_size, sink));
+        }
+        if !stack.is_empty() && cases != CacheCases::Final {
+            results.extend(isolated_run::run(&stack, path, self.options.max_size, sink));
         }
         if baked.is_empty() {
             return results;

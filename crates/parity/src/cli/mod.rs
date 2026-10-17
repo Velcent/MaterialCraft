@@ -6,6 +6,7 @@
 //!                                                 which projects/sets can run, and why others cannot
 //! mcparity run <subject|all> [--projects <file|glob|list>]… [--corpus <dir>]… [--limit N]
 //!              [--max-size N] [--jobs N] [--out <dir>] [--history <file> | --no-history] [--open]
+//!              [--cache-cases final|isolated|both]
 //! ```
 //!
 //! `--projects`/`--corpus` may repeat; without them `$MC_SUBSTANCE_CORPUS` is used. `run` prints a table,
@@ -17,6 +18,9 @@
 //! import review read their median MAE from the history. `texture.<id>` subjects measure the procedural
 //! textures the same way; for those look-alikes read the histogram and spectrum distances, not the MAE.
 //! `filter.<id>` subjects measure the filters the same way (mask filters over content the import reproduces).
+//! Both also get *isolated* cases (`--cache-cases`, default both): the effect's own output read back from the
+//! cache through the rest of the stack, also in channels with other unknown layers, on the texels they do not
+//! reach (`materialcraft_substance::tools::verify_layers::isolate`).
 
 mod args;
 
@@ -53,7 +57,8 @@ pub fn run(raw: Vec<String>) -> Result<(), String> {
 const HELP: &str = "mcparity list
 mcparity cases <subject> [--projects <file|glob|list>]... [--corpus <dir>]...
 mcparity run <subject|all> [--projects ...]... [--corpus <dir>]... [--limit N] [--max-size N]
-             [--jobs N (projects at once; default a quarter of the cores, within 60 % of free memory)] [--out <dir>] [--history <file> | --no-history] [--open]";
+             [--jobs N (projects at once; default a quarter of the cores, within 60 % of free memory)] [--out <dir>] [--history <file> | --no-history] [--open]
+             [--cache-cases final|isolated|both (generator/texture cases: final look, isolated read-back, or both; default both)]";
 
 fn list() {
     for s in subjects::all() {
@@ -118,6 +123,7 @@ fn run_cases(args: &Args) -> Result<(), String> {
             limit: args.limit,
             max_size: args.max_size,
             jobs: args.jobs,
+            cache_cases: args.cache_cases,
         },
     };
     let results = runner.run(&projects, &mut report);
