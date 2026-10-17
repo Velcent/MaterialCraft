@@ -38,6 +38,8 @@ pub struct Screen<'a> {
     pub bakers: &'a mut BakersPanel,
     pub shell: &'a mut Shell,
     pub brush: &'a mut BrushTools,
+    /// The quick mask's state, for its controls.
+    pub quick_mask: materialcraft_brush::QuickMaskState,
 }
 
 /// Draws the screen and returns what the user asked for.
@@ -76,6 +78,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
             page: &mut shell.page,
             tools: &shell.tools,
             brush: s.brush,
+            quick_mask: s.quick_mask,
             scale_draft: &mut shell.scale_draft,
             log: s.log,
             tray: s.tray,

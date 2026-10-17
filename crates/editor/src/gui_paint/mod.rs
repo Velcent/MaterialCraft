@@ -31,6 +31,8 @@ mod maps_worker;
 mod navigation;
 mod occlusion_check;
 mod panels;
+mod quick_mask_tint;
+mod quick_tools;
 mod reveal;
 mod save_point;
 mod saving;
@@ -280,12 +282,16 @@ impl PaintMode {
             bakers: &mut self.bakers,
             shell: &mut self.shell,
             brush: &mut self.painting.brush,
+            quick_mask: self.painting.quick_mask.state(),
         };
         panels::layout::show(ui, screen)
     }
 
     fn apply(&mut self, ev: PanelEvent) -> PaintAction {
         self.end_stroke_before(&ev);
+        if ev == PanelEvent::PreviousTool {
+            self.apply_quick_mask();
+        }
         let can_paint = self.document.as_ref().is_some_and(|d| self.layers.paintable(d.doc()));
         let Some(ev) = self.shell.apply(ev, can_paint) else {
             return PaintAction::Stay;
@@ -316,6 +322,8 @@ impl PaintMode {
                     self.scene.rebuild(doc, self.display);
                 }
             }
+            PanelEvent::Undo | PanelEvent::Redo if self.quick_mask_step(ev == PanelEvent::Undo) => {}
+            PanelEvent::Tool(ev) => self.tool_event(ev),
             PanelEvent::Undo => self.move_in_history("Undo", |d| d.undo().map(|_| ())),
             PanelEvent::Redo => self.move_in_history("Redo", |d| d.redo().map(|_| ())),
             PanelEvent::JumpHistory(done) => self.move_in_history("Going back in the history", |d| d.jump_to(done)),

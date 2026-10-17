@@ -6,16 +6,18 @@ use eframe::egui::{self, Id, RichText, Ui};
 use super::super::channel_view::ChannelView;
 use super::super::shell::tools::{self, ToolState};
 use super::super::tools::BrushTools;
-use super::{PanelEvent, channel_bar, quick_bar};
+use super::{PanelEvent, channel_bar, polygon_bar, quick_bar, quick_mask_bar};
 use crate::gui_theme;
 use crate::gui_widgets::toolbar::{self, Group, Side};
 use crate::gui_workspace::shortcuts::ShortcutTable;
+use materialcraft_brush::QuickMaskState;
 
 #[allow(clippy::too_many_arguments)] // the toolbar shows a little of everything; a struct would only repeat these names
 pub fn show(
     ui: &mut Ui,
     tool_state: &ToolState,
     brush: &mut BrushTools,
+    quick_mask: QuickMaskState,
     keys: &ShortcutTable,
     display: ChannelView,
     has_document: bool,
@@ -27,6 +29,7 @@ pub fn show(
     let reset_key = keys.label("paint.view.reset_camera");
     let mut view_events = Vec::new();
     let mut camera_events = Vec::new();
+    let mut mask_events = Vec::new();
     let groups = vec![
         Group::new(Side::Left, move |ui: &mut Ui| {
             ui.label(RichText::new(tool.label()).strong().color(gui_theme::HEADER_TEXT));
@@ -35,8 +38,18 @@ pub fn show(
             }
         }),
         Group::new(Side::Left, |ui: &mut Ui| {
-            if let Some((preset, helpers)) = brush.quick_mut(tool).filter(|_| unavailable.is_none()) {
+            if unavailable.is_some() {
+                return;
+            }
+            if tool == tools::Tool::PolygonFill {
+                polygon_bar::show(ui, &mut brush.polygon);
+            } else if let Some((preset, helpers)) = brush.quick_mut(tool) {
                 quick_bar::show(ui, preset, helpers);
+            }
+        }),
+        Group::new(Side::Left, |ui: &mut Ui| {
+            if unavailable.is_none() {
+                quick_mask_bar::show(ui, quick_mask, &mut mask_events);
             }
         }),
         Group::new(Side::Right, |ui: &mut Ui| {
@@ -55,4 +68,5 @@ pub fn show(
     toolbar::show(ui, Id::new("paint_viewport_toolbar"), groups);
     events.append(&mut view_events);
     events.append(&mut camera_events);
+    events.append(&mut mask_events);
 }

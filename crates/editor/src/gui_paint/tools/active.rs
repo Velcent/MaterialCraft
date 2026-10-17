@@ -12,6 +12,7 @@ use materialcraft::paint::Document;
 use materialcraft::paint::brush::BrushPreset;
 use materialcraft::paint::stroke::{StrokeTool, Symmetry, ViewKind};
 use materialcraft::projection::ViewProjector;
+use materialcraft::stamp::TexelFactor;
 use materialcraft_brush::{BrushError, DocumentStroke, Ended, InputPoint, LazyMouse, LineAnchor, PaintTarget, PaintValues, SessionScene, StrokeSetup};
 use std::sync::Arc;
 
@@ -63,7 +64,13 @@ fn split(doc: &mut Document, set: usize) -> Result<(&materialcraft::mesh::Mesh, 
 impl ActiveStroke {
     /// Pen down at `at`: prepares the target, starts the stroke and paints its first sample. On failure after
     /// the target was prepared, what was done is recorded so the history stays whole.
-    pub fn begin(doc: &mut OpenDocument, picking: &ViewPicking, start: StrokeStart, at: PointerSample) -> Result<ActiveStroke, BrushError> {
+    pub fn begin(
+        doc: &mut OpenDocument,
+        picking: &ViewPicking,
+        start: StrokeStart,
+        at: PointerSample,
+        factors: &[&dyn TexelFactor],
+    ) -> Result<ActiveStroke, BrushError> {
         let label = if start.tool == StrokeTool::Eraser { "Erase" } else { "Paint" };
         let model = doc.doc().mesh.bounding_sphere().unwrap_or(Sphere { centre: [0.0; 3], radius: 1.0 });
         let setup = StrokeSetup {
@@ -80,8 +87,7 @@ impl ActiveStroke {
         let result = {
             let (mesh, set) = split(doc.doc_for_strokes(), start.set)?;
             let projector = picking.projector_on(mesh, start.camera).ok_or(BrushError::NoView)?;
-            let scene =
-                SessionScene { surface: &start.surface.map, index: &start.surface.index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
+            let scene = SessionScene { surface: &start.surface.map, index: &start.surface.index, projector: Some(&projector as &dyn ViewProjector), factors };
             prepared.start(setup, &scene, mesh, &|part| picking.is_shown(part), set)
         };
         let stroke = match result {
@@ -94,7 +100,7 @@ impl ActiveStroke {
         };
         let mut active =
             ActiveStroke { stroke, set: start.set, camera: start.camera, surface: start.surface, t0: at.time, label, lazy: start.lazy, last: None };
-        active.add(doc, picking, &[at])?;
+        active.add(doc, picking, &[at], factors)?;
         Ok(active)
     }
 
@@ -104,7 +110,7 @@ impl ActiveStroke {
     }
 
     /// Paints more samples; returns whether any pixel changed.
-    pub fn add(&mut self, doc: &mut OpenDocument, picking: &ViewPicking, samples: &[PointerSample]) -> Result<bool, BrushError> {
+    pub fn add(&mut self, doc: &mut OpenDocument, picking: &ViewPicking, samples: &[PointerSample], factors: &[&dyn TexelFactor]) -> Result<bool, BrushError> {
         if samples.is_empty() {
             return Ok(false);
         }
@@ -117,7 +123,7 @@ impl ActiveStroke {
         self.last = Some(last.pos);
         let (mesh, set) = split(doc.doc_for_strokes(), self.set)?;
         let projector = picking.projector_on(mesh, self.camera).ok_or(BrushError::NoView)?;
-        let scene = SessionScene { surface: &self.surface.map, index: &self.surface.index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
+        let scene = SessionScene { surface: &self.surface.map, index: &self.surface.index, projector: Some(&projector as &dyn ViewProjector), factors };
         Ok(!self.stroke.add(&scene, &points, set)?.is_empty())
     }
 
@@ -127,14 +133,14 @@ impl ActiveStroke {
     }
 
     /// Pen up: paints the last stamps and records the stroke as one history step.
-    pub fn end(self, doc: &mut OpenDocument, picking: &ViewPicking) -> StrokeEnd {
+    pub fn end(self, doc: &mut OpenDocument, picking: &ViewPicking, factors: &[&dyn TexelFactor]) -> StrokeEnd {
         let ActiveStroke { stroke, set, camera, surface, label, last, .. } = self;
         let mut anchor = None;
         let (ended, mut problem) = match split(doc.doc_for_strokes(), set) {
             Ok((mesh, set_ref)) => match picking.projector_on(mesh, camera) {
                 Some(projector) => {
                     anchor = last.map(|end| LineAnchor::at(end, Some(&projector as &dyn ViewProjector)));
-                    let scene = SessionScene { surface: &surface.map, index: &surface.index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
+                    let scene = SessionScene { surface: &surface.map, index: &surface.index, projector: Some(&projector as &dyn ViewProjector), factors };
                     let (ended, result) = stroke.finish(&scene, set_ref);
                     (ended, result.err().map(|e| e.to_string()))
                 }

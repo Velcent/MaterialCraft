@@ -31,6 +31,7 @@ pub struct Bodies<'a> {
     pub tools: &'a ToolState,
     /// The brush tools' settings (brush panel, quick-access bar).
     pub brush: &'a mut BrushTools,
+    pub quick_mask: materialcraft_brush::QuickMaskState,
     pub scale_draft: &'a mut f32,
     pub log: &'a mut LogPanel,
     pub tray: &'a mut AssetTray,
@@ -113,7 +114,7 @@ impl Bodies<'_> {
     fn viewport_body(&mut self, ui: &mut Ui) {
         let has_document = self.document.is_some();
         let paintable = self.document.is_some_and(|d| self.layers.paintable(d.doc()));
-        viewport_toolbar::show(ui, self.tools, self.brush, self.shortcuts, self.display, has_document, paintable, self.events);
+        viewport_toolbar::show(ui, self.tools, self.brush, self.quick_mask, self.shortcuts, self.display, has_document, paintable, self.events);
         if let Some(doc) = self.document {
             timeline::show(ui, doc.history(), self.events);
         }

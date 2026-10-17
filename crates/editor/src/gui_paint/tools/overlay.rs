@@ -104,6 +104,12 @@ impl Painting {
     /// The aids to draw this frame with the pointer at `hover` and brush tool `tool`.
     pub fn overlay(&mut self, doc: &OpenDocument, picking: &ViewPicking, camera: Option<Camera>, hover: Option<Hover>, tool: Tool) -> Overlay {
         let mut out = Overlay::default();
+        // the polygon fill tool's rectangle or lasso while dragging
+        if let (Tool::PolygonFill, Some(g)) = (tool, &self.gesture) {
+            let outline = g.outline(self.brush.polygon.shape);
+            out.lines.extend(outline.windows(2).filter_map(|w| Some((*w.first()?, *w.get(1)?, Aid::Line, true))));
+            return out;
+        }
         let Some(preset) = self.brush.preset(tool).cloned() else { return out };
         let mesh = &doc.doc().mesh;
         let projector = camera.and_then(|c| picking.projector_on(mesh, c));

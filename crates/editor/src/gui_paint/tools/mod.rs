@@ -8,11 +8,18 @@
 //! ([`LineAnchor`], re-projected into the current view) to the click; without a previous stroke it paints one
 //! stamp. Strokes go through the lazy mouse and symmetry of [`helpers::StrokeHelpers`]; [`overlay`] draws their
 //! visual aids.
+//!
+//! Quick mask (PT-42): while it is edited, paint and eraser strokes go into it ([`mask_stroke`]); while it is
+//! applied, every document stroke is multiplied by it. The polygon fill tool ([`polygon_fill`]) turns the same
+//! gesture into picks.
 
 mod active;
 pub mod brush_state;
+mod events;
 pub mod helpers;
+mod mask_stroke;
 mod overlay;
+pub mod polygon_fill;
 mod surfaces;
 
 use super::document_state::OpenDocument;
@@ -21,13 +28,16 @@ use super::shell::tools::Tool;
 use super::view_pick::ViewPicking;
 use active::{ActiveStroke, StrokeStart};
 pub use brush_state::BrushTools;
+pub use events::ToolEvent;
+use mask_stroke::{ActiveMaskStroke, MaskStrokeStart};
 use materialcraft::camera::Camera;
 use materialcraft::paint::stroke::StrokeTool;
 use materialcraft::projection::ViewProjector;
+use materialcraft::stamp::TexelFactor;
 use materialcraft_brush::stroke::line::SNAP_DEGREES;
 use materialcraft_brush::stroke::{line_points, snap_angle};
 use materialcraft_brush::symmetry::to_record;
-use materialcraft_brush::{LineAnchor, PaintTarget};
+use materialcraft_brush::{LineAnchor, PaintTarget, QuickMask};
 use std::time::{Duration, Instant};
 use surfaces::SurfaceCache;
 
@@ -43,6 +53,8 @@ pub struct PaintReport {
     pub message: Option<String>,
     /// True while a stroke is in progress (keep frames coming).
     pub busy: bool,
+    /// The quick mask changed (its tint is out of date).
+    pub quick_mask: bool,
 }
 
 /// What the tools work with this frame.
@@ -67,6 +79,13 @@ pub struct Painting {
     /// Where the last stroke ended (the next straight line's start).
     anchor: Option<LineAnchor>,
     guides: overlay::GuideCache,
+    /// The session's quick mask (PT-42), honoured by every document stroke while applied.
+    pub quick_mask: QuickMask,
+    /// A stroke into the quick mask while it is edited.
+    mask_active: Option<ActiveMaskStroke>,
+    /// The polygon fill pick gesture in progress.
+    gesture: Option<polygon_fill::PickGesture>,
+    topologies: polygon_fill::TopologyCache,
 }
 
 impl Painting {
@@ -82,6 +101,14 @@ impl Painting {
             Tool::Eraser => Some(StrokeTool::Eraser),
             _ => None,
         };
+        if f.tool == Tool::PolygonFill {
+            let mut polygon = self.polygon_frame(input, f);
+            polygon.message = polygon.message.or(report.message);
+            return polygon;
+        }
+        if let (true, Some(tool)) = (self.quick_mask.is_editing(), tool) {
+            return self.mask_frame(input, f, tool, report);
+        }
         // keep the selected set's surface warm, so the first stroke does not wait
         if let (Some(_), Some((_, set))) = (tool, &f.target) {
             let _ = self.surfaces.get(f.doc, *set);
@@ -109,7 +136,8 @@ impl Painting {
                             .skip(1)
                             .map(|p| PointerSample { pos: p.pos, pressure: p.pressure, time: to.time + p.time })
                             .collect();
-                        if let Err(e) = a.add(f.doc, f.picking, &samples) {
+                        let factor = factor_for(&self.quick_mask, f.doc, a.set());
+                        if let Err(e) = a.add(f.doc, f.picking, &samples, &factors(&factor)) {
                             report.message = Some(format!("The line stopped: {e}."));
                         }
                     }
@@ -117,7 +145,8 @@ impl Painting {
                 }
                 StrokeInput::Move(at) => {
                     let Some(a) = &mut self.active else { continue };
-                    match a.add(f.doc, f.picking, &[at]) {
+                    let factor = factor_for(&self.quick_mask, f.doc, a.set());
+                    match a.add(f.doc, f.picking, &[at], &factors(&factor)) {
                         Ok(true) => painted = Some(a.set()),
                         Ok(false) => {}
                         Err(e) => {
@@ -167,7 +196,8 @@ impl Painting {
             symmetry: to_record(helpers.symmetry.spec()),
             lazy: if lazy { helpers.lazy.start() } else { None },
         };
-        match ActiveStroke::begin(doc, picking, start, at) {
+        let factor = factor_for(&self.quick_mask, doc, set);
+        match ActiveStroke::begin(doc, picking, start, at, &factors(&factor)) {
             Ok(a) => {
                 self.active = Some(a);
             }
@@ -196,9 +226,9 @@ impl Painting {
         self.surfaces.get(doc, set).is_some()
     }
 
-    /// True while a stroke is in progress.
+    /// True while a stroke or a pick gesture is in progress.
     pub fn is_stroking(&self) -> bool {
-        self.active.is_some()
+        self.active.is_some() || self.mask_active.is_some() || self.gesture.is_some()
     }
 
     /// Forgets the document's state (another document was opened or it was closed).
@@ -206,12 +236,19 @@ impl Painting {
         self.active = None;
         self.anchor = None;
         self.surfaces.clear();
+        self.mask_active = None;
+        self.gesture = None;
+        self.quick_mask.forget();
+        self.topologies = Default::default();
     }
 
     fn end(&mut self, doc: &mut OpenDocument, picking: &ViewPicking, report: &mut PaintReport) {
+        self.gesture = None;
+        self.end_mask(doc, picking, report);
         let Some(a) = self.active.take() else { return };
         let set = a.set();
-        let end = a.end(doc, picking);
+        let factor = factor_for(&self.quick_mask, doc, set);
+        let end = a.end(doc, picking, &factors(&factor));
         if let Some(problem) = end.problem {
             report.message = Some(format!("The stroke had a problem: {problem}."));
         }
@@ -219,6 +256,83 @@ impl Painting {
             self.anchor = end.anchor;
         }
         report.refresh = Some(set);
+        self.last_refresh = Some(Instant::now());
+    }
+}
+
+/// The quick mask's factor for strokes into texture set `set`, while it is applied.
+fn factor_for<'a>(mask: &'a QuickMask, doc: &OpenDocument, set: usize) -> Option<materialcraft::stamp::QuickMask<'a>> {
+    let s = doc.doc().texture_sets.get(set)?;
+    mask.factor(&s.id, s.resolution)
+}
+
+fn factors<'a>(factor: &'a Option<materialcraft::stamp::QuickMask<'a>>) -> Vec<&'a dyn TexelFactor> {
+    factor.iter().map(|f| f as &dyn TexelFactor).collect()
+}
+
+impl Painting {
+    /// This frame's brush input while the quick mask is edited: strokes paint the mask (PT-42).
+    fn mask_frame(&mut self, input: Vec<StrokeInput>, f: PaintFrame, tool: StrokeTool, mut report: PaintReport) -> PaintReport {
+        let Some((_, set)) = f.target.clone() else { return report };
+        let mut painted = false;
+        for ev in input {
+            match ev {
+                StrokeInput::Down(at) | StrokeInput::Line { to: at, .. } => {
+                    self.end_mask(f.doc, f.picking, &mut report);
+                    let Some(camera) = f.camera else { continue };
+                    let Some(surface) = self.surfaces.get(f.doc, set) else {
+                        report.message = Some("The brush is getting this texture set ready; paint again in a moment.".into());
+                        continue;
+                    };
+                    self.strokes = self.strokes.wrapping_add(1);
+                    let start = MaskStrokeStart {
+                        set,
+                        preset: self.brush.preset(f.tool).cloned().unwrap_or_default(),
+                        tool,
+                        occlusion: self.brush.occlusion,
+                        seed: self.strokes,
+                        camera,
+                        surface,
+                        symmetry: to_record(self.brush.helpers.symmetry.spec()),
+                    };
+                    match ActiveMaskStroke::begin(&mut self.quick_mask, f.doc, f.picking, start, at) {
+                        Ok(a) => {
+                            self.mask_active = Some(a);
+                            painted = true;
+                        }
+                        Err(e) => report.message = Some(format!("Nothing was painted into the quick mask: {e}.")),
+                    }
+                }
+                StrokeInput::Move(at) => {
+                    let Some(a) = &mut self.mask_active else { continue };
+                    match a.add(&mut self.quick_mask, f.doc, f.picking, &[at]) {
+                        Ok(changed) => painted |= changed,
+                        Err(e) => {
+                            report.message = Some(format!("The stroke stopped: {e}."));
+                            self.end_mask(f.doc, f.picking, &mut report);
+                        }
+                    }
+                }
+                StrokeInput::Up => self.end_mask(f.doc, f.picking, &mut report),
+            }
+        }
+        if painted && self.last_refresh.is_none_or(|t| t.elapsed() >= REFRESH) {
+            report.refresh = Some(set);
+            report.quick_mask = true;
+            self.last_refresh = Some(Instant::now());
+        }
+        report.busy = self.mask_active.is_some() || self.surfaces.is_building();
+        report
+    }
+
+    fn end_mask(&mut self, doc: &OpenDocument, picking: &ViewPicking, report: &mut PaintReport) {
+        let Some(a) = self.mask_active.take() else { return };
+        let set = a.set();
+        if let Some(problem) = a.end(&mut self.quick_mask, doc, picking) {
+            report.message = Some(format!("The quick-mask stroke had a problem: {problem}."));
+        }
+        report.refresh = Some(set);
+        report.quick_mask = true;
         self.last_refresh = Some(Instant::now());
     }
 }

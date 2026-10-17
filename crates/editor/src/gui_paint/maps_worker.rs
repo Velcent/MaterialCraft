@@ -4,6 +4,7 @@
 
 use super::channel_view::ChannelView;
 use super::job::Job;
+use super::quick_mask_tint::QuickMaskTint;
 use materialcraft::diag::Entry;
 use materialcraft::generators;
 use materialcraft::gpu3d::GpuMaps;
@@ -38,8 +39,15 @@ pub struct MapsWorker {
 
 impl MapsWorker {
     /// Composites `sets` for `view`, evaluating material fills with `materials`; the set of `isolate` shows that
-    /// layer's mask alone instead (MK-05).
-    pub fn start(doc: Arc<Document>, sets: Vec<usize>, view: ChannelView, isolate: Option<LayerRef>, materials: MaterialFills) -> MapsWorker {
+    /// layer's mask alone instead (MK-05); `tint` lays the quick mask over the maps (PT-42).
+    pub fn start(
+        doc: Arc<Document>,
+        sets: Vec<usize>,
+        view: ChannelView,
+        isolate: Option<LayerRef>,
+        materials: MaterialFills,
+        tint: Option<Arc<QuickMaskTint>>,
+    ) -> MapsWorker {
         let total = sets.len();
         let listed = sets.clone();
         let job = Job::spawn(move |cancel, tx| {
@@ -67,7 +75,10 @@ impl MapsWorker {
                     return;
                 }
                 let warnings = diag_entries::composite_warnings(ts, &maps.warnings);
-                let maps = view.prepare(&maps, ts);
+                let mut maps = view.prepare(&maps, ts);
+                if let Some(t) = &tint {
+                    t.apply(&ts.id, &mut maps);
+                }
                 if tx.send(SetMaps { set, maps, warnings }).is_err() {
                     return;
                 }

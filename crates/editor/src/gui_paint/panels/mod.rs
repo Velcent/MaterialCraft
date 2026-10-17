@@ -13,7 +13,9 @@ pub mod layout;
 pub mod log;
 pub mod menu_bar;
 mod panel_strip;
+mod polygon_bar;
 mod quick_bar;
+mod quick_mask_bar;
 pub mod status_bar;
 mod symmetry_menu;
 pub mod texture_sets;
@@ -88,4 +90,6 @@ pub enum PanelEvent {
     Assets(TrayEvent),
     /// A request from the bakers panel.
     Bakers(bakers::BakerEvent),
+    /// A tool key or quick-access control: quick mask, polygon fill settings.
+    Tool(crate::gui_paint::tools::ToolEvent),
 }

@@ -10,6 +10,7 @@ use super::document_state::OpenDocument;
 use super::geometry::{self, PartGeometry};
 use super::job::Job;
 use super::maps_worker::{MapsWorker, SetMaps};
+use super::quick_mask_tint::QuickMaskTint;
 use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
 use materialcraft::material_fill::{ChainResolver, FolderResolver, MaterialCache, MaterialFills, MaterialResolver, MemoryResolver};
@@ -36,6 +37,8 @@ pub struct SceneSync {
     materials: Arc<MaterialCache>,
     /// The asset library roots, where material references are looked up after the document's folder.
     library_folders: Vec<PathBuf>,
+    /// The quick mask shown over the view (PT-42).
+    tint: Option<Arc<QuickMaskTint>>,
     pub error: Option<String>,
 }
 
@@ -77,7 +80,7 @@ impl SceneSync {
     fn start_maps(&mut self, doc: &OpenDocument, view: ChannelView, sets: Vec<usize>) {
         self.waiting.retain(|m| !sets.contains(&m.set));
         let materials = self.material_fills(doc);
-        self.maps = Some(MapsWorker::start(doc.maps_view(&sets), sets, view, self.isolate.clone(), materials));
+        self.maps = Some(MapsWorker::start(doc.maps_view(&sets), sets, view, self.isolate.clone(), materials, self.tint.clone()));
     }
 
     /// How material fills of `doc` are evaluated, as the maps the view shows evaluate them (the eyedropper's
@@ -92,6 +95,11 @@ impl SceneSync {
             self.isolate = layer;
             self.remap(doc, view);
         }
+    }
+
+    /// The quick mask tint the next maps runs lay over the sets (`None`: no tint). The caller recomposites.
+    pub fn set_tint(&mut self, tint: Option<QuickMaskTint>) {
+        self.tint = tint.map(Arc::new);
     }
 
     /// Drops all work and the GPU scene (rendered materials are kept).

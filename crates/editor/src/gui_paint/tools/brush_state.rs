@@ -4,6 +4,7 @@
 
 use super::super::shell::tools::Tool;
 use super::helpers::StrokeHelpers;
+use super::polygon_fill::PolygonFillSettings;
 use materialcraft::paint::brush::BrushPreset;
 use materialcraft::paint::{Channel, TextureSet};
 use materialcraft_brush::PaintValues;
@@ -30,6 +31,8 @@ pub struct BrushTools {
     pub occlusion: bool,
     /// Lazy mouse and symmetry, shared by the brush tools.
     pub helpers: StrokeHelpers,
+    /// The polygon fill tool's settings.
+    pub polygon: PolygonFillSettings,
 }
 
 impl Default for BrushTools {
@@ -41,6 +44,7 @@ impl Default for BrushTools {
             mask_value: 1.0,
             occlusion: true,
             helpers: StrokeHelpers::default(),
+            polygon: PolygonFillSettings::default(),
         }
     }
 }

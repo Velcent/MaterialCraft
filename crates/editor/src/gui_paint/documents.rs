@@ -99,6 +99,9 @@ impl PaintMode {
             self.diag.emit(diag_entries::import_summary(report, &doc.source().display().to_string(), doc.summary.as_deref()));
         }
         self.layers.reset();
+        // the quick mask and the tools' caches belong to the document that was open
+        self.painting.forget_document();
+        self.scene.set_tint(None);
         self.scene.rebuild(&mut doc, self.display);
         self.viewport.reset_camera();
         self.document = Some(doc);

@@ -3,6 +3,7 @@
 
 use super::PaintMode;
 use super::panels::PanelEvent;
+use super::quick_mask_tint::QuickMaskTint;
 use super::tools::{PaintFrame, PaintReport};
 use eframe::egui;
 use materialcraft::diag::{Area, SinkExt};
@@ -41,6 +42,8 @@ impl PaintMode {
                 | PanelEvent::Save
                 | PanelEvent::SaveAs
                 | PanelEvent::SetVisible(..)
+                | PanelEvent::Tool(_)
+                | PanelEvent::PreviousTool
         );
         if !(changes_document && self.painting.is_stroking()) {
             return;
@@ -53,6 +56,11 @@ impl PaintMode {
     pub(super) fn after_painting(&mut self, report: PaintReport) {
         if let Some(msg) = report.message {
             self.diag.warn(Area::General, msg);
+        }
+        if report.quick_mask
+            && let Some(doc) = &self.document
+        {
+            self.scene.set_tint(QuickMaskTint::of(&self.painting.quick_mask, doc.doc()));
         }
         if let (Some(set), Some(doc)) = (report.refresh, self.document.as_mut()) {
             self.scene.refresh(doc, self.display, vec![set]);

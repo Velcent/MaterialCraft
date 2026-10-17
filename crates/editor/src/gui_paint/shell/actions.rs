@@ -7,8 +7,10 @@ use super::tools::Tool;
 use crate::gui_paint::channel_view::ChannelView;
 use crate::gui_paint::panels::PanelEvent;
 use crate::gui_paint::panels::layers::LayerAction;
+use crate::gui_paint::tools::ToolEvent;
 use crate::gui_workspace::shortcuts::{ActionSpec, Kind};
 use materialcraft::paint::edit::ops::NewLayer;
+use materialcraft::paint::effect::PickMode;
 
 const fn press(id: &'static str, label: &'static str, group: &'static str, defaults: &'static [&'static str]) -> ActionSpec {
     ActionSpec { id, label, group, kind: Kind::Press, defaults }
@@ -101,10 +103,15 @@ pub const ACTIONS: &[ActionSpec] = &[
     press("paint.quickmask.toggle", "Quick mask on or off", TOOL_KEYS, &["Y"]),
     press("paint.quickmask.previous_tool", "Back to the previous tool", TOOL_KEYS, &["U"]),
     press("paint.quickmask.invert", "Invert the quick mask", TOOL_KEYS, &["I"]),
+    press("paint.quickmask.clear", "Clear the quick mask", TOOL_KEYS, &[]),
+    press("paint.polyfill.triangle", "Polygon fill picks triangles", TOOL_KEYS, &[]),
+    press("paint.polyfill.polygon", "Polygon fill picks faces", TOOL_KEYS, &[]),
+    press("paint.polyfill.mesh", "Polygon fill picks mesh pieces", TOOL_KEYS, &[]),
+    press("paint.polyfill.uv_island", "Polygon fill picks UV islands", TOOL_KEYS, &[]),
 ];
 
 /// What a key press of action `id` does; `None` for gestures and for actions that tools not
-/// built yet will act on (stencil, clone source, quick mask…).
+/// built yet will act on (stencil, clone source…).
 pub fn event_for(id: &str) -> Option<PanelEvent> {
     if let Some(tool) = Tool::ALL.iter().find(|t| t.action() == id) {
         return Some(PanelEvent::SelectTool(*tool));
@@ -136,6 +143,14 @@ pub fn event_for(id: &str) -> Option<PanelEvent> {
         "paint.layout.baking" => PanelEvent::SwitchLayout("Baking".into()),
         "paint.layout.reset" => PanelEvent::ResetLayout,
         "paint.quickmask.previous_tool" => PanelEvent::PreviousTool,
+        "paint.quickmask.toggle" => PanelEvent::Tool(ToolEvent::QuickMaskToggle),
+        "paint.quickmask.invert" => PanelEvent::Tool(ToolEvent::QuickMaskInvert),
+        "paint.quickmask.clear" => PanelEvent::Tool(ToolEvent::QuickMaskClear),
+        "paint.tool.swap_fill" => PanelEvent::Tool(ToolEvent::SwapFill),
+        "paint.polyfill.triangle" => PanelEvent::Tool(ToolEvent::PickMode(PickMode::Triangle)),
+        "paint.polyfill.polygon" => PanelEvent::Tool(ToolEvent::PickMode(PickMode::Polygon)),
+        "paint.polyfill.mesh" => PanelEvent::Tool(ToolEvent::PickMode(PickMode::Mesh)),
+        "paint.polyfill.uv_island" => PanelEvent::Tool(ToolEvent::PickMode(PickMode::UvIsland)),
         _ => return None,
     })
 }
@@ -172,15 +187,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     /// Actions that are listed and rebindable now, and are acted on by tools not built yet.
-    const RESERVED: &[&str] = &[
-        "paint.stroke",
-        "paint.tool.stencil",
-        "paint.tool.stencil_hide",
-        "paint.tool.clone_source",
-        "paint.tool.swap_fill",
-        "paint.quickmask.toggle",
-        "paint.quickmask.invert",
-    ];
+    const RESERVED: &[&str] = &["paint.stroke", "paint.tool.stencil", "paint.tool.stencil_hide", "paint.tool.clone_source"];
 
     #[test]
     fn every_action_is_on_the_shortcuts_page_and_its_defaults_parse() {
