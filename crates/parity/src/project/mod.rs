@@ -5,22 +5,22 @@ mod sets;
 
 pub use sets::{SetCase, discover};
 
-use crate::inputs::{HighCache, HighSource, Inputs, to_bake_mesh};
+use crate::inputs::{HighCache, HighSource, Inputs};
 use crate::settings::{BAKING_INI, HighPolyRequest, MaterialBaking, PainterBaking, Params};
 use crate::subject::CaseError;
-use materialcraft::bake;
+use materialcraft::bake::TextureSetRef;
 use materialcraft::mesh::Mesh;
 use materialcraft_substance::decode::assbin::{AssbinGeometry, Normalization};
 use materialcraft_substance::decode::document::NormalMapSyscoord;
 use materialcraft_substance::project::{SppProject, paths};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 pub struct OpenedProject {
     pub path: PathBuf,
     pub spp: SppProject,
-    pub mesh: Mesh,
-    /// The whole mesh as baker triangles (the high mesh for "low as high").
-    pub whole: bake::Mesh,
+    /// The whole mesh (also the high mesh for "low as high").
+    pub mesh: Rc<Mesh>,
     pub normalization: Option<Normalization>,
     pub baking: Option<PainterBaking>,
     /// Baked normal maps are stored DirectX (`normalMapSyscoord` = 1).
@@ -58,9 +58,8 @@ impl OpenedProject {
         let sets = discover(&spp, &scene)?;
         Ok(OpenedProject {
             path: path.to_path_buf(),
-            whole: to_bake_mesh(&mesh, None),
             spp,
-            mesh,
+            mesh: Rc::new(mesh),
             normalization,
             baking,
             directx_normals,
@@ -93,12 +92,25 @@ impl OpenedProject {
 
     /// Everything a case of `set` needs; the high mesh is loaded here.
     pub fn inputs(&self, set: &SetCase, source: &HighSource) -> Result<Inputs, CaseError> {
-        let low = to_bake_mesh(&self.mesh, Some(&set.slots));
-        if low.tris.is_empty() {
+        let triangles = self
+            .mesh
+            .parts
+            .iter()
+            .filter(|p| set.slots.contains(&p.material))
+            .map(|p| p.triangles.len())
+            .sum::<usize>();
+        if triangles == 0 {
             return Err(CaseError::skipped("the set has no triangles"));
         }
-        let high = self.high_meshes.get_or_load(source, &self.whole, self.normalization)?;
-        Ok(Inputs::new(low, high))
+        let high = self.high_meshes.get_or_load(source, &self.mesh, self.normalization)?;
+        Ok(Inputs::new(
+            Rc::clone(&self.mesh),
+            TextureSetRef {
+                materials: set.slots.clone(),
+                uv_set: 0,
+            },
+            high,
+        ))
     }
 
     /// Our parameters for a set compared at `size`².

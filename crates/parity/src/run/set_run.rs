@@ -8,6 +8,7 @@ use crate::inputs::HighSource;
 use crate::project::{OpenedProject, SetCase};
 use crate::reference::{Reference, References};
 use crate::subject::{CaseError, ReferenceKind, Subject};
+use materialcraft::bake::{MapKind, MapSelection};
 use materialcraft::mesh::Mesh;
 use materialcraft::paint::BakedKind;
 use materialcraft_substance::tools::compare::UvMask;
@@ -41,7 +42,23 @@ impl SetRun<'_> {
             Ok(i) => i,
             Err(e) => return self.skip_all(subjects, std::iter::repeat(e), sink),
         };
-        let params = self.project.params(self.set, size.0.max(size.1));
+        let mut params = self.project.params(self.set, size.0.max(size.1));
+        if let Some(stored) = refs
+            .iter()
+            .flatten()
+            .map(|r| r.stored_size.0.max(r.stored_size.1))
+            .next()
+        {
+            params.match_reference_size(stored);
+        }
+        // bake only what the selected subjects compare
+        let kinds: Vec<MapKind> = subjects
+            .iter()
+            .filter_map(|s| match s.reference() {
+                ReferenceKind::Baked(kind) => MapKind::from_name(kind.id()),
+            })
+            .collect();
+        params.bake.maps = MapSelection::of(&kinds);
         let islands = self.mask(size);
         let coverage = self.coverage(size);
         let mut out = Vec::new();

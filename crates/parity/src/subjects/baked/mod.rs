@@ -21,6 +21,7 @@ pub use world_normal::WorldNormal;
 use crate::inputs::Inputs;
 use crate::settings::Params;
 use crate::subject::{CaseError, Need};
+use materialcraft::bake::MapKind;
 use materialcraft::tex::Tex;
 
 /// What every baked subject needs.
@@ -29,7 +30,8 @@ pub const NEEDS: &[Need] = &[Need::LowMesh, Need::HighMesh];
 /// One map of the case's bake, by the baker's name for it.
 pub fn baked_map(inputs: &Inputs, params: &Params, name: &str) -> Result<Tex, CaseError> {
     let maps = inputs.bake(params)?;
-    maps.get(name)
+    MapKind::from_name(name)
+        .and_then(|kind| maps.get(kind))
         .cloned()
         .ok_or_else(|| CaseError::failed(format!("the baker produced no '{name}' map")))
 }

@@ -1,6 +1,7 @@
 //! Baking settings: Painter's ([`painter`]), what they ask for as high-poly input ([`HighPolyRequest`]),
 //! and how they map onto ours ([`Params`], [`mapping`]).
 
+mod bakers;
 pub mod mapping;
 pub mod painter;
 mod reader;
@@ -13,6 +14,9 @@ pub use painter::{BAKING_INI, MaterialBaking, PainterBaking, TweakList, TweakVal
 pub use request::HighPolyRequest;
 
 use materialcraft::bake::BakeSettings;
+
+/// Most samples per texel side used to match a larger stored reference (memory: 4 x the texels).
+const MAX_REFERENCE_SAMPLES: u32 = 2;
 
 /// What one case runs with: our bake settings plus what of Painter's could not be mapped.
 #[derive(Debug, Clone)]
@@ -32,6 +36,13 @@ impl Params {
         }
     }
 
+    /// Painter's maps stored larger than compared are area-averaged down, which antialiases them: sample our
+    /// texels as finely (up to 2 x 2) so both sides are averaged alike.
+    pub fn match_reference_size(&mut self, stored: usize) {
+        let ratio = (stored / self.size.max(1)).clamp(1, MAX_REFERENCE_SAMPLES as usize) as u32;
+        self.bake.samples = self.bake.samples.max(ratio);
+    }
+
     /// Unmapped settings that concern the baker of `usage` (plus the shared ones).
     pub fn unmapped_for(&self, usage: Option<u64>) -> Vec<&str> {
         self.unmapped
@@ -43,11 +54,7 @@ impl Params {
 
     /// A short hash of the settings our side ran with (FNV-1a), to tell runs with different settings apart.
     pub fn hash(&self) -> String {
-        let b = &self.bake;
-        let text = format!(
-            "{}|{}|{}|{}|{}|{}",
-            self.size, b.size, b.max_dist, b.ao_rays, b.ao_dist, b.padding
-        );
+        let text = format!("{}|{:?}", self.size, self.bake);
         let h = text.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, c| {
             (h ^ u64::from(c)).wrapping_mul(0x0100_0000_01b3)
         });

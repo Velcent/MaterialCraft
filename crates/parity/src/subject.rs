@@ -50,6 +50,13 @@ pub trait Subject: Send + Sync {
     fn components(&self) -> &'static [Component];
     /// Our output for one case, the size of `params.size`, rows top first, in the reference's conventions.
     fn run(&self, inputs: &Inputs, params: &Params) -> Result<Tex, CaseError>;
+
+    /// Our output prepared for comparing with `theirs` inside `mask` (both at the compared size). Most subjects
+    /// compare values as they are; a subject whose values are arbitrary labels (ID colours) maps them onto the
+    /// reference's here, so only the layout is measured.
+    fn align(&self, ours: Tex, _theirs: &Tex, _mask: &[bool]) -> Tex {
+        ours
+    }
 }
 
 /// Why a case produced no numbers.

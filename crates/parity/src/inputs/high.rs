@@ -1,11 +1,12 @@
 //! The mesh Painter baked from: [`HighSource::resolve`] decides where it comes from (cheap, no loading),
-//! [`HighMesh::load`] reads it and moves it into Painter's normalised space, like the project's low mesh.
+//! [`HighMesh::load`] reads it, moves it into Painter's normalised space, like the project's low mesh, and builds
+//! the baker's [`HighScene`] (with its BVH) once for every set that bakes from it.
 
 use super::finder::{MeshFinder, is_mesh_name};
-use super::low::bounds;
 use crate::settings::HighPolyRequest;
 use crate::subject::CaseError;
-use materialcraft::bake;
+use materialcraft::bake::{self, HighScene};
+use materialcraft::mesh::Mesh;
 use materialcraft_substance::decode::assbin::Normalization;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -63,7 +64,7 @@ impl HighSource {
 }
 
 pub struct HighMesh {
-    pub mesh: bake::Mesh,
+    pub scene: HighScene,
     pub source: HighSource,
     /// Notes about how it was placed (normalisation, bounding-box check).
     pub notes: Vec<String>,
@@ -73,12 +74,12 @@ impl HighMesh {
     /// `whole_low`: the project's whole mesh in Painter's normalised space.
     pub fn load(
         source: &HighSource,
-        whole_low: &bake::Mesh,
+        whole_low: &Mesh,
         normalization: Option<Normalization>,
     ) -> Result<HighMesh, CaseError> {
         let HighSource::Files(files) = source else {
             return Ok(HighMesh {
-                mesh: whole_low.clone(),
+                scene: HighScene::from_mesh(whole_low),
                 source: source.clone(),
                 notes: Vec::new(),
             });
@@ -96,8 +97,8 @@ impl HighMesh {
                 .for_each(|p| *p = n.apply(*p)),
             None => notes.push("project has no normalisation record; high mesh used unmoved".into()),
         }
-        if let (Some(high), Some(low)) = (bounds(&mesh), bounds(whole_low)) {
-            let check = BoundsCheck::of(high, low);
+        if let (Some(high), Some(low)) = (bounds(&mesh), whole_low.bounds()) {
+            let check = BoundsCheck::of(high, (low.min, low.max));
             if !check.plausible() {
                 notes.push(format!(
                     "high and low bounds differ (centre off by {:.1} %, size ratio {:.2}); placement may be wrong",
@@ -107,11 +108,23 @@ impl HighMesh {
             }
         }
         Ok(HighMesh {
-            mesh,
+            scene: mesh.to_high(),
             source: source.clone(),
             notes,
         })
     }
+}
+
+/// Whole-mesh bounds of an OBJ soup: (min, max).
+pub fn bounds(mesh: &bake::Mesh) -> Option<([f32; 3], [f32; 3])> {
+    let mut points = mesh.tris.iter().flat_map(|t| t.p.iter());
+    let first = *points.next()?;
+    Some(points.fold((first, first), |(lo, hi), p| {
+        (
+            [lo[0].min(p[0]), lo[1].min(p[1]), lo[2].min(p[2])],
+            [hi[0].max(p[0]), hi[1].max(p[1]), hi[2].max(p[2])],
+        )
+    }))
 }
 
 /// High meshes of one project, loaded once and shared by its texture sets (many sets bake from one file).
@@ -124,7 +137,7 @@ impl HighCache {
     pub fn get_or_load(
         &self,
         source: &HighSource,
-        whole_low: &bake::Mesh,
+        whole_low: &Mesh,
         normalization: Option<Normalization>,
     ) -> Result<Rc<HighMesh>, CaseError> {
         if let Some((_, mesh)) = self.loaded.borrow().iter().find(|(s, _)| s == source) {

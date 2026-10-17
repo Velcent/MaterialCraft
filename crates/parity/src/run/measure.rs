@@ -49,6 +49,7 @@ impl Case<'_> {
             .enumerate()
             .map(|(i, (&inside, p))| inside && p[3] >= COVERED && self.coverage.is_none_or(|c| c.get(i) == Some(&true)))
             .collect();
+        let ours = self.subject.align(ours, &theirs, &mask);
         let (metrics, errors) = Metrics::measure(&ours, &theirs, self.subject.components(), &mask);
         let mut notes = reference.notes;
         let islands = self.islands.iter().filter(|b| **b).count();

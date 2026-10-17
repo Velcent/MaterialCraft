@@ -3,6 +3,7 @@
 use super::mapping::usage;
 use super::painter::{BakerSettings, MaterialBaking, TweakList, TweakValue};
 use super::{HighPolyRequest, Params};
+use materialcraft::bake::Attenuation;
 
 fn list(baker: &str, tweaks: &[(&str, TweakValue)]) -> TweakList {
     TweakList {
@@ -52,11 +53,24 @@ fn material() -> MaterialBaking {
 fn maps_known_settings_and_lists_the_rest() {
     let p = Params::from_painter(Some(&material()), 512);
     assert_eq!((p.size, p.bake.size, p.bake.padding), (512, 512, 4));
-    assert_eq!((p.bake.ao_rays, p.bake.ao_dist, p.bake.max_dist), (64, 0.5, 0.02));
+    assert_eq!(
+        (p.bake.ao_rays, p.bake.ao_dist, p.bake.max_dist, p.bake.rear_dist),
+        (64, 0.5, 0.02, Some(0.01))
+    );
+    assert_eq!((p.bake.ao.attenuation, p.bake.samples), (Attenuation::Linear, 2));
+    assert!(p.unmapped.is_empty(), "{:?}", p.unmapped);
+    let mut odd = material();
+    odd.detail
+        .tweaks
+        .push(("Detail.UseCage".into(), TweakValue::Bool(true)));
+    odd.bakers[0]
+        .params
+        .tweaks
+        .push(("Detail.AO.GroundPlane".into(), TweakValue::Bool(true)));
+    let p = Params::from_painter(Some(&odd), 512);
     let ao = p.unmapped_for(Some(usage::AO));
-    assert!(ao.iter().any(|t| t.contains("AO.Attenuation")));
-    assert!(ao.iter().any(|t| t.contains("SubSampling")));
-    assert!(ao.iter().any(|t| t.contains("distances differ")));
+    assert!(ao.iter().any(|t| t.contains("GroundPlane")));
+    assert!(ao.iter().any(|t| t.contains("UseCage")));
     // Disabled bakers and other bakers' settings are not listed for AO.
     assert!(!ao.iter().any(|t| t.contains("SamplingRadius")));
     assert_eq!(p.hash(), Params::from_painter(Some(&material()), 512).hash());

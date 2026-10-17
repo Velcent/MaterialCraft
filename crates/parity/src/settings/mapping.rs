@@ -1,7 +1,9 @@
 //! [`Params::from_painter`]: Painter's baking settings for one set mapped onto our [`BakeSettings`], with
-//! every setting we cannot reproduce listed as [`Unmapped`] (so reports say what limits parity).
+//! every setting we cannot reproduce listed as [`Unmapped`] (so reports say what limits parity). The per-baker
+//! settings are mapped in [`super::bakers`].
 
 use super::Params;
+use super::bakers::{flag, map_baker};
 use super::painter::{MaterialBaking, TweakList, TweakValue};
 use materialcraft::bake::BakeSettings;
 use materialcraft::paint::BakedKind;
@@ -46,10 +48,10 @@ const NO_EFFECT: &[&str] = &[
     "Detail.LowpolySuffix",
     "Detail.HipolySuffix",
     "Detail.BackfaceCullingSuffix",
-    "Detail.MaxHeight",
-    "Detail.MaxDepth",
-    "Detail.RelativeScale",
 ];
+
+/// Our samples per texel side for Painter's antialiasing setting (`Detail.SubSampling` > 0).
+const ANTIALIASED_SAMPLES: u32 = 2;
 
 impl Params {
     /// Maps `painter` (the set's settings, or none) onto a bake of `size`² texels.
@@ -67,71 +69,38 @@ impl Params {
         if let Some(w) = p.common.f32("Common.DilationWidth") {
             bake.padding = w.max(0.0) as usize;
         }
-        map_distances(&p.detail, &mut bake, &mut note);
         for (k, v) in &p.detail.tweaks {
-            let differs = match k.as_str() {
-                "Detail.SmoothNormals" => p.detail.bool(k) == Some(false),
-                "Detail.UseCage" | "Detail.IgnoreBackface" => p.detail.bool(k) == Some(true),
-                "Detail.SubSampling" | "Detail.FilterMethod" => v.as_f32() != Some(0.0),
-                key => !NO_EFFECT.contains(&key),
-            };
-            if differs {
+            if !map_detail(k, v, &mut bake) {
                 note(None, format!("{k} = {v}"));
             }
         }
         for baker in p.bakers.iter().filter(|b| b.enabled) {
-            let usage = baker.usage;
             for (k, v) in &baker.params.tweaks {
-                let mapped = match (usage, k.as_str()) {
-                    (Some(usage::AO), "Detail.SecondaryCommon.NbSecondary") => {
-                        bake.ao_rays = v.as_f32().unwrap_or(32.0).max(1.0) as u32;
-                        true
-                    }
-                    (Some(usage::AO), "Detail.SecondaryCommon.MaxDistance") => {
-                        bake.ao_dist = v.as_f32().unwrap_or(bake.ao_dist);
-                        true
-                    }
-                    (Some(usage::AO), "Detail.SecondaryCommon.MaxDistanceRelativeScale") => {
-                        matches!(v, TweakValue::Bool(true))
-                    }
-                    _ => false,
-                };
-                if !mapped {
-                    note(usage, format!("{} {k} = {v}", short_baker(&baker.params)));
+                if !map_baker(baker.usage, k, v, &mut bake) {
+                    note(baker.usage, format!("{} {k} = {v}", short_baker(&baker.params)));
                 }
             }
-        }
-        if let Some(t) = p
-            .baker(usage::THICKNESS)
-            .and_then(|b| b.params.f32("Detail.SecondaryCommon.MaxDistance"))
-        {
-            note(
-                Some(usage::THICKNESS),
-                format!(
-                    "our thickness uses the AO distance {} instead of its own {t}",
-                    bake.ao_dist
-                ),
-            );
         }
         Params::new(bake, unmapped)
     }
 }
 
-/// Painter's frontal/rear distances (relative to the mesh size when `RelativeScale`) → our one symmetric
-/// distance relative to the high mesh's bounding-box diagonal.
-fn map_distances(detail: &TweakList, bake: &mut BakeSettings, note: &mut impl FnMut(Option<u64>, String)) {
-    let (h, d) = (detail.f32("Detail.MaxHeight"), detail.f32("Detail.MaxDepth"));
-    if let Some(max) = h.into_iter().chain(d).reduce(f32::max) {
-        bake.max_dist = max.max(1e-5);
-    }
-    if h != d {
-        note(
-            None,
-            format!("frontal {h:?} / rear {d:?} distances differ; ours is symmetric (max used)"),
-        );
-    }
-    if detail.bool("Detail.RelativeScale") == Some(false) {
-        note(None, "absolute ray distances used as relative ones".into());
+/// One detail (common ray) setting; false when we have no counterpart.
+fn map_detail(key: &str, v: &TweakValue, bake: &mut BakeSettings) -> bool {
+    match key {
+        "Detail.MaxHeight" => v.as_f32().map(|d| bake.max_dist = d.max(1e-5)).is_some(),
+        "Detail.MaxDepth" => v.as_f32().map(|d| bake.rear_dist = Some(d.max(1e-5))).is_some(),
+        "Detail.SmoothNormals" => flag(v).map(|b| bake.average_normals = b).is_some(),
+        "Detail.IgnoreBackface" => flag(v).map(|b| bake.ignore_backfaces = b).is_some(),
+        "Detail.SubSampling" => v
+            .as_f32()
+            .map(|s| bake.samples = if s > 0.0 { ANTIALIASED_SAMPLES } else { 1 })
+            .is_some(),
+        // distances relative to the mesh size, as ours
+        "Detail.RelativeScale" => flag(v) == Some(true),
+        "Detail.UseCage" => flag(v) == Some(false),
+        "Detail.FilterMethod" => v.as_f32() == Some(0.0),
+        key => NO_EFFECT.contains(&key),
     }
 }
 
