@@ -24,7 +24,7 @@ fn big_document() -> OpenDocument {
                 img.set((g * 40 + i) % res, (k * 300 + i) % res, [0.7, 0.7, 0.7, 1.0]);
             }
             let mut l =
-                Layer::new(format!("p{g}_{k}"), format!("Paint {g}.{k}"), LayerKind::Paint(PaintContent { images: vec![(Channel::Roughness, img.clone())] }))
+                Layer::new(format!("p{g}_{k}"), format!("Paint {g}.{k}"), LayerKind::Paint(PaintContent::from_images(vec![(Channel::Roughness, img.clone())])))
                     .with_blend(Channel::Roughness, BlendMode::Normal, 1.0);
             if k % 2 == 0 {
                 l = l.with_mask(img);

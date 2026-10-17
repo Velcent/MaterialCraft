@@ -86,7 +86,7 @@ fn effect_edits_invert() {
     round_trip(&mut d, Edit::MoveEffect { layer: lr("a"), stack: StackId::Content, from: 0, to: 1 });
     round_trip(&mut d, Edit::ReplaceEffect { layer: lr("a"), index: 1, effect: StackEffect::Content(generator("z")) });
     round_trip(&mut d, Edit::RemoveEffect { layer: lr("a"), stack: StackId::Content, index: 0 });
-    let mask_paint = StackEffect::Mask(MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels { image: img() })));
+    let mask_paint = StackEffect::Mask(MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels::new(img()))));
     assert_eq!(
         Edit::InsertEffect { layer: lr("a"), index: 0, effect: mask_paint.clone() }.apply(&mut d),
         Err(EditError::NoMask { set: "s".into(), layer: "a".into() })

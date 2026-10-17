@@ -41,7 +41,7 @@ impl NewLayer {
         let kind = match self {
             NewLayer::Paint => {
                 let images = set.channels.iter().filter_map(|spec| Some((spec.channel, empty_image(set, spec.layer_format())?))).collect();
-                LayerKind::Paint(PaintContent { images })
+                LayerKind::Paint(PaintContent::from_images(images))
             }
             NewLayer::Fill => LayerKind::Fill(Fill::uniform(channels(set).into_iter().map(|c| (c, c.default_value())).collect())),
             NewLayer::Folder => LayerKind::Group(Vec::new()),

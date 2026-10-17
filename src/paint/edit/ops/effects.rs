@@ -46,13 +46,12 @@ pub fn new_effect(set: &TextureSet, what: NewEffect, stack: StackId) -> StackEff
     match stack {
         StackId::Content => {
             let kind = match what {
-                NewEffect::Paint => EffectKind::Paint(PaintContent {
-                    images: set
-                        .channels
+                NewEffect::Paint => EffectKind::Paint(PaintContent::from_images(
+                    set.channels
                         .iter()
                         .filter_map(|s| Some((s.channel, TiledImage::new(set.resolution.0, set.resolution.1, s.layer_format()).ok()?)))
                         .collect(),
-                }),
+                )),
                 NewEffect::Fill => EffectKind::Fill(Fill::uniform(channels(set).into_iter().map(|c| (c, c.default_value())).collect())),
                 NewEffect::Levels => EffectKind::Levels(Levels::default()),
                 NewEffect::ColorSelection => EffectKind::ColorSelection(selection()),
@@ -67,7 +66,7 @@ pub fn new_effect(set: &TextureSet, what: NewEffect, stack: StackId) -> StackEff
         StackId::Mask => {
             let kind = match what {
                 NewEffect::Paint => match mask_image(set) {
-                    Some(image) => EffectKind::Paint(MaskPixels { image }),
+                    Some(image) => EffectKind::Paint(MaskPixels::new(image)),
                     None => EffectKind::Fill(0.0),
                 },
                 NewEffect::Fill => EffectKind::Fill(0.5),

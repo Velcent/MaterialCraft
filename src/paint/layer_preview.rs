@@ -136,12 +136,12 @@ mod tests {
                 mask_image.set(x, y, [1.0; 4]);
             }
         }
-        let mut l = Layer::new("p", "P", LayerKind::Paint(PaintContent { images: vec![(Channel::Roughness, image)] })).with_blend(
+        let mut l = Layer::new("p", "P", LayerKind::Paint(PaintContent::from_images(vec![(Channel::Roughness, image)]))).with_blend(
             Channel::Roughness,
             BlendMode::Multiply,
             0.3,
         );
-        l.mask = Some(Mask::new(0.0).with_effect(MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels { image: mask_image }))));
+        l.mask = Some(Mask::new(0.0).with_effect(MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels::new(mask_image)))));
         let reduced = grid.reduce(&l);
         let none = EffectRegistry::new();
         let c = grid.content(&reduced, Channel::Roughness, &none);
