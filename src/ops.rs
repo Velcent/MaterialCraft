@@ -162,45 +162,62 @@ fn box_rows1(src: &[f32], w: usize, h: usize, r: i64) -> Vec<f32> {
 
 /// Vertical wrapping box blur of a single-channel image without transposing it: every thread owns a band of columns and
 /// slides a running sum down the rows, reading whole row segments (cache friendly).
-// Second documented exception to the workspace's `unsafe_code` lint (AGENTS.md): threads write disjoint column bands
-// of one buffer through a raw pointer; the SAFETY note on the block below states the invariant.
-#[allow(unsafe_code)]
 fn box_cols1(src: &[f32], w: usize, h: usize, r: i64) -> Vec<f32> {
-    let mut dst = vec![0.0f32; w * h];
+    if w == 0 || h == 0 {
+        return Vec::new();
+    }
     let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).max(1);
     let band = ((w + n - 1) / n).max(1);
     let inv = 1.0 / (2 * r + 1) as f32;
     let my = crate::tex::my_job();
-    // each thread writes its own columns: split the destination into column bands through raw row pointers
-    struct Ptr(*mut f32);
-    unsafe impl Send for Ptr {}
-    unsafe impl Sync for Ptr {}
-    let base = Ptr(dst.as_mut_ptr());
-    let basep = &base;
+    // each thread blurs its own column band into a buffer of its own; the bands are stitched together afterwards
+    let bands: Vec<(usize, Vec<f32>)> = std::thread::scope(|sc| {
+        let jobs: Vec<_> = (0..w)
+            .step_by(band)
+            .map(|x0| {
+                let x1 = (x0 + band).min(w);
+                sc.spawn(move || {
+                    let bw = x1 - x0;
+                    let mut out = vec![0.0f32; bw * h];
+                    let hi = h as i64;
+                    let mut acc = vec![0.0f32; bw];
+                    for k in -r..=r {
+                        let row = &src[(k.rem_euclid(hi) as usize) * w + x0..(k.rem_euclid(hi) as usize) * w + x1];
+                        for (a, v) in acc.iter_mut().zip(row) {
+                            *a += *v;
+                        }
+                    }
+                    for (y, o) in out.chunks_exact_mut(bw).enumerate() {
+                        if y % 32 == 0 && crate::tex::stale(my) {
+                            break;
+                        }
+                        let ia = ((y as i64 + r + 1).rem_euclid(hi)) as usize;
+                        let is = ((y as i64 - r).rem_euclid(hi)) as usize;
+                        let (add, sub) = (&src[ia * w + x0..ia * w + x1], &src[is * w + x0..is * w + x1]);
+                        for i in 0..bw {
+                            o[i] = acc[i] * inv;
+                            acc[i] += add[i] - sub[i];
+                        }
+                    }
+                    (x0, out)
+                })
+            })
+            .collect();
+        jobs.into_iter().filter_map(|j| j.join().ok()).collect()
+    });
+    // stitch in parallel too: each thread fills a band of whole rows from every column band
+    let mut dst = vec![0.0f32; w * h];
+    let rows = ((h + n - 1) / n).max(1);
+    let bands = &bands;
     std::thread::scope(|sc| {
-        for x0 in (0..w).step_by(band) {
-            let x1 = (x0 + band).min(w);
+        for (i, chunk) in dst.chunks_mut(rows * w).enumerate() {
             sc.spawn(move || {
-                let hi = h as i64;
-                let mut acc = vec![0.0f32; x1 - x0];
-                for k in -r..=r {
-                    let row = &src[(k.rem_euclid(hi) as usize) * w + x0..(k.rem_euclid(hi) as usize) * w + x1];
-                    for (a, v) in acc.iter_mut().zip(row) {
-                        *a += *v;
-                    }
-                }
-                for y in 0..h {
-                    if y % 32 == 0 && crate::tex::stale(my) {
-                        return;
-                    }
-                    // SAFETY: the bands are disjoint column ranges, so no two threads write the same element
-                    let out = unsafe { std::slice::from_raw_parts_mut(basep.0.add(y * w + x0), x1 - x0) };
-                    let ia = ((y as i64 + r + 1).rem_euclid(hi)) as usize;
-                    let is = ((y as i64 - r).rem_euclid(hi)) as usize;
-                    let (add, sub) = (&src[ia * w + x0..ia * w + x1], &src[is * w + x0..is * w + x1]);
-                    for i in 0..acc.len() {
-                        out[i] = acc[i] * inv;
-                        acc[i] += add[i] - sub[i];
+                let y0 = i * rows;
+                for (dy, d) in chunk.chunks_exact_mut(w).enumerate() {
+                    for (x0, out) in bands {
+                        let bw = out.len() / h;
+                        let y = y0 + dy;
+                        d[*x0..*x0 + bw].copy_from_slice(&out[y * bw..(y + 1) * bw]);
                     }
                 }
             });

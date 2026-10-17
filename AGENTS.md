@@ -55,11 +55,10 @@ Toolchain: Rust 1.95 or newer, edition 2024. Formatting follows `rustfmt.toml` (
    `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]`
    (`clippy.toml` allows them in tests). Existing code isn't converted wholesale; tighten it when you touch it, in
    its own commit.
-6. **No `unsafe`.** The workspace sets `unsafe_code = "forbid"`. The root package uses `deny` instead because of two
-   documented exceptions, each with a module- or function-level `allow` and `SAFETY:` notes:
+6. **No `unsafe`.** The workspace sets `unsafe_code = "forbid"`. The root package uses `deny` instead because of one
+   documented exception with a module-level `allow` and `SAFETY:` notes:
    - `src/gpu3d`: glow exposes every OpenGL call as `unsafe fn`; the module's doc states the invariant (calls only
      inside egui_glow paint callbacks, objects freed by their owner).
-   - `src/ops.rs` `box_cols1`: threads write disjoint column bands of one buffer through a raw pointer.
 
    Don't add `unsafe` anywhere else.
 7. **Attribution.** Code copied from another Craft app (PhotoCraft is MIT OR Apache-2.0) keeps its licence notice in

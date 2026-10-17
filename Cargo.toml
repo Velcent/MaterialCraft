@@ -17,8 +17,8 @@ unsafe_code = "forbid"
 dbg_macro = "warn"
 todo = "warn"
 
-# The root package can't inherit `forbid`: its gpu3d module (glow's OpenGL calls are all `unsafe fn`) and one
-# parallel blur in ops.rs need a module-level `allow`, which `forbid` doesn't permit. Here `unsafe_code` is `deny`
+# The root package can't inherit `forbid`: its gpu3d module (glow's OpenGL calls are all `unsafe fn`) needs a
+# module-level `allow`, which `forbid` doesn't permit. Here `unsafe_code` is `deny`
 # instead, so `unsafe` anywhere else in the package is still an error. Keep the rest in sync with the table above.
 [lints.rust]
 unsafe_code = "deny"
