@@ -13,6 +13,7 @@ pub mod diag;
 pub mod export;
 pub mod expr;
 pub mod exr;
+pub mod filters;
 pub mod font;
 pub mod func;
 pub mod fxmap;
