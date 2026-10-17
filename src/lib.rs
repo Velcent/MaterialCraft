@@ -1,5 +1,6 @@
 //! MaterialCraft: procedural node-based material authoring in pure Rust.
 //! The core library has no external dependencies; it builds on Windows, Linux and macOS.
+pub mod assets;
 pub mod bake;
 pub mod checksum;
 pub mod deflate;
