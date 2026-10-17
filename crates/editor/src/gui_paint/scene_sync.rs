@@ -12,8 +12,10 @@ use super::job::Job;
 use super::maps_worker::{MapsWorker, SetMaps};
 use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
+use materialcraft::material_fill::{FolderResolver, MaterialCache, MaterialFills};
 use materialcraft::paint::edit::LayerRef;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 type GeometryResult = Result<Vec<PartGeometry>, String>;
 
@@ -29,6 +31,8 @@ pub struct SceneSync {
     pending: Option<(ChannelView, BTreeSet<usize>)>,
     /// The layer whose mask is shown alone (MK-05).
     isolate: Option<LayerRef>,
+    /// Rendered materials of material fills, kept across maps runs (and documents: keyed by graph content).
+    materials: Arc<MaterialCache>,
     pub error: Option<String>,
 }
 
@@ -69,7 +73,8 @@ impl SceneSync {
 
     fn start_maps(&mut self, doc: &OpenDocument, view: ChannelView, sets: Vec<usize>) {
         self.waiting.retain(|m| !sets.contains(&m.set));
-        self.maps = Some(MapsWorker::start(doc.shared(), sets, view, self.isolate.clone()));
+        let materials = MaterialFills::new(Arc::new(material_folders(doc)), self.materials.clone());
+        self.maps = Some(MapsWorker::start(doc.shared(), sets, view, self.isolate.clone(), materials));
     }
 
     /// Shows `layer`'s mask alone in place of its set's material (`None`: the material again); recomposites.
@@ -80,9 +85,9 @@ impl SceneSync {
         }
     }
 
-    /// Drops all work and the GPU scene.
+    /// Drops all work and the GPU scene (rendered materials are kept).
     pub fn clear(&mut self, gpu: &Shared) {
-        *self = SceneSync::default();
+        *self = SceneSync { materials: self.materials.clone(), ..SceneSync::default() };
         if let Ok(mut g) = gpu.lock() {
             g.clear_scene();
         }
@@ -168,4 +173,9 @@ fn placeholder() -> GpuMaps {
 /// `GpuMaps` is not `Clone`; parts sharing a texture set each need their own copy.
 fn copy(m: &GpuMaps) -> GpuMaps {
     GpuMaps { size: m.size, base: m.base.clone(), normal: m.normal.clone(), rma: m.rma.clone(), emissive: m.emissive.clone(), height: m.height.clone() }
+}
+
+/// Where material fill references are looked up: the document's folder (asset library roots join with the tray).
+fn material_folders(doc: &OpenDocument) -> FolderResolver {
+    FolderResolver::new(doc.source().parent().map(|p| p.to_path_buf()))
 }

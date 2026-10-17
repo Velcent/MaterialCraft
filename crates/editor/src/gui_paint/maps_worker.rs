@@ -6,8 +6,9 @@ use super::channel_view::ChannelView;
 use super::job::Job;
 use materialcraft::diag::Entry;
 use materialcraft::gpu3d::GpuMaps;
+use materialcraft::material_fill::MaterialFills;
 use materialcraft::paint::edit::LayerRef;
-use materialcraft::paint::{Document, MaterialMaps, OutputOptions, diag_entries};
+use materialcraft::paint::{Document, FillContext, MaterialMaps, OutputOptions, diag_entries};
 use std::sync::Arc;
 
 /// The prepared maps of one texture set.
@@ -27,11 +28,13 @@ pub struct MapsWorker {
 }
 
 impl MapsWorker {
-    /// Composites `sets` for `view`; the set of `isolate` shows that layer's mask alone instead (MK-05).
-    pub fn start(doc: Arc<Document>, sets: Vec<usize>, view: ChannelView, isolate: Option<LayerRef>) -> MapsWorker {
+    /// Composites `sets` for `view`, evaluating material fills with `materials`; the set of `isolate` shows that
+    /// layer's mask alone instead (MK-05).
+    pub fn start(doc: Arc<Document>, sets: Vec<usize>, view: ChannelView, isolate: Option<LayerRef>, materials: MaterialFills) -> MapsWorker {
         let total = sets.len();
         let listed = sets.clone();
         let job = Job::spawn(move |cancel, tx| {
+            let fills = FillContext::with_sources(&materials);
             for set in sets {
                 if cancel.is_cancelled() {
                     return;
@@ -45,7 +48,7 @@ impl MapsWorker {
                     }
                     continue;
                 }
-                let maps = MaterialMaps::build(ts, &OutputOptions::for_document(&doc));
+                let maps = MaterialMaps::build_with_fills(ts, &OutputOptions::for_document(&doc), &fills);
                 if cancel.is_cancelled() {
                     return;
                 }
