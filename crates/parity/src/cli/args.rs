@@ -32,7 +32,7 @@ impl Args {
             projects: ProjectList::default(),
             limit: None,
             max_size: DEFAULT_MAX_SIZE,
-            jobs: crate::run::default_jobs(),
+            jobs: materialcraft_substance::tools::parallel::CorpusPool::default_jobs(),
             out: None,
             history: None,
             no_history: false,

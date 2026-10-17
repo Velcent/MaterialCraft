@@ -8,13 +8,13 @@ mod set_run;
 pub mod survey;
 
 pub use case::{CaseImages, CaseResult, CaseSink, Measured, Outcome};
-pub use parallel::default_jobs;
 pub use set_run::SetRun;
 
 use crate::project::OpenedProject;
 use crate::reference::References;
 use crate::subject::{CaseError, Subject};
-use parallel::{SharedSink, map_in_order};
+use materialcraft_substance::tools::parallel::CorpusPool;
+use parallel::SharedSink;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -33,17 +33,21 @@ pub struct Runner<'a> {
 }
 
 impl Runner<'_> {
-    /// Every project, `options.jobs` at a time. Results come back in project order, so tables and the history
-    /// read the same as a run with one job; cases reach `sink` as they finish.
+    /// Every project, up to `options.jobs` at a time within the pool's memory budget. Results come back in
+    /// project order, so tables and the history read the same as a run with one job; cases reach `sink` as
+    /// they finish.
     pub fn run(&self, projects: &[PathBuf], sink: &mut (dyn CaseSink + Send)) -> Vec<CaseResult> {
         let shared = SharedSink::new(sink);
         let ran = AtomicUsize::new(0);
-        map_in_order(projects, self.options.jobs, |path| {
-            self.project(path, &ran, &mut shared.handle())
-        })
-        .into_iter()
-        .flatten()
-        .collect()
+        CorpusPool::new(self.options.jobs)
+            .map(
+                projects,
+                |path| CorpusPool::estimate(path),
+                |path| self.project(path, &ran, &mut shared.handle()),
+            )
+            .into_iter()
+            .flatten()
+            .collect()
     }
 
     /// One project: every texture set, every subject. `ran` counts the sets that ran, across all workers.

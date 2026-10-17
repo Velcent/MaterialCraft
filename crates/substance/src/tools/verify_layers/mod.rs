@@ -7,17 +7,18 @@ mod prepared;
 mod table;
 
 pub use crate::translate::layers::cache_score::{EXACT_STEPS, Score};
-pub use fit::FitTally;
+pub use fit::{FitRecord, FitTally};
 pub use table::Verification;
 
 use crate::inspect::Corpus;
 use crate::project::SppProject;
+use crate::tools::parallel::CorpusPool;
 use crate::translate::cache_channels::CacheChannels;
 use crate::translate::layers::cache_agreement::{CacheAgreement, disagrees};
 use crate::translate::layers::{BlendTable, Computability, ProjectImages, StackStrategy};
 use materialcraft::paint::Channel;
 use prepared::PreparedSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct VerifyOptions {
@@ -42,29 +43,56 @@ pub struct SetResult {
     pub channels: Vec<ChannelResult>,
 }
 
-/// Verifies every `.spp` below `root` (or `root` itself when it is a file).
-pub fn verify_path(root: &Path, options: VerifyOptions, progress: &mut dyn FnMut(&Path)) -> Verification {
-    let mut out = Verification::default();
+/// What one project contributed, merged into the [`Verification`] in project order.
+#[derive(Default)]
+struct ProjectVerification {
+    sets: Vec<SetResult>,
+    fits: Vec<FitRecord>,
+}
+
+/// Verifies every `.spp` below `root` (or `root` itself when it is a file), several projects at once on `pool`.
+/// The result is the same as one project after another.
+pub fn verify_path(
+    root: &Path,
+    options: VerifyOptions,
+    pool: CorpusPool,
+    progress: &(dyn Fn(&Path) + Sync),
+) -> Verification {
     let files = match root.is_file() {
         true => vec![root.to_path_buf()],
         false => Corpus::discover(root).files().to_vec(),
     };
-    for path in &files {
-        progress(path);
+    let label_of = |path: &PathBuf| {
         let relative = path.strip_prefix(root).ok().filter(|p| !p.as_os_str().is_empty());
-        let label = relative
+        relative
             .or_else(|| path.file_name().map(Path::new))
             .unwrap_or(path)
             .display()
-            .to_string();
-        if let Err(e) = verify_project(path, &label, options, &mut out) {
-            out.failures.push((label, e));
+            .to_string()
+    };
+    let results = pool.map(
+        &files,
+        |path| CorpusPool::estimate(path),
+        |path| {
+            progress(path);
+            verify_project(path, &label_of(path), options)
+        },
+    );
+    let mut out = Verification::default();
+    for (path, result) in files.iter().zip(results) {
+        match result {
+            Ok(project) => {
+                out.sets.extend(project.sets);
+                out.fits.add(project.fits);
+            }
+            Err(e) => out.failures.push((label_of(path), e)),
         }
     }
     out
 }
 
-fn verify_project(path: &Path, label: &str, options: VerifyOptions, out: &mut Verification) -> Result<(), String> {
+fn verify_project(path: &Path, label: &str, options: VerifyOptions) -> Result<ProjectVerification, String> {
+    let mut out = ProjectVerification::default();
     let project = SppProject::open(path).map_err(|e| e.to_string())?;
     let (document, _) = project.model().map_err(|e| e.to_string())?;
     let cache = CacheChannels::new(&project);
@@ -83,7 +111,14 @@ fn verify_project(path: &Path, label: &str, options: VerifyOptions, out: &mut Ve
                 (score, options.fit, stack.verdict.blend_values.get(&channel.id()))
             {
                 let example = format!("{label} / {} / {}", painter.name, set.channels.label(channel));
-                out.fits.fit(&set, channel, values, score, (&table, &images), &example);
+                out.fits.extend(FitTally::measure(
+                    &set,
+                    channel,
+                    values,
+                    score,
+                    (&table, &images),
+                    &example,
+                ));
             }
             channels.push(ChannelResult {
                 channel,
@@ -108,5 +143,5 @@ fn verify_project(path: &Path, label: &str, options: VerifyOptions, out: &mut Ve
             channels,
         });
     }
-    Ok(())
+    Ok(out)
 }

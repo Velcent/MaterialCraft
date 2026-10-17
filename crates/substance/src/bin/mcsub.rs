@@ -7,14 +7,17 @@
 //!     mcsub model --all <folder>                   build the model of every .spp below the folder
 //!     mcsub corpus <folder> [--verify]             one table row per .spp below the folder
 //!     mcsub convert <in.spp> <out.mcpaint>         import and save as .mcpaint
-//!     mcsub convert --all <folder> <out dir> [--discard]   convert every .spp below the folder
+//!     mcsub convert --all <folder> <out dir> [--discard] [--jobs N]   convert every .spp below the folder
 //!     mcsub report <in>                            import and print the import report
 //!     mcsub maps <in> <out dir>                    final maps per texture set as PNGs
 //!     mcsub compare <in> <export dir> [--diff <dir>] [--height-normal <factor>]
 //!                                                  compare with Painter's exported textures
 //!     mcsub verify-layers <file.spp> [--fit]       imported layer stacks against Painter's texture cache
-//!     mcsub verify-layers --all <folder> [--fit]   the same for every .spp below the folder
+//!     mcsub verify-layers --all <folder> [--fit] [--jobs N]   the same for every .spp below the folder
 //!
+//! The `--all` commands work on several projects at once: `--jobs N` at most (default a quarter of the cores),
+//! and only as many as fit in 60 % of the free memory (a project needs about twice its file size). Their
+//! output is the same as one project after another.
 //! `<in>` is a `.spp` (imported on the fly) or an already converted `.mcpaint`. `--height-normal` multiplies
 //! the height → normal scale (default 1 = Painter's; 0 leaves height out of the normal map).
 //! `convert`, `maps` and `compare` print progress on stderr as `progress <0..1> <message>`.
@@ -25,6 +28,7 @@ use materialcraft_substance::inspect::document_dump::LIST_PREVIEW;
 use materialcraft_substance::inspect::{Corpus, CorpusTable, DocumentDump, InspectOptions, ProjectReport, TextReport};
 use materialcraft_substance::project::{SppProject, paths};
 use materialcraft_substance::tools::model_text::ModelText;
+use materialcraft_substance::tools::parallel::CorpusPool;
 use materialcraft_substance::tools::report_text::ReportText;
 use materialcraft_substance::tools::verify_layers::{VerifyOptions, verify_path};
 use materialcraft_substance::tools::{compare, convert, maps, model_corpus};
@@ -40,6 +44,7 @@ struct Args {
     flags: Vec<String>,
     diff: Option<PathBuf>,
     height_normal: Option<f32>,
+    jobs: Option<usize>,
 }
 
 impl Args {
@@ -49,17 +54,24 @@ impl Args {
             flags: Vec::new(),
             diff: None,
             height_normal: None,
+            jobs: None,
         };
         let mut it = raw.into_iter();
         while let Some(a) = it.next() {
             match a.as_str() {
                 "--diff" => args.diff = it.next().map(PathBuf::from),
                 "--height-normal" => args.height_normal = it.next().and_then(|v| v.parse().ok()),
+                "--jobs" => args.jobs = it.next().and_then(|v| v.parse().ok()),
                 f if f.starts_with("--") => args.flags.push(a),
                 _ => args.words.push(a),
             }
         }
         args
+    }
+
+    /// The pool for the `--all` commands.
+    fn pool(&self) -> CorpusPool {
+        CorpusPool::new(self.jobs.unwrap_or_else(CorpusPool::default_jobs).clamp(1, 64))
     }
 
     fn has(&self, flag: &str) -> bool {
@@ -136,9 +148,13 @@ fn run(args: Args) -> Result<(), String> {
             print!("{}", CorpusTable { rows: &rows, root });
         }
         ["convert", root, out] if args.has("--all") => {
-            let table = convert::convert_all(Path::new(root), Path::new(out), args.has("--discard"), &mut |line| {
-                eprintln!("{line}")
-            });
+            let table = convert::convert_all(
+                Path::new(root),
+                Path::new(out),
+                args.has("--discard"),
+                args.pool(),
+                &|line| eprintln!("{line}"),
+            );
             print!("{table}");
         }
         ["convert", input, out] => {
@@ -176,7 +192,7 @@ fn run(args: Args) -> Result<(), String> {
         }
         ["verify-layers", path] => {
             let options = VerifyOptions { fit: args.has("--fit") };
-            let result = verify_path(Path::new(path), options, &mut |p| eprintln!("{}", p.display()));
+            let result = verify_path(Path::new(path), options, args.pool(), &|p| eprintln!("{}", p.display()));
             print!("{result}");
         }
         _ => return Err(USAGE.into()),

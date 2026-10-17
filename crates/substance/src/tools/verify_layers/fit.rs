@@ -43,28 +43,54 @@ pub struct FitTally {
     values: BTreeMap<u64, ValueFit>,
 }
 
+/// The scores of one blend value in one compared channel: with the table, and with each of our modes. Measuring
+/// is the expensive part and runs per project (in parallel); [`FitTally::add`] then sums records in project
+/// order, so the totals are the same as with one job.
+#[derive(Debug)]
+pub struct FitRecord {
+    value: u64,
+    before: Score,
+    modes: Vec<(&'static str, Score)>,
+    example: String,
+}
+
 impl FitTally {
     /// Tries every mode for each value used in one compared channel. `before` is the score with the table.
-    pub fn fit(
-        &mut self,
+    pub fn measure(
         set: &PreparedSet,
         channel: Channel,
         values: &BTreeSet<u64>,
         before: Score,
         (table, images): (&BlendTable, &dyn ImageSource),
         example: &str,
-    ) {
-        for &value in values {
-            let entry = self.values.entry(value).or_default();
-            entry.table.add(before);
+    ) -> Vec<FitRecord> {
+        values
+            .iter()
+            .map(|&value| FitRecord {
+                value,
+                before,
+                modes: BlendMode::ALL
+                    .into_iter()
+                    .filter(|m| *m != BlendMode::Passthrough)
+                    .filter_map(|mode| {
+                        let stack = set.import(&table.clone().with_override(value, mode), images);
+                        set.score(&stack, channel).map(|score| (mode.id(), score))
+                    })
+                    .collect(),
+                example: example.to_string(),
+            })
+            .collect()
+    }
+
+    pub fn add(&mut self, records: impl IntoIterator<Item = FitRecord>) {
+        for r in records {
+            let entry = self.values.entry(r.value).or_default();
+            entry.table.add(r.before);
             if entry.examples.len() < 4 {
-                entry.examples.insert(example.to_string());
+                entry.examples.insert(r.example);
             }
-            for mode in BlendMode::ALL.into_iter().filter(|m| *m != BlendMode::Passthrough) {
-                let stack = set.import(&table.clone().with_override(value, mode), images);
-                if let Some(score) = set.score(&stack, channel) {
-                    entry.modes.entry(mode.id()).or_default().add(score);
-                }
+            for (mode, score) in r.modes {
+                entry.modes.entry(mode).or_default().add(score);
             }
         }
     }

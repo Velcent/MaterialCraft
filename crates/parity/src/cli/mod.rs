@@ -47,7 +47,7 @@ pub fn run(raw: Vec<String>) -> Result<(), String> {
 const HELP: &str = "mcparity list
 mcparity cases <subject> [--projects <file|glob|list>]... [--corpus <dir>]...
 mcparity run <subject|all> [--projects ...]... [--corpus <dir>]... [--limit N] [--max-size N]
-             [--jobs N (projects at once; default a quarter of the cores)] [--out <dir>] [--history <file> | --no-history] [--open]";
+             [--jobs N (projects at once; default a quarter of the cores, within 60 % of free memory)] [--out <dir>] [--history <file> | --no-history] [--open]";
 
 fn list() {
     for s in subjects::all() {

@@ -1,6 +1,7 @@
 //! `mcsub convert`: import a `.spp` and save it as `.mcpaint`, for one file or a whole folder.
 
 use crate::inspect::Corpus;
+use crate::tools::parallel::CorpusPool;
 use crate::translate::{ImportError, import_spp};
 use materialcraft::paint::format::{FormatError, save_path};
 use materialcraft::paint::{Document, Fidelity};
@@ -103,24 +104,40 @@ pub struct ConvertTable {
     pub seconds: f64,
 }
 
-/// Converts every `.spp` below `root` into `out_dir` (`<n>.mcpaint`); `discard` deletes each output after
-/// measuring it. `log` gets one line per file.
-pub fn convert_all(root: &Path, out_dir: &Path, discard: bool, log: &mut dyn FnMut(&str)) -> ConvertTable {
+/// Converts every `.spp` below `root` into `out_dir` (`<n>.mcpaint`), several projects at once on `pool`;
+/// `discard` deletes each output after measuring it. `log` gets one line per file as it starts; the table
+/// lists the files in corpus order.
+pub fn convert_all(
+    root: &Path,
+    out_dir: &Path,
+    discard: bool,
+    pool: CorpusPool,
+    log: &(dyn Fn(&str) + Sync),
+) -> ConvertTable {
     let start = Instant::now();
     let files = Corpus::discover(root).files().to_vec();
-    let mut rows = Vec::with_capacity(files.len());
     if let Err(e) = std::fs::create_dir_all(out_dir) {
         log(&format!("cannot create {}: {e}", out_dir.display()));
     }
-    for (i, input) in files.iter().enumerate() {
-        log(&format!("[{}/{}] {}", i + 1, files.len(), input.display()));
-        let output = out_dir.join(format!("{i:03}.mcpaint"));
-        let result = convert_one(input, &output, &mut |_, _| {}).map_err(|e| e.to_string());
-        if discard {
-            let _ = std::fs::remove_file(&output);
-        }
-        rows.push((input.strip_prefix(root).unwrap_or(input).to_path_buf(), result));
-    }
+    let numbered: Vec<(usize, &PathBuf)> = files.iter().enumerate().collect();
+    let results = pool.map(
+        &numbered,
+        |(_, input)| CorpusPool::estimate(input),
+        |&(i, input)| {
+            log(&format!("[{}/{}] {}", i + 1, files.len(), input.display()));
+            let output = out_dir.join(format!("{i:03}.mcpaint"));
+            let result = convert_one(input, &output, &mut |_, _| {}).map_err(|e| e.to_string());
+            if discard {
+                let _ = std::fs::remove_file(&output);
+            }
+            result
+        },
+    );
+    let rows = files
+        .iter()
+        .zip(results)
+        .map(|(input, result)| (input.strip_prefix(root).unwrap_or(input).to_path_buf(), result))
+        .collect();
     ConvertTable {
         rows,
         seconds: start.elapsed().as_secs_f64(),
