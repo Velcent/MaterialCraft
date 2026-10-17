@@ -79,7 +79,7 @@ fn reject(v: Vec3, n: Vec3) -> Vec3 {
 }
 
 /// A unit vector perpendicular to the unit vector `n`.
-fn any_perpendicular(n: Vec3) -> Vec3 {
+pub(super) fn any_perpendicular(n: Vec3) -> Vec3 {
     let axis = if n[0].abs() < 0.9 { [1.0, 0.0, 0.0] } else { [0.0, 1.0, 0.0] };
     unit_or(reject(axis, n), [1.0, 0.0, 0.0])
 }

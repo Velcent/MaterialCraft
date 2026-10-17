@@ -13,6 +13,7 @@ pub mod gltf;
 mod normals;
 mod obj;
 mod obj_read;
+mod surface;
 mod tangents;
 #[cfg(test)]
 mod test_util;
@@ -24,6 +25,7 @@ pub use bounds::{Bounds, Fit, Sphere};
 pub use bvh::{Bvh, Hit, Triangles};
 pub use error::{Attribute, MeshError, MeshErrorKind};
 pub use obj_read::{ObjError, ObjImport};
+pub use surface::{MAX_SURFACE_SIZE, SurfaceError, SurfaceKey, SurfaceMap, SurfaceSample, TexelKind, mesh_fingerprint};
 pub use topology::{Components, Edge, FaceGroups, Topology, UvEdge, UvEdgeKind, UvEdges};
 pub use viewer::ViewportPart;
 
