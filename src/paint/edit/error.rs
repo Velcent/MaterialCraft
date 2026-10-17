@@ -53,6 +53,9 @@ pub enum EditError {
     /// A region outside the image, or pixel data of the wrong length.
     BadRegion,
     Image(ImageError),
+    /// A panel operation that does not apply to what it was aimed at (e.g. an effect dropped onto a mask
+    /// that does not exist, an empty selection); the text says why.
+    NotAccepted(&'static str),
 }
 
 impl fmt::Display for EditError {
@@ -70,6 +73,7 @@ impl fmt::Display for EditError {
             EditError::NoImage { set, layer, image } => write!(f, "layer {layer:?} in {set:?} has no image {image:?}"),
             EditError::BadRegion => write!(f, "pixel region outside the image or of the wrong size"),
             EditError::Image(e) => write!(f, "{e}"),
+            EditError::NotAccepted(why) => f.write_str(why),
         }
     }
 }

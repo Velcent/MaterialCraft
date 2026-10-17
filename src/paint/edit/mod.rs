@@ -13,15 +13,23 @@
 //! - [`effects`]: content and mask effect stacks;
 //! - [`pixels`]: tile swaps, region writes and [`TileCapture`];
 //! - [`document`]: texture sets, the mesh and the height filter;
-//! - [`tiles`]: the tiles an edit or a document holds (for memory accounting).
+//! - [`tiles`]: the tiles an edit or a document holds (for memory accounting);
+//! - [`ids`]: fresh layer and anchor ids, and re-iding a copied layer tree;
+//! - [`Transaction`]: several edits applied one after another, each planned on the result of the one
+//!   before, that either all stay or are all rolled back;
+//! - [`ops`]: the layer panel's operations (create, duplicate, delete, group, move, effects, masks, drops)
+//!   built from edits inside a transaction.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod document;
 mod effects;
 mod error;
+pub mod ids;
+pub mod ops;
 mod pixels;
 mod tiles;
+mod transaction;
 mod tree;
 
 #[cfg(test)]
@@ -30,6 +38,7 @@ mod tests;
 pub use error::EditError;
 pub use pixels::{TileCapture, TileSwap};
 pub use tiles::document_tiles;
+pub use transaction::Transaction;
 
 use super::doc::Document;
 use super::effect::{ContentEffect, MaskEffect};
@@ -124,6 +133,8 @@ pub enum LayerProperty {
     Mask(Option<Mask>),
     /// Switches the mask on or off (the layer must have one).
     MaskEnabled(bool),
+    /// The value the mask starts from, 0 (black) … 1 (white), under its effects (the layer must have a mask).
+    MaskInitial(f32),
     GeometryMask(Option<GeometryMask>),
     /// The fill of a fill layer.
     Fill(Fill),

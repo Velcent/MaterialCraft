@@ -40,7 +40,7 @@ impl Compositor<'_> {
     }
 
     /// The mask's grey values over `r` with its first `upto` effects.
-    fn mask_values(&self, mask: &Mask, upto: usize, r: Rect) -> Vec<f32> {
+    pub(super) fn mask_values(&self, mask: &Mask, upto: usize, r: Rect) -> Vec<f32> {
         let initial = if mask.initial.is_finite() { mask.initial.clamp(0.0, 1.0) } else { 0.0 };
         let mut grey = vec![initial; r.area()];
         for (index, e) in mask.effects.iter().enumerate().take(upto).filter(|(_, e)| e.enabled) {

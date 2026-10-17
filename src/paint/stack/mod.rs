@@ -32,6 +32,7 @@ use pass::{Pass, Scratch, affects};
 mod content;
 mod mask_eval;
 mod pass;
+mod preview;
 mod procedural;
 mod warnings;
 use crate::tex::Tex;

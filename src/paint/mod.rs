@@ -8,7 +8,7 @@
 //! - [`layer`], [`effect`], [`mask`], [`geometry_mask`], [`texture_set`], [`doc`], [`report`]: the document
 //!   model; [`validate`] its invariants.
 //! - [`edit`]: [`edit::Edit`], every document change with its inverse (for the GUI and the history).
-//! - [`stack`]: [`Compositor`], layer stack → channel.
+//! - [`stack`]: [`Compositor`], layer stack → channel; [`layer_preview`]: layer thumbnails on a reduced grid.
 //! - [`diag_entries`]: import summaries and compositing warnings as session log entries.
 //! - [`working_space`]: the space layers blend in (linear light for sRGB channels).
 //! - [`output`]: [`MaterialMaps`], final PBR maps for the viewer and export.
@@ -24,6 +24,7 @@ pub mod geometry_mask;
 pub mod height_normal;
 pub mod image;
 pub mod layer;
+pub mod layer_preview;
 pub mod mask;
 pub mod normal;
 pub mod normal_combine;

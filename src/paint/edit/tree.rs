@@ -32,7 +32,7 @@ fn children_mut<'a>(set: &'a mut TextureSet, parent: Option<&str>) -> Result<&'a
 }
 
 /// Where layer `id` sits.
-fn locate(layers: &[Layer], id: &str, parent: Option<&str>) -> Option<LayerSlot> {
+pub(super) fn locate(layers: &[Layer], id: &str, parent: Option<&str>) -> Option<LayerSlot> {
     for (index, l) in layers.iter().enumerate() {
         if l.id == id {
             return Some(LayerSlot { parent: parent.map(str::to_string), index });
@@ -106,6 +106,10 @@ pub(super) fn set_property(doc: &mut Document, r: LayerRef, property: LayerPrope
         LayerProperty::MaskEnabled(v) => {
             let mask = l.mask.as_mut().ok_or_else(|| EditError::NoMask { set: r.set.clone(), layer: r.layer.clone() })?;
             LayerProperty::MaskEnabled(replace(&mut mask.enabled, v))
+        }
+        LayerProperty::MaskInitial(v) => {
+            let mask = l.mask.as_mut().ok_or_else(|| EditError::NoMask { set: r.set.clone(), layer: r.layer.clone() })?;
+            LayerProperty::MaskInitial(replace(&mut mask.initial, v))
         }
         LayerProperty::GeometryMask(v) => LayerProperty::GeometryMask(replace(&mut l.geometry_mask, v)),
         LayerProperty::Fill(v) => match &mut l.kind {
