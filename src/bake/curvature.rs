@@ -6,6 +6,11 @@
 //! on or crossing the surface don't show), and the automatic range maps nearly the strongest curvature of the map
 //! (the 99.9th percentile) to black and white, which matched the user's bakes better than lower percentiles or a
 //! fixed range.
+//!
+//! The sampling radius is relative to half the bounding-box diagonal (the bounding sphere's radius), not to the
+//! whole diagonal like the other distances: on the feature-cover projects half the diagonal brought the median from
+//! 10.3 to 8.6 steps (0.25, 0.35, 0.7, 1 and 1.5 diagonals all fitted worse). Tried and dropped: curvature from the high
+//! mesh's vertex normals (alone or mixed in), lower auto-range percentiles, a tone curve.
 
 use super::context::Ctx;
 use super::high::Facing;
@@ -13,12 +18,15 @@ use super::rays::basis;
 use super::settings::CurvatureRange;
 use crate::v3::*;
 
+/// What the sampling radius is relative to, as a share of the bake's scale (the bounding-box diagonal).
+const RADIUS_UNIT: f32 = 0.5;
+
 /// Share of texels whose curvature lies inside the automatic range (the rest saturate).
 const AUTO_PERCENTILE: f32 = 0.999;
 
 pub(crate) fn bake(ctx: &Ctx) -> Vec<[f32; 4]> {
     let s = ctx.settings.curvature;
-    let radius = s.radius.max(1e-6) * ctx.scale;
+    let radius = s.radius.max(1e-6) * ctx.scale * RADIUS_UNIT;
     let rays = ctx.rays_per_sample(s.rays.clamp(1, 256)).max(4);
     let raw = ctx.map([0.0; 4], |i, sample| {
         let (p, n) = sample.surface();

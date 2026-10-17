@@ -105,11 +105,13 @@ pub struct AoSettings {
     pub spread: f32,
     /// Occluders nearer than this (relative) are ignored.
     pub min_dist: f32,
+    /// Rays pass through high triangles seen from behind (only front faces occlude).
+    pub ignore_backfaces: bool,
 }
 
 impl Default for AoSettings {
     fn default() -> Self {
-        AoSettings { attenuation: Attenuation::Smooth, distribution: RayDistribution::Cosine, spread: 180.0, min_dist: 1e-5 }
+        AoSettings { attenuation: Attenuation::Smooth, distribution: RayDistribution::Cosine, spread: 180.0, min_dist: 1e-5, ignore_backfaces: false }
     }
 }
 
@@ -124,7 +126,7 @@ pub enum CurvatureRange {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CurvatureSettings {
-    /// Distance from the surface point at which the neighbourhood is sampled (relative).
+    /// Distance from the surface point at which the neighbourhood is sampled, relative to half the bake's scale (the bounding sphere's radius).
     pub radius: f32,
     /// Samples around each point.
     pub rays: u32,
@@ -141,7 +143,7 @@ impl Default for CurvatureSettings {
 pub struct ThicknessSettings {
     /// Rays cast into the mesh per texel.
     pub rays: u32,
-    /// How far the rays look (relative); misses count as this far.
+    /// How far the rays look (relative to half the bake's scale); misses count as this far.
     pub max_dist: f32,
     pub distribution: RayDistribution,
     /// Stretch the result so the thickest texel of the map is white.

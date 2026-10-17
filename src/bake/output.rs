@@ -69,6 +69,33 @@ pub(crate) fn dilate(px: &mut [[f32; 4]], covered: &[bool], size: usize, rings: 
     }
 }
 
+/// Averages each covered value of a `width`-wide grid with its covered neighbours within `radius` (a box of
+/// `2 radius + 1` on each side); uncovered values stay as they are and are never read.
+pub(crate) fn box_filter(values: &mut [[f32; 4]], covered: &[bool], width: usize, radius: usize) {
+    if radius == 0 || width == 0 {
+        return;
+    }
+    let source = values.to_vec();
+    let height = source.len() / width;
+    let inside = |i: usize| covered.get(i).copied().unwrap_or(false);
+    for (i, out) in values.iter_mut().enumerate().filter(|(i, _)| inside(*i)) {
+        let (x, y) = (i % width, i / width);
+        let (mut sum, mut n) = ([0.0f32; 4], 0.0f32);
+        for yy in y.saturating_sub(radius)..(y + radius + 1).min(height) {
+            for xx in x.saturating_sub(radius)..(x + radius + 1).min(width) {
+                let j = yy * width + xx;
+                if let (true, Some(v)) = (inside(j), source.get(j)) {
+                    sum.iter_mut().zip(v).for_each(|(s, v)| *s += v);
+                    n += 1.0;
+                }
+            }
+        }
+        if n > 0.0 {
+            *out = sum.map(|s| s / n);
+        }
+    }
+}
+
 fn neighbours(i: usize, size: usize) -> impl Iterator<Item = usize> {
     let (x, y) = ((i % size) as i64, (i / size) as i64);
     let s = size as i64;
@@ -81,6 +108,17 @@ fn neighbours(i: usize, size: usize) -> impl Iterator<Item = usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn box_filter_averages_covered_neighbours_only() {
+        // 3 x 1: a covered noisy pair and an uncovered background texel
+        let mut v = vec![[0.0; 4], [1.0; 4], [9.0; 4]];
+        box_filter(&mut v, &[true, true, false], 3, 1);
+        assert_eq!(v, vec![[0.5; 4], [0.5; 4], [9.0; 4]]);
+        let mut same = v.clone();
+        box_filter(&mut same, &[true, true, false], 3, 0);
+        assert_eq!(same, v);
+    }
 
     #[test]
     fn averages_covered_samples_only() {

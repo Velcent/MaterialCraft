@@ -11,9 +11,14 @@ use super::high::Facing;
 use super::rays::Cone;
 use crate::v3::*;
 
+/// What the thickness distance is relative to, as a share of the bake's scale (the bounding-box diagonal): half the
+/// diagonal took the feature-cover median from 24.0 to 16.6 steps (0.35: 22.2, 1: 24.0, 2: 39.7; a tone curve on top
+/// only made it worse).
+const DISTANCE_UNIT: f32 = 0.5;
+
 pub(crate) fn bake(ctx: &Ctx) -> Vec<[f32; 4]> {
     let s = ctx.settings.thickness;
-    let reach = s.max_dist.max(1e-6) * ctx.scale;
+    let reach = s.max_dist.max(1e-6) * ctx.scale * DISTANCE_UNIT;
     let offset = SELF_OFFSET * ctx.scale;
     let rays = ctx.rays_per_sample(s.rays.clamp(1, 1024));
     let mut out = ctx.map([0.0, 0.0, 0.0, 1.0], |i, sample| {

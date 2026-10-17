@@ -52,6 +52,7 @@ fn map_ao(key: &str, v: &TweakValue, b: &mut BakeSettings) -> bool {
         "Detail.SecondaryCommon.MinDistance" => v.as_f32().map(|d| b.ao.min_dist = d.max(0.0)).is_some(),
         "Detail.SecondaryCommon.Spread" => v.as_f32().map(|s| b.ao.spread = s.clamp(0.0, 180.0)).is_some(),
         "Detail.SecondaryCommon.Distribution" => distribution(v).map(|d| b.ao.distribution = d).is_some(),
+        "Detail.SecondaryCommon.IgnoreBackfaceSecondary" => flag(v).map(|i| b.ao.ignore_backfaces = i).is_some(),
         "Detail.AO.Attenuation" => {
             let a = match int(v) {
                 Some(0) => Attenuation::None,
