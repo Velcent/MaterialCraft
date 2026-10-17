@@ -8,6 +8,7 @@
 
 mod baked_maps;
 pub(crate) mod cache_channels;
+mod cancel;
 pub mod channel_table;
 mod error;
 mod foreign;
@@ -23,9 +24,10 @@ pub mod source_format;
 mod texture_sets;
 
 pub use baked_maps::{BakedImage, BakedMaps, BakedSource};
+pub use cancel::Cancel;
 pub use error::{ImportError, PartError};
 pub use foreign::FOREIGN_ROOT;
-pub use importer::{Importer, import_spp};
+pub use importer::{Importer, import_spp, import_spp_cancellable};
 pub use layers::{PAINTER_RESULT_NAME, REFERENCE_NAME};
 pub use set_layers::{DEFAULTS_LAYER_ID, DEFAULTS_LAYER_NAME, PAINTER_RESULT_ID};
 pub use texture_sets::{SetBinding, SetSource};

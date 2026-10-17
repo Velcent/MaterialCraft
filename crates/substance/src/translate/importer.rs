@@ -3,6 +3,7 @@
 
 use super::baked_maps::BakedMaps;
 use super::cache_channels::CacheChannels;
+use super::cancel::Cancel;
 use super::error::ImportError;
 use super::foreign::ForeignFiles;
 use super::layers::strokes::{StrokeCount, report_unimported_strokes};
@@ -25,7 +26,17 @@ const SETS_END: f32 = 0.9;
 
 /// Imports a `.spp` as a flattened document. `progress` gets a fraction 0..1 and a short message.
 pub fn import_spp(path: &Path, progress: &mut dyn FnMut(f32, &str)) -> Result<Document, ImportError> {
-    Importer::open(path)?.run(progress)
+    import_spp_cancellable(path, progress, Cancel::NEVER)
+}
+
+/// [`import_spp`] that stops with [`ImportError::Cancelled`] soon after `cancel` asks for it.
+pub fn import_spp_cancellable(
+    path: &Path,
+    progress: &mut dyn FnMut(f32, &str),
+    cancel: Cancel<'_>,
+) -> Result<Document, ImportError> {
+    cancel.check()?;
+    Importer::open(path)?.run(progress, cancel)
 }
 
 /// One import in progress.
@@ -40,14 +51,17 @@ impl Importer {
         })
     }
 
-    pub fn run(&self, progress: &mut dyn FnMut(f32, &str)) -> Result<Document, ImportError> {
+    /// Builds the document; `cancel` is asked between stages, per texture set and per image.
+    pub fn run(&self, progress: &mut dyn FnMut(f32, &str), cancel: Cancel<'_>) -> Result<Document, ImportError> {
         let mut report = Reporter::new(self.source_label());
         progress(0.0, "reading mesh");
         let scene = self.project.read(paths::SCENE)?;
+        cancel.check()?;
         let decode = |part| move |source| ImportError::Decode { part, source };
         let mut mesh = AssbinGeometry::parse(&scene).map_err(decode("mesh"))?;
         let materials = AssbinScene::parse(&scene).map_err(decode("mesh"))?.materials;
         report.mesh(mesh.parts.len(), mesh.parts.iter().map(|p| p.triangles.len()).sum());
+        cancel.check()?;
         progress(0.05, "reading layer document");
         let records = self.project.document_materials()?;
         let normals = NormalConventions::from_settings(self.project.document_settings().ok().as_ref());
@@ -60,8 +74,9 @@ impl Importer {
                 None
             }
         };
+        cancel.check()?;
         let table = BlendTable::painter();
-        let images = ProjectImages::new(&self.project);
+        let images = ProjectImages::new(&self.project).with_cancel(cancel);
         let import = LayerImport {
             table: &table,
             images: &images,
@@ -78,12 +93,14 @@ impl Importer {
             baked: &baked,
             normals: &normals,
             layers: &layers,
+            cancel,
         };
         let mut translated = BTreeSet::new();
         let mut sets = Vec::with_capacity(binding.sets.len());
         let slot_names = mesh.materials.clone();
         for (i, source) in binding.sets.iter().enumerate() {
             let at = SETS_START + (SETS_END - SETS_START) * i as f32 / binding.sets.len() as f32;
+            cancel.check()?;
             progress(at, &format!("texture set {}", source.record.name));
             merge_slots(
                 &mut mesh,
@@ -93,7 +110,7 @@ impl Importer {
                 &mut report,
                 &source.record.name,
             );
-            sets.push(builder.build(source, &mesh, &mut report, &mut translated));
+            sets.push(builder.build(source, &mesh, &mut report, &mut translated)?);
         }
         for r in &binding.unused {
             report.unused_material(&r.name);
@@ -102,8 +119,9 @@ impl Importer {
                 report_unimported_strokes(&mut report, &r.name, &StrokeCount::of_set(set));
             }
         }
+        cancel.check()?;
         progress(SETS_END, "keeping original files");
-        let kept = ForeignFiles::new(&self.project).collect(&translated);
+        let kept = ForeignFiles::new(&self.project).collect(&translated, cancel)?;
         report.foreign(&kept);
         let mut doc = Document::new(mesh);
         doc.texture_sets = sets;

@@ -3,7 +3,9 @@
 
 use super::baked_maps::BakedMaps;
 use super::cache_channels::{CacheChannels, CacheImage};
+use super::cancel::Cancel;
 use super::channel_table::{channel_for_bit, channel_spec, painter_channel_name};
+use super::error::ImportError;
 use super::normal_conventions::NormalConventions;
 use super::report::Reporter;
 use super::set_layers::{Flattened, SetLayers, painter_result_layer};
@@ -22,20 +24,22 @@ pub struct SetBuilder<'a> {
     pub baked: &'a BakedMaps<'a>,
     pub normals: &'a NormalConventions,
     pub layers: &'a SetLayers<'a>,
+    /// Asked before each image read and after the layer stack.
+    pub cancel: Cancel<'a>,
 }
 
 impl SetBuilder<'_> {
     /// Builds the set on `mesh` (its slots merged); parts that fail are reported and left out. Datasets turned
-    /// into pixels are added to `translated`.
+    /// into pixels are added to `translated`. Fails only when the import is cancelled.
     pub fn build(
         &self,
         source: &SetSource,
         mesh: &Mesh,
         report: &mut Reporter,
         translated: &mut BTreeSet<String>,
-    ) -> TextureSet {
+    ) -> Result<TextureSet, ImportError> {
         let name = &source.record.name;
-        let images = self.cache_images(source, report, translated);
+        let images = self.cache_images(source, report, translated)?;
         let resolution = resolve_resolution(source, &images, report);
         let mut set = TextureSet::new(source.id.clone(), name.clone(), resolution);
         set.material_slot = source.slot;
@@ -47,9 +51,12 @@ impl SetBuilder<'_> {
             fully_covered,
             complete,
         };
+        // Image loads inside the layer stack fail fast once cancelled; this check ends the import.
+        self.cancel.check()?;
         self.layers.build(&mut set, source, flattened, mesh, report);
-        self.add_baked(source, &mut set, report, translated);
-        set
+        self.cancel.check()?;
+        self.add_baked(source, &mut set, report, translated)?;
+        Ok(set)
     }
 
     /// Converted cache images with their channel; unknown bits and failures are reported.
@@ -58,7 +65,7 @@ impl SetBuilder<'_> {
         source: &SetSource,
         report: &mut Reporter,
         translated: &mut BTreeSet<String>,
-    ) -> Vec<(Channel, CacheImage)> {
+    ) -> Result<Vec<(Channel, CacheImage)>, ImportError> {
         let name = &source.record.name;
         let Some(folder) = &source.cache_set else {
             report.set_problem(
@@ -66,7 +73,7 @@ impl SetBuilder<'_> {
                 Fidelity::Approximated,
                 "no texture cache (Painter never rendered this set); channels are empty",
             );
-            return Vec::new();
+            return Ok(Vec::new());
         };
         let mut out = Vec::new();
         for entry in self.cache.entries_of(folder) {
@@ -75,6 +82,7 @@ impl SetBuilder<'_> {
                 report.channel_failed(name, &label, "cache entry for an unknown channel; kept raw");
                 continue;
             };
+            self.cancel.check()?;
             match self.cache.read(entry) {
                 Ok(image) => {
                     translated.insert(entry.path.clone());
@@ -83,7 +91,7 @@ impl SetBuilder<'_> {
                 Err(e) => report.channel_failed(name, &label, format!("unreadable cache entry: {e}")),
             }
         }
-        out
+        Ok(out)
     }
 
     fn add_baked(
@@ -92,9 +100,10 @@ impl SetBuilder<'_> {
         set: &mut TextureSet,
         report: &mut Reporter,
         translated: &mut BTreeSet<String>,
-    ) {
+    ) -> Result<(), ImportError> {
         let name = &source.record.name;
         for baked in self.baked.sources(name, &source.record.baked) {
+            self.cancel.check()?;
             match self.baked.read(&baked) {
                 Ok(mut image) => {
                     report.baked_map(name, &baked.name, image.missing_bytes);
@@ -105,6 +114,7 @@ impl SetBuilder<'_> {
                 Err(e) => report.baked_failed(name, &baked.name, e.to_string()),
             }
         }
+        Ok(())
     }
 }
 

@@ -12,6 +12,8 @@ pub enum ImportError {
     Project(ProjectError),
     /// A required record (mesh, document) could not be decoded.
     Decode { part: &'static str, source: DecodeError },
+    /// The caller cancelled the import (see [`super::Cancel`]).
+    Cancelled,
 }
 
 impl fmt::Display for ImportError {
@@ -19,6 +21,7 @@ impl fmt::Display for ImportError {
         match self {
             ImportError::Project(e) => write!(f, "{e}"),
             ImportError::Decode { part, source } => write!(f, "{part}: {source}"),
+            ImportError::Cancelled => write!(f, "cancelled"),
         }
     }
 }
@@ -28,6 +31,7 @@ impl std::error::Error for ImportError {
         match self {
             ImportError::Project(e) => Some(e),
             ImportError::Decode { source, .. } => Some(source),
+            ImportError::Cancelled => None,
         }
     }
 }

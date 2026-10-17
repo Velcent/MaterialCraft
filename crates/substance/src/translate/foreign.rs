@@ -4,7 +4,8 @@
 //! fills), metadata and the cache index. Left out: the texture-cache images and baked maps, which were
 //! translated into the document.
 
-use super::error::PartError;
+use super::cancel::Cancel;
+use super::error::{ImportError, PartError};
 use crate::project::{SppProject, paths};
 use materialcraft::paint::ForeignFile;
 use std::collections::BTreeSet;
@@ -30,13 +31,15 @@ impl<'a> ForeignFiles<'a> {
         ForeignFiles { project }
     }
 
-    /// Reads every dataset except cache images and the `translated` datasets (absolute paths).
-    pub fn collect(&self, translated: &BTreeSet<String>) -> KeptFiles {
+    /// Reads every dataset except cache images and the `translated` datasets (absolute paths). `cancel` is asked
+    /// before each read.
+    pub fn collect(&self, translated: &BTreeSet<String>, cancel: Cancel<'_>) -> Result<KeptFiles, ImportError> {
         let mut kept = KeptFiles::default();
         for d in self.project.layout().datasets() {
             if translated.contains(d.path) || is_cache_image(d.path) {
                 continue;
             }
+            cancel.check()?;
             match self.read(d.path) {
                 Ok(file) => {
                     kept.bytes += file.bytes.len() as u64;
@@ -45,7 +48,7 @@ impl<'a> ForeignFiles<'a> {
                 Err(e) => kept.failed.push((d.path.to_string(), e.to_string())),
             }
         }
-        kept
+        Ok(kept)
     }
 
     fn read(&self, dataset: &str) -> Result<ForeignFile, PartError> {

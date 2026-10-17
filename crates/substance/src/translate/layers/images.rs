@@ -3,6 +3,7 @@
 //! bitmap cannot stay an image fill.
 
 use crate::project::SppProject;
+use crate::translate::cancel::Cancel;
 use crate::translate::resources::{read_image, split_resource_url};
 use materialcraft::paint::working_space::linear_to_srgb;
 use materialcraft::paint::{ChannelSpec, ColorSpace, TiledImage};
@@ -24,16 +25,28 @@ pub trait ImageSource {
 /// Embedded image resources of an opened project.
 pub struct ProjectImages<'a> {
     project: &'a SppProject,
+    cancel: Cancel<'a>,
 }
 
 impl<'a> ProjectImages<'a> {
     pub fn new(project: &'a SppProject) -> Self {
-        ProjectImages { project }
+        ProjectImages {
+            project,
+            cancel: Cancel::NEVER,
+        }
+    }
+
+    /// Refuses further loads once `cancel` asks for it, so a cancelled import skips the remaining decodes.
+    pub fn with_cancel(self, cancel: Cancel<'a>) -> Self {
+        ProjectImages { cancel, ..self }
     }
 }
 
 impl ImageSource for ProjectImages<'_> {
     fn load(&self, url: &str) -> Result<LoadedImage, String> {
+        if self.cancel.requested() {
+            return Err("import cancelled".into());
+        }
         let Some((_, id)) = split_resource_url(url) else {
             return Err(format!("bitmap {url:?} is a shelf resource, not stored in the project"));
         };
