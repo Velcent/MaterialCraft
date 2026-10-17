@@ -39,7 +39,7 @@ pub struct SceneSync {
 impl SceneSync {
     /// Rebuilds geometry and maps (new document or changed visibility).
     pub fn rebuild(&mut self, doc: &mut OpenDocument, view: ChannelView) {
-        let (shared, visible) = (doc.shared(), doc.visibility());
+        let (shared, visible) = (doc.mesh_view(), doc.visibility());
         self.geometry = Some(Job::spawn(move |_, tx| {
             let _ = tx.send(geometry::build(&shared, &visible));
         }));
@@ -74,7 +74,7 @@ impl SceneSync {
     fn start_maps(&mut self, doc: &OpenDocument, view: ChannelView, sets: Vec<usize>) {
         self.waiting.retain(|m| !sets.contains(&m.set));
         let materials = MaterialFills::new(Arc::new(material_folders(doc)), self.materials.clone());
-        self.maps = Some(MapsWorker::start(doc.shared(), sets, view, self.isolate.clone(), materials));
+        self.maps = Some(MapsWorker::start(doc.maps_view(&sets), sets, view, self.isolate.clone(), materials));
     }
 
     /// Shows `layer`'s mask alone in place of its set's material (`None`: the material again); recomposites.

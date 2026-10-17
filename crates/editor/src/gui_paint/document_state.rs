@@ -3,8 +3,8 @@
 //! history; undo, redo and jumps go through the history too (HI-01, HI-07).
 
 use materialcraft::history::{CoalesceKey, PaintHistory};
-use materialcraft::paint::Document;
 use materialcraft::paint::edit::{EditError, Transaction};
+use materialcraft::paint::{Document, TextureSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -17,10 +17,10 @@ pub struct SetState {
     pub reported: bool,
 }
 
-/// A document shown on the Paint screen. The document itself is shared read-only with workers; an edit
-/// copies it only while a worker still holds the old version.
+/// A document shown on the Paint screen. Background workers get views of it ([`Self::maps_view`],
+/// [`Self::mesh_view`]), never the document itself, so an edit never has to copy it.
 pub struct OpenDocument {
-    doc: Arc<Document>,
+    doc: Document,
     /// One per open document; a new document comes with a new, empty history.
     history: PaintHistory,
     source: PathBuf,
@@ -32,16 +32,29 @@ pub struct OpenDocument {
 impl OpenDocument {
     pub fn new(doc: Document, source: PathBuf, summary: Option<String>) -> OpenDocument {
         let sets = doc.texture_sets.iter().map(|_| SetState { visible: true, maps_ready: false, reported: false }).collect();
-        OpenDocument { doc: Arc::new(doc), history: PaintHistory::default(), source, summary, sets }
+        OpenDocument { doc, history: PaintHistory::default(), source, summary, sets }
     }
 
     pub fn doc(&self) -> &Document {
         &self.doc
     }
 
-    /// A handle for background workers.
-    pub fn shared(&self) -> Arc<Document> {
-        self.doc.clone()
+    /// What a maps worker compositing `sets` reads: those texture sets and the output settings. Other sets keep
+    /// only their placement; the mesh, the kept files and the import report are left out. Cheap (layer images
+    /// share their tiles), and the document itself stays unshared, so edits while the worker runs change it in
+    /// place instead of copying it.
+    pub fn maps_view(&self, sets: &[usize]) -> Arc<Document> {
+        let doc = &self.doc;
+        let texture_sets = doc.texture_sets.iter().enumerate().map(|(i, s)| if sets.contains(&i) { s.clone() } else { placement(s) }).collect();
+        Arc::new(Document { texture_sets, height_filter: doc.height_filter, ..Document::default() })
+    }
+
+    /// What a geometry worker reads: the mesh and each set's slot and UV set (no layers, baked maps or kept
+    /// files). Copies the mesh once per geometry build, which is rare (a new document, changed visibility).
+    pub fn mesh_view(&self) -> Arc<Document> {
+        let doc = &self.doc;
+        let sets = doc.texture_sets.iter().map(placement).collect();
+        Arc::new(Document { mesh: doc.mesh.clone(), texture_sets: sets, ..Document::default() })
     }
 
     pub fn history(&self) -> &PaintHistory {
@@ -52,8 +65,7 @@ impl OpenDocument {
     /// open step (one slider drag); an operation that makes no edit records nothing. On error the document
     /// is unchanged.
     pub fn edit<T>(&mut self, label: &str, key: Option<CoalesceKey>, op: impl FnOnce(&mut Transaction) -> Result<T, EditError>) -> Result<T, EditError> {
-        let doc = Arc::make_mut(&mut self.doc);
-        let mut tx = Transaction::new(doc);
+        let mut tx = Transaction::new(&mut self.doc);
         let out = op(&mut tx)?;
         let inverses = tx.commit();
         if !inverses.is_empty() {
@@ -70,17 +82,17 @@ impl OpenDocument {
     /// Steps back once; false if there was nothing to undo. After a history move call [`Self::sync_sets`] and
     /// recomposite: the history does not say what changed.
     pub fn undo(&mut self) -> Result<bool, EditError> {
-        self.history.undo(Arc::make_mut(&mut self.doc))
+        self.history.undo(&mut self.doc)
     }
 
     /// Steps forward once; false if there was nothing to redo.
     pub fn redo(&mut self) -> Result<bool, EditError> {
-        self.history.redo(Arc::make_mut(&mut self.doc))
+        self.history.redo(&mut self.doc)
     }
 
     /// Returns the document to the state after `done` steps (the timeline's blocks).
     pub fn jump_to(&mut self, done: usize) -> Result<(), EditError> {
-        self.history.jump_to(Arc::make_mut(&mut self.doc), done)
+        self.history.jump_to(&mut self.doc, done)
     }
 
     /// Keeps one view state per texture set when steps added or removed sets; returns true if the number of
@@ -145,3 +157,16 @@ impl OpenDocument {
         self.doc.texture_sets.iter().position(|s| s.id == id)
     }
 }
+
+/// A set's placement on the mesh without its layers and baked maps.
+fn placement(set: &TextureSet) -> TextureSet {
+    let mut out = TextureSet::new(set.id.clone(), set.name.clone(), set.resolution);
+    out.material_slot = set.material_slot;
+    out.uv_set = set.uv_set;
+    out.channels = set.channels.clone();
+    out
+}
+
+#[cfg(test)]
+#[path = "document_state_tests.rs"]
+mod tests;

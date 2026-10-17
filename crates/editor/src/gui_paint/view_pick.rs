@@ -48,7 +48,7 @@ impl ViewPicking {
         };
         let key = SceneKey::of(doc);
         if self.key.as_ref() != Some(&key) {
-            let (shared, visible) = (doc.shared(), key.visible.clone());
+            let (shared, visible) = (doc.mesh_view(), key.visible.clone());
             self.building = Some(Job::spawn(move |_, tx| {
                 let _ = tx.send(build(&shared, &visible));
             }));
