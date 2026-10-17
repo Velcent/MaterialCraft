@@ -2,11 +2,14 @@
 //! evaluating it.
 
 use super::Compositor;
+use super::fill_eval::FillProblem;
 use super::pass::affects;
 use crate::paint::blend::BlendMode;
 use crate::paint::channel::Channel;
-use crate::paint::layer::{FillSource, Layer, LayerImage, LayerKind};
+use crate::paint::effect::EffectKind;
+use crate::paint::layer::{Layer, LayerImage, LayerKind};
 use crate::paint::validate::MAX_GROUP_DEPTH;
+use crate::projection::NotComputable;
 
 /// Something the compositor could not do exactly. Layers are named by id.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +27,12 @@ pub enum CompositeWarning {
     GroupEffectsSkipped { layer: String },
     /// The layer's geometry mask is not applied yet.
     GeometryMaskIgnored { layer: String },
+    /// A fill (the layer's own, or content effect `effect`) projects from a volume and the compositor has no
+    /// surface map for the set (no mesh, or the set's UV set is missing); it was left out instead of guessed.
+    FillNeedsMesh { layer: String, effect: Option<usize>, mode: String },
+    /// A fill's projection cannot be evaluated (a mode not evaluated yet, or one from a newer version); it was
+    /// left out.
+    ProjectionNotComputable { layer: String, effect: Option<usize>, reason: String },
 }
 
 impl Compositor<'_> {
@@ -35,7 +44,11 @@ impl Compositor<'_> {
             }
             let passthrough = l.blend_for(channel).is_some_and(|b| b.mode == BlendMode::Passthrough);
             match &l.kind {
-                LayerKind::Fill(f) if matches!(f.source, FillSource::Material { .. }) => out.push(CompositeWarning::MaterialFillSkipped { layer: id() }),
+                LayerKind::Fill(f) => match self.fill_problem(f, channel) {
+                    Some(FillProblem::NoEvaluator) => out.push(CompositeWarning::MaterialFillSkipped { layer: id() }),
+                    Some(FillProblem::Projection(p)) => out.push(projection_warning(id(), None, p)),
+                    None => {}
+                },
                 LayerKind::Group(_) if depth >= MAX_GROUP_DEPTH => out.push(CompositeWarning::GroupTooDeep { layer: id() }),
                 LayerKind::Group(children) => self.collect_warnings(children, channel, depth + 1, out),
                 _ => {}
@@ -51,7 +64,17 @@ impl Compositor<'_> {
             out.push(CompositeWarning::GroupEffectsSkipped { layer: l.id.clone() });
         } else {
             for (index, e) in l.effects.iter().enumerate().filter(|(_, e)| applies(e) && !self.content_effect_computable(e)) {
-                out.push(CompositeWarning::EffectNotComputable { layer: l.id.clone(), in_mask: false, index, kind: e.kind.id().to_string() });
+                let projection = match &e.kind {
+                    EffectKind::Fill(f) => match self.fill_computable(f) {
+                        Err(FillProblem::Projection(p)) => Some(p),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                out.push(match projection {
+                    Some(p) => projection_warning(l.id.clone(), Some(index), p),
+                    None => CompositeWarning::EffectNotComputable { layer: l.id.clone(), in_mask: false, index, kind: e.kind.id().to_string() },
+                });
             }
         }
         if let Some(mask) = l.mask.as_ref().filter(|m| m.enabled) {
@@ -62,6 +85,13 @@ impl Compositor<'_> {
         if l.geometry_mask.is_some() {
             out.push(CompositeWarning::GeometryMaskIgnored { layer: l.id.clone() });
         }
+    }
+}
+
+fn projection_warning(layer: String, effect: Option<usize>, p: NotComputable) -> CompositeWarning {
+    match p {
+        NotComputable::NeedsMesh { mode } => CompositeWarning::FillNeedsMesh { layer, effect, mode },
+        other => CompositeWarning::ProjectionNotComputable { layer, effect, reason: other.to_string() },
     }
 }
 

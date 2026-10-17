@@ -4,15 +4,17 @@
 //! - hidden layers, layers without a blend entry for the channel and `Disable` entries are skipped;
 //! - a layer's strength is `layer opacity × entry opacity × mask`; the mask is its initial value with its
 //!   effects on top ([`crate::paint::mask`]), a disabled mask counts as 1;
-//! - a layer's content is its base (paint image with alpha = coverage, uniform fill with coverage 1; material
-//!   fills are skipped and reported) with its content effects on top, each blended by its own entry for the
+//! - a layer's content is its base (paint image with alpha = coverage, uniform fill with coverage 1, image
+//!   fill through its projection; other sources through the [`FillContext`], else skipped and reported) with its content effects on top, each blended by its own entry for the
 //!   channel; the content is blended over the stack with the layer's mode and strength;
 //! - groups: `Passthrough` blends the children straight into the stack, then fades the result
 //!   against the stack below by the group's strength; any other mode composites the children in
 //!   isolation (from the default, coverage 0), applies the group's effects, and blends that over the stack
 //!   with the group's mode;
 //! - generators and filters are evaluated by the implementations in the [`EffectRegistry`]; effects without
-//!   one, and kinds that are not computable yet, are left out and reported by [`Compositor::warnings`].
+//!   one, and kinds that are not computable yet, are left out and reported by [`Compositor::warnings`];
+//! - fills are laid on by their projection ([`crate::projection`]); sources other than uniform values and
+//!   images, and projections that need the mesh, are evaluated through the [`FillContext`].
 //!
 //! Layers blend in the channel's working space (see [`super::working_space`]): sRGB channels in linear
 //! light. The output's RGB is the channel value in its stored encoding, alpha the accumulated coverage.
@@ -30,12 +32,15 @@ use super::working_space::{SpaceConverter, WorkingSpace};
 use pass::{Pass, Scratch, affects};
 
 mod content;
+mod fill_context;
+mod fill_eval;
 mod mask_eval;
 mod pass;
 mod preview;
 mod procedural;
 mod warnings;
 use crate::tex::Tex;
+pub use fill_context::{ChainedSources, FillContext, FillRequest, FillSources, NO_FILL_CONTEXT, NoFillSources};
 pub use warnings::CompositeWarning;
 
 /// Composites the layer stack of one texture set. Cheap to create; borrows the set.
@@ -43,17 +48,25 @@ pub use warnings::CompositeWarning;
 pub struct Compositor<'a> {
     set: &'a TextureSet,
     effects: &'a EffectRegistry,
+    fills: &'a FillContext<'a>,
 }
 
 impl<'a> Compositor<'a> {
-    /// A compositor without generator or filter implementations (they are all not computable).
+    /// A compositor without generator or filter implementations (they are all not computable) and without a
+    /// fill context (uniform and texture-space/UV image fills only).
     pub fn new(set: &'a TextureSet) -> Compositor<'a> {
-        Compositor { set, effects: &EMPTY_REGISTRY }
+        Compositor { set, effects: &EMPTY_REGISTRY, fills: &NO_FILL_CONTEXT }
     }
 
     /// A compositor that evaluates generators and filters through `effects`.
     pub fn with_effects(set: &'a TextureSet, effects: &'a EffectRegistry) -> Compositor<'a> {
-        Compositor { set, effects }
+        Compositor { set, effects, fills: &NO_FILL_CONTEXT }
+    }
+
+    /// Builder: evaluates fills with `fills` (surface map, scene frame, source evaluators).
+    pub fn with_fills(mut self, fills: &'a FillContext<'a>) -> Compositor<'a> {
+        self.fills = fills;
+        self
     }
 
     /// Composites `channel` over the pixel rectangle `r` into `out` (`r.area()` pixels, row by row).
@@ -158,12 +171,11 @@ impl<'a> Compositor<'a> {
                 }
             }
             LayerKind::Fill(f) => {
-                let Some(v) = f.uniform_value(channel) else {
+                let Some(top) = self.fill_top(f, pass) else {
                     return;
                 };
-                let top = pass.space.to_working([v[0], v[1], v[2], 1.0]);
                 for (i, a) in acc.iter_mut().enumerate() {
-                    *a = mode.mix(*a, top, weights.at(i));
+                    *a = mode.mix(*a, top.at(i), weights.at(i));
                 }
             }
             LayerKind::Group(children) => {
@@ -194,3 +206,5 @@ impl<'a> Compositor<'a> {
 mod tests;
 #[cfg(test)]
 mod tests_effects;
+#[cfg(test)]
+mod tests_fills;

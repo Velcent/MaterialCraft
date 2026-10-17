@@ -59,6 +59,10 @@ pub fn composite_warning(set: &TextureSet, warning: &CompositeWarning) -> Entry 
         }
         CompositeWarning::GroupEffectsSkipped { .. } => "effects on a pass-through group are not applied".to_owned(),
         CompositeWarning::GeometryMaskIgnored { .. } => "its geometry mask is not applied yet".to_owned(),
+        CompositeWarning::FillNeedsMesh { effect, mode, .. } => {
+            format!("{} uses a {mode} projection, which needs the mesh, and is left out", fill_name(*effect))
+        }
+        CompositeWarning::ProjectionNotComputable { effect, reason, .. } => format!("{} is left out: {reason}", fill_name(*effect)),
     };
     let text = format!("{} / {layer}: {what}.", set.name);
     Entry::new(Level::Warning, Area::Checks, text).with_target(Target::Layer { texture_set: set.id.clone(), layer: layer_id.to_owned() })
@@ -71,7 +75,17 @@ fn layer_of(w: &CompositeWarning) -> &str {
         | CompositeWarning::ImageSizeMismatch { layer }
         | CompositeWarning::EffectNotComputable { layer, .. }
         | CompositeWarning::GroupEffectsSkipped { layer }
-        | CompositeWarning::GeometryMaskIgnored { layer } => layer,
+        | CompositeWarning::GeometryMaskIgnored { layer }
+        | CompositeWarning::FillNeedsMesh { layer, .. }
+        | CompositeWarning::ProjectionNotComputable { layer, .. } => layer,
+    }
+}
+
+/// "its fill" or "content effect n's fill".
+fn fill_name(effect: Option<usize>) -> String {
+    match effect {
+        None => "its fill".to_owned(),
+        Some(i) => format!("the fill of content effect {}", i.saturating_add(1)),
     }
 }
 

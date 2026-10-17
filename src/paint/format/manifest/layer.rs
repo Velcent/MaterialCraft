@@ -1,15 +1,16 @@
 //! Layers: `{"id", "name", "kind", "visible", "opacity", "blend", "mask", "geometry_mask", …}` plus `images`
 //! and `strokes` (paint), `fill` (fill) or `children` (group), and `effects` (the content effects, since 0.3).
 
-use super::extras::{Extras, loc};
+use super::extras::loc;
 use super::fields::{Obj, as_f32, num, num4};
-use super::{ReadCtx, WriteCtx, blend, effect, effect_mask, geometry_mask, image_ref, strokes};
+use super::{ReadCtx, WriteCtx, blend, effect, effect_mask, geometry_mask, image_ref, projection, strokes};
 use crate::json::Value;
 use crate::paint::format::FormatError;
 use crate::paint::format::slot::ImageSlot;
 use crate::paint::format::strokes::StrokeSlot;
 use crate::paint::stroke::StrokeOwner;
-use crate::paint::{Channel, ChannelSpec, ColorSpace, Fill, FillSource, Layer, LayerImage, LayerKind, PaintContent};
+use crate::paint::{Channel, ChannelSpec, ColorSpace, Fill, FillImageRef, FillSource, ImageFill, Layer, LayerImage, LayerKind, PaintContent};
+use crate::projection::Projection;
 
 pub use blend::channel;
 
@@ -63,7 +64,8 @@ fn write(l: &Layer, set: &SetScope, ctx: &WriteCtx) -> Value {
             strokes::write(&StrokeSlot { set: set.index, layer: l.id.clone(), owner: StrokeOwner::Paint }, ctx, &mut v);
         }
         LayerKind::Fill(f) => {
-            v.insert("fill", write_fill(f, &format!("{here}/fill"), ctx.extras));
+            let at = FillAt { set, layer: &l.id, effect: None, here: format!("{here}/fill") };
+            v.insert("fill", write_fill(f, &at, ctx));
         }
         LayerKind::Group(children) => {
             v.insert("children", write_all(children, set, ctx));
@@ -76,22 +78,50 @@ fn write(l: &Layer, set: &SetScope, ctx: &WriteCtx) -> Value {
     v
 }
 
-/// A fill object: `{"values"}` or `{"material", "params"}`.
-pub fn write_fill(f: &Fill, here: &str, extras: &Extras) -> Value {
-    let mut v = match &f.source {
-        FillSource::Uniform(values) => {
-            let mut obj = Value::object();
-            for (c, val) in values {
-                obj.insert(c.id(), num4(*val));
-            }
-            Value::object().with("values", obj)
+/// Where a fill object sits: its layer, and the content effect it belongs to (`None`: the layer's own fill).
+pub struct FillAt<'a> {
+    pub set: &'a SetScope<'a>,
+    pub layer: &'a str,
+    pub effect: Option<usize>,
+    /// Extras location of the fill object.
+    pub here: String,
+}
+
+impl FillAt<'_> {
+    fn slot(&self, channel: Channel) -> ImageSlot {
+        ImageSlot::Fill { set: self.set.index, layer: self.layer.to_string(), image: FillImageRef { effect: self.effect, channel } }
+    }
+}
+
+/// A fill object: `{"values"}`, `{"material", "params"}` or `{"images", "values"}`, plus `"projection"` when it is
+/// not the default.
+pub fn write_fill(f: &Fill, at: &FillAt, ctx: &WriteCtx) -> Value {
+    let values = |list: &[(Channel, [f32; 4])]| {
+        let mut obj = Value::object();
+        for (c, val) in list {
+            obj.insert(c.id(), num4(*val));
         }
+        obj
+    };
+    let mut v = match &f.source {
+        FillSource::Uniform(list) => Value::object().with("values", values(list)),
         FillSource::Material { path, params } => {
             let p = params.iter().map(|(k, v)| (k.clone(), Value::from(v.as_str()))).collect();
             Value::object().with("material", path.as_str()).with("params", Value::Object(p))
         }
+        FillSource::Image(fill) => {
+            let mut images = Value::object();
+            for (c, img) in fill.images() {
+                let path = ctx.plan.path(&at.slot(c)).unwrap_or_default();
+                images.insert(c.id(), image_ref::write(path, img.image(), at.set.color_space(c), &loc(&at.here, "images", &c.id()), ctx.extras));
+            }
+            Value::object().with("images", images).with("values", values(fill.values()))
+        }
     };
-    extras.inject(here, &mut v);
+    if let Some(p) = projection::write(&f.projection, &format!("{}/projection", at.here), ctx.extras) {
+        v.insert("projection", p);
+    }
+    ctx.extras.inject(&at.here, &mut v);
     v
 }
 
@@ -132,7 +162,8 @@ fn read(v: &Value, at: String, set: &SetScope, ctx: &mut ReadCtx) -> Result<Laye
             LayerKind::Paint(content)
         }
         "fill" => {
-            let f = read_fill(o.req("fill")?, o.path("fill"), &format!("{here}/fill"), ctx)?;
+            let at = FillAt { set, layer: &id, effect: None, here: format!("{here}/fill") };
+            let f = read_fill(o.req("fill")?, o.path("fill"), &at, ctx)?;
             LayerKind::Fill(f)
         }
         "group" => {
@@ -147,9 +178,9 @@ fn read(v: &Value, at: String, set: &SetScope, ctx: &mut ReadCtx) -> Result<Laye
     Ok(layer)
 }
 
-/// Reads a fill object (`at` is its JSON path, `here` its extras location).
-pub fn read_fill(v: &Value, at: String, here: &str, ctx: &mut ReadCtx) -> Result<Fill, FormatError> {
-    let mut o = Obj::new(v, at)?;
+/// Reads a fill object (`json` is its JSON path).
+pub fn read_fill(v: &Value, json: String, at: &FillAt, ctx: &mut ReadCtx) -> Result<Fill, FormatError> {
+    let mut o = Obj::new(v, json)?;
     let source = match o.opt_str("material")? {
         Some(path) => {
             let mut params = Vec::new();
@@ -167,9 +198,37 @@ pub fn read_fill(v: &Value, at: String, here: &str, ctx: &mut ReadCtx) -> Result
                 let nums = nums.ok_or_else(|| o.error("values", format!("{k}: expected 4 numbers")))?;
                 values.push((c, [nums[0], nums[1], nums[2], nums[3]]));
             }
-            FillSource::Uniform(values)
+            match o.opt("images") {
+                Some(_) => FillSource::Image(read_fill_images(&mut o, values, at, ctx)?),
+                None => FillSource::Uniform(values),
+            }
         }
     };
-    ctx.extras.record(here, &o);
-    Ok(Fill { source })
+    let projection = match o.opt("projection") {
+        Some(p) => projection::read(p, o.path("projection"), &format!("{}/projection", at.here), ctx)?,
+        None => Projection::default(),
+    };
+    ctx.extras.record(&at.here, &o);
+    Ok(Fill { source, projection })
+}
+
+/// The `images` of an image fill, with `values` for the other channels.
+fn read_fill_images(o: &mut Obj, values: Vec<(Channel, [f32; 4])>, at: &FillAt, ctx: &mut ReadCtx) -> Result<ImageFill, FormatError> {
+    let mut fill = ImageFill::default();
+    for (c, v) in values {
+        fill.set_value(c, v);
+    }
+    for (key, r) in o.entries("images")? {
+        let c = channel(key, &o.path("images"))?;
+        let rat = format!("{}.{key}", o.path("images"));
+        if fill.value(c).is_some() {
+            return Err(FormatError::manifest(rat, "channel has both an image and a value"));
+        }
+        let (img, cs) = image_ref::read(r, rat.clone(), &loc(&at.here, "images", key), at.slot(c), ctx)?;
+        if cs != at.set.color_space(c) {
+            return Err(FormatError::manifest(rat, "colour space differs from the channel's"));
+        }
+        fill.set_image(c, img);
+    }
+    Ok(fill)
 }

@@ -27,7 +27,8 @@ pub struct ImagePlan<'d> {
 impl<'d> ImagePlan<'d> {
     /// Names every image: `textures/<set>/layers/<layer>/<channel>.<ext>`,
     /// `textures/<set>/layers/<layer>/effect-<index>-<channel>.<ext>`,
-    /// `textures/<set>/layers/<layer>/mask-<index>.<ext>` and `textures/<set>/baked/<kind>.<ext>`.
+    /// `textures/<set>/layers/<layer>/mask-<index>.<ext>`, fill images `textures/<set>/layers/<layer>/fill-<channel>.<ext>`
+    /// and `…/effect-<index>-fill-<channel>.<ext>`, and `textures/<set>/baked/<kind>.<ext>`.
     pub fn new(doc: &'d Document) -> ImagePlan<'d> {
         let mut plan = ImagePlan { entries: Vec::new(), index: HashMap::new(), layer_dirs: HashMap::new() };
         let mut set_dirs = Names::default();
@@ -44,6 +45,13 @@ impl<'d> ImagePlan<'d> {
                     };
                     plan.push(ImageSlot::Layer { set: s, layer: layer.id.clone(), image }, format!("{ldir}/{stem}"), img);
                 }
+                for (image, img) in layer.fill_images() {
+                    let stem = match image.effect {
+                        None => format!("fill-{}", image.channel.id()),
+                        Some(effect) => format!("effect-{effect}-fill-{}", image.channel.id()),
+                    };
+                    plan.push(ImageSlot::Fill { set: s, layer: layer.id.clone(), image }, format!("{ldir}/{stem}"), img);
+                }
                 plan.layer_dirs.insert((s, layer.id.clone()), ldir);
             }
             let mut baked_names = Names::default();
@@ -57,7 +65,8 @@ impl<'d> ImagePlan<'d> {
 
     fn push(&mut self, slot: ImageSlot, stem: String, img: &'d TiledImage) {
         let path = format!("{stem}.{}", Encoding::for_format(img.format()).extension());
-        // Stems cannot collide: channel ids never start with "mask-" or "effect-".
+        // Stems cannot collide: channel ids never start with "mask-", "effect-" or "fill-", and a content effect is
+        // either paint ("effect-<i>-<channel>") or fill ("effect-<i>-fill-<channel>").
         self.index.insert(slot.clone(), self.entries.len());
         self.entries.push((slot, path, img));
     }

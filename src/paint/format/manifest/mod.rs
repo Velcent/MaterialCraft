@@ -18,6 +18,7 @@ pub mod fields;
 pub mod geometry_mask;
 pub mod image_ref;
 pub mod layer;
+pub mod projection;
 pub mod report;
 pub mod strokes;
 pub mod texture_set;

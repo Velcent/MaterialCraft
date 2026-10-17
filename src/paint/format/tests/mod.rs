@@ -7,6 +7,7 @@ mod effect_fixtures;
 mod effects;
 mod fixtures;
 mod manifest_errors;
+mod projections;
 mod round_trip;
 mod strokes;
 mod unknown_fields;

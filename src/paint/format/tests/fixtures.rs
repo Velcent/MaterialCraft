@@ -103,12 +103,10 @@ fn body_set() -> TextureSet {
         0.25,
     );
     fill.opacity = 0.37;
-    let material = Fill {
-        source: FillSource::Material {
-            path: "materials/rust.mca".into(),
-            params: vec![("Amount".into(), "0.4".into()), ("Farbe \"äöü\"".into(), "#ff0000".into())],
-        },
-    };
+    let material = Fill::new(FillSource::Material {
+        path: "materials/rust.mca".into(),
+        params: vec![("Amount".into(), "0.4".into()), ("Farbe \"äöü\"".into(), "#ff0000".into())],
+    });
     let mut rust = Layer::new("rust", "Rust", LayerKind::Fill(material)).with_blend(Channel::Metallic, BlendMode::Overlay, 1.0).with_mask(noisy(
         w,
         h,

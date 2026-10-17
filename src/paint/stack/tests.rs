@@ -77,7 +77,7 @@ fn mask_hidden_opacity_and_missing_entry() {
 fn uniform_fill_covers_everything_and_material_fill_warns() {
     let mut s = set(4, 4);
     s.layers.push(fill("base", 0.8, BlendMode::Normal));
-    let material = Fill { source: FillSource::Material { path: "materials/rust.mca".into(), params: vec![] } };
+    let material = Fill::new(FillSource::Material { path: "materials/rust.mca".into(), params: vec![] });
     s.layers.push(Layer::new("rust", "Rust", LayerKind::Fill(material)).with_blend(R, BlendMode::Normal, 1.0));
     assert_eq!(at(&s, 3, 3), [0.8, 0.8, 0.8, 1.0]);
     let (_, warnings) = Compositor::new(&s).composite_tex(R);

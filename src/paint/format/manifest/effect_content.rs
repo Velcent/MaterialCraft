@@ -6,7 +6,7 @@ use super::blend;
 use super::effect::{DomainCodec, EffectAt};
 use super::extras::loc;
 use super::fields::Obj;
-use super::layer::{read_fill, write_fill};
+use super::layer::{FillAt, read_fill, write_fill};
 use super::{ReadCtx, WriteCtx, image_ref, strokes};
 use crate::json::Value;
 use crate::paint::effect::Content;
@@ -15,6 +15,11 @@ use crate::paint::format::slot::ImageSlot;
 use crate::paint::format::strokes::StrokeSlot;
 use crate::paint::stroke::StrokeOwner;
 use crate::paint::{ChannelBlend, Fill, LayerImage, PaintContent};
+
+/// The fill object of the effect at `at`.
+fn fill_at<'a>(at: &EffectAt<'a>) -> FillAt<'a> {
+    FillAt { set: at.set, layer: at.layer, effect: Some(at.index), here: format!("{}/fill", at.here) }
+}
 
 fn slot(at: &EffectAt, channel: crate::paint::Channel) -> ImageSlot {
     ImageSlot::Layer { set: at.set.index, layer: at.layer.to_string(), image: LayerImage::Effect { effect: at.index, channel } }
@@ -63,12 +68,12 @@ impl DomainCodec for Content {
     }
 
     fn write_values(f: &Fill, at: &EffectAt, ctx: &WriteCtx, v: &mut Value) {
-        v.insert("fill", write_fill(f, &format!("{}/fill", at.here), ctx.extras));
+        v.insert("fill", write_fill(f, &fill_at(at), ctx));
     }
 
     fn read_values(o: &mut Obj, at: &EffectAt, ctx: &mut ReadCtx) -> Result<Fill, FormatError> {
         match o.opt("fill") {
-            Some(f) => read_fill(f, o.path("fill"), &format!("{}/fill", at.here), ctx),
+            Some(f) => read_fill(f, o.path("fill"), &fill_at(at), ctx),
             None => Ok(Fill::uniform(Vec::new())),
         }
     }

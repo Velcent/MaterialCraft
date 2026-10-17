@@ -9,10 +9,12 @@
 use super::blend::BlendMode;
 use super::channel::Channel;
 use super::effect::{ContentEffect, EffectKind};
+use super::fill_image::ImageFill;
 use super::geometry_mask::GeometryMask;
 use super::image::TiledImage;
 use super::mask::Mask;
 use super::stroke::StrokeData;
+use crate::projection::Projection;
 
 /// How a layer (or a content effect) affects one channel. Without an entry for a channel it does not affect it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -62,24 +64,40 @@ pub enum FillSource {
     /// A procedural material, evaluated outside the core document (path inside the document, e.g.
     /// `materials/rust.mca`, plus parameter overrides as strings).
     Material { path: String, params: Vec<(String, String)> },
+    /// Images per channel (any size, sampled through the fill's projection) and constants for the other channels.
+    Image(ImageFill),
 }
 
+/// A fill: its source and how the source is laid onto the texture set. Uniform values ignore the projection.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fill {
     pub source: FillSource,
+    pub projection: Projection,
 }
 
 impl Fill {
-    /// A uniform fill.
-    pub fn uniform(values: Vec<(Channel, [f32; 4])>) -> Fill {
-        Fill { source: FillSource::Uniform(values) }
+    /// A fill from `source` in texture space.
+    pub fn new(source: FillSource) -> Fill {
+        Fill { source, projection: Projection::default() }
     }
 
-    /// The channels a uniform fill sets (none for a material).
+    /// A uniform fill.
+    pub fn uniform(values: Vec<(Channel, [f32; 4])>) -> Fill {
+        Fill::new(FillSource::Uniform(values))
+    }
+
+    /// Builder: the fill with `projection`.
+    pub fn with_projection(mut self, projection: Projection) -> Fill {
+        self.projection = projection;
+        self
+    }
+
+    /// The channels the fill sets (none for a material).
     pub fn channels(&self) -> Vec<Channel> {
         match &self.source {
             FillSource::Uniform(v) => v.iter().map(|(c, _)| *c).collect(),
             FillSource::Material { .. } => Vec::new(),
+            FillSource::Image(i) => i.channels(),
         }
     }
 
@@ -87,7 +105,7 @@ impl Fill {
     pub fn uniform_value(&self, channel: Channel) -> Option<[f32; 4]> {
         match &self.source {
             FillSource::Uniform(v) => v.iter().find(|(c, _)| *c == channel).map(|(_, v)| *v),
-            FillSource::Material { .. } => None,
+            FillSource::Material { .. } | FillSource::Image(_) => None,
         }
     }
 }

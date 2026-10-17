@@ -36,7 +36,7 @@ pub fn effects_layer(w: u32, h: u32) -> Layer {
             1.0,
         ),
         rough(EffectKind::Fill(Fill::uniform(vec![(Channel::Roughness, [0.9, 0.9, 0.9, 1.0])]))),
-        rough(EffectKind::Fill(Fill { source: FillSource::Material { path: "materials/rust.mca".into(), params: vec![("Amount".into(), "1".into())] } })),
+        rough(EffectKind::Fill(Fill::new(FillSource::Material { path: "materials/rust.mca".into(), params: vec![("Amount".into(), "1".into())] }))),
         rough(EffectKind::Generator(procedural("dirt"))),
         rough(EffectKind::Filter(procedural("blur"))),
         disabled,

@@ -2,11 +2,12 @@
 //! with its content effects on top, in working space, straight RGBA with alpha = coverage.
 
 use super::Compositor;
+use super::fill_eval::FillTop;
 use super::pass::{Pass, Scratch, stack_mix};
 use super::procedural::{FilterRun, generate};
 use crate::paint::blend::BlendMode;
 use crate::paint::effect::{ContentEffect, EffectKind, EvalTarget};
-use crate::paint::layer::{Fill, FillSource, Layer, LayerKind};
+use crate::paint::layer::{FillSource, Layer, LayerKind};
 use crate::paint::validate::MAX_GROUP_DEPTH;
 
 impl Compositor<'_> {
@@ -23,7 +24,7 @@ impl Compositor<'_> {
     /// Whether the compositor can evaluate the effect (built in, or a registered generator/filter).
     pub(super) fn content_effect_computable(&self, e: &ContentEffect) -> bool {
         match &e.kind {
-            EffectKind::Fill(f) => matches!(f.source, FillSource::Uniform(_)),
+            EffectKind::Fill(f) => self.fill_computable(f).is_ok(),
             EffectKind::PolygonFill(_) => false,
             k if k.is_builtin() => true,
             EffectKind::Generator(p) => self.effects.generator(&p.id).is_some(),
@@ -54,11 +55,15 @@ impl Compositor<'_> {
                 img.read_region(pass.r, c);
                 pass.space.to_working_all(c);
             }
-            LayerKind::Fill(f) => {
-                if let Some(v) = uniform(f, pass) {
-                    c.fill(v);
+            LayerKind::Fill(f) => match self.fill_top(f, pass) {
+                Some(FillTop::Constant(v)) => c.fill(v),
+                Some(FillTop::Pixels(px)) => {
+                    for (c, p) in c.iter_mut().zip(px) {
+                        *c = p;
+                    }
                 }
-            }
+                None => {}
+            },
             LayerKind::Group(children) => {
                 if depth < MAX_GROUP_DEPTH {
                     self.apply_layers(children, pass, c, depth + 1, &mut Scratch::default());
@@ -80,8 +85,8 @@ impl Compositor<'_> {
                 pass.space.to_working_all(&mut px);
                 px
             }
-            EffectKind::Fill(f) => match uniform(f, pass) {
-                Some(v) => vec![v; pass.r.area()],
+            EffectKind::Fill(f) => match self.fill_top(f, pass) {
+                Some(top) => top.into_pixels(pass.r.area()),
                 None => return,
             },
             EffectKind::Generator(p) => match generate(self, p, EvalTarget::Channel(pass.channel), pass.r) {
@@ -108,14 +113,11 @@ impl Compositor<'_> {
 fn is_noop(e: &ContentEffect, pass: &Pass) -> bool {
     match &e.kind {
         EffectKind::Paint(p) => p.image(pass.channel).is_none(),
-        EffectKind::Fill(f) => f.uniform_value(pass.channel).is_none(),
+        EffectKind::Fill(f) => match &f.source {
+            FillSource::Uniform(_) | FillSource::Image(_) => !f.channels().contains(&pass.channel),
+            FillSource::Material { .. } => false,
+        },
         EffectKind::Anchor(_) => true,
         _ => false,
     }
-}
-
-/// The fill's value for the pass's channel in working space with coverage 1.
-fn uniform(f: &Fill, pass: &Pass) -> Option<[f32; 4]> {
-    let v = f.uniform_value(pass.channel)?;
-    Some(pass.space.to_working([v[0], v[1], v[2], 1.0]))
 }

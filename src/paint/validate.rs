@@ -3,7 +3,7 @@
 use super::channel::Channel;
 use super::doc::Document;
 use super::image::MAX_DIMENSION;
-use super::layer::{FillSource, Layer, LayerImage, LayerKind};
+use super::layer::{Layer, LayerImage, LayerKind};
 use super::texture_set::TextureSet;
 use std::fmt;
 
@@ -184,11 +184,7 @@ fn check_layer(set: &TextureSet, layer: &Layer, out: &mut Vec<DocError>) {
     let mut channels: Vec<Vec<Channel>> = vec![layer.blend.iter().map(|b| b.channel).collect()];
     match &layer.kind {
         LayerKind::Paint(p) => channels.push(p.images.iter().map(|(c, _)| *c).collect()),
-        LayerKind::Fill(f) => {
-            if let FillSource::Uniform(v) = &f.source {
-                channels.push(v.iter().map(|(c, _)| *c).collect());
-            }
-        }
+        LayerKind::Fill(f) => channels.push(f.channels()),
         LayerKind::Group(_) => {}
     }
     check_channel_lists(set, layer, &channels, out);
