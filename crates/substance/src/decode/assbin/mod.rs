@@ -15,6 +15,7 @@ mod material;
 mod mesh;
 mod mesh_block;
 mod node;
+mod normalization;
 mod part;
 mod repair;
 mod scene;
@@ -30,6 +31,7 @@ pub use geometry::AssbinGeometry;
 pub use header::{AssbinHeader, HEADER_LEN};
 pub use material::MaterialSummary;
 pub use mesh::MeshSummary;
+pub use normalization::Normalization;
 
 use crate::decode::DecodeError;
 use scene::{scene_bytes, SceneBlocks};

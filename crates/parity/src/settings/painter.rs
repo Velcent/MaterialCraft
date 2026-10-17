@@ -1,0 +1,159 @@
+//! [`PainterBaking`]: Painter's baking settings from `/baking/baking.ini`, read with the generic object walker
+//! of the substance crate (the file is Painter's object serialisation, not an `.ini`).
+//!
+//! Layout (Observed on VASE, format 20): root `BakingMaterials` with `materials[]` (`BakingMaterial`:
+//! `materialUID` = the `DataMaterial` uid in `document.bin`, `enabled`, `materialParameters` with
+//! `commonParameters`/`detailParameters`, `definitions[]` = one `BakingDefinition { usage, enabled,
+//! parameters }` per baker), where parameters are references into `tweakLists[]` (`BakingTweakList { bakerId,
+//! tweaks[] }`, each tweak `DataTweak* { identifier, value }`). `materialTemplate` holds the same inline.
+//! Older files (format 12, Painter 2020) differ; [`super::reader`] reads both.
+
+use super::reader::read;
+use materialcraft_substance::decode::document::Scalar;
+use materialcraft_substance::decode::DecodeError;
+use materialcraft_substance::model::raw::RawObject;
+use materialcraft_substance::model::RawTree;
+
+/// Where the settings live inside a `.spp`.
+pub const BAKING_INI: &str = "/baking/baking.ini";
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TweakValue {
+    Bool(bool),
+    Int(i64),
+    Int2([i32; 2]),
+    Float(f32),
+    Text(String),
+    Other(String),
+}
+
+impl TweakValue {
+    fn from_scalar(s: &Scalar) -> TweakValue {
+        match s {
+            Scalar::Bool(b) => TweakValue::Bool(*b),
+            Scalar::Int(v) => TweakValue::Int(i64::from(*v)),
+            Scalar::UInt(v) => TweakValue::Int(i64::from(*v)),
+            Scalar::IVec2(v) => TweakValue::Int2(*v),
+            Scalar::Float(v) => TweakValue::Float(*v),
+            Scalar::String(v) => TweakValue::Text(v.clone()),
+            other => TweakValue::Other(other.to_string()),
+        }
+    }
+
+    pub fn as_f32(&self) -> Option<f32> {
+        match self {
+            TweakValue::Float(v) => Some(*v),
+            TweakValue::Int(v) => Some(*v as f32),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for TweakValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TweakValue::Bool(v) => write!(f, "{v}"),
+            TweakValue::Int(v) => write!(f, "{v}"),
+            TweakValue::Int2(v) => write!(f, "{}x{}", v[0], v[1]),
+            TweakValue::Float(v) => write!(f, "{v}"),
+            TweakValue::Text(v) => write!(f, "{v:?}"),
+            TweakValue::Other(v) => f.write_str(v),
+        }
+    }
+}
+
+/// One `BakingTweakList`: the parameters of one baker (or the common/detail parameters).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TweakList {
+    pub baker: String,
+    pub tweaks: Vec<(String, TweakValue)>,
+}
+
+impl TweakList {
+    /// A `BakingTweakList` object.
+    pub(super) fn from_object(o: &RawObject) -> TweakList {
+        TweakList::from_tweaks(o.string("bakerId").unwrap_or_default(), o.objects("tweaks"))
+    }
+
+    /// `DataTweak*` objects of the baker `baker`.
+    pub(super) fn from_tweaks<'a>(baker: &str, tweaks: impl Iterator<Item = &'a RawObject>) -> TweakList {
+        TweakList {
+            baker: baker.to_string(),
+            tweaks: tweaks
+                .filter_map(|t| {
+                    Some((
+                        t.string("identifier")?.to_string(),
+                        TweakValue::from_scalar(t.scalar("value")?),
+                    ))
+                })
+                .collect(),
+        }
+    }
+
+    pub fn get(&self, id: &str) -> Option<&TweakValue> {
+        self.tweaks.iter().find(|(k, _)| k == id).map(|(_, v)| v)
+    }
+
+    pub fn f32(&self, id: &str) -> Option<f32> {
+        self.get(id)?.as_f32()
+    }
+
+    pub fn bool(&self, id: &str) -> Option<bool> {
+        match self.get(id)? {
+            TweakValue::Bool(b) => Some(*b),
+            TweakValue::Int(v) => Some(*v != 0),
+            _ => None,
+        }
+    }
+
+    pub fn text(&self, id: &str) -> Option<&str> {
+        match self.get(id)? {
+            TweakValue::Text(t) => Some(t),
+            _ => None,
+        }
+    }
+}
+
+/// One baker of a material: its map usage (Painter's `additionalMaps` usage; 6 = tangent normal).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BakerSettings {
+    pub usage: Option<u64>,
+    pub enabled: bool,
+    pub params: TweakList,
+}
+
+/// The settings Painter baked one texture set with.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct MaterialBaking {
+    /// `DataMaterial` uid (`None` for the template).
+    pub material_uid: Option<u64>,
+    pub enabled: bool,
+    pub common: TweakList,
+    pub detail: TweakList,
+    pub bakers: Vec<BakerSettings>,
+}
+
+impl MaterialBaking {
+    pub fn baker(&self, usage: u64) -> Option<&BakerSettings> {
+        self.bakers.iter().find(|b| b.usage == Some(usage))
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PainterBaking {
+    pub materials: Vec<MaterialBaking>,
+    pub template: Option<MaterialBaking>,
+}
+
+impl PainterBaking {
+    pub fn parse(data: &[u8]) -> Result<PainterBaking, DecodeError> {
+        let tree = RawTree::parse(data)?;
+        Ok(tree.root.as_ref().map(read).unwrap_or_default())
+    }
+
+    /// The material's own settings, else the template's.
+    pub fn for_material(&self, uid: Option<u64>) -> Option<&MaterialBaking> {
+        uid.and_then(|u| self.materials.iter().find(|m| m.material_uid == Some(u)))
+            .or(self.template.as_ref())
+    }
+}

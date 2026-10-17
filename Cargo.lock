@@ -1576,6 +1576,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "materialcraft-parity"
+version = "0.1.0"
+dependencies = [
+ "materialcraft",
+ "materialcraft-substance",
+]
+
+[[package]]
 name = "materialcraft-substance"
 version = "0.1.0"
 dependencies = [

@@ -22,6 +22,7 @@ pub(crate) mod set_layers;
 pub mod source_format;
 mod texture_sets;
 
+pub use baked_maps::{BakedImage, BakedMaps, BakedSource};
 pub use error::{ImportError, PartError};
 pub use foreign::FOREIGN_ROOT;
 pub use importer::{import_spp, Importer};

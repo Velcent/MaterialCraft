@@ -10,6 +10,7 @@ mod table;
 mod uv_mask;
 
 pub use exports::{ExportFinder, ExportMap};
+pub use heatmap::write_heatmap;
 pub use metrics::{Diff, Fit, TOLERANCE};
 pub use table::{CompareRow, CompareTable};
 pub use uv_mask::UvMask;

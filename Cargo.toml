@@ -6,7 +6,7 @@ description = "Procedural, node-based material authoring engine in pure Rust"
 license = "MIT"
 
 [workspace]
-members = ["crates/substance"]
+members = ["crates/substance", "crates/parity"]
 
 [features]
 default = []

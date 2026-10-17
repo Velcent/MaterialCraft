@@ -1,0 +1,15 @@
+[package]
+name = "materialcraft-parity"
+version = "0.1.0"
+edition = "2021"
+description = "Measures how close MaterialCraft's own implementations get to Substance Painter's results on your projects"
+license = "MIT"
+publish = false
+
+[dependencies]
+materialcraft = { path = "../.." }
+materialcraft-substance = { path = "../substance" }
+
+[[bin]]
+name = "mcparity"
+path = "src/main.rs"
