@@ -19,6 +19,8 @@ pub enum ThumbSource {
     Image(PathBuf),
     /// A material graph, rendered small.
     Material(PathBuf),
+    /// A smart material or smart mask file holding its own thumbnail.
+    Fragment(PathBuf),
 }
 
 /// One asset as the tray shows it.
@@ -85,6 +87,7 @@ fn thumb_source(dir: Option<&std::path::Path>, asset: &Asset) -> ThumbSource {
     match &asset.thumbnail {
         Thumbnail::File(rel) => ThumbSource::Image(dir.join(rel)),
         Thumbnail::OwnImage => ThumbSource::Image(dir.join(&asset.path)),
+        Thumbnail::Embedded => ThumbSource::Fragment(dir.join(&asset.path)),
         Thumbnail::None if asset.format == Format::Graph => ThumbSource::Material(dir.join(&asset.path)),
         Thumbnail::None => ThumbSource::None,
     }

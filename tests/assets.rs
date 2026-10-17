@@ -207,6 +207,38 @@ fn malformed_sidecars_are_reported_and_never_fatal() {
 }
 
 #[test]
+fn fragments_are_indexed_from_their_own_header() {
+    use materialcraft::paint::format::fragment;
+    use materialcraft::paint::{BakedKind, Channel, Fragment, Mask, TextureSet};
+    let dir = scratch("fragments");
+    let set = TextureSet::new("s", "S", (8, 8)).with_channel(Channel::BaseColor);
+    let mut mask = Fragment::smart_mask("Worn edges", &set, Mask::new(0.0));
+    mask.needs = vec![BakedKind::Curvature, BakedKind::AmbientOcclusion];
+    fs::create_dir_all(dir.join("smart-materials")).unwrap();
+    // A smart mask filed under smart materials is still a smart mask: the file says what it is.
+    fragment::save_path(&mask, &dir.join("smart-materials/edges.mcfrag")).unwrap();
+    fragment::save_path(&Fragment::smart_material("Plain", &set, vec![]), &dir.join("plain.mcfrag")).unwrap();
+    write(&dir, "broken.mcfrag", "not a zip");
+    write(&dir, "plain.mcfrag.mcmeta", r#"{"name": "Renamed", "needs": ["thickness"]}"#);
+    let sink = Keep::default();
+    let lib = Library::with_roots([LibraryRoot::folder("u", "U", RootKind::User, &dir)], &sink);
+    let cat = lib.catalogue();
+    let get = |p: &str| cat.get(&RootId::new("u"), p).unwrap().clone();
+    let edges = get("smart-materials/edges.mcfrag");
+    assert_eq!((edges.usage, edges.format, edges.name.as_str()), (Usage::SmartMask, Format::Fragment, "Worn edges"));
+    assert_eq!(edges.needs, ["curvature", "ambient_occlusion"]);
+    assert_eq!(edges.thumbnail, Thumbnail::None, "a smart mask has no base colour to show");
+    let plain = get("plain.mcfrag");
+    assert_eq!((plain.usage, plain.name.as_str()), (Usage::SmartMaterial, "Renamed"));
+    assert_eq!(plain.needs, ["thickness"]);
+    assert_eq!(plain.thumbnail, Thumbnail::Embedded);
+    assert_eq!(get("broken.mcfrag").usage, Usage::SmartMaterial);
+    assert!(sink.take().iter().any(|e| e.level == Level::Warning && e.text.contains("fragment")));
+    assert_eq!(cat.find(&Search::text("usage:smart-mask")).len(), 1);
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn usage_comes_from_the_sidecar_then_the_folder_then_the_format() {
     let dir = scratch("usage");
     write(&dir, "Smart Masks/edges/wear.mca", "g");

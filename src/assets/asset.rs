@@ -16,6 +16,8 @@ pub enum Thumbnail {
     OwnImage,
     /// An image file, root-relative (`/`-separated).
     File(String),
+    /// The asset file holds its own thumbnail (a fragment's `thumbnail.png` entry).
+    Embedded,
 }
 
 /// An asset in a library.

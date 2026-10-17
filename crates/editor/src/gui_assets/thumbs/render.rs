@@ -1,11 +1,12 @@
 //! Making one thumbnail (on a worker thread): an image asset (or an asset's thumbnail file) decoded from PNG or
-//! OpenEXR and scaled down, or a material graph evaluated small through `material_fill` and shown on a lit ball
+//! OpenEXR and scaled down, a fragment's own thumbnail, or a material graph evaluated small through `material_fill` and shown on a lit ball
 //! by the software renderer (`render3d`).
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use materialcraft::material_fill::{MAX_GRAPH_BYTES, Material};
+use materialcraft::paint::format::fragment;
 use materialcraft::paint::working_space::linear_to_srgb;
 use materialcraft::render3d::{self, Maps, View};
 use materialcraft::tex::Tex;
@@ -60,6 +61,12 @@ pub fn material(path: &Path) -> Result<Tex, String> {
     };
     let view = View { tess: 48, relief: render3d::RELIEF_BUMP, ..View::default() };
     Ok(render3d::render(&maps, &view, THUMB_PX, THUMB_PX))
+}
+
+/// The thumbnail a smart material or smart mask file holds, scaled to fit [`THUMB_PX`].
+pub fn fragment(path: &Path) -> Result<Tex, String> {
+    let png = fragment::read_thumbnail_path(path).map_err(|e| e.to_string())?.ok_or("the file holds no thumbnail")?;
+    Ok(fit(&png::decode(&png)?, THUMB_PX))
 }
 
 fn read(path: &Path, limit: u64) -> Result<Vec<u8>, String> {
