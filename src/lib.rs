@@ -22,6 +22,7 @@ pub mod noise;
 pub mod ops;
 pub mod paint;
 pub mod png;
+pub mod projection;
 pub mod render3d;
 pub mod scatter;
 pub mod tex;
