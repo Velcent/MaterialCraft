@@ -223,10 +223,18 @@ impl fmt::Debug for TiledImage {
 }
 
 /// Equal when size, format and pixel bytes match (an unallocated tile equals an all-zero one).
-/// Dirty flags are ignored.
+/// Dirty flags are ignored. Images whose tiles are all shared with each other compare without reading pixels.
 impl PartialEq for TiledImage {
     fn eq(&self, other: &TiledImage) -> bool {
-        self.size() == other.size() && self.format == other.format && self.to_raw() == other.to_raw()
+        if self.size() != other.size() || self.format != other.format {
+            return false;
+        }
+        let shared = self.tiles.iter().zip(&other.tiles).all(|pair| match pair {
+            (None, None) => true,
+            (Some(a), Some(b)) => a.same(b),
+            _ => false,
+        });
+        shared || self.to_raw() == other.to_raw()
     }
 }
 
