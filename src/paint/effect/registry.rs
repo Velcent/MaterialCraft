@@ -61,8 +61,9 @@ pub struct FilterInput<'a> {
 
 /// Transforms what is below it in its stack.
 pub trait FilterKernel: Send + Sync {
-    /// How many texels beyond the output the kernel reads on each side (0 for per-texel filters).
-    fn radius(&self, _params: &[(String, String)]) -> u32 {
+    /// How many texels beyond the output the kernel reads on each side (0 for per-texel filters). The request
+    /// gives the parameters and the texture set (its resolution: kernels sized in UV units need it).
+    fn radius(&self, _request: &EvalRequest) -> u32 {
         0
     }
 

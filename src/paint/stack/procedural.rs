@@ -29,10 +29,10 @@ impl FilterRun<'_, '_> {
     pub fn run(&self, input: impl FnOnce(Rect) -> Vec<[f32; 4]>) -> Option<Vec<[f32; 4]>> {
         let kernel = self.compositor.effects.filter(&self.procedural.id)?;
         let params = &self.procedural.params;
-        let outer = grow(self.r, kernel.radius(params), self.compositor.set.resolution);
+        let request = EvalRequest { set: self.compositor.set, target: self.target, rect: self.r, params, stack: None, surface: self.compositor.fills.surface };
+        let outer = grow(self.r, kernel.radius(&request), self.compositor.set.resolution);
         let pixels = input(outer);
         let mut out = vec![[0.0; 4]; self.r.area()];
-        let request = EvalRequest { set: self.compositor.set, target: self.target, rect: self.r, params, stack: None, surface: self.compositor.fills.surface };
         kernel.apply(&request, &FilterInput { rect: outer, pixels: &pixels }, &mut out).ok()?;
         Some(out)
     }

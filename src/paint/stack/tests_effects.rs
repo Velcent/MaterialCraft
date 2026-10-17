@@ -47,7 +47,7 @@ impl GeneratorSource for Ramp {
 /// Each texel becomes its left neighbour (clamped): needs a radius of 1.
 struct ShiftRight;
 impl FilterKernel for ShiftRight {
-    fn radius(&self, _: &[(String, String)]) -> u32 {
+    fn radius(&self, _: &EvalRequest) -> u32 {
         1
     }
     fn apply(&self, request: &EvalRequest, input: &FilterInput, out: &mut [[f32; 4]]) -> Result<(), String> {
