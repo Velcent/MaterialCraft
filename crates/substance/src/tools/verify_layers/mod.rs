@@ -6,6 +6,7 @@
 
 mod fit;
 pub mod generator_cases;
+pub mod isolate;
 pub mod kinds;
 mod prepared;
 mod project_mesh;

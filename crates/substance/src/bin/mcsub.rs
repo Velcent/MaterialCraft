@@ -16,6 +16,10 @@
 //!                                                  compare with Painter's exported textures
 //!     mcsub verify-layers <file.spp> [--fit]       imported layer stacks against Painter's texture cache
 //!     mcsub verify-layers --all <folder> [--fit] [--jobs N]   the same for every .spp below the folder
+//!     mcsub isolate <file.spp|folder|list.txt> [--measure] [--cases] [--jobs N]
+//!                                                  isolated effect cases per effect id (procedural fills and
+//!                                                  filters measurable against the texture cache), see
+//!                                                  `tools::verify_layers::isolate`
 //!
 //! `convert`, `report`, `maps`, `compare` and `verify-layers` take `--plan <choices.json>` or
 //! `--procedurals keep|replace`: which Substance procedurals are replaced by MaterialCraft's generators
@@ -38,6 +42,8 @@ use materialcraft_substance::tools::analyze::Analysis;
 use materialcraft_substance::tools::model_text::ModelText;
 use materialcraft_substance::tools::parallel::CorpusPool;
 use materialcraft_substance::tools::report_text::ReportText;
+use materialcraft_substance::tools::verify_layers::isolate::IsolateOptions;
+use materialcraft_substance::tools::verify_layers::isolate::corpus::{CASE_HEADER, census_files};
 use materialcraft_substance::tools::verify_layers::{VerifyOptions, verify_path};
 use materialcraft_substance::tools::{compare, convert, maps, model_corpus};
 use materialcraft_substance::translate::replacements::{Choice, ProceduralPlan};
@@ -45,7 +51,7 @@ use materialcraft_substance::translate::{Cancel, import_spp_with};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: mcsub inspect|tree|doc|model|corpus|analyze|convert|report|maps|compare|verify-layers … (see the source header for details)";
+const USAGE: &str = "usage: mcsub inspect|tree|doc|model|corpus|analyze|convert|report|maps|compare|verify-layers|isolate … (see the source header for details)";
 
 /// Parsed command line: positional words, `--flag`s and `--diff <dir>`.
 struct Args {
@@ -239,9 +245,38 @@ fn run(args: Args) -> Result<(), String> {
             let result = verify_path(Path::new(path), options, args.pool(), &|p| eprintln!("{}", p.display()));
             print!("{result}");
         }
+        ["isolate", root] => {
+            let result = census_files(
+                &project_files(Path::new(root)),
+                args.has("--measure"),
+                &IsolateOptions::default(),
+                args.pool(),
+                &|p| eprintln!("{}", p.display()),
+            );
+            print!("{result}");
+            if args.has("--cases") {
+                println!("\n{CASE_HEADER}");
+                result.cases.iter().for_each(|line| println!("{line}"));
+            }
+        }
         _ => return Err(USAGE.into()),
     }
     Ok(())
+}
+
+/// A `.spp`, every `.spp` below a folder, or the paths listed one per line in a text file.
+fn project_files(root: &Path) -> Vec<PathBuf> {
+    match root.extension().and_then(|e| e.to_str()) {
+        Some("txt") => std::fs::read_to_string(root)
+            .unwrap_or_default()
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(PathBuf::from)
+            .collect(),
+        _ if root.is_file() => vec![root.to_path_buf()],
+        _ => Corpus::discover(root).files().to_vec(),
+    }
 }
 
 fn main() -> ExitCode {

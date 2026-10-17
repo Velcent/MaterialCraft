@@ -101,6 +101,24 @@ impl<'a> PreparedSet<'a> {
         .import_on(self.painter, &self.channels, self.resolution, self.geometry.as_ref())
     }
 
+    /// [`Self::import`] of another copy of this set's stack (e.g. with parts swapped), with this set's channels,
+    /// resolution and mesh and the procedural choices of `plan`.
+    pub fn import_copy(
+        &self,
+        painter: &PainterTextureSet,
+        table: &BlendTable,
+        images: &dyn ImageSource,
+        plan: &ProceduralPlan,
+    ) -> ImportedStack {
+        LayerImport {
+            table,
+            projections: &ProjectionTable::painter(),
+            images,
+            plan,
+        }
+        .import_on(painter, &self.channels, self.resolution, self.geometry.as_ref())
+    }
+
     /// Reads the cache image of `channel` (once); false if there is none or it does not decode.
     pub fn load(&mut self, channel: Channel, cache: &CacheChannels) -> bool {
         if self.cache.iter().any(|(c, _)| *c == channel) {
