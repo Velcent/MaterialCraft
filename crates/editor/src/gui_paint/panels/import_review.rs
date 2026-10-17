@@ -113,7 +113,7 @@ mod tests {
     use materialcraft_substance::tools::analyze::{ProceduralUse, Role};
 
     fn use_of(name: &str) -> ProceduralUse {
-        ProceduralUse { name: name.into(), role: Role::MaskFill, set: "S".into(), layer: "L".into(), visible: true, params: vec![], inputs: vec![] }
+        ProceduralUse { name: name.into(), role: Role::MaskFill, set: "S".into(), layer: "L".into(), visible: true, params: vec![], inputs: vec![], material: false }
     }
 
     #[test]

@@ -8,8 +8,8 @@ mod fit;
 pub mod generator_cases;
 pub mod isolate;
 pub mod kinds;
-mod prepared;
-mod project_mesh;
+pub(crate) mod prepared;
+pub(crate) mod project_mesh;
 pub mod projection_fit;
 mod table;
 
@@ -21,6 +21,7 @@ pub use table::Verification;
 
 use crate::inspect::Corpus;
 use crate::project::SppProject;
+use crate::tools::material_match::ProjectPlanner;
 use crate::tools::parallel::CorpusPool;
 use crate::translate::BakedMaps;
 use crate::translate::cache_channels::CacheChannels;
@@ -36,8 +37,9 @@ use std::path::{Path, PathBuf};
 pub struct VerifyOptions {
     /// Also fit guessed blend values.
     pub fit: bool,
-    /// Which Substance procedurals are replaced by MaterialCraft's generators before comparing.
-    pub plan: ProceduralPlan,
+    /// Which Substance procedurals are replaced by MaterialCraft's generators (and material fills by our
+    /// materials) before comparing.
+    pub planner: ProjectPlanner,
 }
 
 /// One channel of one set.
@@ -119,14 +121,15 @@ fn verify_project(path: &Path, label: &str, options: &VerifyOptions) -> Result<P
     let table = BlendTable::painter();
     let baked = BakedMaps::new(&project);
     let records = project.document_materials().unwrap_or_default();
+    let (plan, _) = options.planner.plan_for(path)?;
     for painter in &document.texture_sets {
         let Some(mut set) = PreparedSet::new(painter, &cache, mesh.as_ref()) else {
             continue;
         };
-        set.plan = options.plan.clone();
+        set.plan = plan.clone();
         let kinds = NativeKinds::of(painter, &set.channels);
         let reads_baked = kinds.uses(kinds::COLOUR_SELECTION);
-        if options.plan != ProceduralPlan::default() || reads_baked {
+        if plan != ProceduralPlan::default() || reads_baked {
             set.load_baked(&baked, &records);
         }
         let stack = set.import(&table, &images);

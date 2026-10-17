@@ -4,6 +4,7 @@
 
 use crate::model::{PainterDocument, PainterEffect, PainterLayer, PainterSource, Procedural};
 use crate::translate::layers::effect_data;
+use crate::translate::replacements::materials;
 
 /// Where a procedural is used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -45,6 +46,8 @@ pub struct ProceduralUse {
     pub params: Vec<(String, String)>,
     /// Image inputs that are fed: input identifier and what feeds it (`anchor`, `bitmap`, a procedural's name …).
     pub inputs: Vec<(String, String)>,
+    /// A Substance material filling layer content (what the import review offers our materials for).
+    pub material: bool,
 }
 
 /// Every use in the document, set by set, bottom → top.
@@ -104,16 +107,18 @@ impl Walk<'_> {
             match e {
                 PainterEffect::Fill(fill) => {
                     for source in &fill.sources {
-                        if let PainterSource::Procedural(p) = source
-                            && let Some(p) = &p.procedural
+                        if let PainterSource::Procedural(ps) = source
+                            && let Some(p) = &ps.procedural
                         {
-                            self.add(p, if mask { Role::MaskFill } else { Role::Fill }, &on);
+                            let role = if mask { Role::MaskFill } else { Role::Fill };
+                            let material = !mask && materials::is_material(ps);
+                            self.add(p, role, &on, material);
                         }
                     }
                 }
                 PainterEffect::Filter(f) => {
                     if let Some(p) = &f.procedural {
-                        self.add(p, if mask { Role::MaskFilter } else { Role::Filter }, &on);
+                        self.add(p, if mask { Role::MaskFilter } else { Role::Filter }, &on, false);
                     }
                 }
                 PainterEffect::Group(g) => self.effects(&g.effects, &on, mask),
@@ -122,13 +127,13 @@ impl Walk<'_> {
         }
     }
 
-    fn add(&mut self, p: &Procedural, role: Role, at: &At) {
+    fn add(&mut self, p: &Procedural, role: Role, at: &At, material: bool) {
         let mut inputs = Vec::new();
         for input in &p.inputs {
             let feeds = match input.source.as_deref() {
                 Some(PainterSource::Procedural(inner)) => match &inner.procedural {
                     Some(inner) => {
-                        self.add(inner, Role::Input, at);
+                        self.add(inner, Role::Input, at, false);
                         inner.name().to_string()
                     }
                     None => "procedural".to_string(),
@@ -155,6 +160,7 @@ impl Walk<'_> {
                 .filter(|(k, _)| !k.starts_with(effect_data::INPUT_PREFIX))
                 .collect(),
             inputs,
+            material,
         });
     }
 }

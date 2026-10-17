@@ -32,6 +32,11 @@ impl ProceduralSummary {
         self.uses.iter().filter(|u| u.visible).count()
     }
 
+    /// True if it fills layer content as a Substance material somewhere (the review offers our materials).
+    pub fn is_material(&self) -> bool {
+        self.uses.iter().any(|u| u.material)
+    }
+
     /// Uses per role, in role order.
     pub fn roles(&self) -> BTreeMap<Role, usize> {
         let mut roles = BTreeMap::new();
@@ -117,6 +122,11 @@ impl Analysis {
         }
     }
 
+    /// The Substance materials filling layer content, most-used first.
+    pub fn materials(&self) -> impl Iterator<Item = &ProceduralSummary> {
+        self.procedurals.iter().filter(|p| p.is_material())
+    }
+
     pub fn to_json(&self) -> Value {
         let procedurals = self.procedurals.iter().map(summary_json).collect();
         let replaceable = self.procedurals.iter().filter(|p| p.replacement.is_some()).count();
@@ -166,6 +176,7 @@ fn summary_json(p: &ProceduralSummary) -> Value {
         .with("name", p.name.as_str())
         .with("uses", p.uses.len())
         .with("visible_uses", p.visible_uses())
+        .with("material", p.is_material())
         .with("roles", Value::Object(roles))
         .with("sets", Value::Array(p.sets().into_iter().map(Value::from).collect()))
         .with("params", Value::Object(params))

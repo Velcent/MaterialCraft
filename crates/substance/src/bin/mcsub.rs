@@ -6,7 +6,10 @@
 //!     mcsub model <file.spp>                       Painter's layer stacks as a tree, with the model report
 //!     mcsub model --all <folder>                   build the model of every .spp below the folder
 //!     mcsub corpus <folder> [--verify]             one table row per .spp below the folder
-//!     mcsub analyze <file.spp>                     Substance procedurals used, replacements, accuracy (JSON)
+//!     mcsub analyze <file.spp> [--library <dir>]   Substance procedurals used, replacements, accuracy (JSON);
+//!                                                  with a library also the material fills and our suggestions
+//!     mcsub match-materials <file.spp | folder> --library <dir> [--jobs N]
+//!                                                  suggestions per material fill and how close their looks are
 //!     mcsub convert <in.spp> <out.mcpaint> [--plan choices.json | --procedurals keep|replace]
 //!                                                  import and save as .mcpaint
 //!     mcsub convert --all <folder> <out dir> [--discard] [--jobs N]   convert every .spp below the folder
@@ -24,6 +27,9 @@
 //! `convert`, `report`, `maps`, `compare` and `verify-layers` take `--plan <choices.json>` or
 //! `--procedurals keep|replace`: which Substance procedurals are replaced by MaterialCraft's generators
 //! (default: keep them all; `choices.json` as written by the import review, see `replacements::plan`).
+//! They also take `--library <dir>` (repeatable; asset library folders, e.g. the starter library) to embed the
+//! materials a plan picks for Substance material fills, and `--materials auto` to give every material fill the
+//! plan does not choose its best-scored material from those folders (`keep`, the default, keeps Painter's result).
 //!
 //! The `--all` commands work on several projects at once: `--jobs N` at most (default a quarter of the cores),
 //! and only as many as fit in 60 % of the free memory (a project needs about twice its file size). Their
@@ -39,6 +45,8 @@ use materialcraft_substance::inspect::{Corpus, CorpusTable, DocumentDump, Inspec
 use materialcraft_substance::project::{SppProject, paths};
 use materialcraft_substance::tools::accuracy::ReplacementAccuracy;
 use materialcraft_substance::tools::analyze::Analysis;
+use materialcraft_substance::tools::material_match::report::MatchTable;
+use materialcraft_substance::tools::material_match::{MaterialMatches, ProjectPlanner, TrayMaterials};
 use materialcraft_substance::tools::model_text::ModelText;
 use materialcraft_substance::tools::parallel::CorpusPool;
 use materialcraft_substance::tools::report_text::ReportText;
@@ -50,6 +58,7 @@ use materialcraft_substance::translate::replacements::{Choice, ProceduralPlan};
 use materialcraft_substance::translate::{Cancel, import_spp_with};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
 
 const USAGE: &str = "usage: mcsub inspect|tree|doc|model|corpus|analyze|convert|report|maps|compare|verify-layers|isolate … (see the source header for details)";
 
@@ -64,6 +73,10 @@ struct Args {
     plan: Option<PathBuf>,
     /// `--procedurals keep|replace`.
     procedurals: Option<String>,
+    /// `--library <folder>` (repeatable): asset library folders whose materials replace material fills.
+    library: Vec<PathBuf>,
+    /// `--materials keep|auto`.
+    materials: Option<String>,
 }
 
 impl Args {
@@ -76,6 +89,8 @@ impl Args {
             jobs: None,
             plan: None,
             procedurals: None,
+            library: Vec::new(),
+            materials: None,
         };
         let mut it = raw.into_iter();
         while let Some(a) = it.next() {
@@ -85,6 +100,8 @@ impl Args {
                 "--jobs" => args.jobs = it.next().and_then(|v| v.parse().ok()),
                 "--plan" => args.plan = it.next().map(PathBuf::from),
                 "--procedurals" => args.procedurals = it.next(),
+                "--library" => args.library.extend(it.next().map(PathBuf::from)),
+                "--materials" => args.materials = it.next(),
                 f if f.starts_with("--") => args.flags.push(a),
                 _ => args.words.push(a),
             }
@@ -114,6 +131,29 @@ impl Args {
                 .map(ProceduralPlan::all)
                 .ok_or_else(|| format!("--procedurals {id}: expected keep or replace")),
         }
+    }
+}
+
+impl Args {
+    /// The plan per project: [`Args::plan`]; with `--library`, picked materials are embedded, and with
+    /// `--materials auto` every material fill the plan does not choose gets its best-scored tray material.
+    fn planner(&self) -> Result<ProjectPlanner, String> {
+        let auto = match self.materials.as_deref() {
+            None | Some("keep") => false,
+            Some("auto") => true,
+            Some(other) => return Err(format!("--materials {other}: expected keep or auto")),
+        };
+        let planner = ProjectPlanner::fixed(self.plan()?);
+        match (self.library.is_empty(), auto) {
+            (true, true) => Err("--materials auto needs --library <folder>".into()),
+            (true, false) => Ok(planner),
+            (false, _) => Ok(planner.with_tray(Arc::new(self.tray()), auto)),
+        }
+    }
+
+    /// The materials of the `--library` folders.
+    fn tray(&self) -> TrayMaterials {
+        TrayMaterials::load(&self.library)
     }
 }
 
@@ -191,13 +231,33 @@ fn run(args: Args) -> Result<(), String> {
         }
         ["analyze", path] => {
             let analysis = Analysis::of_project(Path::new(path), &ReplacementAccuracy::load())?;
-            println!("{}", analysis.to_json().to_string_pretty());
+            let mut json = analysis.to_json();
+            if !args.library.is_empty() {
+                let planner = args.planner()?;
+                let tray = planner.tray().cloned().unwrap_or_default();
+                let matches = MaterialMatches::measure(Path::new(path), &analysis, &tray)?;
+                let plan = match args.materials.as_deref() {
+                    Some("auto") => matches.best_plan(planner.base().clone()),
+                    _ => planner.base().clone(),
+                };
+                json.insert("materials", matches.to_json(&plan));
+            }
+            println!("{}", json.to_string_pretty());
+        }
+        ["match-materials", root] => {
+            if args.library.is_empty() {
+                return Err("match-materials needs --library <folder>".into());
+            }
+            let table = MatchTable::of_path(Path::new(root), &args.tray(), args.pool(), &|p| {
+                eprintln!("{}", p.display())
+            });
+            print!("{table}");
         }
         ["convert", root, out] if args.has("--all") => {
             let table = convert::convert_all(
                 Path::new(root),
                 Path::new(out),
-                &args.plan()?,
+                &args.planner()?,
                 args.has("--discard"),
                 args.pool(),
                 &|line| eprintln!("{line}"),
@@ -205,7 +265,7 @@ fn run(args: Args) -> Result<(), String> {
             print!("{table}");
         }
         ["convert", input, out] => {
-            let summary = convert::convert_one(Path::new(input), Path::new(out), &args.plan()?, &mut progress_line)
+            let summary = convert::convert_one(Path::new(input), Path::new(out), &args.planner()?, &mut progress_line)
                 .map_err(|e| err(&e))?;
             println!("{summary}");
         }
@@ -240,7 +300,7 @@ fn run(args: Args) -> Result<(), String> {
         ["verify-layers", path] => {
             let options = VerifyOptions {
                 fit: args.has("--fit"),
-                plan: args.plan()?,
+                planner: args.planner()?,
             };
             let result = verify_path(Path::new(path), options, args.pool(), &|p| eprintln!("{}", p.display()));
             print!("{result}");

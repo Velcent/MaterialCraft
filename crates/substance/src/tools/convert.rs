@@ -1,11 +1,12 @@
 //! `mcsub convert`: import a `.spp` and save it as `.mcpaint`, for one file or a whole folder.
 
 use crate::inspect::Corpus;
+use crate::tools::material_match::ProjectPlanner;
 use crate::tools::parallel::CorpusPool;
-use crate::translate::replacements::ProceduralPlan;
-use crate::translate::{Cancel, ImportError, import_spp_with};
+use crate::translate::{Cancel, ImportError, import_spp_planned, import_spp_with};
 use materialcraft::paint::format::{FormatError, save_path};
-use materialcraft::paint::{Document, Fidelity};
+use materialcraft::paint::layer::LayerWalk;
+use materialcraft::paint::{Document, EffectKind, Fidelity, FillSource, LayerKind};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -15,6 +16,8 @@ const IMPORT_SHARE: f32 = 0.85;
 
 #[derive(Debug)]
 pub enum ConvertError {
+    /// The plan for the project could not be made (`--materials auto` reads the project first).
+    Plan(String),
     Import(ImportError),
     Save(FormatError),
 }
@@ -22,6 +25,7 @@ pub enum ConvertError {
 impl fmt::Display for ConvertError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ConvertError::Plan(e) => write!(f, "plan failed: {e}"),
             ConvertError::Import(e) => write!(f, "import failed: {e}"),
             ConvertError::Save(e) => write!(f, "save failed: {e}"),
         }
@@ -41,6 +45,8 @@ pub struct ConvertSummary {
     pub strokes: (usize, usize),
     /// Report entries per fidelity: exact, approximated, baked, kept raw.
     pub fidelity: [usize; 4],
+    /// Material fills replaced by a material of ours.
+    pub materials: usize,
     pub bytes: u64,
     pub import_seconds: f64,
     pub save_seconds: f64,
@@ -62,6 +68,7 @@ impl ConvertSummary {
                 Fidelity::KeptRaw,
             ]
             .map(count),
+            materials: replaced_materials(doc),
             bytes: std::fs::metadata(output).map_or(0, |m| m.len()),
             import_seconds,
             save_seconds,
@@ -75,13 +82,15 @@ impl fmt::Display for ConvertSummary {
         write!(
             f,
             "ok {}: {} texture sets, {} channels, {} baked maps, {} strokes ({} samples) recorded; report {exact} \
-             exact, {approx} approximated, {baked} baked, {raw} kept raw; {:.1} MB; import {:.1} s, save {:.1} s",
+             exact, {approx} approximated, {baked} baked, {raw} kept raw; {} material fills replaced; {:.1} MB; import {:.1} s, \
+             save {:.1} s",
             self.output.display(),
             self.sets,
             self.channels,
             self.baked,
             self.strokes.0,
             self.strokes.1,
+            self.materials,
             self.bytes as f64 / 1048576.0,
             self.import_seconds,
             self.save_seconds
@@ -89,16 +98,22 @@ impl fmt::Display for ConvertSummary {
     }
 }
 
-/// Imports `input` with the procedural replacements of `plan` and saves it as `output`.
+/// Imports `input` with the replacements `planner` chooses for it and saves it as `output`; picked materials
+/// are embedded when the planner has a library.
 pub fn convert_one(
     input: &Path,
     output: &Path,
-    plan: &ProceduralPlan,
+    planner: &ProjectPlanner,
     progress: &mut dyn FnMut(f32, &str),
 ) -> Result<ConvertSummary, ConvertError> {
     let start = Instant::now();
-    let doc = import_spp_with(input, plan, &mut |f, m| progress(f * IMPORT_SHARE, m), Cancel::NEVER)
-        .map_err(ConvertError::Import)?;
+    let (plan, _) = planner.plan_for(input).map_err(ConvertError::Plan)?;
+    let mut on = |f: f32, m: &str| progress(f * IMPORT_SHARE, m);
+    let doc = match planner.library() {
+        Some(library) => import_spp_planned(input, &plan, library, &mut on, Cancel::NEVER),
+        None => import_spp_with(input, &plan, &mut on, Cancel::NEVER),
+    }
+    .map_err(ConvertError::Import)?;
     let imported = start.elapsed().as_secs_f64();
     progress(IMPORT_SHARE, "saving");
     save_path(&doc, output).map_err(ConvertError::Save)?;
@@ -119,7 +134,7 @@ pub struct ConvertTable {
 pub fn convert_all(
     root: &Path,
     out_dir: &Path,
-    plan: &ProceduralPlan,
+    planner: &ProjectPlanner,
     discard: bool,
     pool: CorpusPool,
     log: &(dyn Fn(&str) + Sync),
@@ -136,7 +151,7 @@ pub fn convert_all(
         |&(i, input)| {
             log(&format!("[{}/{}] {}", i + 1, files.len(), input.display()));
             let output = out_dir.join(format!("{i:03}.mcpaint"));
-            let result = convert_one(input, &output, plan, &mut |_, _| {}).map_err(|e| e.to_string());
+            let result = convert_one(input, &output, planner, &mut |_, _| {}).map_err(|e| e.to_string());
             if discard {
                 let _ = std::fs::remove_file(&output);
             }
@@ -174,11 +189,12 @@ impl fmt::Display for ConvertTable {
         }
         let sum = |g: fn(&ConvertSummary) -> f64| ok.iter().map(|s| g(s)).sum::<f64>();
         let strokes: usize = ok.iter().map(|s| s.strokes.0).sum();
+        let materials: usize = ok.iter().map(|s| s.materials).sum();
         let samples: usize = ok.iter().map(|s| s.strokes.1).sum();
         writeln!(
             f,
-            "{} converted, {} failed; {strokes} strokes ({samples} samples) recorded; import {:.0} s, save {:.0} s, \
-             output {:.0} MB; wall {:.0} s",
+            "{} converted, {} failed; {strokes} strokes ({samples} samples) recorded; {materials} material fills replaced; \
+             import {:.0} s, save {:.0} s, output {:.0} MB; wall {:.0} s",
             ok.len(),
             self.rows.len() - ok.len(),
             sum(|s| s.import_seconds),
@@ -187,4 +203,22 @@ impl fmt::Display for ConvertTable {
             self.seconds
         )
     }
+}
+
+/// Fills of layers and content effects standing in for a Substance material.
+fn replaced_materials(doc: &Document) -> usize {
+    let is_replaced =
+        |f: &materialcraft::paint::Fill| matches!(f.source, FillSource::Material { .. }) && f.original.is_some();
+    let mut n = 0;
+    for set in &doc.texture_sets {
+        for (_, l) in LayerWalk::new(&set.layers) {
+            n += usize::from(matches!(&l.kind, LayerKind::Fill(f) if is_replaced(&f)));
+            n += l
+                .effects
+                .iter()
+                .filter(|e| matches!(&e.kind, EffectKind::Fill(f) if is_replaced(f)))
+                .count();
+        }
+    }
+    n
 }

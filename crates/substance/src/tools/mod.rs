@@ -7,6 +7,7 @@ pub mod analyze;
 pub mod compare;
 pub mod convert;
 pub mod maps;
+pub mod material_match;
 pub mod model_corpus;
 pub mod model_text;
 pub mod parallel;
