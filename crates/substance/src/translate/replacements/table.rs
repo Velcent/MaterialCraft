@@ -75,6 +75,8 @@ fn look(source: &str) -> f32 {
 }
 
 /// A texture part: copied only when a procedural feeds the input (a uniform or empty input adds nothing).
+/// The input becomes our procedural texture standing in for it (`<ours>_texture`) where there is one, and a
+/// grunge look by number (`<ours>_look`) for older readers and for the rest.
 fn texture(o: Ours, p: &Painter, input: &str, ours: &str, theirs: &[(&str, &[&str])]) -> Ours {
     let Some(source) = p
         .input(input)
@@ -84,7 +86,11 @@ fn texture(o: Ours, p: &Painter, input: &str, ours: &str, theirs: &[(&str, &[&st
     };
     let key = |k: &str| format!("{ours}_{k}");
     let o = theirs.iter().fold(o, |o, (k, names)| o.num(&key(k), p.first(names)));
-    o.num(&key("look"), Some(look(source)))
+    let o = o.num(&key("look"), Some(look(source)));
+    match super::texture_for(source) {
+        Some(id) => o.text(&key("texture"), id),
+        None => o,
+    }
 }
 
 fn finish(o: Ours, p: &Painter) -> Ours {

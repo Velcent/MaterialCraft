@@ -1,5 +1,5 @@
 //! The replacement table: Substance procedurals MaterialCraft can stand in for with its own generators
-//! ([`materialcraft::generators`]), one [`Replacement`] per entry, with the translation of Painter's parameter
+//! ([`materialcraft::generators`]) and procedural textures ([`materialcraft::proc_textures`], [`TEXTURES`]), one [`Replacement`] per entry, with the translation of Painter's parameter
 //! values into ours. This is the only place that knows Painter's procedural and parameter names.
 //!
 //! A replaced effect becomes our generator with the Painter procedural kept as its
@@ -13,9 +13,11 @@
 mod params;
 pub mod plan;
 mod table;
+mod textures;
 
 pub use plan::{Choice, ProceduralPlan};
 pub use table::TABLE;
+pub use textures::TEXTURES;
 
 use super::layers::effect_data::SUBSTANCE_PREFIX;
 use materialcraft::paint::effect::Procedural;
@@ -45,9 +47,19 @@ impl Replacement {
     }
 }
 
+/// Every entry: the mask generators ([`TABLE`]), then the procedural textures ([`TEXTURES`]).
+pub fn entries() -> impl Iterator<Item = &'static Replacement> {
+    TABLE.iter().chain(TEXTURES)
+}
+
 /// The entry for Painter graph `name`, if MaterialCraft has a replacement.
 pub fn find(name: &str) -> Option<&'static Replacement> {
-    TABLE.iter().find(|r| r.painter.contains(&name))
+    entries().find(|r| r.painter.contains(&name))
+}
+
+/// Our procedural texture standing in for Painter texture `name` (a texture entry's id), if there is one.
+pub fn texture_for(name: &str) -> Option<&'static str> {
+    TEXTURES.iter().find(|r| r.painter.contains(&name)).map(|r| r.generator)
 }
 
 /// The Painter graph name of an imported procedural id (`substance:mg_dirt` → `mg_dirt`).

@@ -10,7 +10,7 @@ fn imported(name: &str, params: &[(&str, &str)]) -> Procedural {
 
 #[test]
 fn every_entry_names_a_registered_generator_once() {
-    for r in TABLE {
+    for r in entries() {
         assert!(
             generators::builtin().generator(r.generator).is_some(),
             "{}",
@@ -88,6 +88,7 @@ fn mask_editor_reads_both_naming_schemes_and_texture_inputs() {
         (a.param("tex1_opacity"), a.param("tex1_look")),
         (Some("0.5"), Some("10"))
     );
+    assert_eq!(a.param("tex1_texture"), Some("plaster_cracks"));
     assert_eq!(b.param("tex1_opacity"), None, "a uniform input adds no texture");
 }
 
@@ -106,4 +107,27 @@ fn reconversion_follows_the_plan_and_is_stable() {
     );
     assert!(reconvert(&original, &ProceduralPlan::default()).is_none());
     assert_eq!(painter_name("substance:mg_dirt"), Some("mg_dirt"));
+}
+
+#[test]
+fn texture_entries_translate_tone_seed_and_disorder() {
+    let clouds = imported(
+        "ratio_clouds_2",
+        &[
+            ("$randomseed", "12"),
+            ("balance", "0.3"),
+            ("historgram_contrast", "0.2"),
+            ("Disorder", "50"),
+            ("scale", "4"),
+        ],
+    );
+    let (r, ours) = replace(&clouds, &ProceduralPlan::all(Choice::Replace)).unwrap();
+    assert_eq!(r.generator, "clouds_2");
+    assert_eq!(ours.param("seed"), Some("12"));
+    assert_eq!(ours.param("balance"), Some("0.3"));
+    assert_eq!(ours.param("range"), Some("0.2"));
+    assert_eq!(ours.param("disorder"), Some("0.5"));
+    assert_eq!(ours.param("scale"), Some("4"));
+    assert_eq!(texture_for("ratio_grunge_map_012"), Some("grunge_12"));
+    assert_eq!(texture_for("mg_dirt"), None, "generators are not textures");
 }
