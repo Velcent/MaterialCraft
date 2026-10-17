@@ -62,9 +62,9 @@ fn materials() -> MaterialFills {
     MaterialFills::new(Arc::new(FolderResolver::new([PathBuf::from("/nonexistent")])), Arc::new(MaterialCache::default()))
 }
 
-/// Runs a maps worker over set 0 to the end.
-fn run(doc: &mut OpenDocument, surfaces: Option<Arc<FillSurfaces>>) -> SetMaps {
-    let mut worker = MapsWorker::start(doc.maps_view(&[0]), vec![0], ChannelView::Material, None, materials(), None, surfaces);
+/// Runs a maps worker over set `set` to the end.
+fn run_set(doc: &mut OpenDocument, set: usize, surfaces: Option<Arc<FillSurfaces>>) -> SetMaps {
+    let mut worker = MapsWorker::start(doc.maps_view(&[set]), vec![set], ChannelView::Material, None, materials(), None, surfaces);
     let start = Instant::now();
     let mut out = Vec::new();
     while !worker.is_finished() || out.is_empty() {
@@ -73,6 +73,49 @@ fn run(doc: &mut OpenDocument, surfaces: Option<Arc<FillSurfaces>>) -> SetMaps {
         std::thread::sleep(Duration::from_millis(2));
     }
     out.pop().expect("the set's maps")
+}
+
+fn run(doc: &mut OpenDocument, surfaces: Option<Arc<FillSurfaces>>) -> SetMaps {
+    run_set(doc, 0, surfaces)
+}
+
+/// Needs-mesh warnings among a run's log entries.
+fn needs_mesh(maps: &SetMaps) -> usize {
+    maps.warnings.iter().filter(|e| e.text.contains("needs the mesh")).count()
+}
+
+/// A real document's sets with and without surface maps: needs-mesh warnings and the time of a recomposite (the
+/// first one with surfaces builds them, later ones reuse them). `MC_FILLS_DOC` names the `.mcpaint`. Run with
+/// `cargo test --release -p materialcraft-editor real_document_fills -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn real_document_fills() {
+    let path = std::env::var_os("MC_FILLS_DOC").expect("MC_FILLS_DOC");
+    let loaded = materialcraft::paint::format::load_path(std::path::Path::new(&path)).expect("load");
+    let mut doc = OpenDocument::new(loaded, PathBuf::from(&path), None);
+    let surfaces = Arc::new(FillSurfaces::new(doc.shared_mesh()));
+    for set in 0..doc.doc().texture_sets.len() {
+        let name = doc.doc().texture_sets[set].name.clone();
+        let needs = doc.doc().texture_sets[set].needs_surface();
+        let timed = |doc: &mut OpenDocument, s: Option<Arc<FillSurfaces>>| {
+            let start = Instant::now();
+            let maps = run_set(doc, set, s);
+            (maps, start.elapsed())
+        };
+        let (plain, t_plain) = timed(&mut doc, None);
+        let (first, t_first) = timed(&mut doc, Some(surfaces.clone()));
+        let (again, t_again) = timed(&mut doc, Some(surfaces.clone()));
+        eprintln!(
+            "{name}: needs surface {needs}; warnings without/with surfaces {}/{}, needs-mesh {}/{}; recomposite without {t_plain:?}, first with {t_first:?}, again {t_again:?}; base colour differs: {}",
+            plain.warnings.len(),
+            first.warnings.len(),
+            needs_mesh(&plain),
+            needs_mesh(&first),
+            plain.maps.base != first.maps.base
+        );
+        assert_eq!(needs_mesh(&first), 0);
+        assert_eq!(first.maps.base, again.maps.base);
+    }
 }
 
 #[test]
