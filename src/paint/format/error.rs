@@ -19,6 +19,8 @@ pub enum FormatError {
     Json(String),
     /// Not a `.mcpaint` document (`format` is not `"mcpaint"`).
     NotMcpaint,
+    /// Not a fragment (`.mcfrag`: `format` is not `"mcfrag"`).
+    NotFragment,
     /// The file has a newer major `format_version` than this reader supports.
     NewerVersion {
         found: String,
@@ -67,6 +69,7 @@ impl fmt::Display for FormatError {
             FormatError::MissingEntry(n) => write!(f, "the document has no entry {n:?}"),
             FormatError::Json(m) => write!(f, "document.json: {m}"),
             FormatError::NotMcpaint => write!(f, "not a .mcpaint document"),
+            FormatError::NotFragment => write!(f, "not a smart material or smart mask (.mcfrag) file"),
             FormatError::NewerVersion { found, supported } => write!(
                 f,
                 "the document has format version {found}, this program reads up to {supported}; \

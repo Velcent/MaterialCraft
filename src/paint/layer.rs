@@ -136,6 +136,10 @@ pub struct Layer {
     pub kind: LayerKind,
     /// Content effects on top of the base, bottom → top.
     pub effects: Vec<ContentEffect>,
+    /// The asset this layer was made from: a smart-material folder records the fragment it came from (a library
+    /// reference such as `smart-materials/worn-paint.mcfrag`, also the key of the document's embedded copy, see
+    /// [`crate::paint::embedded`]). `None` for layers made by hand.
+    pub asset: Option<String>,
 }
 
 /// Which image of a layer an image is.
@@ -152,7 +156,18 @@ pub enum LayerImage {
 impl Layer {
     /// A visible, fully opaque layer with no channel entries, effects or masks yet.
     pub fn new(id: impl Into<String>, name: impl Into<String>, kind: LayerKind) -> Layer {
-        Layer { id: id.into(), name: name.into(), visible: true, opacity: 1.0, blend: Vec::new(), mask: None, geometry_mask: None, kind, effects: Vec::new() }
+        Layer {
+            id: id.into(),
+            name: name.into(),
+            visible: true,
+            opacity: 1.0,
+            blend: Vec::new(),
+            mask: None,
+            geometry_mask: None,
+            kind,
+            effects: Vec::new(),
+            asset: None,
+        }
     }
 
     /// The blend entry for `channel`; `None` means the layer does not affect it.

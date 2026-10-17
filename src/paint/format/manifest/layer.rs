@@ -1,5 +1,6 @@
-//! Layers: `{"id", "name", "kind", "visible", "opacity", "blend", "mask", "geometry_mask", …}` plus `images`
+//! Layers: `{"id", "name", "kind", "visible", "opacity", "blend", "mask", "geometry_mask", "asset", …}` plus `images`
 //! and `strokes` (paint), `fill` (fill) or `children` (group), and `effects` (the content effects, since 0.3).
+//! `asset` (since 0.6) names the asset a smart-material folder was made from.
 
 use super::extras::loc;
 use super::fields::{Obj, as_f32, num, num4};
@@ -50,6 +51,9 @@ fn write(l: &Layer, set: &SetScope, ctx: &WriteCtx) -> Value {
     }
     if let Some(g) = &l.geometry_mask {
         v.insert("geometry_mask", geometry_mask::write(g, &format!("{here}/geometry_mask"), ctx));
+    }
+    if let Some(a) = &l.asset {
+        v.insert("asset", a.as_str());
     }
     match &l.kind {
         LayerKind::Paint(p) => {
@@ -144,6 +148,7 @@ fn read(v: &Value, at: String, set: &SetScope, ctx: &mut ReadCtx) -> Result<Laye
     if let Some(g) = o.opt("geometry_mask") {
         layer.geometry_mask = Some(geometry_mask::read(g, o.path("geometry_mask"), &format!("{here}/geometry_mask"), ctx)?);
     }
+    layer.asset = o.opt_str("asset")?.map(str::to_string);
     let kind = o.str("kind")?;
     layer.kind = match kind {
         "paint" => {

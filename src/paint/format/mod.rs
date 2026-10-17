@@ -9,7 +9,8 @@
 //! - [`manifest`]: the JSON mapping of every model type.
 //! - [`paths`] and [`slot`]: entry names derived from ids; which image an entry holds.
 //! - [`strokes`]: stroke record entries (binary, one per recorded paint layer or effect).
-//! - [`writer`] and [`reader`]: assembling and taking apart the archive.
+//! - [`writer`] and [`reader`]: assembling and taking apart the archive; [`embedded`]: embedded library assets.
+//! - [`fragment`]: smart materials and smart masks (`.mcfrag`), built from the same pieces.
 //!
 //! ```
 //! use materialcraft::paint::{format, Document};
@@ -20,7 +21,9 @@
 //! ```
 
 mod batch;
+pub mod embedded;
 mod error;
+pub mod fragment;
 pub mod images;
 pub mod manifest;
 pub mod paths;
@@ -44,7 +47,7 @@ use std::io::{Read, Seek, Write};
 use std::path::Path;
 
 /// Version written by [`save`]: `major.minor`. Readers reject a newer major version.
-pub const FORMAT_VERSION: &str = "0.5";
+pub const FORMAT_VERSION: &str = "0.6";
 
 /// Writes `doc` as a `.mcpaint` archive with default options (including a thumbnail).
 /// Same document, same bytes.
