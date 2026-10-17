@@ -1,6 +1,7 @@
 //! Every [`Subject`] the tool knows. Adding one means a new module here plus one line in [`all`].
 
 pub mod baked;
+pub mod filters;
 pub mod generators;
 pub mod textures;
 
@@ -21,6 +22,7 @@ pub fn all() -> Vec<Box<dyn Subject>> {
         .into_iter()
         .chain(generators::all())
         .chain(textures::all())
+        .chain(filters::all())
         .collect()
 }
 
@@ -55,5 +57,7 @@ mod tests {
         assert_eq!(select("generator.dirt")[0].generator(), Some("dirt"));
         assert_eq!(select("texture").len(), materialcraft::proc_textures::TEXTURES.len());
         assert_eq!(select("texture.clouds_2")[0].generator(), Some("clouds_2"));
+        assert_eq!(select("filter").len(), materialcraft::filters::FILTERS.len());
+        assert_eq!(select("filter.blur")[0].generator(), Some("blur"));
     }
 }
