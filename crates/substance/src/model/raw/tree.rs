@@ -112,7 +112,7 @@ impl RawObject {
     }
 
     /// The present objects of a list field, in order.
-    pub fn objects<'a>(&'a self, name: &str) -> impl Iterator<Item = &'a RawObject> + 'a {
+    pub fn objects<'a>(&'a self, name: &str) -> impl Iterator<Item = &'a RawObject> + 'a + use<'a> {
         self.list(name).iter().filter_map(|v| match v {
             RawValue::Object(o) => Some(o.as_ref()),
             _ => None,

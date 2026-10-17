@@ -54,7 +54,7 @@ pub struct Spec {
 }
 
 macro_rules! s {
-    ($k:expr, [$($r:expr),*], [$($o:expr),*], $d:expr) => {
+    ($k:expr_2021, [$($r:expr_2021),*], [$($o:expr_2021),*], $d:expr_2021) => {
         Spec { kind: $k, req: &[$($r),*], opt: &[$($o),*], doc: $d }
     };
 }
@@ -1898,8 +1898,8 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             Tex::gray_fn(s, s, move |u, v| ops::bricks(u, v, r, c, m, b, o, lv, seed))
         }
         "tile_sampler" | "tile_generator" => {
-            let gen = n.kind == "tile_generator";
-            let mut p = scatter::TileP::legacy(gen);
+            let r#gen = n.kind == "tile_generator";
+            let mut p = scatter::TileP::legacy(r#gen);
             p.nx = f("x_amount", p.nx);
             p.ny = f("y_amount", p.ny);
             p.size = f("size", p.size);
@@ -1944,7 +1944,7 @@ fn compute(id: u32, n: &Node, ins: &BTreeMap<String, Rc<Tex>>, ctx: &Ctx) -> Res
             p.opacity = f("opacity", 1.0);
             p.background = f("background", 0.0);
             p.reverse = f("reverse_order", 0.0) > 0.5;
-            let pats = scatter_patterns(ins, f("pattern_type", 0.0) as u32, if gen { 1 } else { 2 }, f("pattern_distribution", 0.0) as u32);
+            let pats = scatter_patterns(ins, f("pattern_type", 0.0) as u32, if r#gen { 1 } else { 2 }, f("pattern_distribution", 0.0) as u32);
             let g = |k: &str| ins.get(k).map(|t| t.as_ref());
             let maps = scatter::TileMaps { mask: g("mask"), scale: g("scale_map"), rotation: g("rotation_map"), displacement: g("displacement_map"), color: g("color_map"), distribution: g("distribution_map"), background: g("background") };
             scatter::tile_grid(s, s, &pats, &maps, &p)

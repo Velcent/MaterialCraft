@@ -21,7 +21,7 @@ pub(super) struct Program {
 
 impl Program {
     /// The PBR material program (vertex displacement + GGX shading).
-    pub unsafe fn material(gl: &glow::Context) -> Result<Program, String> {
+    pub unsafe fn material(gl: &glow::Context) -> Result<Program, String> { unsafe {
         let id = compile(gl, VS, FS)?;
         let mut locs = HashMap::new();
         for name in UNIFORMS {
@@ -30,23 +30,23 @@ impl Program {
             }
         }
         Ok(Program { id, locs })
-    }
+    }}
 
     /// Full-screen background gradient (one triangle, no attributes).
-    pub unsafe fn background(gl: &glow::Context) -> Result<Program, String> {
+    pub unsafe fn background(gl: &glow::Context) -> Result<Program, String> { unsafe {
         Ok(Program { id: compile(gl, BG_VS, BG_FS)?, locs: HashMap::new() })
-    }
+    }}
 
     pub fn loc(&self, name: &str) -> Option<&glow::UniformLocation> {
         self.locs.get(name)
     }
 
-    pub unsafe fn free(&self, gl: &glow::Context) {
+    pub unsafe fn free(&self, gl: &glow::Context) { unsafe {
         gl.delete_program(self.id);
-    }
+    }}
 }
 
-unsafe fn compile(gl: &glow::Context, vs: &str, fs: &str) -> Result<glow::Program, String> {
+unsafe fn compile(gl: &glow::Context, vs: &str, fs: &str) -> Result<glow::Program, String> { unsafe {
     let prog = gl.create_program()?;
     let mut shaders = Vec::new();
     for (kind, src) in [(glow::VERTEX_SHADER, vs), (glow::FRAGMENT_SHADER, fs)] {
@@ -69,4 +69,4 @@ unsafe fn compile(gl: &glow::Context, vs: &str, fs: &str) -> Result<glow::Progra
         gl.delete_shader(sh);
     }
     Ok(prog)
-}
+}}

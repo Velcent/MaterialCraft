@@ -146,7 +146,7 @@ fn read_pkg(path: &std::path::Path) -> Result<Pkg, String> {
 }
 
 struct EvalResult {
-    gen: u64,
+    r#gen: u64,
     thumbs: HashMap<u32, Vec<u8>>,
     errors: HashMap<u32, String>,
     kept: HashMap<u32, std::sync::Arc<Tex>>,
@@ -162,7 +162,7 @@ struct EvalResult {
 
 /// The 2D view image of the selected node, sent as soon as that node is done (before the rest of the graph).
 struct Partial {
-    gen: u64,
+    r#gen: u64,
     img2d: ColorImage,
     img_for: u32,
 }
@@ -243,7 +243,7 @@ struct App {
     confirm_close: Option<usize>,
     dirty: bool,
     dirty3d: bool,
-    gen: u64,
+    r#gen: u64,
     job: Option<Receiver<EvalResult>>,
     part: Option<Receiver<Partial>>,
     node_cache: std::sync::Arc<NodeCache>,
@@ -343,7 +343,7 @@ impl App {
             confirm_close: None,
             dirty: true,
             dirty3d: true,
-            gen: 0,
+            r#gen: 0,
             job: None,
             part: None,
             node_cache: std::sync::Arc::new(NodeCache::with_default_budget()),
@@ -1185,9 +1185,9 @@ impl App {
             keep.push(a);
         }
         // a newer job makes every older one stale: their loops stop within a few rows
-        self.gen += 1;
-        let gen = self.gen;
-        tex::CURRENT_JOB.store(gen, std::sync::atomic::Ordering::Relaxed);
+        self.r#gen += 1;
+        let r#gen = self.r#gen;
+        tex::CURRENT_JOB.store(r#gen, std::sync::atomic::Ordering::Relaxed);
         let (tx, rx) = channel();
         self.job = Some(rx);
         let (ptx, prx) = channel();
@@ -1196,16 +1196,16 @@ impl App {
         std::thread::spawn(move || {
             let mut on_first = |t: &Tex| {
                 if let Some(a) = active {
-                    if !tex::stale(gen) {
-                        let _ = ptx.send(Partial { gen, img2d: qimg(t), img_for: a });
+                    if !tex::stale(r#gen) {
+                        let _ = ptx.send(Partial { r#gen, img2d: qimg(t), img_for: a });
                     }
                 }
             };
-            let r = g.evaluate_all_cached(size, &keep, gen, &cache, active, &mut on_first);
-            if tex::stale(gen) {
+            let r = g.evaluate_all_cached(size, &keep, r#gen, &cache, active, &mut on_first);
+            if tex::stale(r#gen) {
                 return; // superseded: nobody waits for this result
             }
-            tex::set_job(gen);
+            tex::set_job(r#gen);
             let outputs: Vec<(String, u32)> = g.output_nodes().into_iter().map(|(u, _, id)| (u, id)).collect();
             let named = |n: &str| outputs.iter().find(|o| o.0 == n).and_then(|o| r.kept.get(&o.1)).map(|a| a.as_ref());
             let inv_gloss = named("glossiness").map(ops::invert);
@@ -1220,11 +1220,11 @@ impl App {
             });
             let img2d = active.and_then(|a| r.kept.get(&a)).map(|a| qimg(a));
             tex::set_job(0);
-            if tex::stale(gen) {
+            if tex::stale(r#gen) {
                 return;
             }
             let _ = tx.send(EvalResult {
-                gen,
+                r#gen,
                 thumbs: r.thumbs,
                 errors: r.errors,
                 kept: r.kept,
@@ -1255,7 +1255,7 @@ impl App {
                 latest = Some(p);
             }
             if let Some(p) = latest {
-                if p.gen == self.gen && self.active == Some(p.img_for) {
+                if p.r#gen == self.r#gen && self.active == Some(p.img_for) {
                     let opts = egui::TextureOptions {
                         magnification: egui::TextureFilter::Nearest,
                         minification: egui::TextureFilter::Linear,
@@ -1272,7 +1272,7 @@ impl App {
         match rx.try_recv() {
             Ok(r) => {
                 self.job = None;
-                if r.gen != self.gen {
+                if r.r#gen != self.r#gen {
                     return;
                 }
                 // progressive preview: this pass is on screen, the next (double size) one starts right away

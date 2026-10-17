@@ -7,7 +7,7 @@ const ANISO_PARAM: u32 = 0x84FE;
 const ANISO_MAX: u32 = 0x84FF;
 
 /// Highest anisotropic filtering level the driver offers (1 when the extension is missing).
-pub(super) unsafe fn max_aniso(gl: &glow::Context) -> f32 {
+pub(super) unsafe fn max_aniso(gl: &glow::Context) -> f32 { unsafe {
     let ext = gl.supported_extensions();
     let has_aniso = ext.contains("GL_EXT_texture_filter_anisotropic") || ext.contains("GL_ARB_texture_filter_anisotropic");
     if has_aniso {
@@ -15,7 +15,7 @@ pub(super) unsafe fn max_aniso(gl: &glow::Context) -> f32 {
     } else {
         1.0
     }
-}
+}}
 
 /// The requested level (0 = maximum) limited to what the GPU offers.
 pub(super) fn aniso_level(req: f32, max: f32) -> f32 {
@@ -34,7 +34,7 @@ pub(super) struct Tx {
 
 impl Tx {
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn new(gl: &glow::Context, internal: u32, fmt: u32, ty: u32, w: usize, h: usize, data: &[u8], aniso: f32) -> Result<Tx, String> {
+    pub unsafe fn new(gl: &glow::Context, internal: u32, fmt: u32, ty: u32, w: usize, h: usize, data: &[u8], aniso: f32) -> Result<Tx, String> { unsafe {
         let id = gl.create_texture()?;
         gl.bind_texture(glow::TEXTURE_2D, Some(id));
         gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
@@ -48,16 +48,16 @@ impl Tx {
             gl.tex_parameter_f32(glow::TEXTURE_2D, ANISO_PARAM, aniso);
         }
         Ok(Tx { id, w, h })
-    }
+    }}
 
     /// 1x1 zero height, bound when a material has no height map.
-    pub unsafe fn flat_height(gl: &glow::Context) -> Result<Tx, String> {
+    pub unsafe fn flat_height(gl: &glow::Context) -> Result<Tx, String> { unsafe {
         Tx::new(gl, glow::R16F, glow::RED, glow::FLOAT, 1, 1, bytes_of(&[0.0f32]), 1.0)
-    }
+    }}
 
-    pub unsafe fn free(&self, gl: &glow::Context) {
+    pub unsafe fn free(&self, gl: &glow::Context) { unsafe {
         gl.delete_texture(self.id);
-    }
+    }}
 }
 
 /// The uploaded maps of one material.
@@ -70,7 +70,7 @@ pub(super) struct MapTextures {
 }
 
 impl MapTextures {
-    pub unsafe fn upload(gl: &glow::Context, maps: &GpuMaps, aniso: f32) -> Result<MapTextures, String> {
+    pub unsafe fn upload(gl: &glow::Context, maps: &GpuMaps, aniso: f32) -> Result<MapTextures, String> { unsafe {
         let s = maps.size;
         let base = Tx::new(gl, glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE, s, s, &maps.base, aniso)?;
         let normal = Tx::new(gl, glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE, s, s, &maps.normal, aniso)?;
@@ -84,16 +84,16 @@ impl MapTextures {
             None => None,
         };
         Ok(MapTextures { base, normal, rma, emis, height })
-    }
+    }}
 
     /// Size of the height map in texels, (1, 1) without one.
     pub fn height_size(&self) -> (usize, usize) {
         self.height.as_ref().map(|t| (t.w, t.h)).unwrap_or((1, 1))
     }
 
-    pub unsafe fn free(&self, gl: &glow::Context) {
+    pub unsafe fn free(&self, gl: &glow::Context) { unsafe {
         for t in [Some(&self.base), Some(&self.normal), Some(&self.rma), self.emis.as_ref(), self.height.as_ref()].into_iter().flatten() {
             t.free(gl);
         }
-    }
+    }}
 }

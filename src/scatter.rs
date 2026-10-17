@@ -175,11 +175,11 @@ pub struct TileP {
 
 impl TileP {
     /// Defaults that reproduce the original Tile Sampler (`gen == false`) or Tile Generator (`gen == true`).
-    pub fn legacy(gen: bool) -> TileP {
+    pub fn legacy(r#gen: bool) -> TileP {
         TileP {
-            nx: if gen { 6.0 } else { 8.0 },
-            ny: if gen { 6.0 } else { 8.0 },
-            size: if gen { 0.92 } else { 0.8 },
+            nx: if r#gen { 6.0 } else { 8.0 },
+            ny: if r#gen { 6.0 } else { 8.0 },
+            size: if r#gen { 0.92 } else { 0.8 },
             aspect: 1.0,
             size_mode: 0,
             scale: 1.0,
@@ -198,7 +198,7 @@ impl TileP {
             lum_by_number: 0.0,
             lum_by_scale: 0.0,
             offset: 0.5,
-            offset_mode: if gen { 1 } else { 0 },
+            offset_mode: if r#gen { 1 } else { 0 },
             offset_rand: 0.0,
             offset_seed: 0,
             global_offset: [0.0, 0.0],

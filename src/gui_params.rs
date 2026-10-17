@@ -49,9 +49,9 @@ fn pattern_block() -> Vec<PD> {
 }
 
 /// Properties shared by Tile Sampler and Tile Generator (everything except the X / Y amounts).
-fn tile_common(gen: bool) -> Vec<PD> {
+fn tile_common(r#gen: bool) -> Vec<PD> {
     let mut v = vec![
-        pf("size", "Size", if gen { 0.92 } else { 0.8 }, 0.05, 3.0),
+        pf("size", "Size", if r#gen { 0.92 } else { 0.8 }, 0.05, 3.0),
         pf("aspect", "Size Y / X", 1.0, 0.1, 4.0),
         pe("size_mode", "Size mode", 0, SIZE_MODES),
         pf("scale", "Scale", 1.0, 0.0, 10.0),
@@ -62,8 +62,8 @@ fn tile_common(gen: bool) -> Vec<PD> {
         pf("rotation_random", "Rotation random", 0.0, 0.0, 1.0),
         pe("pattern_rotation", "Pattern rotation", 0, ROT90),
         pe("symmetry_random", "Symmetry random", 0, SYMM),
-        pf("offset", if gen { "Row offset" } else { "Offset" }, 0.5, 0.0, 1.0),
-        pe("offset_mode", "Offset type", if gen { 1 } else { 0 }, OFFSET_MODES),
+        pf("offset", if r#gen { "Row offset" } else { "Offset" }, 0.5, 0.0, 1.0),
+        pe("offset_mode", "Offset type", if r#gen { 1 } else { 0 }, OFFSET_MODES),
         pf("offset_random", "Offset random", 0.0, 0.0, 1.0),
         pi("offset_seed", "Offset random seed", 0, 0, 9999),
         pf("global_offset_x", "Global offset X", 0.0, -1.0, 1.0),

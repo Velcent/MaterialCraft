@@ -1,7 +1,8 @@
 [package]
 name = "materialcraft-parity"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.95"
 description = "Measures how close MaterialCraft's own implementations get to Substance Painter's results on your projects"
 license = "MIT"
 publish = false

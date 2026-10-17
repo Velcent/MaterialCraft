@@ -988,8 +988,8 @@ fn phase3_scatter_nodes_keep_old_output_and_gain_designer_properties() {
         let g = (u * 3.0 + v).fract();
         [g, g, g, 1.0]
     });
-    for gen in [false, true] {
-        let mut p = scatter::TileP::legacy(gen);
+    for r#gen in [false, true] {
+        let mut p = scatter::TileP::legacy(r#gen);
         p.pos_rand = 0.4;
         p.size_rand = 0.3;
         p.rot_rand = 0.5;
@@ -1000,7 +1000,7 @@ fn phase3_scatter_nodes_keep_old_output_and_gain_designer_properties() {
             64,
             Some(&pat),
             None,
-            &ops::TileP { nx: p.nx, ny: p.ny, size: p.size, size_rand: p.size_rand, rot: p.rot, rot_rand: p.rot_rand, pos_rand: p.pos_rand, color: p.color, color_rand: p.color_rand, offset: p.offset, seed: 7, thresh: 0.5, default_disc: !gen, brick: gen },
+            &ops::TileP { nx: p.nx, ny: p.ny, size: p.size, size_rand: p.size_rand, rot: p.rot, rot_rand: p.rot_rand, pos_rand: p.pos_rand, color: p.color, color_rand: p.color_rand, offset: p.offset, seed: 7, thresh: 0.5, default_disc: !r#gen, brick: r#gen },
         );
         let pats = scatter::Patterns { inputs: vec![&pat], builtin: 0, fallback: 2, distribution: 0 };
         let maps = scatter::TileMaps { mask: None, scale: None, rotation: None, displacement: None, color: None, distribution: None, background: None };

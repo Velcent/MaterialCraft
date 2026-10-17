@@ -27,7 +27,7 @@ pub(super) struct MaterialPass<'a> {
 
 impl<'a> MaterialPass<'a> {
     /// Bind the program and set everything that is the same for all meshes of the frame.
-    pub unsafe fn begin(gl: &'a glow::Context, prog: &'a Program, view: &'a View, cam: &CamOut, self_shadow: bool, flat_height: glow::Texture) -> Self {
+    pub unsafe fn begin(gl: &'a glow::Context, prog: &'a Program, view: &'a View, cam: &CamOut, self_shadow: bool, flat_height: glow::Texture) -> Self { unsafe {
         let (ldir, fill) = crate::render3d::light_dirs(view);
         let mode = if view.relief == RELIEF_BUMP {
             1
@@ -55,18 +55,18 @@ impl<'a> MaterialPass<'a> {
         gl.uniform_1_i32(loc("uShadow"), self_shadow as i32);
         gl.uniform_1_i32(loc("uWire"), 0);
         MaterialPass { gl, prog, view, flat_height }
-    }
+    }}
 
     /// Shade every mesh.
-    pub unsafe fn draw(&self, items: &[Drawable]) {
+    pub unsafe fn draw(&self, items: &[Drawable]) { unsafe {
         for d in items {
             self.bind(d);
             d.mesh.draw(self.gl);
         }
-    }
+    }}
 
     /// Wireframe overlay of every mesh (displaced like the shaded surface).
-    pub unsafe fn draw_wire(&self, items: &[Drawable]) {
+    pub unsafe fn draw_wire(&self, items: &[Drawable]) { unsafe {
         let gl = self.gl;
         gl.uniform_1_i32(self.prog.loc("uWire"), 1);
         gl.polygon_mode(glow::FRONT_AND_BACK, glow::LINE);
@@ -81,10 +81,10 @@ impl<'a> MaterialPass<'a> {
         gl.polygon_mode(glow::FRONT_AND_BACK, glow::FILL);
         gl.depth_func(glow::LESS);
         gl.uniform_1_i32(self.prog.loc("uWire"), 0);
-    }
+    }}
 
     /// Per-mesh uniforms and textures.
-    unsafe fn bind(&self, d: &Drawable) {
+    unsafe fn bind(&self, d: &Drawable) { unsafe {
         let (gl, view, m) = (self.gl, self.view, d.maps);
         let loc = |n: &str| self.prog.loc(n);
         let has_h = m.height.is_some();
@@ -108,5 +108,5 @@ impl<'a> MaterialPass<'a> {
             gl.bind_texture(glow::TEXTURE_2D, Some(*tex));
             gl.uniform_1_i32(loc(name), i as i32);
         }
-    }
+    }}
 }
