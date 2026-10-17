@@ -7,6 +7,7 @@ use super::document_state::OpenDocument;
 use super::geometry::{self, PartGeometry};
 use super::job::Job;
 use super::maps_worker::{MapsWorker, SetMaps};
+use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
 
 type GeometryResult = Result<Vec<PartGeometry>, String>;
@@ -49,8 +50,9 @@ impl SceneSync {
         }
     }
 
-    /// Hands finished work to the GPU. Call once per frame.
-    pub fn poll(&mut self, doc: &mut OpenDocument, gpu: &Shared) {
+    /// Hands finished work to the GPU and each set's compositing warnings to `sink` (the first
+    /// time the set's maps are ready). Call once per frame.
+    pub fn poll(&mut self, doc: &mut OpenDocument, gpu: &Shared, sink: &dyn Sink) {
         let mut built = Vec::new();
         if let Some(job) = &mut self.geometry {
             built = job.poll();
@@ -71,9 +73,11 @@ impl SceneSync {
             }
         }
         if let Some(part_sets) = &self.part_sets {
-            for SetMaps { set, maps } in self.waiting.drain(..) {
+            for SetMaps { set, maps, warnings } in self.waiting.drain(..) {
                 apply_set_maps(part_sets, set, maps, gpu);
-                doc.mark_ready(set);
+                if doc.mark_ready(set) {
+                    warnings.into_iter().for_each(|w| sink.emit(w));
+                }
             }
         }
     }

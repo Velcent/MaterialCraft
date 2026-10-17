@@ -32,6 +32,7 @@ use eframe::egui;
 use launch::{Launch, StartDocument};
 use loader::{Loaded, Loader};
 use materialcraft::diag::{Area, RingBuffer, Sink, SinkExt};
+use materialcraft::paint::diag_entries;
 use panels::PanelEvent;
 use panels::import_report::ReportPanel;
 use panels::layout::Screen;
@@ -86,7 +87,7 @@ impl PaintMode {
             document: None,
             loader: None,
             scene: SceneSync::default(),
-            viewport: Viewport::new(),
+            viewport: Viewport::new(diag.clone()),
             display: launch.channel.unwrap_or(ChannelView::Material),
             report: ReportPanel::default(),
             shell: Shell::new(settings, diag.clone()),
@@ -140,7 +141,7 @@ impl PaintMode {
         }
         self.poll_loader();
         if let Some(doc) = &mut self.document {
-            self.scene.poll(doc, self.viewport.gpu());
+            self.scene.poll(doc, self.viewport.gpu(), &*self.diag);
             if let Some(e) = self.scene.error.take() {
                 self.diag.error(Area::Gpu, e);
             }
@@ -258,6 +259,10 @@ impl PaintMode {
         let mut doc = OpenDocument::new(loaded.document, loaded.source, loaded.summary);
         let d = doc.doc();
         self.diag.info(Area::Project, format!("Opened {}: {} texture sets, {} mesh parts.", doc.source().display(), d.texture_sets.len(), d.mesh.parts.len()));
+        if let Some(report) = d.import_report.as_ref().filter(|_| doc.summary.is_some()) {
+            // The import report panel keeps the details; the log gets its summary line (LG-12).
+            self.diag.emit(diag_entries::import_summary(report, &doc.source().display().to_string(), doc.summary.as_deref()));
+        }
         self.scene.rebuild(&mut doc, self.display);
         self.viewport.reset_camera();
         self.document = Some(doc);

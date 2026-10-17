@@ -9,6 +9,8 @@ pub struct SetState {
     pub visible: bool,
     /// The set's maps for the current display mode are on the GPU.
     pub maps_ready: bool,
+    /// The set's maps were ready at least once (its compositing warnings were logged).
+    pub reported: bool,
 }
 
 /// A document shown on the Paint screen. The document itself is shared read-only with workers.
@@ -22,7 +24,7 @@ pub struct OpenDocument {
 
 impl OpenDocument {
     pub fn new(doc: Document, source: PathBuf, summary: Option<String>) -> OpenDocument {
-        let sets = doc.texture_sets.iter().map(|_| SetState { visible: true, maps_ready: false }).collect();
+        let sets = doc.texture_sets.iter().map(|_| SetState { visible: true, maps_ready: false, reported: false }).collect();
         OpenDocument { doc: Arc::new(doc), source, summary, sets }
     }
 
@@ -65,9 +67,10 @@ impl OpenDocument {
         self.sets.iter_mut().for_each(|s| s.maps_ready = false);
     }
 
-    pub fn mark_ready(&mut self, set: usize) {
-        if let Some(s) = self.sets.get_mut(set) {
-            s.maps_ready = true;
-        }
+    /// Marks `set`'s maps as ready; true the first time for this document.
+    pub fn mark_ready(&mut self, set: usize) -> bool {
+        let Some(s) = self.sets.get_mut(set) else { return false };
+        s.maps_ready = true;
+        !std::mem::replace(&mut s.reported, true)
     }
 }

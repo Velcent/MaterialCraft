@@ -4,14 +4,17 @@
 
 use super::channel_view::ChannelView;
 use super::job::Job;
+use materialcraft::diag::Entry;
 use materialcraft::gpu3d::GpuMaps;
-use materialcraft::paint::{Document, MaterialMaps, OutputOptions};
+use materialcraft::paint::{Document, MaterialMaps, OutputOptions, diag_entries};
 use std::sync::Arc;
 
 /// The prepared maps of one texture set.
 pub struct SetMaps {
     pub set: usize,
     pub maps: GpuMaps,
+    /// What compositing the set could not do exactly, as log entries.
+    pub warnings: Vec<Entry>,
 }
 
 /// One run over a list of texture sets.
@@ -34,8 +37,9 @@ impl MapsWorker {
                 if cancel.is_cancelled() {
                     return;
                 }
+                let warnings = diag_entries::composite_warnings(ts, &maps.warnings);
                 let maps = view.prepare(&maps, ts);
-                if tx.send(SetMaps { set, maps }).is_err() {
+                if tx.send(SetMaps { set, maps, warnings }).is_err() {
                     return;
                 }
             }

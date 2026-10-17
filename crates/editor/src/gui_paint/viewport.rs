@@ -8,6 +8,7 @@ use super::navigation;
 use super::shell::actions;
 use crate::gui_workspace::shortcuts::ShortcutTable;
 use eframe::egui::{self, Align2, Color32, FontId, PointerButton, Sense};
+use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, Shared};
 use materialcraft::render3d::{RELIEF_NONE, View};
 use std::sync::Arc;
@@ -20,12 +21,14 @@ pub struct Viewport {
     view: View,
     /// The unsnapped yaw and pitch during a snapping orbit.
     snap: Option<(f32, f32)>,
+    /// Where the renderer reports shader and GL errors.
+    diag: Arc<dyn Sink>,
 }
 
 impl Viewport {
-    pub fn new() -> Viewport {
+    pub fn new(diag: Arc<dyn Sink>) -> Viewport {
         // Painter shows height through the normal map; displacement stays opt-in.
-        Viewport { gpu: gpu3d::new_shared(), view: View { relief: RELIEF_NONE, ..View::default() }, snap: None }
+        Viewport { gpu: gpu3d::new_shared(), view: View { relief: RELIEF_NONE, ..View::default() }, snap: None, diag }
     }
 
     pub fn gpu(&self) -> &Shared {
@@ -57,8 +60,8 @@ impl Viewport {
         let error = self.gpu.lock().ok().and_then(|g| g.error.clone());
         match error {
             None => {
-                let (gpu, view) = (self.gpu.clone(), display.view_for(&self.view));
-                let cb = eframe::egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&gpu, &info, painter, &view));
+                let (gpu, view, sink) = (self.gpu.clone(), display.view_for(&self.view), self.diag.clone());
+                let cb = eframe::egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&gpu, &info, painter, &view, &*sink));
                 ui.painter().add(egui::PaintCallback { rect, callback: Arc::new(cb) });
             }
             Some(e) => {

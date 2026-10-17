@@ -1510,10 +1510,10 @@ impl App {
             }
         }
         if self.gpu_ready() {
-            let (g, v) = (self.gpu.clone(), self.view3d.clone());
+            let (g, v, sink) = (self.gpu.clone(), self.view3d.clone(), self.diag.sink());
             ui.painter().add(egui::PaintCallback {
                 rect,
-                callback: std::sync::Arc::new(eframe::egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&g, &info, painter, &v))),
+                callback: std::sync::Arc::new(eframe::egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&g, &info, painter, &v, &*sink))),
             });
         } else if let Some(t) = &self.tex3d {
             ui.painter().image(t.id(), img_rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);

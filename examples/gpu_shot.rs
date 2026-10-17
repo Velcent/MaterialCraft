@@ -53,8 +53,10 @@ impl eframe::App for App {
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {
             let rect = ui.max_rect();
             let (g, v) = (self.gpu.clone(), self.view.clone());
-            ui.painter()
-                .add(egui::PaintCallback { rect, callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&g, &info, painter, &v))) });
+            ui.painter().add(egui::PaintCallback {
+                rect,
+                callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&g, &info, painter, &v, &materialcraft::diag::NullSink))),
+            });
         });
         self.frame += 1;
         if self.frame == 4 {

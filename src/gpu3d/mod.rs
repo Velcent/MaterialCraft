@@ -30,6 +30,7 @@ mod textures;
 pub use maps::{GpuMaps, MapInputs, prepare};
 pub use scene::ScenePart;
 
+use crate::diag::{Area, Sink, SinkExt};
 use crate::render3d::View;
 use eframe::egui::PaintCallbackInfo;
 use eframe::egui_glow::{self, glow};
@@ -111,8 +112,10 @@ fn bytes_of<T>(v: &[T]) -> &[u8] {
 }
 
 /// Draw the viewport into the rectangle of the paint callback. Call from an `egui_glow::CallbackFn`.
+/// Shader compile and link failures and GL errors go to `sink` once, when they stop the viewer; the
+/// GPU's name is reported when the renderer starts.
 // SAFETY (every block in `paint`): it runs inside an egui_glow paint callback, so `painter.gl()` is current.
-pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Painter, view: &View) {
+pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Painter, view: &View, sink: &dyn Sink) {
     let mut g = match shared.lock() {
         Ok(g) => g,
         Err(_) => return,
@@ -131,24 +134,25 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
         match unsafe { Renderer::new(gl, &maps, aniso_req) } {
             Ok(r) => {
                 g.renderer = unsafe { gl.get_parameter_string(glow::RENDERER) };
+                sink.info(Area::Gpu, format!("3D view started on {}.", g.renderer));
                 g.res = Some(r);
             }
             Err(e) => {
-                g.error = Some(e);
+                fail(&mut g.error, sink, e);
                 return;
             }
         }
     } else if let Some(maps) = g.pending.take() {
         let res = unsafe { g.res.as_mut().unwrap().set_maps(gl, &maps, aniso_req) };
         if let Err(e) = res {
-            g.error = Some(e);
+            fail(&mut g.error, sink, e);
             return;
         }
     }
     let g = &mut *g;
     let r = g.res.as_mut().unwrap();
     if let Err(e) = unsafe { g.scene.sync(gl, r.aniso(aniso_req)) } {
-        g.error = Some(e);
+        fail(&mut g.error, sink, e);
         return;
     }
     let self_shadow = g.opts.self_shadow;
@@ -164,8 +168,14 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
     }
     g.frames += 1;
     if let Err(e) = result {
-        g.error = Some(e);
+        fail(&mut g.error, sink, e);
     }
+}
+
+/// Stops the viewer with `error` and reports it.
+fn fail(slot: &mut Option<String>, sink: &dyn Sink, error: String) {
+    sink.error(Area::Gpu, format!("The 3D view stopped: {error}"));
+    *slot = Some(error);
 }
 
 /// Read the drawn viewport back: (width, height, RGBA8 rows from the top).
