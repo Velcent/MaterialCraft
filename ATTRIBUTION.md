@@ -16,8 +16,7 @@ This file doesn't change MaterialCraft's own licence (the `license` field in `Ca
 
 | Path | What | Author | Source (repository, file, revision) | Licence |
 |---|---|---|---|---|
-
-None yet.
+| `src/diag/time.rs` | UTC timestamp formatting (`timestamp`, `civil_from_days`) and its test | ArtCraft Team and the PhotoCraft contributors | PhotoCraft, `apps/photocraft/src/logging.rs`, revision 57437ea | MIT OR Apache-2.0 |
 
 ## Assets
 

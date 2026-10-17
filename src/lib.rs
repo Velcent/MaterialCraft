@@ -3,6 +3,7 @@
 pub mod bake;
 pub mod checksum;
 pub mod deflate;
+pub mod diag;
 pub mod export;
 pub mod expr;
 pub mod exr;
