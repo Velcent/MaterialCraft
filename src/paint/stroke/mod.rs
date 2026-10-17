@@ -9,6 +9,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod attach;
+mod camera;
 mod record;
 #[cfg(test)]
 mod tests;

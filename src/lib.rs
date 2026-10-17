@@ -2,6 +2,7 @@
 //! The core library has no external dependencies; it builds on Windows, Linux and macOS.
 pub mod assets;
 pub mod bake;
+pub mod camera;
 pub mod checksum;
 pub mod deflate;
 pub mod diag;
