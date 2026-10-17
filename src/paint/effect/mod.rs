@@ -22,6 +22,7 @@ use super::blend::BlendMode;
 use super::channel::Channel;
 use super::image::TiledImage;
 use super::layer::{ChannelBlend, Fill, PaintContent};
+use super::stroke::StrokeData;
 use std::fmt::Debug;
 
 /// What the effects of one kind of stack write: the blend an effect carries, the pixels of a paint effect
@@ -67,10 +68,19 @@ impl Default for GreyBlend {
 }
 
 /// Painted mask pixels: the grey value is red, alpha is coverage (straight). The image has the texture set's
-/// resolution. (Room for the stroke record that will sit next to the pixels.)
+/// resolution.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MaskPixels {
     pub image: TiledImage,
+    /// The strokes the pixels were painted with, if recorded (see [`super::stroke`]).
+    pub strokes: Option<StrokeData>,
+}
+
+impl MaskPixels {
+    /// Pixels without a stroke record.
+    pub fn new(image: TiledImage) -> MaskPixels {
+        MaskPixels { image, strokes: None }
+    }
 }
 
 /// One entry of an effect stack.

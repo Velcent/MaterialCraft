@@ -1,6 +1,6 @@
 //! Masks: `{"kind": "stack", "enabled", "initial", "effects"}` since 0.3, and [`DomainCodec`] for their
-//! effects: `"blend"` is one `{"mode", "opacity"}`, paint pixels are one `"image"` (written `linear`), fill
-//! values one number `"value"`.
+//! effects: `"blend"` is one `{"mode", "opacity"}`, paint pixels are one `"image"` (written `linear`) and
+//! `"strokes"`, fill values one number `"value"`.
 //!
 //! The 0.2 form `{"kind": "image", "image": …}` (value = red × alpha) is still read: it becomes a black mask
 //! with the image painted on top ([`Mask::from_image`]), which is how it is written from then on.
@@ -9,15 +9,21 @@ use super::blend;
 use super::effect::{self, DomainCodec, EffectAt};
 use super::fields::{Obj, num};
 use super::layer::SetScope;
-use super::{ReadCtx, WriteCtx, image_ref};
+use super::{ReadCtx, WriteCtx, image_ref, strokes};
 use crate::json::Value;
 use crate::paint::effect::Grey;
 use crate::paint::format::FormatError;
 use crate::paint::format::slot::ImageSlot;
+use crate::paint::format::strokes::StrokeSlot;
+use crate::paint::stroke::StrokeOwner;
 use crate::paint::{ColorSpace, GreyBlend, LayerImage, Mask, MaskPixels};
 
 fn slot(set: &SetScope, layer: &str, index: usize) -> ImageSlot {
     ImageSlot::Layer { set: set.index, layer: layer.to_string(), image: LayerImage::Mask { effect: index } }
+}
+
+fn stroke_slot(at: &EffectAt) -> StrokeSlot {
+    StrokeSlot { set: at.set.index, layer: at.layer.to_string(), owner: StrokeOwner::Mask { effect: at.index } }
 }
 
 impl DomainCodec for Grey {
@@ -36,11 +42,13 @@ impl DomainCodec for Grey {
     fn write_pixels(p: &MaskPixels, at: &EffectAt, ctx: &WriteCtx, v: &mut Value) {
         let path = ctx.plan.path(&slot(at.set, at.layer, at.index)).unwrap_or_default();
         v.insert("image", image_ref::write(path, &p.image, ColorSpace::Linear, &format!("{}/image", at.here), ctx.extras));
+        strokes::write(&stroke_slot(at), ctx, v);
     }
 
     fn read_pixels(o: &mut Obj, at: &EffectAt, ctx: &mut ReadCtx) -> Result<MaskPixels, FormatError> {
         let (image, _) = image_ref::read(o.req("image")?, o.path("image"), &format!("{}/image", at.here), slot(at.set, at.layer, at.index), ctx)?;
-        Ok(MaskPixels { image })
+        strokes::read(o, stroke_slot(at), ctx)?;
+        Ok(MaskPixels::new(image))
     }
 
     fn write_values(value: &f32, _: &EffectAt, _: &WriteCtx, v: &mut Value) {

@@ -1,9 +1,9 @@
 //! [`DocumentReader`]: reads the manifest, checks its version, then the mesh, images (decoded in
-//! parallel batches), foreign files and import report, and validates the result.
+//! parallel batches), stroke records, foreign files and import report, and validates the result.
 
 use super::batch::{batch_size, par_map};
 use super::manifest::{self, ImageRef, report};
-use super::{FormatError, images, paths};
+use super::{FormatError, images, paths, strokes};
 use crate::json;
 use crate::mesh::Mesh;
 use crate::paint::Document;
@@ -53,6 +53,13 @@ impl<R: Read + Seek> DocumentReader<R> {
         // before decoding any pixels.
         doc.validate()?;
         self.read_images(&mut doc, &m.images)?;
+        for r in &m.strokes {
+            // A record that cannot be read is kept as unreadable; it never stops the load.
+            let data = strokes::read_entry(&mut self.zip, &r.path);
+            if let Some(slot) = r.slot.strokes_mut(&mut doc) {
+                *slot = Some(data);
+            }
+        }
         for path in m.foreign.iter().filter(|p| *p != manifest::extras::Extras::PATH) {
             paths::check_foreign_path(path)?;
             let bytes = self.zip.read(path)?;

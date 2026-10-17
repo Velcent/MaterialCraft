@@ -8,4 +8,5 @@ mod effects;
 mod fixtures;
 mod manifest_errors;
 mod round_trip;
+mod strokes;
 mod unknown_fields;

@@ -20,6 +20,8 @@ const MAX_SEGMENT: usize = 64;
 pub struct ImagePlan<'d> {
     entries: Vec<(ImageSlot, String, &'d TiledImage)>,
     index: HashMap<ImageSlot, usize>,
+    /// `(set index, layer id)` → the layer's directory, also used for its stroke records.
+    layer_dirs: HashMap<(usize, String), String>,
 }
 
 impl<'d> ImagePlan<'d> {
@@ -27,7 +29,7 @@ impl<'d> ImagePlan<'d> {
     /// `textures/<set>/layers/<layer>/effect-<index>-<channel>.<ext>`,
     /// `textures/<set>/layers/<layer>/mask-<index>.<ext>` and `textures/<set>/baked/<kind>.<ext>`.
     pub fn new(doc: &'d Document) -> ImagePlan<'d> {
-        let mut plan = ImagePlan { entries: Vec::new(), index: HashMap::new() };
+        let mut plan = ImagePlan { entries: Vec::new(), index: HashMap::new(), layer_dirs: HashMap::new() };
         let mut set_dirs = Names::default();
         for (s, set) in doc.texture_sets.iter().enumerate() {
             let dir = format!("textures/{}", set_dirs.claim(&segment(&set.id)));
@@ -42,6 +44,7 @@ impl<'d> ImagePlan<'d> {
                     };
                     plan.push(ImageSlot::Layer { set: s, layer: layer.id.clone(), image }, format!("{ldir}/{stem}"), img);
                 }
+                plan.layer_dirs.insert((s, layer.id.clone()), ldir);
             }
             let mut baked_names = Names::default();
             for (i, b) in set.baked.iter().enumerate() {
@@ -62,6 +65,11 @@ impl<'d> ImagePlan<'d> {
     /// The entry name of `slot`.
     pub fn path(&self, slot: &ImageSlot) -> Option<&str> {
         self.index.get(slot).map(|&i| self.entries[i].1.as_str())
+    }
+
+    /// The directory of layer `layer` of set `set` (`textures/<set>/layers/<layer>`).
+    pub fn layer_dir(&self, set: usize, layer: &str) -> Option<&str> {
+        self.layer_dirs.get(&(set, layer.to_string())).map(String::as_str)
     }
 
     /// `(entry name, image)` in writing order.

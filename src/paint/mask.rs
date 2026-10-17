@@ -23,7 +23,7 @@ impl Mask {
     /// A painted mask: black with `image` painted on top at full strength, so the value is red × alpha
     /// (the image masks of format 0.2).
     pub fn from_image(image: TiledImage) -> Mask {
-        let paint = MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels { image }));
+        let paint = MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels::new(image)));
         Mask { effects: vec![paint], ..Mask::new(0.0) }
     }
 

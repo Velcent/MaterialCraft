@@ -48,7 +48,7 @@ pub fn effects_layer(w: u32, h: u32) -> Layer {
     ];
     let mut mask = Mask::new(1.0);
     mask.effects = vec![
-        grey(BlendMode::Normal, 1.0, EffectKind::Paint(MaskPixels { image: noisy(w, h, PixelFormat::from_id("graya16").unwrap(), 33) })),
+        grey(BlendMode::Normal, 1.0, EffectKind::Paint(MaskPixels::new(noisy(w, h, PixelFormat::from_id("graya16").unwrap(), 33)))),
         grey(BlendMode::Multiply, 0.5, EffectKind::Fill(0.3)),
         grey(BlendMode::Subtract, 1.0, EffectKind::Generator(procedural("edge_wear"))),
         grey(BlendMode::Normal, 1.0, EffectKind::Filter(procedural("sharpen"))),

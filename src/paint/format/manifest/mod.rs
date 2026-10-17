@@ -3,7 +3,8 @@
 //!
 //! - [`fields`]: typed access to JSON objects; exact `f32` numbers.
 //! - [`extras`]: unknown fields kept across load → save.
-//! - [`texture_set`], [`layer`], [`image_ref`], [`report`]: one file per model type.
+//! - [`texture_set`], [`layer`], [`image_ref`], [`report`]: one file per model type; [`strokes`]: stroke record
+//!   references of paint pixels.
 //! - [`effect`] (with [`effect_content`], [`effect_mask`], [`effect_kinds`]), [`blend`], [`geometry_mask`]:
 //!   effect stacks, blend entries and geometry masks of layers.
 
@@ -18,10 +19,12 @@ pub mod geometry_mask;
 pub mod image_ref;
 pub mod layer;
 pub mod report;
+pub mod strokes;
 pub mod texture_set;
 
 use super::paths::{self, ImagePlan};
 use super::slot::ImageSlot;
+use super::strokes::{StrokePlan, StrokeRef};
 use super::version::Version;
 use super::{FORMAT_VERSION, FormatError};
 use crate::json::Value;
@@ -38,6 +41,7 @@ pub const GENERATOR: &str = concat!("MaterialCraft ", env!("CARGO_PKG_VERSION"))
 /// What writing the manifest needs besides the document.
 pub struct WriteCtx<'a> {
     pub plan: &'a ImagePlan<'a>,
+    pub strokes: &'a StrokePlan<'a>,
     pub extras: &'a Extras,
 }
 
@@ -55,6 +59,7 @@ pub struct ImageRef {
 pub struct ReadCtx {
     pub extras: Extras,
     pub images: Vec<ImageRef>,
+    pub strokes: Vec<StrokeRef>,
 }
 
 /// A read manifest: the document without mesh, image pixels, foreign bytes and report, plus
@@ -64,6 +69,8 @@ pub struct Manifest {
     /// Texture sets with correctly sized, still empty images.
     pub doc: Document,
     pub images: Vec<ImageRef>,
+    /// Stroke records to load.
+    pub strokes: Vec<StrokeRef>,
     pub mesh: String,
     pub foreign: Vec<String>,
     pub import_report: Option<String>,
@@ -118,11 +125,12 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
         import_report: o.opt_str("import_report")?.map(str::to_string),
         doc,
         images: Vec::new(),
+        strokes: Vec::new(),
         foreign,
         extras: Extras::default(),
     };
     ctx.extras.record("", &o);
-    Ok(Manifest { images: ctx.images, extras: ctx.extras, ..manifest })
+    Ok(Manifest { images: ctx.images, strokes: ctx.strokes, extras: ctx.extras, ..manifest })
 }
 
 /// `height_filter`, optional since 0.2 (default `backward`).

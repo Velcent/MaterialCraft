@@ -91,7 +91,7 @@ fn mask_stacks_scale_the_layer() {
     let mut paint = TiledImage::new(4, 1, PixelFormat::from_id("graya8").unwrap()).unwrap();
     paint.set(1, 0, [1.0; 4]);
     paint.set(2, 0, [1.0, 1.0, 1.0, 0.0]);
-    top.mask = Some(Mask::new(0.0).with_effect(grey(BlendMode::Normal, 1.0, EffectKind::Paint(crate::paint::MaskPixels { image: paint }))).with_effect(grey(
+    top.mask = Some(Mask::new(0.0).with_effect(grey(BlendMode::Normal, 1.0, EffectKind::Paint(crate::paint::MaskPixels::new(paint)))).with_effect(grey(
         BlendMode::Add,
         0.5,
         EffectKind::Fill(0.5),

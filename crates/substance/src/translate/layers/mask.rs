@@ -157,9 +157,7 @@ impl Walk<'_, '_> {
                             let (image, note) = fit(loaded.image, self.evaluator.resolution);
                             self.note(counts, note);
                             self.note(counts, resolved.status());
-                            EffectKind::Paint(MaskPixels {
-                                image: grey_image(&image, self.evaluator.resolution),
-                            })
+                            EffectKind::Paint(MaskPixels::new(grey_image(&image, self.evaluator.resolution)))
                         }
                         Err(e) => {
                             self.stop(counts, format!("mask {e}"));
@@ -216,7 +214,7 @@ impl Walk<'_, '_> {
     fn empty_paint(&self) -> EffectKind<Grey> {
         let (w, h) = self.evaluator.resolution;
         match TiledImage::new(w, h, PAINT_FORMAT) {
-            Ok(image) => EffectKind::Paint(MaskPixels { image }),
+            Ok(image) => EffectKind::Paint(MaskPixels::new(image)),
             Err(_) => EffectKind::Unknown(data::unknown_named("substance:paint", Value::object())),
         }
     }

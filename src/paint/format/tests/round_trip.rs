@@ -58,7 +58,7 @@ fn small_documents_round_trip() {
     doc.texture_sets.push(TextureSet::new("a", "A", (1, 1)));
     let mut big_float = TextureSet::new("b", "B", (300, 5)).with_channel(Channel::Height);
     let img = noisy(300, 5, PixelFormat::from_id("graya16f").unwrap(), 4);
-    big_float.layers.push(crate::paint::Layer::new("h", "H", LayerKind::Paint(crate::paint::PaintContent { images: vec![(Channel::Height, img)] })));
+    big_float.layers.push(crate::paint::Layer::new("h", "H", LayerKind::Paint(crate::paint::PaintContent::from_images(vec![(Channel::Height, img)]))));
     doc.texture_sets.push(big_float);
     for thumbnail in [Thumbnail::None, Thumbnail::FromDocument] {
         let mut out = Vec::new();

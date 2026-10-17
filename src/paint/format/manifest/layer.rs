@@ -1,12 +1,14 @@
 //! Layers: `{"id", "name", "kind", "visible", "opacity", "blend", "mask", "geometry_mask", …}` plus `images`
-//! (paint), `fill` (fill) or `children` (group), and `effects` (the content effects, since 0.3).
+//! and `strokes` (paint), `fill` (fill) or `children` (group), and `effects` (the content effects, since 0.3).
 
 use super::extras::{Extras, loc};
 use super::fields::{Obj, as_f32, num, num4};
-use super::{ReadCtx, WriteCtx, blend, effect, effect_mask, geometry_mask, image_ref};
+use super::{ReadCtx, WriteCtx, blend, effect, effect_mask, geometry_mask, image_ref, strokes};
 use crate::json::Value;
 use crate::paint::format::FormatError;
 use crate::paint::format::slot::ImageSlot;
+use crate::paint::format::strokes::StrokeSlot;
+use crate::paint::stroke::StrokeOwner;
 use crate::paint::{Channel, ChannelSpec, ColorSpace, Fill, FillSource, Layer, LayerImage, LayerKind, PaintContent};
 
 pub use blend::channel;
@@ -58,6 +60,7 @@ fn write(l: &Layer, set: &SetScope, ctx: &WriteCtx) -> Value {
                 images.insert(c.id(), r);
             }
             v.insert("images", images);
+            strokes::write(&StrokeSlot { set: set.index, layer: l.id.clone(), owner: StrokeOwner::Paint }, ctx, &mut v);
         }
         LayerKind::Fill(f) => {
             v.insert("fill", write_fill(f, &format!("{here}/fill"), ctx.extras));
@@ -125,6 +128,7 @@ fn read(v: &Value, at: String, set: &SetScope, ctx: &mut ReadCtx) -> Result<Laye
                 }
                 content.images.push((c, img));
             }
+            strokes::read(&mut o, StrokeSlot { set: set.index, layer: id.clone(), owner: StrokeOwner::Paint }, ctx)?;
             LayerKind::Paint(content)
         }
         "fill" => {

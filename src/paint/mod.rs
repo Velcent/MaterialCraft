@@ -8,6 +8,7 @@
 //! - [`layer`], [`effect`], [`mask`], [`geometry_mask`], [`texture_set`], [`doc`], [`report`]: the document
 //!   model; [`validate`] its invariants.
 //! - [`edit`]: [`edit::Edit`], every document change with its inverse (for the GUI and the history).
+//! - [`stroke`]: stroke records, the strokes behind painted pixels.
 //! - [`stack`]: [`Compositor`], layer stack → channel; [`layer_preview`]: layer thumbnails on a reduced grid.
 //! - [`diag_entries`]: import summaries and compositing warnings as session log entries.
 //! - [`working_space`]: the space layers blend in (linear light for sRGB channels).
@@ -33,6 +34,7 @@ mod par;
 pub mod pixel;
 pub mod report;
 pub mod stack;
+pub mod stroke;
 pub mod texture_set;
 pub mod validate;
 pub mod working_space;

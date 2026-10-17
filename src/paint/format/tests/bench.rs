@@ -32,7 +32,7 @@ fn bench_two_sets_seven_channels_2k() {
         let mut set = TextureSet::new(format!("set{s}"), "Set", (size, size));
         set.channels = channels.iter().map(|c| ChannelSpec::new(*c)).collect();
         let images = set.channels.iter().enumerate().map(|(i, spec)| (spec.channel, painted(spec, size, (s * 10 + i) as u32))).collect();
-        set.layers.push(Layer::new("paint", "Paint", LayerKind::Paint(PaintContent { images })));
+        set.layers.push(Layer::new("paint", "Paint", LayerKind::Paint(PaintContent::from_images(images))));
         doc.texture_sets.push(set);
     }
     let raw = doc.image_memory_bytes();

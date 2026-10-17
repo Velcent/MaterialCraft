@@ -1,10 +1,11 @@
 //! [`DocumentWriter`]: validates a document and writes its archive entries in a fixed order:
-//! `document.json`, `import-report.json`, `mesh/model.glb`, images, foreign files,
-//! `thumbnail.png`. JSON and glTF are deflated; PNG and EXR are stored (already compressed).
+//! `document.json`, `import-report.json`, `mesh/model.glb`, images, stroke records, foreign files,
+//! `thumbnail.png`. JSON, glTF and stroke records are deflated; PNG and EXR are stored (already compressed).
 
 use super::batch::{batch_size, par_map};
 use super::manifest::{self, WriteCtx, extras::Extras, report};
 use super::paths::{self, ImagePlan};
+use super::strokes::{self, StrokePlan};
 use super::{FormatError, Thumbnail, images};
 use crate::deflate::Level;
 use crate::paint::Document;
@@ -37,9 +38,14 @@ impl<'o> DocumentWriter<'o> {
         }
         let extras = Extras::of_document(doc)?;
         let plan = ImagePlan::new(doc);
+        let stroke_plan = StrokePlan::new(doc, &plan);
+        let stroke_entries = stroke_plan
+            .entries()
+            .map(|(path, data)| strokes::entry_bytes(data).map(|bytes| (path, bytes)).map_err(|m| FormatError::Unsupported(format!("{path}: {m}"))))
+            .collect::<Result<Vec<_>, FormatError>>()?;
         let glb = doc.mesh.to_glb()?;
         let thumbnail = self.options.thumbnail.render(doc);
-        let ctx = WriteCtx { plan: &plan, extras: &extras };
+        let ctx = WriteCtx { plan: &plan, strokes: &stroke_plan, extras: &extras };
         let manifest = manifest::write(doc, &ctx, thumbnail.is_some());
 
         let mut zip = ZipWriter::new(out);
@@ -50,6 +56,9 @@ impl<'o> DocumentWriter<'o> {
         zip.add(paths::MESH, &glb, Method::Deflate)?;
         drop(glb);
         write_images(&plan, &mut zip)?;
+        for (path, bytes) in stroke_entries {
+            zip.add(path, &bytes, Method::Deflate)?;
+        }
         zip.set_level(Level::Fast);
         for f in &doc.foreign {
             zip.add(&f.path, &f.bytes, Method::Deflate)?;

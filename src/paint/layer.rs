@@ -12,6 +12,7 @@ use super::effect::{ContentEffect, EffectKind};
 use super::geometry_mask::GeometryMask;
 use super::image::TiledImage;
 use super::mask::Mask;
+use super::stroke::StrokeData;
 
 /// How a layer (or a content effect) affects one channel. Without an entry for a channel it does not affect it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -26,9 +27,16 @@ pub struct ChannelBlend {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct PaintContent {
     pub images: Vec<(Channel, TiledImage)>,
+    /// The strokes the pixels were painted with, if recorded (see [`super::stroke`]).
+    pub strokes: Option<StrokeData>,
 }
 
 impl PaintContent {
+    /// Pixels without a stroke record.
+    pub fn from_images(images: Vec<(Channel, TiledImage)>) -> PaintContent {
+        PaintContent { images, strokes: None }
+    }
+
     pub fn image(&self, channel: Channel) -> Option<&TiledImage> {
         self.images.iter().find(|(c, _)| *c == channel).map(|(_, i)| i)
     }
@@ -263,7 +271,7 @@ mod tests {
         fx.set_image(Channel::Height, img());
         let mask = Mask::new(1.0)
             .with_effect(MaskEffect::new(GreyBlend::default(), EffectKind::Fill(0.5)))
-            .with_effect(MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels { image: img() })));
+            .with_effect(MaskEffect::new(GreyBlend::default(), EffectKind::Paint(MaskPixels::new(img()))));
         let mut l = Layer::new("l", "L", LayerKind::Paint(base)).with_effect(ContentEffect::new(Vec::new(), EffectKind::Paint(fx)));
         l.mask = Some(mask);
         let roles: Vec<_> = l.images().into_iter().map(|(r, _)| r).collect();

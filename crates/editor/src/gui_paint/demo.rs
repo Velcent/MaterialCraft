@@ -52,6 +52,6 @@ fn stripes() -> Layer {
     });
     let format = ChannelSpec::new(Channel::Height).layer_format();
     let image = TiledImage::from_tex(&tex, format).expect("demo image");
-    let content = PaintContent { images: vec![(Channel::Height, image)] };
+    let content = PaintContent::from_images(vec![(Channel::Height, image)]);
     Layer::new("stripes", "Stripes", LayerKind::Paint(content)).with_blend(Channel::Height, BlendMode::Normal, 1.0)
 }

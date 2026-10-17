@@ -68,7 +68,7 @@ fn quad(name: &str, material: usize, uv_sets: usize, z: f32) -> MeshPart {
 }
 
 fn paint(id: &str, images: Vec<(Channel, TiledImage)>) -> Layer {
-    let mut l = Layer::new(id, format!("Paint {id}"), LayerKind::Paint(PaintContent { images }));
+    let mut l = Layer::new(id, format!("Paint {id}"), LayerKind::Paint(PaintContent::from_images(images)));
     let channels: Vec<Channel> = l.images().into_iter().filter_map(|(c, _)| if let LayerImage::Paint(c) = c { Some(c) } else { None }).collect();
     for c in channels {
         l.set_blend(c, BlendMode::Normal, 1.0);
