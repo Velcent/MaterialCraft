@@ -10,11 +10,15 @@
 //! ```text
 //! roots (from settings) --> Listing::read --> Catalogue::load ----> Catalogue::find(Search) --> tray
 //!                              Watcher::poll --> FileChange --> Catalogue::update
+//!           AssetStore (every write) --> StoreChange --> Library::apply
 //! ```
 //!
 //! Only MaterialCraft's own formats are assets (`.mca` graphs, PNG, OpenEXR); each may have a JSON
 //! sidecar (`<file>.mcmeta`) with name, usage, tags, thumbnail and provenance, and a conventional
 //! thumbnail (`<file>.thumb.png`). `.sbsar` files are listed as importable only (ADR 0008).
+//!
+//! Every write to a library goes through the [`AssetStore`]: create, update, rename, move and delete, each keeping
+//! an asset's file, sidecar and thumbnail together.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod asset;
@@ -31,6 +35,7 @@ mod query;
 mod root;
 mod search;
 mod sidecar;
+mod store;
 mod usage;
 mod watch;
 
@@ -48,5 +53,6 @@ pub use query::{Field, Mode, Query, Term};
 pub use root::{LibraryRoot, RootId, RootKind};
 pub use search::{Location, SavedSearch, Search};
 pub use sidecar::{SIDECAR_FORMAT, SIDECAR_VERSION, Sidecar, SidecarError};
+pub use store::{AssetRef, AssetStore, DiskFs, Draft, MetaEdit, StoreChange, StoreError, StoreFs, StoreRequest};
 pub use usage::Usage;
 pub use watch::{RootChanges, Watcher};

@@ -98,6 +98,43 @@ impl Listing {
         }
     }
 
+    /// Looks at the files `paths` (root-relative) under `dir` again and updates the listing with what it finds (the
+    /// folders of files that exist are added); returns what changed, in path order. The asset store calls this after
+    /// a write so the catalogue updates without a full scan.
+    pub fn restat(&mut self, dir: &Path, paths: &[String]) -> Vec<FileChange> {
+        let mut out = Vec::new();
+        for path in paths {
+            let full = path.split('/').fold(dir.to_path_buf(), |p, s| p.join(s));
+            let now = fs::metadata(&full).ok().filter(|m| m.is_file()).map(|m| Stamp { modified: m.modified().ok(), len: m.len() });
+            let kind = match (self.files.get(path), now) {
+                (None, Some(stamp)) => {
+                    self.files.insert(path.clone(), stamp);
+                    Some(ChangeKind::Added)
+                }
+                (Some(old), Some(stamp)) if *old != stamp => {
+                    self.files.insert(path.clone(), stamp);
+                    Some(ChangeKind::Modified)
+                }
+                (Some(_), None) => {
+                    self.files.remove(path);
+                    Some(ChangeKind::Removed)
+                }
+                _ => None,
+            };
+            if self.files.contains_key(path) {
+                let mut folder = super::format::folder_of(path);
+                while !folder.is_empty() && self.folders.insert(folder.to_owned()) {
+                    folder = super::format::folder_of(folder);
+                }
+            }
+            if let Some(kind) = kind {
+                out.push(FileChange { path: path.clone(), kind });
+            }
+        }
+        out.sort();
+        out
+    }
+
     /// Stamp of a file, if listed.
     pub fn get(&self, path: &str) -> Option<&Stamp> {
         self.files.get(path)

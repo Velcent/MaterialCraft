@@ -1,13 +1,11 @@
-//! [`NewAsset`]: an asset made outside the library (copied out of an imported project, roadmap step 46) written into
-//! a library folder: the file in its usage's folder under a name that replaces nothing ([`new_asset_path`]), its
-//! sidecar with name, usage, tags, description and provenance, and its thumbnail when it has one. The tray picks it
-//! up on its next poll.
+//! [`NewAsset`]: an asset made outside the library (copied out of an imported project, roadmap step 46; a brush preset
+//! saved from the brush panel) written into a library folder through the [`AssetStore`]: the file in its usage's
+//! folder under a name that replaces nothing, its sidecar with name, usage, tags, description and provenance, and its
+//! thumbnail when it has one. The tray picks it up on its next poll.
 
-use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 
-use super::{Provenance, SIDECAR_SUFFIX, Sidecar, THUMBNAIL_SUFFIX, Usage, new_asset_path};
+use super::{AssetStore, Draft, LibraryRoot, Provenance, RootKind, Sidecar, StoreError, Usage};
 
 /// An asset to write: its bytes and what its sidecar says.
 #[derive(Debug, Clone, PartialEq)]
@@ -48,18 +46,19 @@ impl NewAsset {
 
     /// Writes the asset into `library` (its usage's folder is created when missing). An existing file is never
     /// replaced: the name gets a number.
-    pub fn save(&self, library: &Path) -> io::Result<SavedAsset> {
-        let path = new_asset_path(library, self.usage, &self.name, &self.extension);
-        let (Some(dir), Some(file)) = (path.parent(), path.file_name().and_then(|f| f.to_str())) else {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("no file name for {}", self.name)));
-        };
-        fs::create_dir_all(dir)?;
-        fs::write(&path, &self.bytes)?;
-        fs::write(dir.join(format!("{file}{SIDECAR_SUFFIX}")), format!("{}\n", self.sidecar().to_json().to_string_pretty()))?;
-        if let Some(png) = &self.thumbnail {
-            fs::write(dir.join(format!("{file}{THUMBNAIL_SUFFIX}")), png)?;
-        }
-        Ok(SavedAsset { reference: format!("{}/{file}", self.usage.folder()), path })
+    pub fn save(&self, library: &Path) -> Result<SavedAsset, StoreError> {
+        self.save_with(&AssetStore::new(), library)
+    }
+
+    /// [`NewAsset::save`] through `store`.
+    pub fn save_with(&self, store: &AssetStore, library: &Path) -> Result<SavedAsset, StoreError> {
+        let root = LibraryRoot::folder("library", "library", RootKind::User, library);
+        let sidecar = self.sidecar();
+        let draft = Draft { bytes: &self.bytes, sidecar: Some(&sidecar), thumbnail: self.thumbnail.as_deref() };
+        let change = store.create_named(&root, self.usage, &self.name, &self.extension, &draft)?;
+        let reference = change.after.map(|a| a.path).unwrap_or_default();
+        let path = reference.split('/').fold(library.to_path_buf(), |p: PathBuf, s| p.join(s));
+        Ok(SavedAsset { path, reference })
     }
 }
 
@@ -68,6 +67,7 @@ impl NewAsset {
 mod tests {
     use super::*;
     use crate::assets::{Library, LibraryRoot, RootId, RootKind, Thumbnail};
+    use std::fs;
 
     #[test]
     fn a_saved_asset_lands_in_its_usage_folder_with_its_sidecar_and_shows_in_the_catalogue() {

@@ -57,6 +57,16 @@ impl Watcher {
         self.watched.iter().find(|w| &w.root == root).map(|w| &w.listing)
     }
 
+    /// Looks at the files `paths` of `root` again (after the asset store wrote them) and returns what changed, so the
+    /// next poll doesn't report it a second time. `None` if the root isn't watched or nothing changed.
+    pub fn restat(&mut self, root: &RootId, paths: &[String]) -> Option<RootChanges> {
+        let w = self.watched.iter_mut().find(|w| &w.root == root)?;
+        let folders = w.listing.folders().len();
+        let changes = w.listing.restat(&w.dir, paths);
+        let folders_changed = w.listing.folders().len() != folders;
+        (!changes.is_empty() || folders_changed).then(|| RootChanges { root: root.clone(), changes, folders_changed })
+    }
+
     /// List every watched folder again and return what changed, per root (roots where nothing
     /// changed are left out).
     pub fn poll(&mut self, sink: &dyn Sink) -> Vec<RootChanges> {

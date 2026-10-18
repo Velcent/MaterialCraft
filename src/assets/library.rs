@@ -1,7 +1,7 @@
 //! The asset library the editor holds: the catalogue and the watcher, wired together. The editor
 //! passes in the roots from its settings and calls [`Library::poll`] on a timer, off the UI thread.
 
-use super::{Asset, AssetChange, Catalogue, LibraryRoot, RootId, Watcher};
+use super::{Asset, AssetChange, AssetStore, Catalogue, LibraryRoot, RootId, StoreChange, StoreError, StoreRequest, Watcher};
 use crate::diag::Sink;
 
 /// What one [`Library::poll`] changed.
@@ -94,6 +94,35 @@ impl Library {
             }
         }
         out
+    }
+
+    /// Puts what the asset store did into the catalogue at once (the watcher's next poll then sees nothing new).
+    pub fn apply(&mut self, change: &StoreChange, sink: &dyn Sink) -> Refresh {
+        let mut by_root: Vec<(RootId, Vec<String>)> = Vec::new();
+        for (root, path) in change.files() {
+            match by_root.iter_mut().find(|(r, _)| *r == root) {
+                Some((_, paths)) => paths.push(path),
+                None => by_root.push((root, vec![path])),
+            }
+        }
+        let mut out = Refresh::default();
+        for (root, paths) in by_root {
+            let Some(rc) = self.watcher.restat(&root, &paths) else { continue };
+            if let Some(listing) = self.watcher.listing(&root) {
+                out.assets.extend(self.catalogue.update(&root, listing, &rc.changes, sink));
+            }
+            if rc.folders_changed {
+                out.folders.push(root);
+            }
+        }
+        out
+    }
+
+    /// Runs `request` with `store` on this library's roots and applies its change.
+    pub fn run(&mut self, store: &AssetStore, request: &StoreRequest, sink: &dyn Sink) -> Result<(StoreChange, Refresh), StoreError> {
+        let change = request.run(store, &self.catalogue)?;
+        let refresh = self.apply(&change, sink);
+        Ok((change, refresh))
     }
 
     pub fn catalogue(&self) -> &Catalogue {
