@@ -40,6 +40,7 @@ mod library_import;
 mod loader;
 mod maps_worker;
 mod navigation;
+mod new_project;
 mod occlusion_check;
 mod panels;
 mod projection_edit;
@@ -164,6 +165,8 @@ pub struct PaintMode {
     smart: smart_assets::SmartAssets,
     /// Naming a brush preset saved from the brush panel (AS-06).
     brush_presets: brush_presets::BrushPresets,
+    /// The New project dialog and naming a project template (step 50).
+    new_projects: new_project::NewProjects,
     /// Writing the project assets the import review ticked into the user's library (step 46).
     library_imports: library_import::LibraryImports,
     /// Editing the selected fill's projection: the view gizmo and the panel's gestures (step 38).
@@ -216,6 +219,7 @@ impl PaintMode {
             saving: unsaved::Saving::default(),
             smart: smart_assets::SmartAssets::default(),
             brush_presets: brush_presets::BrushPresets::default(),
+            new_projects: new_project::NewProjects::default(),
             library_imports: library_import::LibraryImports::default(),
             tablet: input::tablet::TabletInput::none(),
             projection: projection_edit::ProjectionEditing::default(),
@@ -227,7 +231,11 @@ impl PaintMode {
         }
         match launch.open {
             Some(StartDocument::File(p)) => pm.open(p),
-            Some(StartDocument::Demo) => pm.show(Loaded { document: demo::document(), source: "demo".into(), summary: None }),
+            Some(StartDocument::Demo) => pm.show(Loaded { document: demo::document(), source: "demo".into(), summary: None, notes: Vec::new() }),
+            Some(StartDocument::NewProject(mesh)) => {
+                let settings = materialcraft::paint::new_project::NewProject::new(mesh, Default::default());
+                pm.loader = Some(Loader::start_new(settings));
+            }
             None => {}
         }
         pm
@@ -288,6 +296,7 @@ impl PaintMode {
         self.eyedrop(ctx);
         self.poll_smart_assets(ctx);
         self.poll_brush_presets(ctx);
+        self.poll_new_project(ctx);
         self.poll_unsaved(ctx);
         let name = self.document.as_ref().map(|d| d.title());
         self.title.update(ctx, name.as_deref());
@@ -365,6 +374,8 @@ impl PaintMode {
             return PaintAction::Stay;
         };
         match ev {
+            PanelEvent::NewProject => self.guard(unsaved::Then::NewProject),
+            PanelEvent::SaveTemplate => self.save_template(),
             PanelEvent::Open => self.guard(unsaved::Then::Open(Pick::Any)),
             PanelEvent::Import => self.guard(unsaved::Then::Open(Pick::Substance)),
             PanelEvent::Close => self.guard(unsaved::Then::Close),

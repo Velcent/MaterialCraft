@@ -50,6 +50,10 @@ pub enum Strip {
 /// A request from a panel.
 #[derive(Clone, PartialEq, Debug)]
 pub enum PanelEvent {
+    /// File > New project: a document from a mesh file.
+    NewProject,
+    /// Save the open document's settings as a project template.
+    SaveTemplate,
     /// Pick a `.mcpaint` or `.spp` file.
     Open,
     /// Pick a Substance Painter project.

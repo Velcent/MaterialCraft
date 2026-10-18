@@ -97,6 +97,9 @@ impl PaintMode {
 
     /// Replaces the current document with `loaded`.
     pub(super) fn show(&mut self, loaded: Loaded) {
+        for note in &loaded.notes {
+            self.diag.info(Area::Project, note.clone());
+        }
         let mut doc = OpenDocument::new(loaded.document, loaded.source, loaded.summary);
         let d = doc.doc();
         self.diag.info(Area::Project, format!("Opened {}: {} texture sets, {} mesh parts.", doc.source().display(), d.texture_sets.len(), d.mesh.parts.len()));

@@ -1,8 +1,9 @@
-//! Background loading of a document: `.mcpaint` directly, `.spp` through the in-process importer
+//! Background loading of a document: `.mcpaint` directly, a new project from a mesh file, `.spp` through the in-process importer
 //! ([`SppImport`], which keeps a conversion cache).
 
 use super::job::{CancelToken, Job};
 use super::spp_import::SppImport;
+use materialcraft::paint::new_project::{self, NewProject};
 use materialcraft::paint::{self, Document};
 use materialcraft_substance::translate::replacements::ProceduralPlan;
 use std::path::{Path, PathBuf};
@@ -15,6 +16,8 @@ pub struct Loaded {
     pub source: PathBuf,
     /// Importer summary line, for imports.
     pub summary: Option<String>,
+    /// What the user should know about how a new project was made (files left out, the unit, cameras).
+    pub notes: Vec<String>,
 }
 
 enum Event {
@@ -43,6 +46,21 @@ impl Loader {
             let _ = tx.send(Event::Done(result));
         });
         Loader { job, source, progress: (0.0, "Opening".into()) }
+    }
+
+    /// Makes a new project from a mesh file (File > New project); the mesh file is its source until it is saved.
+    pub fn start_new(project: NewProject) -> Loader {
+        let source = project.mesh.clone();
+        let job = Job::spawn(move |_, tx| {
+            let mut progress = |f: f32, m: &str| {
+                let _ = tx.send(Event::Progress(f, m.to_string()));
+            };
+            let result = new_project::create(&project, &mut progress)
+                .map(|c| Loaded { document: c.document, source: project.mesh.clone(), summary: None, notes: c.notes })
+                .map_err(|e| format!("No project was made: {e}."));
+            let _ = tx.send(Event::Done(result));
+        });
+        Loader { job, source, progress: (0.0, "Reading the mesh".into()) }
     }
 
     pub fn source(&self) -> &Path {
@@ -75,14 +93,14 @@ fn load(path: &Path, plan: &ProceduralPlan, library: &[PathBuf], cancel: &Cancel
     match ext.as_str() {
         "mcpaint" => {
             let _ = tx.send(Event::Progress(0.95, "Reading document".into()));
-            Ok(Loaded { document: read_document(path)?, source: path.to_path_buf(), summary: None })
+            Ok(Loaded { document: read_document(path)?, source: path.to_path_buf(), summary: None, notes: Vec::new() })
         }
         "spp" => {
             let mut progress = |f: f32, m: &str| {
                 let _ = tx.send(Event::Progress(f, m.to_string()));
             };
             let imported = SppImport::new().with_plan(plan.clone()).with_library(library.to_vec()).open(path, cancel, &mut progress)?;
-            Ok(Loaded { document: imported.document, source: path.to_path_buf(), summary: Some(imported.summary) })
+            Ok(Loaded { document: imported.document, source: path.to_path_buf(), summary: Some(imported.summary), notes: Vec::new() })
         }
         _ => Err(format!("{} is neither a .mcpaint document nor a .spp project.", path.display())),
     }

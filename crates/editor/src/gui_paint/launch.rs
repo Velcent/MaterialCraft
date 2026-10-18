@@ -2,9 +2,11 @@
 //!
 //!     materialcraft-gui --paint <file.mcpaint|file.spp> [--channel <id>] [--layout 3d|2d|both] [--shot <out.png>]
 //!     materialcraft-gui --paint-demo [--channel <id>] [--shot <out.png>]
+//!     materialcraft-gui --new-project <mesh.obj|mesh.glb> [--shot <out.png>]
 //!     materialcraft-gui --paint <file> --occlusion-check <map.png>
 //!     materialcraft-gui --paint <file> --stroke-test [--stroke-helpers] --shot <out.png>
 //!
+//! `--new-project` makes a project from the mesh file with the first built-in template, as File > New project would.
 //! `--channel` takes a channel id (`base_color`, `roughness`, ...) or `material`; `--layout` starts with the 3D view,
 //! the 2D (UV) view or both side by side; `--shot` saves the
 //! window once every map is on the GPU and then quits. `--occlusion-check` compares the CPU view projector
@@ -24,6 +26,8 @@ pub enum StartDocument {
     File(PathBuf),
     /// A small document built in code (for testing without files).
     Demo,
+    /// A new project from this mesh file with the default template.
+    NewProject(PathBuf),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -46,6 +50,7 @@ impl Launch {
             match a.as_str() {
                 "--paint" => launch.open = it.next().map(|p| StartDocument::File(PathBuf::from(p))),
                 "--paint-demo" => launch.open = Some(StartDocument::Demo),
+                "--new-project" => launch.open = it.next().map(|p| StartDocument::NewProject(PathBuf::from(p))),
                 "--shot" => launch.shot = it.next().map(PathBuf::from),
                 "--occlusion-check" => launch.occlusion_check = it.next().map(PathBuf::from),
                 "--stroke-test" => launch.stroke_test = true,

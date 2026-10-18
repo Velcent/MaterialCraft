@@ -52,6 +52,7 @@ const TOOL_KEYS: &str = "Tool modifiers";
 
 /// The Paint screen's actions, in the order the shortcuts page lists them.
 pub const ACTIONS: &[ActionSpec] = &[
+    press("paint.new", "New project from a mesh", FILE, &["Mod+N"]),
     press("paint.open", "Open document", FILE, &["Mod+O"]),
     press("paint.import", "Import Substance Painter project", FILE, &["Mod+I"]),
     press("paint.save", "Save document", FILE, &["Mod+S"]),
@@ -131,6 +132,7 @@ pub fn event_for(id: &str) -> Option<PanelEvent> {
         return Some(PanelEvent::TogglePanel(panel));
     }
     Some(match id {
+        "paint.new" => PanelEvent::NewProject,
         "paint.open" => PanelEvent::Open,
         "paint.import" => PanelEvent::Import,
         "paint.save" => PanelEvent::Save,

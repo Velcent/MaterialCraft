@@ -19,6 +19,8 @@ pub enum Then {
     Open(Pick),
     /// Open this file (dropped onto the window).
     OpenPath(PathBuf),
+    /// Open the New project dialog.
+    NewProject,
     /// Close the window.
     Quit,
 }
@@ -29,6 +31,7 @@ impl Then {
         match self {
             Then::Close => "closing it",
             Then::Open(_) | Then::OpenPath(_) => "opening another document",
+            Then::NewProject => "making a new project",
             Then::Quit => "quitting",
         }
     }
@@ -70,6 +73,7 @@ impl PaintMode {
                 self.pick_file(pick);
             }
             Then::OpenPath(path) => self.open_reviewed(path),
+            Then::NewProject => self.open_new_project(),
             Then::Quit => {
                 self.saving.quit_confirmed = true;
                 self.saving.close_window = true;

@@ -149,6 +149,20 @@ impl AssetTray {
         self.service.roots().iter().filter_map(|r| r.path.clone()).collect()
     }
 
+    /// The project template files (`.mctemplate`) of every library, in tray order, with their display names. Empty
+    /// while the library is busy.
+    pub fn template_files(&self) -> Vec<(String, PathBuf)> {
+        let Some(library) = self.service.try_read() else { return Vec::new() };
+        let catalogue = library.catalogue();
+        let mut out = Vec::new();
+        for root in catalogue.roots() {
+            let Some(dir) = &root.path else { continue };
+            let templates = catalogue.assets(&root.id).filter(|a| a.format == materialcraft::assets::Format::Template);
+            out.extend(templates.map(|a| (a.name.clone(), dir.join(&a.path))));
+        }
+        out
+    }
+
     /// The payload of the asset being dragged, if it can be dropped on the layer stack (for its landing preview).
     pub fn dragged_payload(&self) -> Option<&DropPayload> {
         self.drag.as_ref().and_then(|d| d.payload.as_ref().ok())

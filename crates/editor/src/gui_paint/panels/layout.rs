@@ -114,8 +114,11 @@ pub fn empty_state(ui: &mut egui::Ui, events: &mut Vec<PanelEvent>) {
         ui.add_space(ui.available_height() * 0.35);
         ui.label(egui::RichText::new("Paint mode").size(19.0).strong().color(egui::Color32::from_gray(235)));
         ui.add_space(8.0);
-        ui.label("View a MaterialCraft paint document or a Substance 3D Painter project.");
+        ui.label("Start a project from a mesh, or open a MaterialCraft paint document or a Substance 3D Painter project.");
         ui.add_space(12.0);
+        if ui.button("New project...").clicked() {
+            events.push(PanelEvent::NewProject);
+        }
         if ui.button("Open in Paint mode...").clicked() {
             events.push(PanelEvent::Open);
         }
