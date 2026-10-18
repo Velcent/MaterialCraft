@@ -12,7 +12,9 @@ pub const MANIFEST: &str = "starter.json";
 
 /// The starter library's content version. Bump it whenever a recipe changes what it makes.
 /// Version 2: brush presets, and the procedural alphas name their tip in their provenance.
-pub const LIBRARY_VERSION: u64 = 2;
+/// Version 3: seeded tip variants, PhotoCraft's patterns and Texturizer reliefs, presets translated from PhotoCraft's
+/// and the physicallybased.info reference materials.
+pub const LIBRARY_VERSION: u64 = 3;
 
 const FORMAT: &str = "materialcraft-starter";
 
