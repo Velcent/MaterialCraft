@@ -90,6 +90,7 @@ pub const ACTIONS: &[ActionSpec] = &[
     press("paint.window.assets", "Show or hide Assets", WINDOW, &[]),
     press("paint.window.bakers", "Show or hide Bakers", WINDOW, &[]),
     press("paint.window.brush", "Show or hide Brush", WINDOW, &[]),
+    press("paint.window.projection", "Show or hide Projection", WINDOW, &[]),
     press("paint.layout.painting", "Painting layout", WINDOW, &[]),
     press("paint.layout.baking", "Baking layout", WINDOW, &["F8"]),
     press("paint.layout.reset", "Reset the current layout", WINDOW, &[]),
@@ -183,6 +184,7 @@ pub fn toggle_action(panel: PaintPanel) -> &'static str {
         PaintPanel::Assets => "paint.window.assets",
         PaintPanel::Bakers => "paint.window.bakers",
         PaintPanel::Brush => "paint.window.brush",
+        PaintPanel::Projection => "paint.window.projection",
     }
 }
 

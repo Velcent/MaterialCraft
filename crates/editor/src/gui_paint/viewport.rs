@@ -9,6 +9,7 @@ use super::channel_view::ChannelView;
 use super::input::stylus::StylusFeed;
 use super::input::{PointerLog, StrokeInput};
 use super::navigation;
+use super::projection_edit::{GizmoPointer, Phase};
 use super::shell::actions;
 use super::tools::screen_image::gizmo::GizmoAction;
 use super::view_state::ViewState;
@@ -44,6 +45,13 @@ pub struct Viewport {
     image_key: bool,
     /// This frame's drag of the image gizmo.
     image_drag: Option<ImageDrag>,
+    /// The pointer is over a part of the projection gizmo (set by the screen from last frame's hover): a primary
+    /// press grabs it instead of painting.
+    gizmo_hover: bool,
+    /// A projection gizmo drag holds the primary button.
+    gizmo_active: bool,
+    /// This frame's projection gizmo pointer event.
+    gizmo_pointer: Option<GizmoPointer>,
 }
 
 /// A drag of the stencil's or projection image's gizmo (the stencil key held).
@@ -73,7 +81,21 @@ impl Viewport {
         if let Ok(mut g) = gpu.lock() {
             g.opts = opts;
         }
-        Viewport { gpu, state, snap: None, diag, rect: None, pointer: PointerLog::default(), hover: None, layer: None, image_key: false, image_drag: None }
+        Viewport {
+            gpu,
+            state,
+            snap: None,
+            diag,
+            rect: None,
+            pointer: PointerLog::default(),
+            hover: None,
+            layer: None,
+            image_key: false,
+            image_drag: None,
+            gizmo_hover: false,
+            gizmo_active: false,
+            gizmo_pointer: None,
+        }
     }
 
     pub fn gpu(&self) -> &Shared {
@@ -124,6 +146,16 @@ impl Viewport {
     /// This frame's gizmo drag of the stencil or projection image, if any.
     pub fn image_drag(&self) -> Option<ImageDrag> {
         self.image_drag
+    }
+
+    /// This frame's projection gizmo pointer event, if any.
+    pub fn gizmo_pointer(&self) -> Option<GizmoPointer> {
+        self.gizmo_pointer
+    }
+
+    /// Whether the pointer is over the projection gizmo (a press then grabs it).
+    pub fn set_gizmo_hover(&mut self, over: bool) {
+        self.gizmo_hover = over;
     }
 
     /// True while the stencil key is held (the gizmo is shown).
@@ -180,6 +212,7 @@ impl Viewport {
         let image_key = ui.input(|i| keys.held_shifted(i, actions::STENCIL));
         self.image_key = image_key.is_some();
         self.image_drag = image_key.and_then(|snap| image_drag(ui, &resp, rect, snap));
+        self.gizmo_pointer = if self.image_key { None } else { self.gizmo_input(ui, &resp, rect) };
         if !self.image_key {
             self.camera_input(ui, &resp, keys);
         }
@@ -220,7 +253,9 @@ impl Viewport {
         let hover = resp.hover_pos().filter(|p| rect.contains(*p));
         self.hover = hover.map(|p| Hover { pos: [p.x - rect.min.x, p.y - rect.min.y], line });
         // with the stencil key held, drags edit the stencil or projection image
-        let is_stroke = (gesture == Some(actions::STROKE) || line.is_some()) && !self.image_key;
+        // on the projection gizmo, presses grab it instead
+        let on_gizmo = self.gizmo_active || (self.gizmo_hover && !mods.alt);
+        let is_stroke = (gesture == Some(actions::STROKE) || line.is_some()) && !self.image_key && !on_gizmo;
         let held = is_stroke && resp.dragged_by(PointerButton::Primary);
         let clicked = is_stroke && resp.clicked_by(PointerButton::Primary);
         let started = (is_stroke && resp.drag_started_by(PointerButton::Primary)) || clicked;
@@ -260,6 +295,28 @@ impl Viewport {
                 navigation::zoom(&mut self.state.view, scroll);
             }
         }
+    }
+}
+
+impl Viewport {
+    /// The projection gizmo's pointer: a primary press over it (without Alt, which navigates) grabs it; the drag
+    /// and its release follow. Ctrl steps, Shift snaps onto the surface or locks an axis.
+    fn gizmo_input(&mut self, ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect) -> Option<GizmoPointer> {
+        let (mods, press, now) = ui.input(|i| (i.modifiers, i.pointer.press_origin(), i.pointer.interact_pos()));
+        let at = |p: egui::Pos2| [p.x - rect.min.x, p.y - rect.min.y];
+        let pointer = |p: Option<egui::Pos2>, phase| GizmoPointer { at: p.map_or([f32::NAN; 2], at), phase, step: mods.command, shift: mods.shift };
+        if resp.drag_started_by(PointerButton::Primary) && self.gizmo_hover && !mods.alt {
+            self.gizmo_active = true;
+            return Some(pointer(press.or(now), Phase::Press));
+        }
+        if !self.gizmo_active {
+            return None;
+        }
+        if resp.drag_stopped_by(PointerButton::Primary) || !resp.dragged_by(PointerButton::Primary) {
+            self.gizmo_active = false;
+            return Some(pointer(now, Phase::Release));
+        }
+        Some(pointer(now, Phase::Drag))
     }
 }
 

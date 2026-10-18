@@ -4,7 +4,7 @@
 
 use super::events::LayerEvent;
 use super::menus::{self, Local, MenuTarget};
-use super::row_ui::{self, LayerLook, mask_span};
+use super::row_ui::{self, EffectAt, LayerLook, mask_span};
 use super::rows::{Folding, Landing, RowKind, Rows};
 use super::selection::{ClickMods, Selection};
 use super::thumbnails::Thumbnails;
@@ -138,19 +138,27 @@ impl ListState {
                     RowKind::Effect { layer, stack, index } => {
                         let Some(owner) = set.layer(layer) else { continue };
                         let r = LayerRef::new(set.id.clone(), layer.clone());
+                        let picked = *stack == StackId::Content && selection.focus() == Some(layer.as_str()) && selection.effect() == Some(*index);
                         let shown = match stack {
-                            StackId::Content => owner.effects.get(*index).map(|e| row_ui::effect_row(ui, rect, row.depth, layer, *stack, *index, e)),
+                            StackId::Content => owner
+                                .effects
+                                .get(*index)
+                                .map(|e| row_ui::effect_row(ui, rect, row.depth, EffectAt { owner: layer, stack: *stack, index: *index }, e, picked)),
                             StackId::Mask => owner
                                 .mask
                                 .as_ref()
                                 .and_then(|m| m.effects.get(*index))
-                                .map(|e| row_ui::effect_row(ui, rect, row.depth, layer, *stack, *index, e)),
+                                .map(|e| row_ui::effect_row(ui, rect, row.depth, EffectAt { owner: layer, stack: *stack, index: *index }, e, false)),
                         };
                         let enabled = match stack {
                             StackId::Content => owner.effects.get(*index).is_some_and(|e| e.enabled),
                             StackId::Mask => owner.mask.as_ref().and_then(|m| m.effects.get(*index)).is_some_and(|e| e.enabled),
                         };
-                        if let Some((_, toggled, deleted)) = shown {
+                        if let Some((resp, toggled, deleted)) = shown {
+                            // a content effect clicked is picked for editing (a fill effect's projection)
+                            if resp.clicked() && !toggled && !deleted && *stack == StackId::Content {
+                                selection.pick_effect(layer, *index);
+                            }
                             if toggled {
                                 out.push(LayerEvent::SetEffectEnabled { layer: r.clone(), stack: *stack, index: *index, enabled: !enabled });
                             }

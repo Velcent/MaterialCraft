@@ -16,6 +16,9 @@ pub struct Selection {
     ids: Vec<String>,
     anchor: Option<String>,
     pub part: Part,
+    /// A content effect of the focused layer picked in the list (its properties are edited, e.g. a fill
+    /// effect's projection); any other click clears it.
+    effect: Option<usize>,
 }
 
 /// Modifiers of a click on a row.
@@ -46,16 +49,30 @@ impl Selection {
         self.anchor = ids.last().cloned();
         self.ids = ids;
         self.part = Part::Content;
+        self.effect = None;
     }
 
     pub fn clear(&mut self) {
         self.ids.clear();
         self.anchor = None;
         self.part = Part::Content;
+        self.effect = None;
+    }
+
+    /// Picks content effect `index` of layer `id` (the layer alone is selected and focused).
+    pub fn pick_effect(&mut self, id: &str, index: usize) {
+        self.set(vec![id.to_string()]);
+        self.effect = Some(index);
+    }
+
+    /// The content effect picked on the focused layer.
+    pub fn effect(&self) -> Option<usize> {
+        self.effect
     }
 
     /// A click on layer `id`; `order` is the rows' layer ids top to bottom (for Shift ranges).
     pub fn click(&mut self, id: &str, mods: ClickMods, part: Part, order: &[&str]) {
+        self.effect = None;
         if mods.range
             && let Some(anchor) = self.anchor.clone()
             && let (Some(a), Some(b)) = (order.iter().position(|s| *s == anchor), order.iter().position(|s| *s == id))

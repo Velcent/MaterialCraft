@@ -15,6 +15,7 @@ impl PaintMode {
         let input = self.geometry_pick(input);
         let input = self.material_pick(input);
         self.screen_image_input(ctx);
+        self.projection_gizmo(ctx);
         let Some(doc) = self.document.as_mut() else {
             self.painting.forget_document();
             return;

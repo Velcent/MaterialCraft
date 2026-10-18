@@ -35,6 +35,8 @@ mod maps_worker;
 mod navigation;
 mod occlusion_check;
 mod panels;
+mod projection_edit;
+mod projection_screen;
 mod quick_mask_tint;
 mod quick_tools;
 mod reveal;
@@ -145,6 +147,8 @@ pub struct PaintMode {
     saving: unsaved::Saving,
     /// Naming a new smart material or mask; asking whether to bake the maps a dropped one needs.
     smart: smart_assets::SmartAssets,
+    /// Editing the selected fill's projection: the view gizmo and the panel's gestures (step 38).
+    projection: projection_edit::ProjectionEditing,
     /// The platform's pen reader (step 35), kept alive while the screen exists.
     tablet: input::tablet::TabletInput,
 }
@@ -187,6 +191,7 @@ impl PaintMode {
             saving: unsaved::Saving::default(),
             smart: smart_assets::SmartAssets::default(),
             tablet: input::tablet::TabletInput::none(),
+            projection: projection_edit::ProjectionEditing::default(),
         };
         if launch.stroke_test && launch.stroke_helpers {
             pm.painting.brush.helpers = stroke_test::helpers();
@@ -306,12 +311,14 @@ impl PaintMode {
             brush: &mut self.painting.brush,
             images: &self.painting.images,
             quick_mask: self.painting.quick_mask.state(),
+            projection: &self.projection.settings,
         };
         panels::layout::show(ui, screen)
     }
 
     fn apply(&mut self, ev: PanelEvent) -> PaintAction {
         self.end_stroke_before(&ev);
+        self.end_projection_drag_before(&ev);
         if ev == PanelEvent::PreviousTool {
             self.apply_quick_mask();
         }
@@ -368,6 +375,7 @@ impl PaintMode {
             PanelEvent::Reveal(target) => self.reveal(&target),
             PanelEvent::Assets(ev) => self.apply_tray(ev),
             PanelEvent::Bakers(ev) => self.bakers_event(ev),
+            PanelEvent::Projection(ev) => self.projection_event(ev),
             // Workspace events were handled by the shell.
             _ => {}
         }

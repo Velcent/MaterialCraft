@@ -169,20 +169,34 @@ pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
     out
 }
 
-/// One effect row; returns (row response, on/off toggled, delete clicked).
+/// Which effect a row shows: its layer, stack and index.
+pub struct EffectAt<'a> {
+    pub owner: &'a str,
+    pub stack: StackId,
+    pub index: usize,
+}
+
+/// One effect row (`picked`: its properties are being edited); returns (row response, on/off toggled, delete clicked).
 pub fn effect_row<D: EffectDomain>(
     ui: &mut Ui,
     rect: Rect,
     depth: usize,
-    owner: &str,
-    stack: StackId,
-    index: usize,
+    at: EffectAt,
     e: &materialcraft::paint::Effect<D>,
+    picked: bool,
 ) -> (Response, bool, bool) {
+    let EffectAt { owner, stack, index } = at;
     let id = Id::new(("effect_row", owner, stack == StackId::Mask, index));
     let row = ui.interact(rect, id, Sense::click());
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect.shrink2(vec2(0.0, 0.5)), 0.0, if row.hovered() { gui_theme::STRIP_HOVER } else { Color32::from_gray(36) });
+    let bg = if picked {
+        gui_theme::STRIP_SELECTED
+    } else if row.hovered() {
+        gui_theme::STRIP_HOVER
+    } else {
+        Color32::from_gray(36)
+    };
+    painter.rect_filled(rect.shrink2(vec2(0.0, 0.5)), 0.0, bg);
     let x = rect.min.x + EYE + depth as f32 * INDENT;
     let tick = Rect::from_min_size(pos2(x, rect.min.y + 4.0), vec2(14.0, 14.0));
     painter.rect_stroke(tick, 2.0, Stroke::new(1.0, gui_theme::ICON), StrokeKind::Inside);

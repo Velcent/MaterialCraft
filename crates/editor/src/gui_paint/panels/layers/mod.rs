@@ -29,7 +29,7 @@ use crate::gui_paint::fill_surfaces::FillSurfaces;
 use eframe::egui::{Pos2, Ui};
 use materialcraft::history::CoalesceKey;
 use materialcraft::paint::edit::LayerRef;
-use materialcraft::paint::edit::ops::{DropPayload, DropTarget, NewLayer};
+use materialcraft::paint::edit::ops::{DropPayload, DropTarget, FillAt, FillRef, NewLayer};
 use materialcraft::paint::{Channel, Document, GeometryMask, LayerKind, TextureSet};
 use rows::{Folding, Rows};
 use selection::{Part, Selection};
@@ -112,6 +112,22 @@ impl LayerPanel {
             Part::Content => materialcraft_brush::TargetPart::Content,
         };
         Some((materialcraft_brush::PaintTarget { layer: LayerRef::new(set.id.clone(), self.selection.focus()?), part }, index))
+    }
+
+    /// The fill whose projection the projection panel and gizmos edit: a picked fill effect, else the focused fill
+    /// layer's fill (with its content, not its mask, selected).
+    pub fn selected_fill(&self, doc: &Document) -> Option<FillRef> {
+        let set = self.current_set(doc)?;
+        let focus = self.selection.focus()?;
+        let r = FillRef::new(
+            LayerRef::new(set.id.clone(), focus),
+            match self.selection.effect() {
+                Some(i) => FillAt::Effect(i),
+                None if self.selection.part == Part::Content => FillAt::Layer,
+                None => return None,
+            },
+        );
+        r.fill(doc).is_some().then_some(r)
     }
 
     /// Selects `ids` (new layers after an edit).

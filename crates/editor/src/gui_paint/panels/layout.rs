@@ -3,6 +3,7 @@
 
 use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
+use super::super::projection_edit::GizmoSettings;
 use super::super::shell::Shell;
 use super::super::tools::BrushTools;
 use super::super::tools::screen_image::ScreenImages;
@@ -42,6 +43,8 @@ pub struct Screen<'a> {
     pub images: &'a ScreenImages,
     /// The quick mask's state, for its controls.
     pub quick_mask: materialcraft_brush::QuickMaskState,
+    /// The projection gizmo's settings, for the projection panel.
+    pub projection: &'a GizmoSettings,
 }
 
 /// Draws the screen and returns what the user asked for.
@@ -82,6 +85,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
             brush: s.brush,
             images: s.images,
             quick_mask: s.quick_mask,
+            projection: s.projection,
             scale_draft: &mut shell.scale_draft,
             pen: &shell.settings.get().pen,
             log: s.log,

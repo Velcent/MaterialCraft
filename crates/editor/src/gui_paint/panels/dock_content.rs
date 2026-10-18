@@ -6,6 +6,7 @@ use eframe::egui::{self, Ui};
 
 use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
+use super::super::projection_edit::GizmoSettings;
 use super::super::shell::actions;
 use super::super::shell::panels::PaintPanel;
 use super::super::shell::tools::ToolState;
@@ -16,7 +17,7 @@ use super::bakers::{BakeStatus, BakersPanel};
 use super::import_report::ReportPanel;
 use super::layers::LayerPanel;
 use super::log::LogPanel;
-use super::{PanelEvent, brush_panel, display_settings, interface_settings, pen_settings, texture_sets, timeline, viewport_toolbar};
+use super::{PanelEvent, brush_panel, display_settings, interface_settings, pen_settings, projection, texture_sets, timeline, viewport_toolbar};
 use crate::gui_assets::AssetTray;
 use crate::gui_settings::PenSettings;
 use crate::gui_workspace::shortcuts::{ShortcutTable, ShortcutsPage};
@@ -37,6 +38,8 @@ pub struct Bodies<'a> {
     /// The stencil and projection image, for the brush panel.
     pub images: &'a ScreenImages,
     pub quick_mask: materialcraft_brush::QuickMaskState,
+    /// The projection gizmo's settings, for the projection panel.
+    pub projection: &'a GizmoSettings,
     pub scale_draft: &'a mut f32,
     /// The pen settings, shown under the interface settings.
     pub pen: &'a PenSettings,
@@ -116,6 +119,20 @@ impl DockContent<PaintPanel> for Bodies<'_> {
                 let set = self.document.and_then(|d| self.layers.current_set(d.doc()));
                 let images = brush_panel::ImagesUi { images: self.images, key: self.shortcuts.label(actions::STENCIL), events: self.events };
                 margin.show(ui, |ui| brush_panel::show(ui, self.brush, self.tools.current, set, images));
+            }
+            PaintPanel::Projection => {
+                margin.show(ui, |ui| match self.document {
+                    Some(doc) => {
+                        let p = projection::ProjectionUi {
+                            doc: doc.doc(),
+                            target: self.layers.selected_fill(doc.doc()),
+                            gizmo: self.projection,
+                            symmetry: self.brush.helpers.symmetry,
+                        };
+                        projection::show(ui, p, self.events);
+                    }
+                    None => no_document(ui),
+                });
             }
         }
     }

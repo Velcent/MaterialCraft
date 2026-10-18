@@ -28,6 +28,8 @@ pub enum PaintPanel {
     Bakers,
     /// The brush tools' settings (PT-04 … PT-11).
     Brush,
+    /// The selected fill's projection (PJ-01 … PJ-25).
+    Projection,
 }
 
 impl PanelKind for PaintPanel {
@@ -43,6 +45,7 @@ impl PanelKind for PaintPanel {
         PaintPanel::Assets,
         PaintPanel::Bakers,
         PaintPanel::Brush,
+        PaintPanel::Projection,
     ];
 
     fn id(self) -> &'static str {
@@ -58,6 +61,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Assets => "assets",
             PaintPanel::Bakers => "bakers",
             PaintPanel::Brush => "brush",
+            PaintPanel::Projection => "projection",
         }
     }
 
@@ -74,6 +78,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Assets => "Assets",
             PaintPanel::Bakers => "Bakers",
             PaintPanel::Brush => "Brush",
+            PaintPanel::Projection => "Projection",
         }
     }
 
@@ -90,6 +95,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Assets => Icon::Assets,
             PaintPanel::Bakers => Icon::Bake,
             PaintPanel::Brush => Icon::Brush,
+            PaintPanel::Projection => Icon::Projection,
         }
     }
 
@@ -121,7 +127,8 @@ fn painting() -> Layout<PaintPanel> {
         tabs(&[PaintPanel::TextureSets]),
         tabs(&[PaintPanel::Assets, PaintPanel::ImportReport, PaintPanel::Log]),
     );
-    let right = split(SplitAxis::Vertical, SplitSize::Ratio(0.6), tabs(&[PaintPanel::Layers]), tabs(&[PaintPanel::Brush, PaintPanel::Display]));
+    let right =
+        split(SplitAxis::Vertical, SplitSize::Ratio(0.6), tabs(&[PaintPanel::Layers]), tabs(&[PaintPanel::Brush, PaintPanel::Projection, PaintPanel::Display]));
     let centre = split(SplitAxis::Horizontal, SplitSize::FixedSecond(320.0), tabs(&[PaintPanel::Viewport]), right);
     Layout { root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(280.0), left, centre)), floating: Vec::new() }
 }

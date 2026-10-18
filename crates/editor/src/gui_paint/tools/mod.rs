@@ -282,6 +282,12 @@ impl Painting {
         report
     }
 
+    /// Texture set `set`'s surface once built (starts building it otherwise), for other users of the painted set's
+    /// surface (the projection gizmo's UV handle).
+    pub fn surface_of(&mut self, doc: &OpenDocument, set: usize) -> Option<std::sync::Arc<surfaces::Surface>> {
+        self.surfaces.get(doc, set)
+    }
+
     /// True once texture set `set`'s surface is built (starts building it otherwise).
     pub fn surface_ready(&mut self, doc: &OpenDocument, set: usize) -> bool {
         self.surfaces.get(doc, set).is_some()

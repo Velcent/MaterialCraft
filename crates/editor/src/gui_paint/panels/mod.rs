@@ -17,6 +17,7 @@ pub mod menu_bar;
 mod panel_strip;
 mod pen_settings;
 mod polygon_bar;
+pub mod projection;
 mod quick_bar;
 mod quick_mask_bar;
 pub mod status_bar;
@@ -98,6 +99,8 @@ pub enum PanelEvent {
     Assets(TrayEvent),
     /// A request from the bakers panel.
     Bakers(bakers::BakerEvent),
+    /// A request from the projection panel.
+    Projection(projection::ProjectionEvent),
     /// A tool key or quick-access control: quick mask, polygon fill settings.
     Tool(crate::gui_paint::tools::ToolEvent),
 }
