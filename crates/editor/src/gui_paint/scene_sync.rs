@@ -4,7 +4,7 @@
 //!
 //! Edits ask for new maps often (every frame of a slider drag or a brush stroke). Only one maps worker runs at a
 //! time ([`MapsQueue`]): what is asked for meanwhile is merged into the next run. A brush stroke asks for the tiles it
-//! painted ([`SceneSync::refresh_tiles`]); they are patched into the set's maps on the GPU when the set's whole maps
+//! painted ([`SceneSync::painted`]); they are patched into the set's maps on the GPU when the set's whole maps
 //! for the current display mode are there (or on their way), else the whole set is composited.
 
 use super::channel_display::ChannelDisplay;
@@ -18,6 +18,7 @@ use super::maps_worker::{MapsWorker, RunSetup, SetContent, SetMaps, Want};
 use super::quick_mask_tint::QuickMaskTint;
 use super::scene_shading::{self, ModelScale, Subdivision};
 use super::scene_stats::{self, SceneStats};
+use super::tools::Painted;
 use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
 use materialcraft::material_fill::{ChainResolver, FolderResolver, MaterialCache, MaterialFills, MaterialResolver, MemoryResolver};
@@ -140,22 +141,22 @@ impl SceneSync {
     }
 
     /// A brush frame painted set `set`: in `tiles` (tile coordinates of its grid), or anywhere (`None`).
-    pub fn painted(&mut self, doc: &mut OpenDocument, view: ChannelView, set: usize, tiles: Option<Vec<(u32, u32)>>) {
+    pub fn painted(&mut self, doc: &mut OpenDocument, view: ChannelView, set: usize, tiles: Option<Painted>) {
         match tiles {
-            Some(tiles) => self.refresh_tiles(doc, view, set, tiles),
+            Some(p) => self.refresh_tiles(doc, view, set, p),
             None => self.refresh(doc, view, vec![set]),
         }
     }
 
     /// Updates the maps of set `set` where the composite changed in `tiles` (tile coordinates of the set's grid), as
     /// a brush stroke does: patched onto the set's maps on the GPU, or the whole set when that can't be done.
-    fn refresh_tiles(&mut self, doc: &mut OpenDocument, view: ChannelView, set: usize, tiles: Vec<(u32, u32)>) {
+    fn refresh_tiles(&mut self, doc: &mut OpenDocument, view: ChannelView, set: usize, painted: Painted) {
         if !doc.visible_sets().contains(&set) {
             return;
         }
         let shown = Shown { view, channel: self.channel };
         let patchable = self.uploaded.get(&set) == Some(&shown) || self.maps.brings_whole(set, &shown);
-        let want = if patchable { Want::Tiles(tiles) } else { Want::Full };
+        let want = if patchable { Want::Tiles { layers: vec![painted.layer], tiles: painted.tiles } } else { Want::Full };
         self.ask(doc, view, vec![(set, want)]);
     }
 

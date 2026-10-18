@@ -2,54 +2,15 @@
 //! mask that reads the stack, of a layer a reference reads, of a filter's parameter, of unrelated layers.
 
 use super::*;
-use crate::paint::effect::{Anchor, EffectRegistry, EvalRequest, FilterInput, FilterKernel, GeneratorSource, Grey, Procedural, Reference};
+use crate::paint::effect::{Anchor, EffectRegistry, Grey, Procedural, Reference};
 use crate::paint::output::{MaterialMaps, OutputOptions};
 use crate::paint::stack::NO_FILL_CONTEXT;
-use crate::paint::test_stacks::{blobs, local_stacks, paint_disc};
+use crate::paint::test_stacks::{Blur, HeightBelow, blobs, local_stacks, paint_disc};
 use crate::paint::{BlendMode, Channel, Fill, GreyBlend, LayerKind, Mask, MaskEffect, PixelFormat, PixelLayout, SampleType};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static ANY: AtomicUsize = AtomicUsize::new(0);
 static COUNTED: AtomicUsize = AtomicUsize::new(0);
-
-/// The height below the layer, as grey; counts its calls.
-struct HeightBelow(&'static AtomicUsize);
-impl GeneratorSource for HeightBelow {
-    fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
-        self.0.fetch_add(1, Ordering::Relaxed);
-        let below = request.stack.map(|s| s.height_below(request.rect)).unwrap_or_default();
-        for (o, h) in out.iter_mut().zip(below) {
-            *o = [h, h, h, 1.0];
-        }
-        Ok(())
-    }
-}
-
-/// A 3×3 box blur; `radius` scales nothing, `gain` multiplies.
-struct Blur;
-impl FilterKernel for Blur {
-    fn radius(&self, _: &EvalRequest) -> u32 {
-        1
-    }
-    fn apply(&self, request: &EvalRequest, input: &FilterInput, out: &mut [[f32; 4]]) -> Result<(), String> {
-        let gain: f32 = request.params.iter().find(|(k, _)| k == "gain").and_then(|(_, v)| v.parse().ok()).unwrap_or(1.0);
-        let (r, i) = (request.rect, input.rect);
-        for (k, p) in out.iter_mut().enumerate() {
-            let (x, y) = (r.x + k as u32 % r.w, r.y + k as u32 / r.w);
-            let mut sum = [0.0f32; 4];
-            let mut n = 0.0;
-            for yy in y.saturating_sub(1).max(i.y)..=(y + 1).min(i.y + i.h - 1) {
-                for xx in x.saturating_sub(1).max(i.x)..=(x + 1).min(i.x + i.w - 1) {
-                    let q = input.pixels[((yy - i.y) * i.w + (xx - i.x)) as usize];
-                    (0..4).for_each(|c| sum[c] += q[c]);
-                    n += 1.0;
-                }
-            }
-            *p = sum.map(|s| s / n * gain);
-        }
-        Ok(())
-    }
-}
 
 fn registry() -> EffectRegistry {
     counting(&ANY)
@@ -58,7 +19,7 @@ fn registry() -> EffectRegistry {
 fn counting(calls: &'static AtomicUsize) -> EffectRegistry {
     let mut r = EffectRegistry::new();
     r.add_generator("below", Box::new(HeightBelow(calls)));
-    r.add_filter("blur", Box::new(Blur));
+    r.add_filter("blur", Box::new(Blur(1)));
     r
 }
 
@@ -105,7 +66,7 @@ fn assert_same(a: &MaterialMaps, b: &MaterialMaps, what: &str) {
 /// Builds `s` with the cache and fresh; they must agree.
 fn check(cache: &StackCache, s: &TextureSet, reg: &EffectRegistry, what: &str) {
     let o = OutputOptions::default();
-    let session = cache.session(s, 7);
+    let session = cache.session(s, 7, None);
     let cached = MaterialMaps::build_cached(s, &o, reg, &NO_FILL_CONTEXT, Some(&session));
     let fresh = MaterialMaps::build_with(s, &o, reg, &NO_FILL_CONTEXT);
     assert_same(&cached, &fresh, what);
@@ -164,7 +125,7 @@ fn an_unrelated_edit_reuses_the_kept_masks() {
     let before = COUNTED.load(Ordering::Relaxed);
     s.layer_mut("refers").expect("refers").opacity = 0.4;
     let o = OutputOptions::default();
-    let session = cache.session(&s, 7);
+    let session = cache.session(&s, 7, None);
     let _ = MaterialMaps::build_cached(&s, &o, &reg, &NO_FILL_CONTEXT, Some(&session));
     // the height mask lies below the edited layer: none of its tiles is generated again
     assert_eq!(COUNTED.load(Ordering::Relaxed), before, "no tile of the height mask was generated again");
@@ -176,11 +137,11 @@ fn duplicate_ids_or_a_new_context_keep_nothing_stale() {
     let cache = StackCache::default();
     let mut s = stack(0);
     check(&cache, &s, &reg, "first");
-    let session = cache.session(&s, 8);
+    let session = cache.session(&s, 8, None);
     assert!(session.mask_key("heights").is_some());
     let dup = s.layers[0].clone();
     s.layers.push(dup);
-    assert!(cache.session(&s, 8).mask_key("heights").is_none(), "nothing is kept for sets with repeated ids");
+    assert!(cache.session(&s, 8, None).mask_key("heights").is_none(), "nothing is kept for sets with repeated ids");
 }
 
 #[test]
@@ -193,7 +154,7 @@ fn repeated_edits_of_one_layer_start_from_the_kept_composite() {
     for (step, v) in [0.9f32, 0.6, 0.3, 0.75].into_iter().enumerate() {
         s.layers[k].opacity = v;
         check(&cache, &s, &reg, &format!("drag step {step}"));
-        assert_eq!(cache.session(&s, 7).keeps_below(), Some(k));
+        assert_eq!(cache.session(&s, 7, None).keeps_below(), Some(k));
     }
     // an edit below the kept composite makes it stale
     paint_disc(paint_layer(&mut s), (200, 150), 30, 8);

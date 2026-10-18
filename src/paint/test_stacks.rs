@@ -1,12 +1,15 @@
 //! Layer stacks for tests that compare incremental compositing with a full recompute: every blend mode family,
 //! paint, fills, masks, folders (pass-through and isolated), effect layers, levels, baked maps, sizes that are not
-//! a multiple of the tile size. Deterministic (a small hash stands in for randomness).
+//! a multiple of the tile size; and ([`reaching_stacks`]) generators, filters with a reach, anchors and references
+//! around the painted layer. Deterministic (a small hash stands in for randomness).
 
-use crate::paint::effect::{Grey, Levels};
+use crate::paint::Mask;
+use crate::paint::effect::{Anchor, EffectRegistry, EvalRequest, FilterInput, FilterKernel, GeneratorSource, Grey, Levels, Procedural, Reach, Reference};
 use crate::paint::{
     BakedKind, BakedMap, BlendMode, Channel, ContentEffect, EffectKind, Fill, GreyBlend, Layer, LayerKind, MaskEffect, PaintContent, PixelFormat, PixelLayout,
     SampleType, TextureSet, TiledImage,
 };
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Channels the stacks declare.
 pub const CHANNELS: [Channel; 7] =
@@ -155,5 +158,141 @@ pub fn local_stacks() -> Vec<TextureSet> {
     s.layers.push(p);
     s.layers.push(uniform("top", &[(Channel::Roughness, 0.1), (Channel::Metallic, 1.0)], BlendMode::Darken, 0.4));
     out.push(s);
+    out
+}
+
+/// The height below the layer, as grey (a generator reading the stack); counts its calls.
+pub struct HeightBelow(pub &'static AtomicUsize);
+impl GeneratorSource for HeightBelow {
+    fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
+        Some(Reach::Texel)
+    }
+    fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
+        self.0.fetch_add(1, Ordering::Relaxed);
+        let below = request.stack.map(|s| s.height_below(request.rect)).unwrap_or_default();
+        for (o, h) in out.iter_mut().zip(below) {
+            *o = [h, h, h, 1.0];
+        }
+        Ok(())
+    }
+}
+
+/// A value per texel from its position and a seed parameter (a generator reading nothing but its parameters).
+pub struct Pattern;
+impl GeneratorSource for Pattern {
+    fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
+        None
+    }
+    fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
+        let seed: u32 = request.params.iter().find(|(k, _)| k == "seed").and_then(|(_, v)| v.parse().ok()).unwrap_or(0);
+        let r = request.rect;
+        for (i, o) in out.iter_mut().enumerate() {
+            let (x, y) = (r.x + i as u32 % r.w.max(1), r.y + i as u32 / r.w.max(1));
+            let v = noise(seed, x / 7, y / 5);
+            *o = [v, 1.0 - v, v * v, 1.0];
+        }
+        Ok(())
+    }
+}
+
+/// A box blur of radius `.0` (clamped at the input's edges); `gain` multiplies.
+pub struct Blur(pub u32);
+impl FilterKernel for Blur {
+    fn radius(&self, _: &EvalRequest) -> u32 {
+        self.0
+    }
+    fn reach(&self, _: &EvalRequest) -> Reach {
+        Reach::radius(self.0)
+    }
+    fn apply(&self, request: &EvalRequest, input: &FilterInput, out: &mut [[f32; 4]]) -> Result<(), String> {
+        let gain: f32 = request.params.iter().find(|(k, _)| k == "gain").and_then(|(_, v)| v.parse().ok()).unwrap_or(1.0);
+        let (r, i, d) = (request.rect, input.rect, self.0);
+        for (k, p) in out.iter_mut().enumerate() {
+            let (x, y) = (r.x + k as u32 % r.w, r.y + k as u32 / r.w);
+            let mut sum = [0.0f32; 4];
+            let mut n = 0.0;
+            for yy in y.saturating_sub(d).max(i.y)..=(y + d).min(i.y + i.h - 1) {
+                for xx in x.saturating_sub(d).max(i.x)..=(x + d).min(i.x + i.w - 1) {
+                    let q = input.pixels[((yy - i.y) * i.w + (xx - i.x)) as usize];
+                    (0..4).for_each(|c| sum[c] += q[c]);
+                    n += 1.0;
+                }
+            }
+            *p = sum.map(|s| s / n * gain);
+        }
+        Ok(())
+    }
+}
+
+static CALLS: AtomicUsize = AtomicUsize::new(0);
+
+/// The effects [`reaching_stacks`] use: `below` and `pattern` generators, `blur1` and `blur3` filters.
+pub fn registry() -> EffectRegistry {
+    let mut r = EffectRegistry::new();
+    r.add_generator("below", Box::new(HeightBelow(&CALLS)));
+    r.add_generator("pattern", Box::new(Pattern));
+    r.add_filter("blur1", Box::new(Blur(1)));
+    r.add_filter("blur3", Box::new(Blur(3)));
+    r
+}
+
+fn content(kind: EffectKind<crate::paint::effect::Content>, c: Channel, mode: BlendMode) -> ContentEffect {
+    ContentEffect::new(Vec::new(), kind).with_blend(c, mode, 1.0)
+}
+
+fn proc(id: &str) -> Procedural {
+    Procedural::new(id)
+}
+
+fn grey_effect(kind: EffectKind<Grey>) -> MaskEffect {
+    MaskEffect::new(GreyBlend { mode: BlendMode::Normal, opacity: 1.0 }, kind)
+}
+
+/// Stacks with everything that reads beyond a texel, around a paint layer `paint` inside a folder (see
+/// [`registry`]): generators reading only their parameters, below and above the paint; an effect layer above the
+/// paint with blurs stacked (reach 1 + 3) and an anchor after them; a blur on the folder's content; a mask reading
+/// the height below with a blur after it; a mask and content referencing the anchor; a blur on a layer that reads
+/// only itself.
+pub fn reaching_stacks() -> Vec<TextureSet> {
+    let mut out = Vec::new();
+    for (k, mut s) in local_stacks().into_iter().enumerate() {
+        let mut pattern = uniform("pattern", &[(Channel::Roughness, 0.4)], BlendMode::Overlay, 0.7);
+        let seeded = Procedural { params: vec![("seed".into(), k.to_string())], ..proc("pattern") };
+        pattern.effects.push(content(EffectKind::Generator(seeded), Channel::Roughness, BlendMode::Normal));
+        s.layers.insert(1, pattern);
+        let mut own = uniform("own", &[(Channel::Metallic, 0.6)], BlendMode::Normal, 0.5);
+        own.effects.push(content(EffectKind::Generator(proc("pattern")), Channel::Metallic, BlendMode::Multiply));
+        own.effects.push(content(EffectKind::Filter(proc("blur3")), Channel::Metallic, BlendMode::Normal));
+        s.layers.push(own);
+        let mut fx = Layer::new("fx2", "Blurs", LayerKind::Paint(PaintContent::default()));
+        for c in [Channel::BaseColor, Channel::Height] {
+            fx = fx.with_blend(c, BlendMode::Passthrough, 0.8);
+        }
+        for (id, c) in [("blur1", Channel::BaseColor), ("blur3", Channel::BaseColor), ("blur1", Channel::Height)] {
+            fx.effects.push(content(EffectKind::Filter(proc(id)), c, BlendMode::Normal));
+        }
+        fx.effects.push(ContentEffect::new(Vec::new(), EffectKind::Anchor(Anchor { id: "blurred".into() })));
+        s.layers.push(fx);
+        let mut heights = uniform("heights", &[(Channel::BaseColor, 0.9)], BlendMode::Normal, 1.0);
+        heights.mask =
+            Some(Mask::new(0.0).with_effect(grey_effect(EffectKind::Generator(proc("below")))).with_effect(grey_effect(EffectKind::Filter(proc("blur1")))));
+        s.layers.push(heights);
+        let mut refers = uniform("refers", &[(Channel::Emissive, 1.0)], BlendMode::Normal, 1.0);
+        let reference = || Reference { anchor: "blurred".into(), channel: Some(Channel::BaseColor), levels: None };
+        refers.mask = Some(Mask::new(0.0).with_effect(grey_effect(EffectKind::Reference(reference()))));
+        refers.effects.push(content(EffectKind::Reference(reference()), Channel::Emissive, BlendMode::Multiply));
+        s.layers.push(refers);
+        if let Some(at) = s.layers.iter().position(|l| l.id == "paint") {
+            let paint = s.layers.remove(at);
+            let channels: Vec<Channel> = paint.blend.iter().map(|b| b.channel).collect();
+            let mut folder = Layer::new("pfolder", "Paint folder", LayerKind::Group(vec![paint]));
+            for c in channels {
+                folder = folder.with_blend(c, BlendMode::Normal, 1.0);
+            }
+            folder.effects.push(content(EffectKind::Filter(proc("blur1")), Channel::BaseColor, BlendMode::Normal));
+            s.layers.insert(at, folder);
+        }
+        out.push(s);
+    }
     out
 }

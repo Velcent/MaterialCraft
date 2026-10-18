@@ -70,6 +70,8 @@ pub struct ActiveStroke {
     placement: Option<ScreenImageTransform>,
     /// What changed since the last [`ActiveStroke::take_changes`].
     changes: Changes,
+    /// The id of the layer painted.
+    layer: String,
 }
 
 /// Where a stroke changed the composite of its texture set.
@@ -128,6 +130,7 @@ impl ActiveStroke {
             occlusion: start.occlusion,
             retouch: start.retouch,
         };
+        let layer = start.target.layer.layer.clone();
         let mut prepared = DocumentStroke::prepare(doc.doc_for_strokes(), start.target, &start.values)?;
         let whole: bool;
         let result = {
@@ -168,6 +171,7 @@ impl ActiveStroke {
             last: None,
             placement: start.placement,
             changes: if whole { Changes::Whole } else { Changes::Tiles(Vec::new()) },
+            layer,
         };
         active.add(doc, picking, &[at], through)?;
         Ok(active)
@@ -195,6 +199,11 @@ impl ActiveStroke {
     /// Dabs placed so far (the performance benchmarks count them).
     pub fn dabs(&self) -> usize {
         self.stroke.dabs()
+    }
+
+    /// The id of the layer being painted.
+    pub fn layer(&self) -> &str {
+        &self.layer
     }
 
     /// The texture set being painted.

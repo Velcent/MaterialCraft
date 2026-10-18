@@ -35,7 +35,7 @@ fn cached_after_edits(set: &TextureSet) -> usize {
     let o = OutputOptions::default();
     let reg = generators::builtin();
     let cache = StackCache::default();
-    let _ = MaterialMaps::build_cached(set, &o, reg, &NO_FILL_CONTEXT, Some(&cache.session(set, 1)));
+    let _ = MaterialMaps::build_cached(set, &o, reg, &NO_FILL_CONTEXT, Some(&cache.session(set, 1, None)));
     let mut s = set.clone();
     let n = s.layers.len();
     let mut checked = 0;
@@ -45,7 +45,7 @@ fn cached_after_edits(set: &TextureSet) -> usize {
         if k == n / 2 {
             l.visible = !l.visible;
         }
-        let cached = MaterialMaps::build_cached(&s, &o, reg, &NO_FILL_CONTEXT, Some(&cache.session(&s, 1)));
+        let cached = MaterialMaps::build_cached(&s, &o, reg, &NO_FILL_CONTEXT, Some(&cache.session(&s, 1, None)));
         let fresh = MaterialMaps::build_with(&s, &o, reg, &NO_FILL_CONTEXT);
         assert!(same(&cached, &fresh), "{}: the cached build differs after editing layer {k}", set.name);
         checked += 1;
@@ -57,16 +57,11 @@ fn cached_after_edits(set: &TextureSet) -> usize {
 fn tiles_after_paint(set: &TextureSet) -> String {
     let o = OutputOptions::default();
     let reg = generators::builtin();
-    if MaterialMaps::build_tiles(set, &o, reg, &NO_FILL_CONTEXT, &[]).is_none() {
-        return "not local".into();
-    }
     let mut s = set.clone();
-    let Some(img) = s.layers.iter_mut().find_map(|l| match &mut l.kind {
-        LayerKind::Paint(p) => p.images.first_mut().map(|(_, i)| i),
-        _ => None,
-    }) else {
-        return "no paint layer".into();
-    };
+    let id = s.walk_layers().find(|(_, l)| matches!(l.kind, LayerKind::Paint(_))).map(|(_, l)| l.id.clone());
+    let Some(id) = id else { return "no paint layer".into() };
+    let Some(LayerKind::Paint(p)) = s.layer_mut(&id).map(|l| &mut l.kind) else { return "no paint layer".into() };
+    let Some((_, img)) = p.images.first_mut() else { return "no paint image".into() };
     img.clear_dirty();
     let (w, h) = (img.width(), img.height());
     for y in h / 3..h / 3 + 40 {
@@ -75,8 +70,11 @@ fn tiles_after_paint(set: &TextureSet) -> String {
         }
     }
     let changed = img.dirty_tiles();
-    let reached = MaterialMaps::tiles_reached(&s, &o, &changed);
-    let tiles = MaterialMaps::build_tiles(&s, &o, reg, &NO_FILL_CONTEXT, &reached).expect("local");
+    let reached = match MaterialMaps::tiles_reached(&s, &o, reg, &NO_FILL_CONTEXT, &[id.as_str()], &changed) {
+        Ok(r) => r,
+        Err(why) => return format!("whole set: {why:?}"),
+    };
+    let tiles = MaterialMaps::build_tiles(&s, &o, reg, &NO_FILL_CONTEXT, None, &reached.tiles).expect("tile by tile");
     let full = MaterialMaps::build_with(&s, &o, reg, &NO_FILL_CONTEXT);
     for t in &tiles {
         for c in Channel::STANDARD {

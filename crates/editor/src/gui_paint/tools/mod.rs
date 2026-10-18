@@ -77,13 +77,22 @@ pub struct PaintReport {
     /// Recomposite this texture set.
     pub refresh: Option<usize>,
     /// Only these tiles of its grid changed (`None`: recomposite it whole).
-    pub tiles: Option<Vec<(u32, u32)>>,
+    pub tiles: Option<Painted>,
     /// Something to tell the user.
     pub message: Option<String>,
     /// True while a stroke is in progress (keep frames coming).
     pub busy: bool,
     /// The quick mask changed (its tint is out of date).
     pub quick_mask: bool,
+}
+
+/// Where a frame of a stroke painted.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Painted {
+    /// The layer whose content or mask was painted (its id).
+    pub layer: String,
+    /// The tiles of the set's grid that changed.
+    pub tiles: Vec<(u32, u32)>,
 }
 
 /// What the tools work with this frame.
@@ -232,13 +241,13 @@ impl Painting {
         if report.refresh.is_none()
             && let Some(set) = painted
         {
-            match self.active.as_mut().filter(|a| a.set() == set).map(ActiveStroke::take_changes) {
-                Some(None) => {}
-                Some(Some(Changes::Tiles(tiles))) => {
+            match self.active.as_mut().filter(|a| a.set() == set).map(|a| (a.layer().to_string(), a.take_changes())) {
+                Some((_, None)) => {}
+                Some((layer, Some(Changes::Tiles(tiles)))) => {
                     report.refresh = Some(set);
-                    report.tiles = Some(tiles);
+                    report.tiles = Some(Painted { layer, tiles });
                 }
-                Some(Some(Changes::Whole)) | None => report.refresh = Some(set),
+                Some((_, Some(Changes::Whole))) | None => report.refresh = Some(set),
             }
         }
         report.busy = self.active.is_some() || self.surfaces.is_building();

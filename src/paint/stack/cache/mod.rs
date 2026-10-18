@@ -39,8 +39,33 @@ pub struct StackCache {
 }
 
 struct Inner {
-    sets: HashMap<String, (u64, Revisions)>,
+    sets: HashMap<String, SetState>,
     store: TileStore,
+}
+
+/// What the cache knows of one texture set: the context and layer revisions of its last build and the keys its
+/// kept results had then.
+struct SetState {
+    context: u64,
+    revisions: Revisions,
+    keys: Keys,
+}
+
+/// The keys of a build's kept results.
+#[derive(Default, Clone)]
+struct Keys {
+    masks: HashMap<String, u64>,
+    below: Option<(String, u64)>,
+}
+
+impl Keys {
+    /// The key a kept result stored under `name` has in this build.
+    fn of(&self, name: &str) -> Option<u64> {
+        if let Some(k) = self.masks.get(name) {
+            return Some(*k);
+        }
+        self.below.as_ref().filter(|(layer, _)| Below::is_entry(name, layer)).map(|(_, k)| *k)
+    }
 }
 
 impl Default for StackCache {
@@ -62,26 +87,38 @@ impl StackCache {
     }
 
     /// Starts a build of `set`. `context` stands for what the caller's fill context gives the masks (surface maps,
-    /// the mesh): a different value drops what was kept for the set. Masks whose inputs changed since the last
-    /// build of the set are dropped.
-    pub fn session(&self, set: &TextureSet, context: u64) -> CacheSession<'_> {
-        let mut keys = HashMap::new();
+    /// the mesh): a different value drops what was kept for the set. Results whose inputs changed since the last
+    /// build of the set are dropped, except, when the change is `confined` to an area (a brush stroke's reach, see
+    /// [`crate::paint::MaterialMaps::tiles_reached`]), those of rectangles outside it: they are the same and are kept
+    /// under their new keys.
+    pub fn session(&self, set: &TextureSet, context: u64, confined: Option<&[Rect]>) -> CacheSession<'_> {
+        let mut keys = Keys::default();
         let mut below = None;
         if let Ok(mut inner) = self.inner.lock() {
-            let entry = inner.sets.entry(set.id.clone()).or_insert_with(|| (context, Revisions::default()));
-            if entry.0 != context {
-                *entry = (context, Revisions::default());
+            let Inner { sets, store } = &mut *inner;
+            let state = sets.entry(set.id.clone()).or_insert_with(|| SetState { context, revisions: Revisions::default(), keys: Keys::default() });
+            if state.context != context {
+                *state = SetState { context, revisions: Revisions::default(), keys: Keys::default() };
             }
-            if let Some(revs) = entry.1.observe(set) {
-                keys = mask_keys(set, &revs, context);
+            if let Some(revs) = state.revisions.observe(set) {
+                keys.masks = mask_keys(set, &revs, context);
                 below = Below::of(set, &revs, context);
             }
-            let kept_below = below.as_ref().map(|b| (b.layer.clone(), b.key));
-            inner.store.retain(|k, dep| {
-                k.set != set.id || keys.get(&k.layer) == Some(&dep) || kept_below.as_ref().is_some_and(|(l, key)| Below::is_entry(&k.layer, l) && *key == dep)
+            keys.below = below.as_ref().map(|b| (b.layer.clone(), b.key));
+            let old = std::mem::replace(&mut state.keys, keys.clone());
+            store.retain_map(|k, dep| {
+                if k.set != set.id {
+                    return Some(dep);
+                }
+                let new = keys.of(&k.layer)?;
+                if new == dep {
+                    return Some(dep);
+                }
+                let outside = confined.is_some_and(|area| !area.iter().any(|a| overlaps(*a, k.rect)));
+                (outside && old.of(&k.layer) == Some(dep)).then_some(new)
             });
         }
-        CacheSession { cache: self, set: set.id.clone(), keys, below }
+        CacheSession { cache: self, set: set.id.clone(), keys: keys.masks, below }
     }
 
     /// Bytes of mask tiles kept.
@@ -175,6 +212,10 @@ impl Below {
     fn is_entry(name: &str, layer: &str) -> bool {
         name.strip_prefix(layer).is_some_and(|rest| rest.starts_with("\u{1}below\u{1}"))
     }
+}
+
+fn overlaps(a: Rect, (x, y, w, h): (u32, u32, u32, u32)) -> bool {
+    a.x < x + w && x < a.x + a.w && a.y < y + h && y < a.y + a.h
 }
 
 /// True for masks worth keeping: those with an effect that computes more than a texel at a time.

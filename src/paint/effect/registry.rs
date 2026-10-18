@@ -40,7 +40,10 @@ pub struct EvalRequest<'a> {
 }
 
 /// What an effect may read from the layer stack it sits in, over any rectangle of the texture set. Heights
-/// are the Height channel's stored values.
+/// are the Height channel's stored values. A generator reads it over its request's rectangle only: the compositor
+/// relies on a generator's texel depending on the stack at that texel alone (a brush stroke's changed tiles are
+/// updated on their own, [`crate::paint::stack::Compositor::reach`]); a generator that needs neighbours has to be a
+/// filter, whose reach is declared.
 pub trait StackContext: fmt::Debug + Sync {
     /// The height the effect's layer itself writes: (value, coverage) per texel, row by row.
     fn layer_height(&self, rect: Rect) -> Vec<[f32; 2]>;

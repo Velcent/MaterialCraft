@@ -1,11 +1,13 @@
 //! The GPU patch for the tiles a brush stroke changed: the set's final maps over the tiles they reach
 //! ([`MaterialMaps::build_tiles`]) turned into the bytes the whole preparation has there ([`gpu3d::prepare_patch`]).
-//! Only for the lit material view without a quick mask tint, a square set the viewer shows at full size, and a stack
-//! that can be composited tile by tile; otherwise `None` and the caller composites the whole set.
+//! Only for the lit material view without a quick mask tint, a square set the viewer shows at full size, and a change
+//! that does not reach most of the set ([`MaterialMaps::tiles_reached`]); otherwise `None` and the caller composites
+//! the whole set. Expensive masks come from the stack cache, which keeps what the change does not reach.
 
 use super::channel_view::{ChannelView, Shown};
 use materialcraft::generators;
 use materialcraft::gpu3d::{self, MapsPatch, TileInputs};
+use materialcraft::paint::stack::StackCache;
 use materialcraft::paint::{Channel, FillContext, MaterialMaps, OutputOptions, TextureSet};
 
 /// Largest map side the viewer uploads unscaled (see `gpu3d::prepare`).
@@ -18,12 +20,23 @@ pub fn patchable(shown: &Shown, set: &TextureSet) -> bool {
 }
 
 /// The patch for the tiles `changed` (tile coordinates of the set's grid), or `None` (see the module docs).
-pub fn patch(set: &TextureSet, options: &OutputOptions, fills: &FillContext, shown: &Shown, changed: &[(u32, u32)]) -> Option<MapsPatch> {
+/// The images of the layers `layers` (ids) changed there. `cache` is the stack cache with the context of `fills`.
+pub fn patch(
+    set: &TextureSet,
+    options: &OutputOptions,
+    fills: &FillContext,
+    shown: &Shown,
+    cache: Option<(&StackCache, u64)>,
+    layers: &[String],
+    changed: &[(u32, u32)],
+) -> Option<MapsPatch> {
     if !patchable(shown, set) {
         return None;
     }
-    let reached = MaterialMaps::tiles_reached(set, options, changed);
-    let tiles = MaterialMaps::build_tiles(set, options, generators::builtin(), fills, &reached)?;
+    let ids: Vec<&str> = layers.iter().map(String::as_str).collect();
+    let reached = MaterialMaps::tiles_reached(set, options, generators::builtin(), fills, &ids, changed).ok()?;
+    let session = cache.map(|(c, context)| c.session(set, context, Some(&reached.area)));
+    let tiles = MaterialMaps::build_tiles(set, options, generators::builtin(), fills, session.as_ref(), &reached.tiles).ok()?;
     let emissive = set.has_channel(Channel::Emissive);
     let height = set.has_channel(Channel::Height);
     let inputs: Vec<TileInputs> = tiles
@@ -86,7 +99,7 @@ mod tests {
         let shown = Shown { view: ChannelView::Material, channel: ChannelDisplay::default() };
         let o = OutputOptions::default();
         let whole = shown.prepare(&MaterialMaps::build_with(&s, &o, generators::builtin(), &NO_FILL_CONTEXT), &s);
-        let p = patch(&s, &o, &NO_FILL_CONTEXT, &shown, &[(0, 0)]).expect("patchable");
+        let p = patch(&s, &o, &NO_FILL_CONTEXT, &shown, None, &["p".to_string()], &[(0, 0)]).expect("patchable");
         assert_eq!(p.tiles.len(), 4, "the tile and its neighbours (the normal reads across)");
         for t in &p.tiles {
             for row in 0..t.h {
@@ -98,6 +111,6 @@ mod tests {
             }
         }
         let channel = Shown { view: ChannelView::Single(Channel::BaseColor), ..shown };
-        assert!(patch(&s, &o, &NO_FILL_CONTEXT, &channel, &[(0, 0)]).is_none());
+        assert!(patch(&s, &o, &NO_FILL_CONTEXT, &channel, None, &["p".to_string()], &[(0, 0)]).is_none());
     }
 }

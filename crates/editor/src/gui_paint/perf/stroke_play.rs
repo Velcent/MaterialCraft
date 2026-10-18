@@ -256,7 +256,7 @@ fn stroke(
             // what the screen does with the report (`PaintMode::after_painting`), then waiting for the result
             let before = b.scene.stats();
             let asked = Instant::now();
-            let tiles = report.tiles.as_ref().map_or(0, Vec::len);
+            let tiles = report.tiles.as_ref().map_or(0, |p| p.tiles.len());
             b.scene.painted(&mut b.doc, b.view, s, report.tiles);
             t.ask.push(asked.elapsed());
             b.settle();

@@ -25,20 +25,23 @@ use std::time::{Duration, Instant};
 pub enum Want {
     /// The whole set.
     Full,
-    /// The tiles whose composite changed (tile coordinates of the set's grid); the maps on the GPU are otherwise
-    /// up to date for the run's display mode.
-    Tiles(Vec<(u32, u32)>),
+    /// The images of `layers` (ids) changed in `tiles` (tile coordinates of the set's grid); the maps on the GPU
+    /// are otherwise up to date for the run's display mode.
+    Tiles { layers: Vec<String>, tiles: Vec<(u32, u32)> },
 }
 
 impl Want {
     /// Both wants at once: the whole set if either is, else the tiles of both.
     pub fn merged(self, other: Want) -> Want {
         match (self, other) {
-            (Want::Tiles(mut a), Want::Tiles(b)) => {
+            (Want::Tiles { layers: mut la, tiles: mut a }, Want::Tiles { layers: lb, tiles: b }) => {
                 a.extend(b);
                 a.sort_unstable();
                 a.dedup();
-                Want::Tiles(a)
+                la.extend(lb);
+                la.sort_unstable();
+                la.dedup();
+                Want::Tiles { layers: la, tiles: a }
             }
             _ => Want::Full,
         }
@@ -123,10 +126,12 @@ impl MapsWorker {
                     return;
                 }
                 let fills = surface.as_ref().map_or(plain, |s| s.context(&materials));
-                if let Want::Tiles(tiles) = &want
+                // what the fill context gives masks: the surface maps of this mesh, or none
+                let context = surface.as_ref().map_or(0, |_| surfaces.as_ref().map_or(0, |s| s.revision().wrapping_add(1)));
+                if let Want::Tiles { layers, tiles } = &want
                     && tint.is_none()
                     && isolated.is_none()
-                    && let Some(patch) = maps_patch::patch(ts, &options, &fills, &shown, tiles)
+                    && let Some(patch) = maps_patch::patch(ts, &options, &fills, &shown, cache.as_deref().map(|c| (c, context)), layers, tiles)
                 {
                     let timing = SetTiming { composite: started.elapsed(), prepare: Duration::ZERO };
                     if tx.send(SetMaps { set, content: SetContent::Patch(patch), warnings: Vec::new(), timing }).is_err() {
@@ -134,9 +139,7 @@ impl MapsWorker {
                     }
                     continue;
                 }
-                // what the fill context gives masks: the surface maps of this mesh, or none
-                let context = surface.as_ref().map_or(0, |_| surfaces.as_ref().map_or(0, |s| s.revision().wrapping_add(1)));
-                let session = cache.as_ref().map(|c| c.session(ts, context));
+                let session = cache.as_ref().map(|c| c.session(ts, context, None));
                 let maps = MaterialMaps::build_cached(ts, &options, generators::builtin(), &fills, session.as_ref());
                 if cancel.is_cancelled() {
                     return;

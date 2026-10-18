@@ -18,6 +18,8 @@
 //! tests above are thin wrappers around the built-in scenarios `stroke-2k` and `edits-big`; `mcperf` runs any
 //! scenario through the editor binary's `--perf-run` and keeps the history.
 
+#[cfg(test)]
+mod coverage;
 mod edit_play;
 #[cfg(test)]
 mod edits;

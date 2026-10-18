@@ -1,11 +1,12 @@
 //! [`TileMaps`]: a texture set's final maps over some of its tiles, with exactly the values [`MaterialMaps`] has
 //! there, for updating what a brush stroke changed without building the whole maps again.
 //!
-//! This works when the set's stack is local ([`Compositor::is_local`]) and its baked normal and ambient occlusion
-//! maps have the set's resolution (others are resampled over the whole map). Each tile is composited as the whole
-//! build composites it (the same rectangles, so the same values); the normal derived from the height reads one
-//! texel around each texel, so a changed tile also changes the edges of its neighbours
-//! ([`MaterialMaps::tiles_reached`]), and their heights are composited for the tiles asked for.
+//! Each tile is composited as the whole build composites it (the same rectangles, so the same values, whatever the
+//! stack holds). Which tiles a change reaches ([`MaterialMaps::tiles_reached`]): the changed tiles grown by how far
+//! the stack spreads a change of the changed layers ([`Compositor::reach`]: filters reading them), and, as the
+//! normal derived from the height reads one texel around each texel, their neighbours, whose heights are composited
+//! for the tiles asked for. Baked normal and ambient occlusion maps must have the set's resolution (others are
+//! resampled over the whole map).
 
 use super::channel::Channel;
 use super::effect::EffectRegistry;
@@ -15,7 +16,7 @@ use super::normal;
 use super::normal_combine;
 use super::output::{MaterialMaps, OutputOptions};
 use super::par::for_each_mut;
-use super::stack::{Compositor, FillContext};
+use super::stack::{CacheSession, Compositor, FillContext};
 use super::texture_set::{BakedKind, TextureSet};
 use crate::paint::TiledImage;
 use std::collections::HashMap;
@@ -52,36 +53,59 @@ impl TileMaps {
 }
 
 impl MaterialMaps {
-    /// The tiles whose maps change when the composite changes in `changed` (tile coordinates of the set's grid):
-    /// those tiles, and their neighbours when the normal is derived from the height. Sorted, without repeats.
-    pub fn tiles_reached(set: &TextureSet, options: &OutputOptions, changed: &[(u32, u32)]) -> Vec<(u32, u32)> {
-        let grid = grid(set);
-        let ring = derives_normal(set, options);
-        let mut out: Vec<(u32, u32)> = changed.iter().copied().filter(|t| inside(*t, grid)).collect();
-        if ring {
-            out = with_ring(&out, grid);
+    /// The tiles whose maps change when the images of the layers `layers` (ids) change in `changed` (tile
+    /// coordinates of the set's grid), sorted, and the area where the composite may change; or why the set has to
+    /// be built whole.
+    pub fn tiles_reached(
+        set: &TextureSet,
+        options: &OutputOptions,
+        effects: &EffectRegistry,
+        fills: &FillContext,
+        layers: &[&str],
+        changed: &[(u32, u32)],
+    ) -> Result<Reached, WholeReason> {
+        if same_size(set.baked(&BakedKind::Normal), set).is_none() || same_size(set.baked(&BakedKind::AmbientOcclusion), set).is_none() {
+            return Err(WholeReason::ResampledBaked);
         }
-        out.sort_unstable();
-        out.dedup();
-        out
+        let reach = Compositor::with_effects(set, effects).with_fills(fills).reach(layers).ok_or(WholeReason::ReadsEverything)?;
+        let grid = grid(set);
+        let (w, h) = set.resolution;
+        let area: Vec<Rect> = changed.iter().filter(|t| inside(**t, grid)).filter_map(|t| tile_rect(set, *t)).map(|r| grow(r, reach, (w, h))).collect();
+        let mut tiles: Vec<(u32, u32)> = area
+            .iter()
+            .flat_map(|r| {
+                let (x0, y0, x1, y1) = (r.x / TILE_SIZE, r.y / TILE_SIZE, (r.x + r.w).saturating_sub(1) / TILE_SIZE, (r.y + r.h).saturating_sub(1) / TILE_SIZE);
+                (y0..=y1).flat_map(move |y| (x0..=x1).map(move |x| (x, y)))
+            })
+            .collect();
+        if derives_normal(set, options) {
+            tiles = with_ring(&tiles, grid);
+        }
+        tiles.sort_unstable();
+        tiles.dedup();
+        let total = (grid.0 * grid.1) as usize;
+        // most of a big set: building it whole is as quick (small sets go tile by tile, it costs little either way)
+        if total > 16 && tiles.len() * 4 > total * 3 {
+            return Err(WholeReason::TooFar);
+        }
+        Ok(Reached { tiles, area })
     }
 
-    /// The maps over `tiles` (see the module docs); `None` if the set's maps can't be built tile by tile. Tiles
-    /// outside the set's grid are left out. Compositing warnings are not collected (the whole build reports them).
+    /// The maps over `tiles` (see the module docs), with expensive masks from and into `cache`; an error if the
+    /// set's maps can't be built tile by tile. Tiles outside the set's grid are left out. Compositing warnings are
+    /// not collected (the whole build reports them).
     pub fn build_tiles(
         set: &TextureSet,
         options: &OutputOptions,
         effects: &EffectRegistry,
         fills: &FillContext,
+        cache: Option<&CacheSession>,
         tiles: &[(u32, u32)],
-    ) -> Option<Vec<TileMaps>> {
-        let compositor = Compositor::with_effects(set, effects).with_fills(fills);
-        if !compositor.is_local() {
-            return None;
-        }
+    ) -> Result<Vec<TileMaps>, WholeReason> {
+        let compositor = Compositor::with_effects(set, effects).with_fills(fills).with_cache(cache);
         let (w, h) = (set.resolution.0 as usize, set.resolution.1 as usize);
-        let baked_normal = same_size(set.baked(&BakedKind::Normal), set)?;
-        let baked_ao = same_size(set.baked(&BakedKind::AmbientOcclusion), set)?;
+        let baked_normal = same_size(set.baked(&BakedKind::Normal), set).ok_or(WholeReason::ResampledBaked)?;
+        let baked_ao = same_size(set.baked(&BakedKind::AmbientOcclusion), set).ok_or(WholeReason::ResampledBaked)?;
         let grid = grid(set);
         let mut wanted: Vec<(u32, u32)> = tiles.iter().copied().filter(|t| inside(*t, grid)).collect();
         wanted.sort_unstable();
@@ -96,7 +120,7 @@ impl MaterialMaps {
         };
         let mut out: Vec<Option<TileMaps>> = vec![None; wanted.len()];
         for_each_mut(&mut out, |i, slot| *slot = wanted.get(i).and_then(|t| builder.tile(*t)));
-        Some(out.into_iter().flatten().collect())
+        Ok(out.into_iter().flatten().collect())
     }
 }
 
@@ -104,6 +128,33 @@ impl MaterialMaps {
 type TilePixels = (Rect, Vec<[f32; 4]>);
 /// Composited heights by tile.
 type Heights = HashMap<(u32, u32), TilePixels>;
+
+/// What a change reaches.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Reached {
+    /// The tiles to build again.
+    pub tiles: Vec<(u32, u32)>,
+    /// Where the composite may differ (kept results elsewhere stay valid).
+    pub area: Vec<Rect>,
+}
+
+/// Why a texture set's maps are built whole instead of tile by tile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WholeReason {
+    /// An effect reads the whole image, or a changed layer is not in the set.
+    ReadsEverything,
+    /// The change reaches most of the set.
+    TooFar,
+    /// A baked normal or ambient occlusion map has another resolution (it is resampled whole).
+    ResampledBaked,
+}
+
+/// `r` grown by `by` on every side, clipped to `size`.
+fn grow(r: Rect, by: u32, size: (u32, u32)) -> Rect {
+    let (x, y) = (r.x.saturating_sub(by), r.y.saturating_sub(by));
+    let (x1, y1) = ((r.x + r.w).saturating_add(by).min(size.0), (r.y + r.h).saturating_add(by).min(size.1));
+    Rect { x, y, w: x1.saturating_sub(x), h: y1.saturating_sub(y) }
+}
 
 /// What every tile of one [`MaterialMaps::build_tiles`] reads.
 struct Builder<'a> {

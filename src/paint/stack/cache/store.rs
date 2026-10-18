@@ -103,15 +103,18 @@ impl TileStore {
         }
     }
 
-    /// Keeps only the entries `keep` accepts.
-    pub fn retain(&mut self, keep: impl Fn(&TileKey, u64) -> bool) {
+    /// Keeps the entries `keep` gives a key for, under that key; drops the others.
+    pub fn retain_map(&mut self, keep: impl Fn(&TileKey, u64) -> Option<u64>) {
         let mut freed = 0;
-        self.entries.retain(|k, e| {
-            let kept = keep(k, e.dep);
-            if !kept {
-                freed += e.values.bytes();
+        self.entries.retain(|k, e| match keep(k, e.dep) {
+            Some(dep) => {
+                e.dep = dep;
+                true
             }
-            kept
+            None => {
+                freed += e.values.bytes();
+                false
+            }
         });
         self.bytes -= freed;
     }
@@ -142,7 +145,7 @@ mod tests {
         assert!(s.bytes() <= 3 * (64 + 96));
         assert_eq!(s.get(&key("b", 5), 1), Some(ramp));
         assert_eq!(s.get(&key("b", 1), 1), None, "the oldest went first");
-        s.retain(|k, _| k.layer != "b");
+        s.retain_map(|k, dep| (k.layer != "b").then_some(dep));
         assert_eq!(s.get(&key("b", 5), 1), None);
     }
 }
