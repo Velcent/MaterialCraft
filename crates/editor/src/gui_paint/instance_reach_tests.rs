@@ -2,7 +2,8 @@
 //! an instance are composited again, not the unrelated ones.
 
 use super::*;
-use crate::gui_paint::channel_view::ChannelView;
+use crate::gui_paint::channel_display::ChannelDisplay;
+use crate::gui_paint::channel_view::{ChannelView, Shown};
 use crate::gui_paint::document_state::OpenDocument;
 use crate::gui_paint::maps_worker::{MapsWorker, SetMaps};
 use crate::gui_paint::stack_editor;
@@ -61,7 +62,8 @@ fn recomposited(doc: &mut OpenDocument, ev: LayerEvent) -> Vec<usize> {
 /// Runs a maps worker over `sets` to the end; the maps of every set it composited.
 fn composite(doc: &OpenDocument, sets: Vec<usize>) -> Vec<SetMaps> {
     let materials = MaterialFills::new(Arc::new(FolderResolver::new([PathBuf::from("/nonexistent")])), Arc::new(MaterialCache::default()));
-    let mut worker = MapsWorker::start(doc.maps_view(&sets), sets, ChannelView::Material, None, materials, None, None);
+    let mut worker =
+        MapsWorker::start(doc.maps_view(&sets), sets, Shown { view: ChannelView::Material, channel: ChannelDisplay::default() }, None, materials, None, None);
     let start = Instant::now();
     let mut out = Vec::new();
     while !worker.is_finished() {
