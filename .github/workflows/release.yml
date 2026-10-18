@@ -1,0 +1,85 @@
+name: Release Windows x64
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Nama tag untuk rilis (contoh: v0.1.0). Kosongkan jika ingin menggunakan commit hash.'
+        required: false
+        default: ''
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build Windows x64
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry and build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build MaterialCraft (CLI + GUI)
+        # Membangun kedua biner dengan fitur GUI diaktifkan
+        run: cargo build --release --features gui
+
+      - name: Prepare Release Directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release
+          
+          # Salin biner utama (CLI dan GUI)
+          Copy-Item "target/release/materialcraft.exe" -Destination "release/"
+          Copy-Item "target/release/materialcraft-gui.exe" -Destination "release/"
+          
+          # Salin file dokumentasi dan lisensi (jika ada)
+          if (Test-Path "LICENSE") { Copy-Item "LICENSE" -Destination "release/" }
+          if (Test-Path "LICENSE-MIT") { Copy-Item "LICENSE-MIT" -Destination "release/" }
+          if (Test-Path "LICENSE-APACHE") { Copy-Item "LICENSE-APACHE" -Destination "release/" }
+          if (Test-Path "README.md") { Copy-Item "README.md" -Destination "release/" }
+
+      - name: Compress Release Archive
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "release\*" -DestinationPath "MaterialCraft-windows-x64.zip"
+
+      - name: Upload Release Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MaterialCraft-windows-x64
+          path: MaterialCraft-windows-x64.zip
+
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Izin wajib untuk membuat Release dan mengunggah file
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: Release ${{ inputs.tag || github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          files: dist/*
