@@ -3,7 +3,7 @@
 
 use crate::manifest;
 use crate::{Made, Recipe, StarterError, alphas, brushes, environment, masks, materials, textures};
-use materialcraft::assets::{LibraryRoot, RootKind, SIDECAR_SUFFIX, THUMBNAIL_SUFFIX, Usage, create_standard_layout};
+use materialcraft::assets::{AssetStore, Draft, LibraryRoot, RootKind, Usage, create_standard_layout};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -53,7 +53,9 @@ pub fn build(dir: &Path, options: &Options) -> Result<Built, StarterError> {
         fs::remove_dir_all(&staging).map_err(|e| StarterError::io(&staging, e))?;
     }
     fs::create_dir_all(&staging).map_err(|e| StarterError::io(&staging, e))?;
-    create_standard_layout(&LibraryRoot::folder("starter-build", "Starter (building)", RootKind::User, &staging)).map_err(|e| StarterError::io(&staging, e))?;
+    let root = LibraryRoot::folder("starter-build", "Starter (building)", RootKind::User, &staging);
+    create_standard_layout(&root).map_err(|e| StarterError::io(&staging, e))?;
+    let store = AssetStore::new();
 
     let recipes = recipes();
     let made = make_all(&recipes, options)?;
@@ -61,7 +63,7 @@ pub fn build(dir: &Path, options: &Options) -> Result<Built, StarterError> {
     for (recipe, made) in recipes.iter().zip(made) {
         let path = recipe.path();
         shippable(&path, &made)?;
-        write(&staging, &path, &made)?;
+        write(&store, &root, &path, &made)?;
         let usage = made.sidecar.usage.unwrap_or(Usage::Texture);
         assets.push((path, usage));
     }
@@ -111,19 +113,10 @@ fn shippable(path: &str, made: &Made) -> Result<(), StarterError> {
     }
 }
 
-/// Writes the asset, its sidecar and its thumbnail under `root`.
-fn write(root: &Path, path: &str, made: &Made) -> Result<(), StarterError> {
-    let file = root.join(path);
-    if let Some(parent) = file.parent() {
-        fs::create_dir_all(parent).map_err(|e| StarterError::io(parent, e))?;
-    }
-    let put = |p: PathBuf, bytes: &[u8]| fs::write(&p, bytes).map_err(|e| StarterError::io(p, e));
-    put(file, &made.bytes)?;
-    put(root.join(format!("{path}{SIDECAR_SUFFIX}")), format!("{}\n", made.sidecar.to_json().to_string_pretty()).as_bytes())?;
-    if let Some(png) = &made.thumbnail {
-        put(root.join(format!("{path}{THUMBNAIL_SUFFIX}")), png)?;
-    }
-    Ok(())
+/// Writes the asset, its sidecar and its thumbnail into `root` through the asset store.
+fn write(store: &AssetStore, root: &LibraryRoot, path: &str, made: &Made) -> Result<(), StarterError> {
+    let draft = Draft { bytes: &made.bytes, sidecar: Some(&made.sidecar), thumbnail: made.thumbnail.as_deref() };
+    store.create(root, path, &draft).map(|_| ()).map_err(|e| StarterError::recipe(path, e))
 }
 
 /// `dir` with `.<suffix>` appended to its last component.
