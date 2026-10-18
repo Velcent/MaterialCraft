@@ -1,8 +1,9 @@
 //! How many texture sets, and how many of their paintable targets, a brush stroke updates tile by tile: over the
 //! projects of a list (`MC_COVERAGE_LIST`, default the feature-cover list), imported as the editor imports them,
-//! with Painter's procedurals kept and with them replaced. "Before" is the first tile path (stacks without filters,
-//! generators or references); "after" asks [`MaterialMaps::tiles_reached`] for a stroke in the middle of the set.
-//! The reasons sets fall back to the whole set are counted. Ignored; run under the heavy lock (`perf_coverage`).
+//! with Painter's procedurals kept and with them replaced: each target asks [`MaterialMaps::tiles_reached`] for a
+//! stroke in the middle of the set. The reasons sets fall back to the whole set are counted. Ignored; run under the
+//! heavy lock (`perf_coverage`). (The "before" column of the step-51 research note, the first tile path's rule of no
+//! filter, generator or reference in the stack, is history: that rule is gone.)
 
 use crate::gui_paint::channel_display::ChannelDisplay;
 use crate::gui_paint::channel_view::{ChannelView, Shown};
@@ -23,12 +24,10 @@ struct Tally {
     projects: usize,
     failed: usize,
     sets: usize,
-    sets_before: usize,
     /// Sets where every target takes the tile path / at least one does.
     sets_all: usize,
     sets_some: usize,
     targets: usize,
-    targets_before: usize,
     targets_after: usize,
     reasons: BTreeMap<String, usize>,
 }
@@ -71,8 +70,6 @@ fn targets(set: &TextureSet) -> Vec<&Layer> {
 
 fn count(set: &TextureSet, o: &OutputOptions, t: &mut Tally) {
     t.sets += 1;
-    let local = set_is_local(&set.layers);
-    t.sets_before += usize::from(local);
     let mid = (set.resolution.0 / TILE_SIZE / 2, set.resolution.1 / TILE_SIZE / 2);
     let shown = Shown { view: ChannelView::Material, channel: ChannelDisplay::default() };
     let previewed = maps_patch::patchable(&shown, set);
@@ -80,7 +77,6 @@ fn count(set: &TextureSet, o: &OutputOptions, t: &mut Tally) {
     let targets = targets(set);
     for l in &targets {
         t.targets += 1;
-        t.targets_before += usize::from(local);
         let reached = MaterialMaps::tiles_reached(set, o, generators::builtin(), &NO_FILL_CONTEXT, &[l.id.as_str()], &[mid]);
         match (reached, previewed) {
             (Ok(_), true) => taken += 1,
@@ -96,34 +92,17 @@ fn count(set: &TextureSet, o: &OutputOptions, t: &mut Tally) {
     t.sets_some += usize::from(taken > 0);
 }
 
-/// The first tile path's rule: no filter, generator or reference anywhere in the stack.
-fn set_is_local(layers: &[Layer]) -> bool {
-    let local = |k: &str| !matches!(k, "filter" | "generator" | "reference");
-    layers.iter().all(|l| {
-        l.effects.iter().all(|e| local(e.kind.id()))
-            && l.mask.as_ref().is_none_or(|m| m.effects.iter().all(|e| local(e.kind.id())))
-            && set_is_local(l.children())
-    })
-}
-
 fn report(name: &str, t: &Tally) {
     let pct = |a: usize, b: usize| if b == 0 { 0.0 } else { 100.0 * a as f64 / b as f64 };
     eprintln!("{name}: {} projects ({} failed to import), {} texture sets, {} paintable targets", t.projects, t.failed, t.sets, t.targets);
-    eprintln!("  sets, tile path before: {} ({:.0} %)", t.sets_before, pct(t.sets_before, t.sets));
     eprintln!(
-        "  sets, tile path after: every target {} ({:.0} %), some target {} ({:.0} %)",
+        "  sets, tile path: every target {} ({:.0} %), some target {} ({:.0} %)",
         t.sets_all,
         pct(t.sets_all, t.sets),
         t.sets_some,
         pct(t.sets_some, t.sets)
     );
-    eprintln!(
-        "  targets, tile path before {} ({:.0} %), after {} ({:.0} %)",
-        t.targets_before,
-        pct(t.targets_before, t.targets),
-        t.targets_after,
-        pct(t.targets_after, t.targets)
-    );
+    eprintln!("  targets, tile path: {} ({:.0} %)", t.targets_after, pct(t.targets_after, t.targets));
     for (why, n) in &t.reasons {
         eprintln!("  whole set: {why}: {n} targets");
     }
