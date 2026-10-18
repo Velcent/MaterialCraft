@@ -112,7 +112,7 @@ mod tests {
         assert_eq!(code, Some(0));
         let r = RunReport::from_json(&json::parse(&std::fs::read_to_string(&output).unwrap()).unwrap()).unwrap();
         assert_eq!((r.scenario.as_str(), r.get("open_ms")), (s.id.as_str(), Some(1.0)));
-        assert_eq!(serve(&["--other".to_string()], |_| unreachable!()), None);
+        assert_eq!(serve(&["--other".to_string()], |_| RunReport::new("never run")), None);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

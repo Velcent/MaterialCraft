@@ -75,7 +75,7 @@ pub fn parse_file(text: &str) -> Result<Vec<Scenario>, String> {
     let v = json::parse(text).map_err(|e| e.to_string())?;
     let list = match &v {
         Value::Array(items) => items,
-        _ => v["scenarios"].as_array().ok_or("a scenario file is a list of scenarios or {\"scenarios\": [..]}")?,
+        _ => v.get("scenarios").and_then(Value::as_array).ok_or("a scenario file is a list of scenarios or {\"scenarios\": [..]}")?,
     };
     list.iter().map(Scenario::from_json).collect()
 }

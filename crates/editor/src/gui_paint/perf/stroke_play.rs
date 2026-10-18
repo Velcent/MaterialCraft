@@ -246,7 +246,7 @@ fn stroke(
 ) {
     let mut dabs = 0;
     let started = Instant::now();
-    for input in frames.to_vec() {
+    for input in frames.iter().cloned() {
         let at = Instant::now();
         let frame = PaintFrame { doc: &mut b.doc, picking, camera: Some(camera), tool, target: Some((target.clone(), set)), uv: None };
         let report = painting.frame(input, frame);
