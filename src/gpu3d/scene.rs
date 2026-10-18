@@ -133,6 +133,15 @@ impl Scene {
             .collect()
     }
 
+    /// Changes the anisotropic filtering level of every part's maps.
+    pub unsafe fn set_aniso(&self, gl: &glow::Context, aniso: f32) {
+        unsafe {
+            for p in &self.parts {
+                p.maps.set_aniso(gl, aniso);
+            }
+        }
+    }
+
     /// Free the GPU objects of all parts (queued changes stay queued).
     pub unsafe fn free(&mut self, gl: &glow::Context) {
         unsafe {

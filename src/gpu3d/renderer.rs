@@ -107,6 +107,11 @@ impl Renderer {
         }
     }
 
+    /// Changes the anisotropic filtering level of the built-in shape's maps (only where the GPU offers it).
+    pub unsafe fn set_aniso(&self, gl: &glow::Context, aniso: f32) {
+        unsafe { self.maps.set_aniso(gl, aniso) }
+    }
+
     /// The resolved HDR target (depth read-backs).
     pub fn target(&self) -> Option<&HdrTarget> {
         self.target.as_ref()

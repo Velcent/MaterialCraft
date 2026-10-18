@@ -88,6 +88,17 @@ impl MapTextures {
         }
     }
 
+    /// Changes the anisotropic filtering level of every map (1 = off).
+    pub unsafe fn set_aniso(&self, gl: &glow::Context, aniso: f32) {
+        unsafe {
+            for t in [Some(&self.base), Some(&self.normal), Some(&self.rma), self.emis.as_ref(), self.height.as_ref()].into_iter().flatten() {
+                gl.bind_texture(glow::TEXTURE_2D, Some(t.id));
+                gl.tex_parameter_f32(glow::TEXTURE_2D, ANISO_PARAM, aniso.max(1.0));
+            }
+            gl.bind_texture(glow::TEXTURE_2D, None);
+        }
+    }
+
     /// Size of the height map in texels, (1, 1) without one.
     pub fn height_size(&self) -> (usize, usize) {
         self.height.as_ref().map(|t| (t.w, t.h)).unwrap_or((1, 1))

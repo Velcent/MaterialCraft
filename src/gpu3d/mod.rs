@@ -119,6 +119,8 @@ pub struct Gpu {
     content: u64,
     /// The last frame left the accumulation incomplete: paint again soon (the view is still refining).
     refining: bool,
+    /// The anisotropic filtering request the uploaded textures have.
+    applied_aniso: Option<f32>,
 }
 
 impl Gpu {
@@ -211,6 +213,16 @@ pub fn paint_with(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow
         fail(&mut g.error, sink, e);
         return;
     }
+    // a changed filtering request applies to the textures already uploaded
+    // (only where the GPU offers anisotropic filtering: the parameter is unknown otherwise)
+    if g.applied_aniso.is_some_and(|a| a != aniso_req) && r.aniso(f32::MAX) > 1.0 {
+        let level = r.aniso(aniso_req);
+        unsafe {
+            r.set_aniso(gl, level);
+            g.scene.set_aniso(gl, level);
+        }
+    }
+    g.applied_aniso = Some(aniso_req);
     let self_shadow = g.opts.self_shadow;
     let want_shot = std::mem::take(&mut g.want_shot);
     let want_depth = std::mem::take(&mut g.want_depth);
