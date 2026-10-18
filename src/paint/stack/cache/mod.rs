@@ -140,8 +140,8 @@ impl StackCache {
                 let outside = confined.is_some_and(|area| !area.iter().any(|a| overlaps(*a, k.rect)));
                 (outside && old.of(&k.layer) == Some(dep)).then_some(new)
             };
-            store.retain_map(&keep);
-            fills.retain_map(&keep);
+            store.retain_map(keep);
+            fills.retain_map(keep);
         }
         CacheSession { cache: self, set: set.id.clone(), keys: keys.masks, fills: keys.fills, below, baked }
     }
