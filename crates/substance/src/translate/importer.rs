@@ -4,6 +4,7 @@
 use super::bake_settings::ProjectBaking;
 use super::baked_maps::BakedMaps;
 use super::cache_channels::CacheChannels;
+use super::cameras::ProjectCameras;
 use super::cancel::Cancel;
 use super::error::ImportError;
 use super::foreign::ForeignFiles;
@@ -22,6 +23,7 @@ use crate::model::PainterDocument;
 use crate::project::{SppProject, paths};
 use materialcraft::material_fill::MaterialResolver;
 use materialcraft::mesh::Mesh;
+use materialcraft::paint::saved_view::SavedView;
 use materialcraft::paint::{Document, Fidelity, embedded};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -168,6 +170,7 @@ impl Importer {
         let cache = CacheChannels::new(&self.project);
         let baked = BakedMaps::new(&self.project);
         let bake_settings = ProjectBaking::read(&self.project, &scene);
+        let (cameras, camera_notes) = ProjectCameras::read(&self.project, &scene);
         let binding = SetBinding::bind(&materials, &records, &cache.sets());
         let builder = SetBuilder {
             cache: &cache,
@@ -218,6 +221,8 @@ impl Importer {
         doc.texture_sets = sets;
         doc.height_filter = normals.height_filter;
         doc.foreign = kept.files;
+        doc.view = cameras.view(&doc.mesh);
+        report_cameras(&mut report, doc.view.as_ref(), camera_notes);
         self.materials(model.as_ref(), &mut doc, &mut report);
         for problem in doc.problems() {
             report.add("document check", Fidelity::Approximated, problem.to_string());
@@ -243,6 +248,22 @@ impl Importer {
             .map_or(String::new(), |n| n.to_string_lossy().into_owned());
         format!("substance-painter {version}: {file}")
     }
+}
+
+/// What became of the project's cameras.
+fn report_cameras(report: &mut Reporter, view: Option<&SavedView>, notes: Vec<String>) {
+    let imported = view.map_or(0, |v| v.cameras.iter().filter(|c| c.original().is_some()).count());
+    let mut note = match imported {
+        0 => "none found".to_string(),
+        n => format!(
+            "{n} imported (the saved view opens as the default camera; depth of field and display settings not taken over)"
+        ),
+    };
+    for n in notes {
+        note.push_str("; ");
+        note.push_str(&n);
+    }
+    report.add("cameras", Fidelity::Approximated, note);
 }
 
 /// Points mesh parts of collapsed slots at the set's slot, so they show the shared texture set.

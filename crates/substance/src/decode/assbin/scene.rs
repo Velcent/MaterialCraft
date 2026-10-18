@@ -1,7 +1,8 @@
 //! Splits the scene into its blocks without decoding them.
 //!
 //! Layout: `u64` size, `u32` flags, root node block, `u32` mesh count + mesh blocks,
-//! `u32` material count + material blocks, then animations, textures, lights, cameras (not read).
+//! `u32` material count + material blocks, then animations, textures, lights and cameras (the `tail`, read by
+//! [`super::AssbinCamera`]).
 
 use super::RECORD;
 use super::block::{read_block, read_count, read_u32};
@@ -27,6 +28,8 @@ pub struct SceneBlocks<'a> {
     pub root_node: &'a [u8],
     pub meshes: Vec<&'a [u8]>,
     pub materials: Vec<&'a [u8]>,
+    /// Everything after the materials: the animation, texture, light and camera lists.
+    pub tail: &'a [u8],
 }
 
 impl<'a> SceneBlocks<'a> {
@@ -37,10 +40,12 @@ impl<'a> SceneBlocks<'a> {
         let root_node = read_block(&mut r)?;
         let meshes = read_blocks(&mut r)?;
         let materials = read_blocks(&mut r)?;
+        let tail = r.bytes(r.remaining()).map_err(DecodeError::truncated(super::RECORD))?;
         Ok(SceneBlocks {
             root_node,
             meshes,
             materials,
+            tail,
         })
     }
 }

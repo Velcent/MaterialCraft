@@ -125,6 +125,13 @@ pub fn node(name: &str, matrix: [f32; 16], meshes: &[u32], children: Vec<Buf>) -
 
 /// The scene block: flags, the root node, meshes, materials and four empty trailing lists.
 pub fn scene_from(root: Buf, meshes: Vec<Buf>, materials: &[&str]) -> Buf {
+    let mut tail = Buf::default();
+    tail.zeros(16);
+    scene_with_tail(root, meshes, materials, tail)
+}
+
+/// The scene block with `tail` after the materials (the animation, texture, light and camera lists).
+pub fn scene_with_tail(root: Buf, meshes: Vec<Buf>, materials: &[&str], tail: Buf) -> Buf {
     let mut s = Buf::default();
     s.u32(8).block(root).u32(meshes.len() as u32);
     for m in meshes {
@@ -134,7 +141,7 @@ pub fn scene_from(root: Buf, meshes: Vec<Buf>, materials: &[&str]) -> Buf {
     for name in materials {
         s.block(material(name));
     }
-    s.zeros(16);
+    s.0.extend_from_slice(&tail.0);
     let mut out = Buf::default();
     out.block(s);
     out

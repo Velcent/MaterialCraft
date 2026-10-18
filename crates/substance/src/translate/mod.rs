@@ -10,6 +10,9 @@
 pub mod bake_settings;
 mod baked_maps;
 pub(crate) mod cache_channels;
+#[cfg(test)]
+mod camera_tests;
+pub mod cameras;
 mod cancel;
 pub mod channel_table;
 mod error;

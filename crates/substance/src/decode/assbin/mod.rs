@@ -4,6 +4,7 @@
 //! [`AssbinScene`] is the cheap summary (counts and names); [`AssbinGeometry`] decodes everything.
 
 mod block;
+mod camera;
 #[cfg(test)]
 mod corpus_tests;
 mod faces;
@@ -28,6 +29,7 @@ mod transform;
 #[cfg(test)]
 mod visual_check;
 
+pub use camera::AssbinCamera;
 pub use geometry::AssbinGeometry;
 pub use header::{AssbinHeader, HEADER_LEN};
 pub use material::MaterialSummary;
