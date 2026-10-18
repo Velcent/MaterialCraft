@@ -1,4 +1,4 @@
-//! Qt `QDataStream` values (big-endian, Qt 5 encoding) as Painter writes them in `.ini`, `.toc` and image headers.
+//! Qt `QDataStream` values (big-endian, Qt 5 encoding) as Painter writes them in `.ini`, `.toc`, image headers and `.alg_meta` records.
 //!
 //! `stream` holds the sequential reader ([`QDataStream`]), `variant` the decoded value types
 //! ([`QVariant`], [`QVariantMap`]) and `error` the [`QdsError`] type.

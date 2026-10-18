@@ -16,6 +16,7 @@ pub(super) mod type_id {
     pub const URL: u32 = 17;
     pub const HASH: u32 = 28;
     pub const FLOAT: u32 = 38;
+    pub const VECTOR3D: u32 = 83;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,7 +36,10 @@ pub enum QVariant {
     Map(QVariantMap),
     /// A `QUrl` in its encoded form, e.g. `resource://allegorithmic/...` (seen in `/editor/exporter.ini`).
     Url(String),
+    /// Stored as a double, like every float Qt writes at its default (double) precision.
     Float(f32),
+    /// A `QVector3D`: three floats, each stored as a double (Observed in the mesh's `.alg_meta` record).
+    Vector3D([f32; 3]),
 }
 
 impl QVariant {

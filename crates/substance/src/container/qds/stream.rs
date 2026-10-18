@@ -90,7 +90,9 @@ impl<'a> QDataStream<'a> {
             type_id::LONG_LONG => QVariant::LongLong(r.i64_be()?),
             type_id::ULONG_LONG => QVariant::ULongLong(r.u64_be()?),
             type_id::DOUBLE => QVariant::Double(r.f64_be()?),
-            type_id::FLOAT => QVariant::Float(f32::from_bits(r.u32_be()?)),
+            // Qt writes `float` at the stream's precision, double by default (Observed: 8 bytes in Painter's records).
+            type_id::FLOAT => QVariant::Float(r.f64_be()? as f32),
+            type_id::VECTOR3D => QVariant::Vector3D([r.f64_be()? as f32, r.f64_be()? as f32, r.f64_be()? as f32]),
             type_id::STRING => QVariant::String(self.read_string()?),
             type_id::STRING_LIST => QVariant::StringList(self.read_string_list()?),
             type_id::BYTE_ARRAY => QVariant::ByteArray(self.read_byte_array()?.to_vec()),
@@ -163,7 +165,8 @@ mod tests {
             .long_long(-9)
             .ulong_long(11)
             .double(2.5)
-            .float(0.5);
+            .float(0.5)
+            .vector3d([1.0, -2.0, 0.25]);
         let bytes = w.finish();
         let mut s = QDataStream::new(&bytes);
         let expected = [
@@ -174,6 +177,7 @@ mod tests {
             QVariant::ULongLong(11),
             QVariant::Double(2.5),
             QVariant::Float(0.5),
+            QVariant::Vector3D([1.0, -2.0, 0.25]),
         ];
         for value in expected {
             assert_eq!(s.read_variant(), Ok(value));

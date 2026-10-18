@@ -68,7 +68,15 @@ impl QdsWriter {
     }
 
     pub fn float(&mut self, v: f32) -> &mut Self {
-        self.header(type_id::FLOAT).raw_bytes(&v.to_be_bytes())
+        self.header(type_id::FLOAT).raw_bytes(&f64::from(v).to_be_bytes())
+    }
+
+    pub fn vector3d(&mut self, v: [f32; 3]) -> &mut Self {
+        self.header(type_id::VECTOR3D);
+        for c in v {
+            self.raw_bytes(&f64::from(c).to_be_bytes());
+        }
+        self
     }
 
     pub fn string(&mut self, s: &str) -> &mut Self {
