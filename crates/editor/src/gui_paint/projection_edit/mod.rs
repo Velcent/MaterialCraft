@@ -18,8 +18,9 @@ use super::document_state::OpenDocument;
 use super::shared_mesh::SharedMesh;
 use materialcraft::history::CoalesceKey;
 use materialcraft::mesh::SurfaceMap;
+use materialcraft::paint::FillSource;
 use materialcraft::paint::edit::EditError;
-use materialcraft::paint::edit::ops::{FillRef, set_projection};
+use materialcraft::paint::edit::ops::{FillRef, set_fill_source, set_projection};
 use materialcraft::projection::gizmo::{GizmoMode, Space, Steps, UvDrag, UvHandle, VolumeDrag, WarpPointDrag, snap_to_surface};
 use materialcraft::projection::{Projection, ProjectionMode, SceneFrame, ViewProjector};
 use view::{GizmoHit, GizmoView, uv_under};
@@ -247,7 +248,19 @@ impl ProjectionEditing {
     /// A projection panel change of `target`: with `gesture` (a slider being dragged) it joins the running
     /// gesture's history step.
     pub fn set_from_panel(&mut self, doc: &mut OpenDocument, target: &FillRef, projection: Projection, gesture: bool) -> Result<(), EditError> {
-        let key = match (gesture, self.panel_key) {
+        let key = self.panel_gesture_key(gesture);
+        doc.edit("Projection", key, |tx| set_projection(tx, target, projection))
+    }
+
+    /// A fill source change from the panel (a channel's texture or its parameters), as [`Self::set_from_panel`].
+    pub fn set_source_from_panel(&mut self, doc: &mut OpenDocument, target: &FillRef, source: FillSource, gesture: bool) -> Result<(), EditError> {
+        let key = self.panel_gesture_key(gesture);
+        doc.edit("Fill texture", key, |tx| set_fill_source(tx, target, source))
+    }
+
+    /// The history key of a panel gesture: the running one's while a slider is dragged, none otherwise.
+    fn panel_gesture_key(&mut self, gesture: bool) -> Option<CoalesceKey> {
+        match (gesture, self.panel_key) {
             (false, _) => None,
             (true, Some(k)) => Some(k),
             (true, None) => {
@@ -255,8 +268,7 @@ impl ProjectionEditing {
                 self.panel_key = Some(k);
                 Some(k)
             }
-        };
-        doc.edit("Projection", key, |tx| set_projection(tx, target, projection))
+        }
     }
 
     /// The panel's gesture ended: the next change starts a new step.

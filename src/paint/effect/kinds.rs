@@ -36,6 +36,15 @@ impl Procedural {
     pub fn param(&self, name: &str) -> Option<&str> {
         self.params.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
     }
+
+    /// Sets parameter `name` to `value` (replacing its value, or adding it last).
+    pub fn set_param(&mut self, name: &str, value: impl Into<String>) {
+        let value = value.into();
+        match self.params.iter_mut().find(|(k, _)| k == name) {
+            Some(slot) => slot.1 = value,
+            None => self.params.push((name.to_string(), value)),
+        }
+    }
 }
 
 /// Levels per RGB component (grey values use the first): input range, gamma, output range.

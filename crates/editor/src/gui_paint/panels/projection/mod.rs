@@ -6,10 +6,12 @@
 //!
 //! - [`placement`]: size mode, tiling, rotation, offset, filter and repetition;
 //! - [`volume`]: the volume, the mode's settings and fill symmetry;
-//! - [`gizmo`]: the gizmo's settings.
+//! - [`gizmo`]: the gizmo's settings;
+//! - [`textures`]: the fill's channel textures and their parameters (roadmap step 48).
 
 mod gizmo;
 mod placement;
+mod textures;
 mod volume;
 
 use super::PanelEvent;
@@ -28,6 +30,13 @@ pub enum ProjectionEvent {
     Set {
         target: FillRef,
         projection: Box<Projection>,
+        gesture: bool,
+    },
+    /// Give `target` this source (a channel's texture or its parameters); with `gesture` (a slider being dragged)
+    /// the change joins the running step.
+    Source {
+        target: FillRef,
+        source: Box<FillSource>,
         gesture: bool,
     },
     /// The slider drag ended.
@@ -78,6 +87,12 @@ pub fn show(ui: &mut Ui, p: ProjectionUi, events: &mut Vec<PanelEvent>) {
                 if edited != fill.projection {
                     let gesture = ui.input(|i| i.pointer.any_down());
                     events.push(PanelEvent::Projection(ProjectionEvent::Set { target: target.clone(), projection: Box::new(edited), gesture }));
+                }
+                let mut source = fill.source.clone();
+                textures::show(ui, &mut source, fill.original.as_deref());
+                if source != fill.source {
+                    let gesture = ui.input(|i| i.pointer.any_down());
+                    events.push(PanelEvent::Projection(ProjectionEvent::Source { target: target.clone(), source: Box::new(source), gesture }));
                 }
             }
         }

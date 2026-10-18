@@ -17,12 +17,14 @@
 //! Common parameters (every texture): `seed`, `scale` (multiplies the look's cell counts; whole numbers keep the
 //! period), `disorder` (0..1, a smooth warp), then the tone: `balance` (0.5 neutral, higher brighter), `contrast`
 //! (0 neutral, 1 a hard step), `position` / `range` (a second scan around `position`), `invert`. Placement on the
-//! texture set (only [`TextureSource`]): the projection parameters of [`placement`] (`projection`, `tiling`,
+//! texture set (only [`TextureSource`] as a mask generator; a channel fill's projection places it there): the
+//! projection parameters of [`placement`] (`projection`, `tiling`,
 //! `offset_x`, `offset_y`, `rotation` in degrees, the volume …).
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod cells;
+pub mod common_params;
 mod grunges;
 mod look;
 mod noises;
@@ -34,6 +36,7 @@ mod spots;
 mod tests;
 mod tone;
 
+pub use common_params::{COMMON_PARAMS, ParamInfo, ParamKind};
 pub use look::{Look, ProcTexture};
 pub use source::TextureSource;
 pub use tone::Tone;

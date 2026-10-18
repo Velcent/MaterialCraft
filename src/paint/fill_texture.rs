@@ -26,6 +26,11 @@ impl TextureFill {
         fill
     }
 
+    /// Constants only (what a uniform fill's values become when a channel gets a texture).
+    pub fn from_values(values: &[(Channel, [f32; 4])]) -> TextureFill {
+        TextureFill { textures: Vec::new(), values: values.to_vec() }
+    }
+
     pub fn textures(&self) -> &[(Channel, Procedural)] {
         &self.textures
     }
@@ -102,5 +107,11 @@ mod tests {
         assert_eq!(f.channels(), vec![Channel::Height, Channel::BaseColor]);
         f.remove(Channel::Height);
         assert_eq!(f.channels(), vec![Channel::BaseColor]);
+        assert_eq!(TextureFill::from_values(f.values()), f);
+        let mut p = Procedural::new("perlin");
+        p.set_param("scale", "2");
+        p.set_param("seed", "3");
+        p.set_param("scale", "4");
+        assert_eq!(p.params, vec![("scale".to_string(), "4".to_string()), ("seed".to_string(), "3".to_string())]);
     }
 }

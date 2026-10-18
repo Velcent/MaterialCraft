@@ -216,3 +216,27 @@ fn a_warp_point_drag_is_one_step() {
     let (before, after) = drag(&mut editing, &mut doc, &f, &[[25.0, 75.0], [30.0, 70.0], [30.0, 70.0]], false, false);
     assert_eq!(after, before);
 }
+
+#[test]
+fn a_texture_parameter_drag_is_one_step_and_keeps_the_projection() {
+    use materialcraft::paint::effect::Procedural;
+    use materialcraft::paint::{FillSource, TextureFill};
+    let mut doc = open("tri_planar");
+    let mut editing = ProjectionEditing::default();
+    let start = target().fill(doc.doc()).cloned().unwrap();
+    let before = doc.history().len();
+    let source = |balance: usize| {
+        let mut t = TextureFill::default();
+        t.set_texture(Channel::Roughness, Procedural::new("perlin").with_params(vec![("balance".into(), format!("0.{balance}"))]));
+        FillSource::Texture(t)
+    };
+    for i in 1..=9 {
+        editing.set_source_from_panel(&mut doc, &target(), source(i), true).unwrap();
+    }
+    editing.end_panel_gesture(Some(&mut doc));
+    assert_eq!(doc.history().len(), before + 1);
+    let now = target().fill(doc.doc()).cloned().unwrap();
+    assert_eq!((now.source, now.projection), (source(9), start.projection.clone()));
+    doc.undo().unwrap();
+    assert_eq!(target().fill(doc.doc()), Some(&start));
+}

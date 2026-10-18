@@ -29,6 +29,13 @@ impl PaintMode {
                     Err(e) => self.diag.warn(Area::Project, format!("That projection change was not made: {e}.")),
                 }
             }
+            ProjectionEvent::Source { target, source, gesture } => {
+                let Some(doc) = &mut self.document else { return };
+                match self.projection.set_source_from_panel(doc, &target, *source, gesture) {
+                    Ok(()) => self.refresh_fill(&target),
+                    Err(e) => self.diag.warn(Area::Project, format!("That fill change was not made: {e}.")),
+                }
+            }
             ProjectionEvent::EndGesture => self.projection.end_panel_gesture(self.document.as_mut()),
             ProjectionEvent::Gizmo(settings) => self.projection.settings = settings,
         }
