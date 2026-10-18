@@ -1,5 +1,5 @@
 //! [`ProjectionMode`]: the seven modes and the settings only some of them have (the projection volume, falloffs,
-//! the warp grid). The volume-based modes are data only in this version.
+//! the warp grid). The projectors are in [`super::volume_modes`] and [`super::warp`].
 
 /// The box a volume-based projection works in, relative to the [`super::SceneFrame`].
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -83,23 +83,24 @@ impl Default for Cylindrical {
     }
 }
 
-/// One control point of a warp grid.
+/// One control point of a warp grid (conventions: [`super::warp::grid`]).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct WarpPoint {
-    /// Position in the volume's local frame (−1…1).
+    /// Position in grid space: −1…1 across the volume (twice its local coordinates).
     pub pos: [f32; 3],
-    /// Image coordinate of the point.
+    /// Image coordinate of the point (0…1 across the image, rows top first).
     pub uv: [f32; 2],
-    /// Bézier handles: previous and next along u, previous and next along v.
+    /// Bézier handles as offsets from the point: previous and next along u (the columns), previous and next along
+    /// v (the rows). A zero handle is automatic.
     pub tangents: [[f32; 3]; 4],
 }
 
-/// A grid of `rows × columns` control points forming a smooth patch.
+/// A grid of `rows × columns` control points forming a smooth patch; no points means the regular grid.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WarpGrid {
     pub rows: u32,
     pub columns: u32,
-    /// Projection depth along the grid's local z.
+    /// Projection depth along the grid's local z, on either side of the surface (grid units).
     pub depth: f32,
     /// Row by row; `rows × columns` points.
     pub points: Vec<WarpPoint>,

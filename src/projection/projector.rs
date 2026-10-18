@@ -1,5 +1,6 @@
 //! [`Projector`]: a surface point → image taps. [`Prepared`] is a [`Projection`] made ready for one pass; it
-//! implements the projector by `match`, so the per-texel path has no dynamic dispatch. The trait exists for
+//! implements the projector by `match`, so the per-texel path has no dynamic dispatch (warp shares its surface and
+//! inverse lookup through an `Arc`, so preparing it again for the next pass is cheap). The trait exists for
 //! projectors made elsewhere (the screen projector of projection painting, symmetry wrappers).
 
 use super::data::{ImagePlacement, Projection};
@@ -8,6 +9,7 @@ use super::modes::ProjectionMode;
 use super::placement::UvPlacement;
 use super::volume::VolumeTransform;
 use super::volume_modes::{PreparedCylindrical, PreparedPlanar, PreparedSpherical, PreparedTriPlanar};
+use super::warp::PreparedWarp;
 use crate::mesh::Vec3;
 use std::fmt;
 
@@ -71,6 +73,8 @@ pub enum NotComputable {
     NotImplemented { mode: String },
     /// A mode (or another setting) from a newer version.
     Unknown { mode: String },
+    /// The mode's settings cannot be evaluated (a malformed warp grid).
+    Invalid { mode: String, why: String },
 }
 
 impl fmt::Display for NotComputable {
@@ -79,12 +83,13 @@ impl fmt::Display for NotComputable {
             NotComputable::NeedsMesh { mode } => write!(f, "{mode} projection needs the mesh"),
             NotComputable::NotImplemented { mode } => write!(f, "{mode} projection is not evaluated yet"),
             NotComputable::Unknown { mode } => write!(f, "unknown projection {mode:?}"),
+            NotComputable::Invalid { mode, why } => write!(f, "{mode} projection cannot be evaluated: {why}"),
         }
     }
 }
 
 /// A projection ready to evaluate.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Prepared {
     /// UV coordinate = image coordinate.
     TextureSpace,
@@ -94,6 +99,7 @@ pub enum Prepared {
     Planar(PreparedPlanar),
     Spherical(PreparedSpherical),
     Cylindrical(PreparedCylindrical),
+    Warp(PreparedWarp),
 }
 
 impl Projection {
@@ -128,7 +134,9 @@ impl Projection {
                     hide_caps: m.hide_caps,
                 })
             }
-            // warp is evaluated from step 43 on
+            ProjectionMode::Warp(m) => Prepared::Warp(
+                PreparedWarp::new(m, VolumeTransform::new(&m.volume, frame), place).map_err(|e| NotComputable::Invalid { mode: mode(), why: e.to_string() })?,
+            ),
             _ => return Err(NotComputable::NotImplemented { mode: mode() }),
         })
     }
@@ -151,6 +159,7 @@ impl Projector for Prepared {
             Prepared::Planar(m) => m.project(p),
             Prepared::Spherical(m) => m.project(p),
             Prepared::Cylindrical(m) => m.project(p),
+            Prepared::Warp(m) => m.project(p),
         }
     }
 }

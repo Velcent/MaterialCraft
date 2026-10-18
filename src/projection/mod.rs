@@ -10,8 +10,8 @@
 //! placement in UV space), and the volume-based modes tri-planar, planar, spherical, cylindrical and warp. Texture
 //! space and UV work in UV space alone; the volume modes need the mesh (a [`crate::mesh::SurfaceMap`]: positions
 //! and interpolated vertex normals, ADR 0006 Q-PJ-02) and the [`SceneFrame`] ([`volume`]: the volume's local frame,
-//! [`rotation`]: Euler angles, [`falloff`]: clip, depth and facing falloffs, the tri-planar blend). Warp is data
-//! only in this version: preparing it reports [`NotComputable::NotImplemented`]. [`Mirrored`] repeats any
+//! [`rotation`]: Euler angles, [`falloff`]: clip, depth and facing falloffs, the tri-planar blend). [`warp`] lays
+//! the image on a Bézier patch grid inside the volume (precomputed inverse lookup). [`Mirrored`] repeats any
 //! projector at the copies of a [`crate::symmetry::SymmetrySpec`] (fill symmetry).
 //!
 //! [`view`] maps between the screen and the mesh for one camera ([`ViewProjector`]) and places images on screen
@@ -43,6 +43,7 @@ mod tests_volume;
 pub mod view;
 pub mod volume;
 mod volume_modes;
+pub mod warp;
 
 pub use data::{Filter, ImagePlacement, Projection, Repeat, SizeMode};
 pub use frame::SceneFrame;
@@ -55,3 +56,4 @@ pub use sampling::{ImageLevels, LevelChain, Texels};
 pub use view::{CpuViewProjector, ScreenImageTransform, ScreenPoint, ScreenProjector, SurfaceHit, ViewProjector, ViewScene};
 pub use volume::VolumeTransform;
 pub use volume_modes::{PreparedCylindrical, PreparedPlanar, PreparedSpherical, PreparedTriPlanar, tri_planar_planes};
+pub use warp::PreparedWarp;
