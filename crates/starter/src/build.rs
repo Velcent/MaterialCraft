@@ -60,6 +60,7 @@ pub fn build(dir: &Path, options: &Options) -> Result<Built, StarterError> {
     let mut assets = Vec::with_capacity(made.len());
     for (recipe, made) in recipes.iter().zip(made) {
         let path = recipe.path();
+        shippable(&path, &made)?;
         write(&staging, &path, &made)?;
         let usage = made.sidecar.usage.unwrap_or(Usage::Texture);
         assets.push((path, usage));
@@ -101,6 +102,15 @@ fn make_all(recipes: &[Box<dyn Recipe>], options: &Options) -> Result<Vec<Made>,
         .collect()
 }
 
+/// Refuses an asset taken from a user's imported project (roadmap step 46): those stay in the user's own library and
+/// are never shipped, whatever their origin.
+fn shippable(path: &str, made: &Made) -> Result<(), StarterError> {
+    match made.sidecar.provenance.is_imported() {
+        true => Err(StarterError::recipe(path, "comes from a user's imported project; the starter library never ships those")),
+        false => Ok(()),
+    }
+}
+
 /// Writes the asset, its sidecar and its thumbnail under `root`.
 fn write(root: &Path, path: &str, made: &Made) -> Result<(), StarterError> {
     let file = root.join(path);
@@ -124,4 +134,18 @@ fn sibling(dir: &Path, suffix: &str) -> PathBuf {
 
 fn is_empty_dir(dir: &Path) -> bool {
     fs::read_dir(dir).is_ok_and(|mut d| d.next().is_none())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use materialcraft::assets::{Provenance, Sidecar};
+
+    #[test]
+    fn assets_from_imported_projects_are_never_shipped() {
+        let made = |provenance| Made { bytes: vec![], sidecar: Sidecar { provenance, ..Sidecar::default() }, thumbnail: None };
+        let imported = Provenance::Imported { project: "Cup.spp".into(), origin: "stored in the project".into(), shareable: true };
+        assert!(shippable("alphas/x.png", &made(imported)).is_err());
+        assert!(shippable("alphas/x.png", &made(Provenance::Generator { generator: "g".into(), preset: None })).is_ok());
+    }
 }
