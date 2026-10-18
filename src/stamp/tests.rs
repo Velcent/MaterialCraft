@@ -52,6 +52,11 @@ fn footprints_sample_bilinearly_and_are_zero_outside() {
     assert_eq!(f.sample([11.0, 20.5]), 0.5);
     assert_eq!(f.sample([5.0, 5.0]), 0.0);
     assert!(Footprint::new(0, 0, 2, 2, vec![0.0; 3]).is_none());
+    // a coarser grid: the same values over twice the frame area
+    let coarse = Footprint::new(5, 10, 2, 1, vec![1.0, 0.0]).unwrap().with_scale(2.0);
+    assert_eq!(coarse.bounds(), [10.0, 20.0, 14.0, 22.0]);
+    assert!((coarse.sample([11.0, 21.0]) - 1.0).abs() < 1e-6 && coarse.sample([13.0, 21.0]) < 1e-6);
+    assert!((coarse.sample([12.0, 21.0]) - 0.5).abs() < 1e-6);
 }
 
 #[test]
