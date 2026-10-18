@@ -692,12 +692,13 @@ impl App {
                         ui.add_space(22.0);
 
                         // ---- action cards
-                        let actions: [(&str, &str, Ic); 6] = [
+                        let actions: [(&str, &str, Ic); 7] = [
                             ("New graph", "Start from a template", Ic::New),
                             ("Open package", "Load a .mcg or .mca file", Ic::Open),
                             ("Brick wall example", "Explore a finished material", Ic::Layout),
                             ("Mesh map baker", "Bake maps from OBJ meshes", Ic::Sphere),
-                            ("Open in Paint mode", "Paint a .mcpaint document or a mesh", Ic::Package),
+                            ("New paint project", "Start texturing a mesh (OBJ, glTF)", Ic::New),
+                            ("Open in Paint mode", "Open a .mcpaint document or a .spp", Ic::Package),
                             ("Import Painter project", "Convert a Substance 3D Painter .spp", Ic::Input),
                         ];
                         let gap = 14.0;
@@ -733,8 +734,12 @@ impl App {
                                 self.screen = Screen::Editor;
                                 self.bake.open = true;
                             }
-                            Some(4) if self.paint.pick(gui_paint::Pick::Any) => self.screen = Screen::Paint,
-                            Some(5) if self.paint.pick(gui_paint::Pick::Substance) => self.screen = Screen::Paint,
+                            Some(4) => {
+                                self.paint.new_project();
+                                self.screen = Screen::Paint;
+                            }
+                            Some(5) if self.paint.pick(gui_paint::Pick::Any) => self.screen = Screen::Paint,
+                            Some(6) if self.paint.pick(gui_paint::Pick::Substance) => self.screen = Screen::Paint,
                             _ => {}
                         }
 

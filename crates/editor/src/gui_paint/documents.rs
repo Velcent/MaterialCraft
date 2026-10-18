@@ -12,6 +12,12 @@ use materialcraft::paint::diag_entries;
 use std::path::PathBuf;
 
 impl PaintMode {
+    /// Opens the New project dialog (from outside the Paint screen, e.g. the start screen); with unsaved changes
+    /// it asks first, like File > New project.
+    pub fn new_project(&mut self) {
+        self.guard(Then::NewProject);
+    }
+
     /// Shows a file dialog and opens the chosen file. Returns false if the user cancelled. With unsaved changes it
     /// first asks whether to save them (on the Paint screen, so it returns true: show that screen).
     pub fn pick(&mut self, pick: Pick) -> bool {
