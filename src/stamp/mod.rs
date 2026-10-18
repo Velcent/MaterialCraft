@@ -14,7 +14,8 @@
 //! - [`StampStroke`]: one stroke into a set of [`ChannelTarget`]s: placement modes (screen, wrapped, flat, UV),
 //!   occlusion, facing limit, symmetry ([`SymmetrySpec`], from [`crate::symmetry`], for 3D-view and 2D-view
 //!   strokes alike), factors ([`TexelFactor`]: [`QuickMask`], [`Stencil`]),
-//!   flow building up under the stroke's opacity ceiling, [`StampMode::Paint`] / [`StampMode::Erase`]; it reports
+//!   flow building up under the stroke's opacity ceiling, [`StampMode::Paint`] / [`StampMode::Erase`] /
+//!   [`StampMode::Clone`], or [`StampMode::Local`] kernels ([`LocalKernel`], [`BlurKernel`]) for smudge and blur; it reports
 //!   the image tiles each dab changed (the caller records them in the history).
 //!
 //! Design: `MaterialCraft-docs/requirements/painting-tools.md` section 10.
@@ -25,7 +26,10 @@ mod dab;
 mod factors;
 mod frame;
 mod index;
+mod local;
 mod occlusion;
+#[cfg(test)]
+mod retouch_tests;
 mod stroke;
 #[cfg(test)]
 mod symmetry_tests;
@@ -39,6 +43,7 @@ pub use dab::{DabSample, Footprint};
 pub use factors::{QuickMask, Stencil, TexelFactor};
 pub use frame::screen_scale_at;
 pub use index::{Aabb, CELL, TexelIndex};
+pub use local::{BlurKernel, LocalGrid, LocalKernel};
 pub use occlusion::DepthMap;
 pub use stroke::{StampContext, StampError, StampStroke, StrokeSpace, ViewSpace};
 pub use write::{ChannelTarget, StampMode};
