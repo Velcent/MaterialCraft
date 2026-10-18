@@ -156,9 +156,10 @@ impl Entry {
     }
 
     fn tags(&self) -> Vec<&str> {
-        let mut tags = vec!["reference", "physicallybased", self.category.as_str(), if self.metalness >= 0.5 { "metal" } else { "dielectric" }];
-        for t in &self.tags {
-            if !tags.contains(&t.as_str()) {
+        let kind = if self.metalness >= 0.5 { "metal" } else { "dielectric" };
+        let mut tags: Vec<&str> = Vec::new();
+        for t in ["reference", "physicallybased", self.category.as_str(), kind].into_iter().chain(self.tags.iter().map(String::as_str)) {
+            if !tags.contains(&t) {
                 tags.push(t);
             }
         }
