@@ -1,32 +1,33 @@
 //! `view` (since 0.12): the document's [`SavedView`]: camera list, active camera, exposure and environment.
-//! Optional; absent when the document has none. Unknown fields are kept like everywhere else (locations `view`,
-//! `view/cameras/<index>`, `…/depth_of_field`, `view/environment`). A view that cannot be read (an unknown
+//! Since 0.13 a camera may be `locked` and carry `imported` (its source and original values, see
+//! [`camera_values`]). Optional; absent when the document has none. Unknown fields are kept like everywhere else
+//! (locations `view`, `view/cameras/<index>`, `…/depth_of_field`, `…/imported`, `…/imported/original`,
+//! `…/imported/original/depth_of_field`, `view/environment`). A view that cannot be read (an unknown
 //! projection, a wrong type) is dropped with no error: it is display state, never a reason to refuse a document.
 
+use super::camera_values;
 use super::extras::Extras;
-use super::fields::{Obj, as_f32, num};
+use super::fields::{Obj, num};
 use super::{FormatError, ReadCtx};
-use crate::camera::{CameraSettings, DepthOfField, Orbit, Projection};
 use crate::json::Value;
-use crate::paint::saved_view::{SavedCamera, SavedEnvironment, SavedView};
+use crate::paint::saved_view::{CameraOrigin, SavedCamera, SavedEnvironment, SavedView};
 
 const HERE: &str = "view";
 
 fn camera(i: usize, c: &SavedCamera, extras: &Extras) -> Value {
     let here = format!("{HERE}/cameras/{i}");
-    let s = &c.settings;
-    let d = &s.depth_of_field;
-    let mut dof = Value::object().with("enabled", d.enabled).with("focus_distance", num(d.focus_distance)).with("aperture", num(d.aperture));
-    extras.inject(&format!("{here}/depth_of_field"), &mut dof);
-    let mut v = Value::object()
-        .with("name", c.name.as_str())
-        .with("projection", s.projection.id())
-        .with("fov_y_degrees", num(s.fov_y.to_degrees()))
-        .with("yaw", num(c.orbit.yaw))
-        .with("pitch", num(c.orbit.pitch))
-        .with("distance", num(c.orbit.distance))
-        .with("pan", c.orbit.pan.iter().map(|v| num(*v)).collect::<Value>())
-        .with("depth_of_field", dof);
+    let mut v = camera_values::write(Value::object().with("name", c.name.as_str()), &c.values(), &here, extras);
+    if c.locked {
+        v = v.with("locked", true);
+    }
+    if let CameraOrigin::Imported { source, original } = &c.origin {
+        let at = format!("{here}/imported");
+        let mut o = camera_values::write(Value::object(), original, &format!("{at}/original"), extras);
+        extras.inject(&format!("{at}/original"), &mut o);
+        let mut imported = Value::object().with("source", source.as_str()).with("original", o);
+        extras.inject(&at, &mut imported);
+        v = v.with("imported", imported);
+    }
     extras.inject(&here, &mut v);
     v
 }
@@ -53,42 +54,27 @@ pub fn write(v: &SavedView, extras: &Extras) -> Value {
 
 fn read_camera(i: usize, value: &Value, at: String, ctx: &mut ReadCtx) -> Result<SavedCamera, FormatError> {
     let here = format!("{HERE}/cameras/{i}");
-    let d = SavedCamera::default();
     let mut o = Obj::new(value, at)?;
     let name = o.opt_str("name")?.unwrap_or(SavedCamera::DEFAULT_NAME).to_string();
-    let projection = match o.opt_str("projection")? {
-        None => Projection::Perspective,
-        Some(id) => Projection::from_id(id).ok_or_else(|| o.error("projection", format!("unknown projection {id:?}")))?,
+    let values = camera_values::read(&mut o, &here, ctx)?;
+    let locked = o.bool_or("locked", false)?;
+    let origin = match o.opt("imported") {
+        None => CameraOrigin::Own,
+        Some(imported) => read_origin(imported, o.path("imported"), &format!("{here}/imported"), ctx)?,
     };
-    let mut settings = CameraSettings { projection, ..d.settings };
-    settings.set_fov_y(o.f32_or("fov_y_degrees", d.settings.fov_y.to_degrees())?.to_radians());
-    let pan = match o.opt("pan") {
-        None => d.orbit.pan,
-        Some(p) => p
-            .as_array()
-            .filter(|a| a.len() == 2)
-            .and_then(|a| Some([as_f32(a.first()?)?, as_f32(a.get(1)?)?]))
-            .ok_or_else(|| o.error("pan", "expected [x, y]"))?,
-    };
-    let orbit = Orbit {
-        yaw: o.f32_or("yaw", d.orbit.yaw)?,
-        pitch: o.f32_or("pitch", d.orbit.pitch)?,
-        distance: o.f32_or("distance", d.orbit.distance)?,
-        pan,
-        roll: d.orbit.roll,
-    };
-    if let Some(dof) = o.opt("depth_of_field") {
-        let def = DepthOfField::default();
-        let mut p = Obj::new(dof, o.path("depth_of_field"))?;
-        settings.depth_of_field = DepthOfField {
-            enabled: p.bool_or("enabled", def.enabled)?,
-            focus_distance: p.f32_or("focus_distance", def.focus_distance)?,
-            aperture: p.f32_or("aperture", def.aperture)?,
-        };
-        ctx.extras.record(&format!("{here}/depth_of_field"), &p);
-    }
     ctx.extras.record(&here, &o);
-    Ok(SavedCamera { name, orbit, settings })
+    Ok(SavedCamera { locked, origin, ..SavedCamera::own(&name, values) })
+}
+
+/// `imported`: where the camera came from and the values it was imported with.
+fn read_origin(value: &Value, at: String, here: &str, ctx: &mut ReadCtx) -> Result<CameraOrigin, FormatError> {
+    let mut o = Obj::new(value, at)?;
+    let source = o.str("source")?.to_string();
+    let mut original = Obj::new(o.req("original")?, o.path("original"))?;
+    let values = camera_values::read(&mut original, &format!("{here}/original"), ctx)?;
+    ctx.extras.record(&format!("{here}/original"), &original);
+    ctx.extras.record(here, &o);
+    Ok(CameraOrigin::Imported { source, original: values })
 }
 
 fn read_environment(value: &Value, at: String, ctx: &mut ReadCtx) -> Result<SavedEnvironment, FormatError> {

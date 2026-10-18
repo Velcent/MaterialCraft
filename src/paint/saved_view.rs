@@ -2,28 +2,7 @@
 //! environment choice and the exposure; every other display setting is a user default). Display state only:
 //! nothing computed from the document depends on it, and a document without one opens with the user's defaults.
 
-use crate::camera::{CameraSettings, Orbit};
-
-/// One camera of the document's camera list.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SavedCamera {
-    pub name: String,
-    /// The pose, as the orbit controller holds it.
-    pub orbit: Orbit,
-    /// Projection, field of view and depth of field.
-    pub settings: CameraSettings,
-}
-
-impl Default for SavedCamera {
-    /// The default camera (CM-01).
-    fn default() -> SavedCamera {
-        SavedCamera { name: SavedCamera::DEFAULT_NAME.to_string(), orbit: Orbit::default(), settings: CameraSettings::default() }
-    }
-}
-
-impl SavedCamera {
-    pub const DEFAULT_NAME: &'static str = "Default";
-}
+pub use super::saved_camera::{CameraOrigin, CameraValues, SavedCamera};
 
 /// The lighting environment the view uses.
 #[derive(Debug, Clone, PartialEq)]

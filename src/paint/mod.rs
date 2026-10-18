@@ -21,6 +21,7 @@
 pub mod bake_config;
 pub mod blend;
 pub mod brush;
+pub mod camera_list;
 pub mod channel;
 pub mod diag_entries;
 pub mod doc;
@@ -43,6 +44,7 @@ pub(crate) mod par;
 pub mod pixel;
 pub mod probe;
 pub mod report;
+pub mod saved_camera;
 pub mod saved_view;
 pub mod see_through;
 pub mod stack;

@@ -51,7 +51,7 @@ impl ViewState {
     /// The view to save with the document.
     pub fn saved(&self) -> SavedView {
         let mut cameras = self.cameras.clone();
-        let live = SavedCamera { name: self.camera_name().to_string(), orbit: self.view.orbit(), settings: self.display.camera };
+        let live = SavedCamera { orbit: self.view.orbit(), settings: self.display.camera, ..self.cameras.get(self.active).cloned().unwrap_or_default() };
         match cameras.get_mut(self.active) {
             Some(c) => *c = live,
             None => cameras.push(live),

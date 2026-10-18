@@ -14,6 +14,7 @@
 pub mod bake_config;
 pub mod bake_enums;
 pub mod blend;
+mod camera_values;
 pub mod effect;
 pub mod effect_content;
 pub mod effect_kinds;
