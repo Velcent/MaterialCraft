@@ -14,6 +14,7 @@ use super::job::Job;
 use super::maps_worker::{MapsWorker, SetMaps};
 use super::quick_mask_tint::QuickMaskTint;
 use super::scene_shading::{self, ModelScale, Subdivision};
+use super::scene_stats::{self, SceneStats};
 use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
 use materialcraft::material_fill::{ChainResolver, FolderResolver, MaterialCache, MaterialFills, MaterialResolver, MemoryResolver};
@@ -60,6 +61,8 @@ pub struct SceneSync {
     /// Each texture set's subdivision in the last geometry build.
     subdivisions: Vec<Subdivision>,
     pub error: Option<String>,
+    /// What keeping the scene in step has cost so far.
+    stats: SceneStats,
 }
 
 impl SceneSync {
@@ -240,8 +243,12 @@ impl SceneSync {
             }
         }
         if let Some(part_sets) = &self.part_sets {
-            for SetMaps { set, maps, warnings } in self.waiting.drain(..) {
-                apply_set_maps(part_sets, set, maps, gpu);
+            for SetMaps { set, maps, warnings, timing } in self.waiting.drain(..) {
+                let started = std::time::Instant::now();
+                self.stats.arrived(timing);
+                let bytes = scene_stats::bytes_of(&maps);
+                let copies = apply_set_maps(part_sets, set, maps, gpu);
+                self.stats.handed(bytes, copies, started.elapsed());
                 if doc.mark_ready(set) {
                     warnings.into_iter().for_each(|w| sink.emit(w));
                 }
@@ -257,6 +264,11 @@ impl SceneSync {
     /// True while geometry or maps are still being built.
     pub fn is_busy(&self) -> bool {
         self.geometry.is_some() || self.maps.is_some() || self.pending.is_some() || !self.waiting.is_empty()
+    }
+
+    /// What keeping the scene in step has cost so far.
+    pub fn stats(&self) -> SceneStats {
+        self.stats
     }
 
     /// (texture sets done, total) of the running maps job.
@@ -301,10 +313,10 @@ impl SceneSync {
     }
 }
 
-/// Gives every part painted with `set` its maps.
-fn apply_set_maps(part_sets: &[Option<usize>], set: usize, maps: GpuMaps, gpu: &Shared) {
+/// Gives every part painted with `set` its maps; returns how many parts got them.
+fn apply_set_maps(part_sets: &[Option<usize>], set: usize, maps: GpuMaps, gpu: &Shared) -> usize {
     let parts: Vec<usize> = (0..part_sets.len()).filter(|&i| part_sets[i] == Some(set)).collect();
-    let Ok(mut g) = gpu.lock() else { return };
+    let Ok(mut g) = gpu.lock() else { return 0 };
     let mut maps = Some(maps);
     for (k, &part) in parts.iter().enumerate() {
         let m = if k + 1 == parts.len() { maps.take() } else { maps.as_ref().map(copy) };
@@ -312,6 +324,7 @@ fn apply_set_maps(part_sets: &[Option<usize>], set: usize, maps: GpuMaps, gpu: &
             g.set_part_maps(part, m);
         }
     }
+    parts.len()
 }
 
 /// Neutral grey maps shown until a set's own maps are ready.

@@ -120,6 +120,11 @@ impl DocumentStroke {
         (Ended { owner: resolved.owner, target, inverses, captures, base, finished }, out)
     }
 
+    /// Dabs placed so far.
+    pub fn dabs(&self) -> usize {
+        self.session.dabs()
+    }
+
     /// The stroke's camera (3D-view strokes).
     pub fn camera(&self) -> Option<materialcraft::camera::Camera> {
         self.session.camera()

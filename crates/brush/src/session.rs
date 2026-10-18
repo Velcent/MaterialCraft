@@ -186,6 +186,11 @@ impl StrokeSession {
         out
     }
 
+    /// Dabs placed so far.
+    pub fn dabs(&self) -> usize {
+        self.placed
+    }
+
     /// Ends the stroke: paints its last dabs and returns it as recorded.
     pub fn finish(mut self, scene: &SessionScene, targets: &mut [ChannelTarget]) -> Result<Finished, BrushError> {
         let mut dabs = Vec::new();

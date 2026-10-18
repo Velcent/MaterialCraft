@@ -343,6 +343,11 @@ impl Painting {
         self.surfaces.get(doc, set).is_some()
     }
 
+    /// Dabs the stroke in progress has placed so far.
+    pub fn stroke_dabs(&self) -> Option<usize> {
+        self.active.as_ref().map(ActiveStroke::dabs)
+    }
+
     /// True while a stroke or a pick gesture is in progress.
     pub fn is_stroking(&self) -> bool {
         self.active.is_some() || self.mask_active.is_some() || self.gesture.is_some()

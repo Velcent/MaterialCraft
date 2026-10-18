@@ -169,6 +169,11 @@ impl ActiveStroke {
         self.placement.is_some()
     }
 
+    /// Dabs placed so far.
+    pub fn dabs(&self) -> usize {
+        self.stroke.dabs()
+    }
+
     /// The texture set being painted.
     pub fn set(&self) -> usize {
         self.set

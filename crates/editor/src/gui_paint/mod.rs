@@ -43,6 +43,8 @@ mod navigation;
 mod new_project;
 mod occlusion_check;
 mod panels;
+#[cfg(test)]
+mod perf;
 mod projection_edit;
 mod projection_screen;
 mod quick_mask_tint;
@@ -51,6 +53,7 @@ mod reveal;
 mod save_point;
 mod saving;
 mod scene_shading;
+mod scene_stats;
 mod scene_sync;
 mod screen_images;
 mod shading_screen;
