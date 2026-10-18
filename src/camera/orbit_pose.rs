@@ -8,9 +8,9 @@ use crate::v3::{cross, dot, len, mul};
 use std::f32::consts::FRAC_PI_2;
 
 /// Below this length of its horizontal part a viewing direction counts as straight up or down.
-const VERTICAL: f32 = 1e-5;
+const VERTICAL: f32 = 1e-6;
 /// How far short of ±90° the pitch of a straight down or up view stays (radians), so the orbit's level axis exists.
-const POLE_MARGIN: f32 = 2e-5;
+const POLE_MARGIN: f32 = 2e-6;
 
 impl Orbit {
     /// The orbit whose [`Orbit::basis`] has the eye `eye`, looks along `forward` and has `up` as close as possible to
@@ -29,7 +29,7 @@ impl Orbit {
             let pitch = if f[1] < 0.0 { FRAC_PI_2 - POLE_MARGIN } else { -(FRAC_PI_2 - POLE_MARGIN) };
             ((-right[2]).atan2(right[0]), pitch)
         } else {
-            ((-f[0]).atan2(-f[2]), (-f[1]).clamp(-1.0, 1.0).asin())
+            ((-f[0]).atan2(-f[2]), (-f[1]).atan2(horizontal))
         };
         let level = Orbit { yaw, pitch, distance: 1.0, pan: [0.0, 0.0], roll: 0.0 }.basis();
         let roll = dot(right, level.up).atan2(dot(right, level.right));
