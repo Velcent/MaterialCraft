@@ -2,8 +2,10 @@
 //! followed by recompositing what changed.
 
 use super::PaintMode;
+use super::channel_view::ChannelView;
 use super::document_state::OpenDocument;
 use super::panels::layers::LayerEvent;
+use super::scene_sync::SceneSync;
 use super::stack_editor;
 use materialcraft::diag::{Area, SinkExt};
 use materialcraft::paint::edit::EditError;
@@ -47,10 +49,7 @@ impl PaintMode {
         if let Err(e) = result {
             self.diag.warn(Area::Project, format!("{what} failed: {e}. The history before that point was dropped."));
         }
-        match moved {
-            Moved::SetsAddedOrRemoved => self.scene.rebuild(doc, self.display),
-            Moved::Changed(sets) => self.scene.refresh(doc, self.display, sets),
-        }
+        moved.recomposite(&mut self.scene, doc, self.display);
     }
 }
 
@@ -61,6 +60,16 @@ pub(super) enum Moved {
     SetsAddedOrRemoved,
     /// These sets changed.
     Changed(Vec<usize>),
+}
+
+impl Moved {
+    /// Asks `scene` for what the move needs: the whole scene, or the maps of the sets that changed.
+    pub(super) fn recomposite(self, scene: &mut SceneSync, doc: &mut OpenDocument, view: ChannelView) {
+        match self {
+            Moved::SetsAddedOrRemoved => scene.rebuild(doc, view),
+            Moved::Changed(sets) => scene.refresh(doc, view, sets),
+        }
+    }
 }
 
 /// Runs a move in the history (`step`) and finds out what it changed.

@@ -2,7 +2,7 @@
 //! them goes into a [`RunReport`].
 
 use super::Bench;
-use crate::gui_paint::editing::{Moved, history_move};
+use crate::gui_paint::editing::history_move;
 use crate::gui_paint::scene_stats::SceneStats;
 use materialcraft::paint::edit::EditError;
 use materialcraft_perf::RunReport;
@@ -46,10 +46,7 @@ impl Recomposite {
         let started = Instant::now();
         let (result, moved) = history_move(&mut b.doc, step);
         result?;
-        match moved {
-            Moved::SetsAddedOrRemoved => b.scene.rebuild(&mut b.doc, b.view),
-            Moved::Changed(sets) => b.scene.refresh(&mut b.doc, b.view, sets),
-        }
+        moved.recomposite(&mut b.scene, &mut b.doc, b.view);
         b.settle();
         Ok(Recomposite { latency: started.elapsed(), did: super::delta(before, b.scene.stats()) })
     }
