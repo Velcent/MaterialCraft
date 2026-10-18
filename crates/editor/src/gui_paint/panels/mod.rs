@@ -7,6 +7,7 @@ pub mod camera_menu;
 pub mod channel_bar;
 mod display_settings;
 mod dock_content;
+pub mod drop_zones;
 pub mod import_report;
 pub mod import_review;
 mod import_review_materials;

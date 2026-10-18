@@ -10,9 +10,11 @@
 //!   [`starter`]: the starter library, installed or built on first run;
 //! - [`view`]: the filter (types, folder, query) and saved searches; [`results`]: what the filter matches;
 //! - [`header`], [`folders`], [`grid`], [`settings_page`]: drawing; [`icons`]: usage icons;
-//! - [`thumbs`]: thumbnails made off the UI thread and cached; [`drag`], [`payload`]: dragging into the stack.
+//! - [`thumbs`]: thumbnails made off the UI thread and cached; [`drag`], [`payload`]: dragging into the stack;
+//!   [`brush_item`]: what a brush preset or alpha does on the brush tools.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod brush_item;
 mod drag;
 mod folders;
 mod grid;
@@ -38,6 +40,7 @@ use materialcraft::diag::Sink;
 use materialcraft::paint::edit::ops::DropPayload;
 
 use crate::gui_settings::{LibrarySettings, SavedSearch, TrayLayout, TraySettings};
+use brush_item::BrushDrop;
 use drag::Drag;
 use results::{Item, Results};
 use service::LibraryService;
@@ -58,6 +61,9 @@ pub enum TrayEvent {
     DroppedImage { item: Box<Item>, pos: Pos2 },
     /// An environment map was let go at screen position `pos`: over the 3D view it lights the view (EN-01).
     DroppedEnvironment { item: Box<Item>, pos: Pos2 },
+    /// A brush preset or an alpha was let go at screen position `pos`: over the tools strip or the brush panel it loads
+    /// the preset or sets the tip (AS-06, PT-11); an alpha that is a picture (`image`) can still go onto the view.
+    DroppedBrush { item: Box<Item>, brush: BrushDrop, pos: Pos2, image: bool },
     /// The further library folders changed (AS-18).
     SetRoots(Vec<PathBuf>),
     /// The saved searches changed (AS-16, AS-17).
@@ -209,11 +215,12 @@ impl AssetTray {
             let drag = self.drag.take()?;
             let pos = pos?;
             let (image, environment) = (drag.is_view_image(), drag.is_environment());
-            return match drag.payload {
-                Ok(payload) => Some(TrayEvent::Dropped { item: Box::new(drag.item), payload, pos, replace: ctrl }),
-                Err(_) if image => Some(TrayEvent::DroppedImage { item: Box::new(drag.item), pos }),
-                Err(_) if environment => Some(TrayEvent::DroppedEnvironment { item: Box::new(drag.item), pos }),
-                Err(_) => None,
+            return match (drag.payload, drag.brush) {
+                (Ok(payload), _) => Some(TrayEvent::Dropped { item: Box::new(drag.item), payload, pos, replace: ctrl }),
+                (Err(_), Ok(brush)) => Some(TrayEvent::DroppedBrush { item: Box::new(drag.item), brush, pos, image }),
+                (Err(_), Err(_)) if image => Some(TrayEvent::DroppedImage { item: Box::new(drag.item), pos }),
+                (Err(_), Err(_)) if environment => Some(TrayEvent::DroppedEnvironment { item: Box::new(drag.item), pos }),
+                (Err(_), Err(_)) => None,
             };
         }
         drag.paint_ghost(ctx, pos);

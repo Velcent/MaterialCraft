@@ -21,4 +21,6 @@ pub enum ToolEvent {
     MarkCloneSource,
     /// The stencil or the projection image (PT-15, PJ-26).
     Image(ImageSlot, ImageEdit),
+    /// Save the shown brush tool's settings as a brush preset in an asset library (AS-06).
+    SaveBrushPreset,
 }

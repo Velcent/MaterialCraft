@@ -105,6 +105,12 @@ impl BrushTools {
         }
     }
 
+    /// The brush tool a brush or tip dropped from the tray goes to (AS-06): `current` if it is one, else the paint
+    /// tool. The projection tool's brush is the paint tool's.
+    pub fn brush_tool_for(&self, current: Tool) -> Tool {
+        if self.preset(current).is_some() { current } else { Tool::Paint }
+    }
+
     /// The preset of `tool` and the stroke helpers together, for the quick-access bar.
     pub fn quick_mut(&mut self, tool: Tool) -> Option<(&mut BrushPreset, &mut StrokeHelpers)> {
         let BrushTools { paint, eraser, smudge, clone, helpers, .. } = self;
@@ -180,6 +186,7 @@ mod tests {
         assert!(b.preset(Tool::MaterialPicker).is_none() && b.preset(Tool::Smudge).is_some() && b.preset(Tool::Clone).is_some());
         assert_eq!(b.preset(Tool::Projection), Some(&b.paint), "the projection tool paints with the paint brush");
         assert_eq!(b.stroke_tool(Tool::Projection), Some(StrokeTool::Projection));
+        assert_eq!((b.brush_tool_for(Tool::Eraser), b.brush_tool_for(Tool::PolygonFill)), (Tool::Eraser, Tool::Paint));
     }
 
     #[test]

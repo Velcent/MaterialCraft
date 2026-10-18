@@ -16,6 +16,8 @@ impl PaintMode {
     pub(super) fn before_tray_frame(&mut self) {
         self.layers.hover(self.tray.dragged_payload().cloned());
         let folders = self.tray.material_folders();
+        // alpha-image tips are found where materials are
+        self.painting.alphas.set_folders(folders.clone());
         self.scene.set_library_folders(folders);
         self.sync_shader_library();
     }
@@ -55,6 +57,8 @@ impl PaintMode {
                     self.diag.info(Area::Assets, format!("Drop {} on the 3D view to light the view with it.", item.name));
                 }
             }
+            // normally applied at the end of the tray's frame, where the brush zones are known
+            TrayEvent::DroppedBrush { item, brush, pos, image } => self.drop_brush(None, &item, brush, pos, image),
             TrayEvent::SetRoots(roots) => {
                 self.shell.settings.update(|s| s.library.roots = roots);
             }

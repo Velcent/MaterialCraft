@@ -17,7 +17,9 @@ use materialcraft::paint::brush::{BrushPreset, Retouch};
 use materialcraft::paint::stroke::{StrokeTool, Symmetry, ViewKind};
 use materialcraft::projection::{CpuViewProjector, ScreenImageTransform, ViewProjector};
 use materialcraft::stamp::{ProjectedPaint, TexelFactor};
-use materialcraft_brush::{Base, BrushError, DocumentStroke, Ended, InputPoint, LazyMouse, LineAnchor, PaintTarget, PaintValues, SessionScene, StrokeSetup};
+use materialcraft_brush::{
+    Base, BrushError, DocumentStroke, Ended, EngineExtras, InputPoint, LazyMouse, LineAnchor, PaintTarget, PaintValues, SessionScene, StrokeSetup, TipAlpha,
+};
 use std::sync::Arc;
 
 /// How to start a stroke.
@@ -42,6 +44,8 @@ pub struct StrokeStart {
     pub base: Option<Base>,
     /// Where the projected image lies (projection strokes; it does not move during a stroke).
     pub placement: Option<ScreenImageTransform>,
+    /// The alpha image of an alpha-image tip (round and procedural tips need none).
+    pub tip: Option<TipAlpha>,
 }
 
 /// What a stroke paints through besides the surface, lent per call: the factors (quick mask, stencil) and, for
@@ -129,7 +133,8 @@ impl ActiveStroke {
                 factors: through.factors,
                 projected: projected.as_ref(),
             };
-            prepared.start(setup, &scene, mesh, &|part| picking.is_shown(part), set)
+            let extras = EngineExtras { tip: start.tip, ..EngineExtras::default() };
+            prepared.start(setup, &scene, mesh, &|part| picking.is_shown(part), set).map(|s| s.with_extras(extras))
         };
         let stroke = match result {
             Ok(s) => s,

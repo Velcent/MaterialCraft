@@ -2,5 +2,6 @@
 //! screen acts on the choice.
 
 pub mod bake_missing;
+pub mod brush_preset;
 pub mod smart_asset;
 pub mod unsaved;

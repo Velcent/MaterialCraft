@@ -1,7 +1,9 @@
 //! The brush panel (PT-04 … PT-11, PT-02, PT-23 … PT-28): the active brush tool's settings, the smudge and clone
 //! tools' own settings, the values painted per channel (the channels switched on there are the ones smudge and
 //! clone work on), the stencil (PT-15) and, for the projection tool, the projection image (PJ-26). Settings take
-//! effect from the next stroke; image requests go out as [`ToolEvent::Image`].
+//! effect from the next stroke; image requests go out as [`ToolEvent::Image`]. The tip is round, a built-in
+//! procedural tip or an alpha dropped from the tray (AS-06); "Save as preset…" asks for
+//! [`ToolEvent::SaveBrushPreset`].
 
 use super::super::screen_images::ImageEdit;
 use super::super::shell::tools::Tool;
@@ -9,13 +11,15 @@ use super::super::tools::brush_state::{RetouchSettings, SmudgeMode};
 use super::super::tools::screen_image::{ImageSlot, ScreenImages};
 use super::super::tools::{BrushTools, ToolEvent};
 use super::PanelEvent;
+use super::drop_zones::{self, BrushZone};
+use crate::gui_assets::brush_item::tip_label;
 use crate::gui_theme;
 use crate::gui_widgets::SliderRow;
 use eframe::egui::{self, RichText, Ui};
 use materialcraft::paint::TextureSet;
-use materialcraft::paint::brush::{BrushPreset, Placement, SizeSpace};
+use materialcraft::paint::brush::{BrushPreset, Placement, SizeSpace, Tip};
 use materialcraft::projection::Repeat;
-use materialcraft_brush::SourceMode;
+use materialcraft_brush::{PROCEDURAL_TIPS, SourceMode};
 
 /// The images over the view as the panel shows them, and how to edit them.
 pub struct ImagesUi<'a> {
@@ -26,6 +30,8 @@ pub struct ImagesUi<'a> {
 }
 
 pub fn show(ui: &mut Ui, brush: &mut BrushTools, tool: Tool, set: Option<&TextureSet>, mut images: ImagesUi) {
+    // brushes and alphas dragged from the tray land here (AS-06)
+    drop_zones::mark(ui.ctx(), BrushZone::BrushPanel, ui.max_rect());
     let projection = tool == Tool::Projection;
     if brush.preset(tool).is_none() {
         ui.weak("The brush settings belong to the paint, eraser, smudge and clone tools.");
@@ -39,6 +45,13 @@ pub fn show(ui: &mut Ui, brush: &mut BrushTools, tool: Tool, set: Option<&Textur
         }
         if let Some(preset) = brush.preset_mut(tool) {
             heading(ui, if tool == Tool::Eraser { "Eraser" } else { "Brush" });
+            ui.horizontal(|ui| {
+                ui.label(&preset.name);
+                if ui.button("Save as preset…").on_hover_text("Save these settings as a brush in your asset library").clicked() {
+                    images.events.push(PanelEvent::Tool(ToolEvent::SaveBrushPreset));
+                }
+            });
+            tip(ui, preset);
             shape(ui, preset);
             heading(ui, "Variation");
             variation(ui, preset);
@@ -136,6 +149,24 @@ pub fn size_range(space: SizeSpace) -> (std::ops::RangeInclusive<f32>, &'static 
         SizeSpace::Model => (0.001..=1.0, "of model", 0.08),
         SizeSpace::Screen | SizeSpace::Texture => (1.0..=1000.0, "px", 60.0),
     }
+}
+
+/// The tip (PT-11): round, one of the built-in procedural tips, or the alpha image dropped here.
+fn tip(ui: &mut Ui, p: &mut BrushPreset) {
+    egui::ComboBox::from_label("Tip").selected_text(tip_label(&p.tip)).show_ui(ui, |ui| {
+        if let Tip::Alpha(path) = p.tip.clone() {
+            let label = tip_label(&p.tip);
+            ui.selectable_value(&mut p.tip, Tip::Alpha(path.clone()), label).on_hover_text(path);
+        }
+        ui.selectable_value(&mut p.tip, Tip::Round, "Round");
+        for t in PROCEDURAL_TIPS {
+            ui.selectable_value(&mut p.tip, Tip::Procedural(t.id.into()), t.label);
+        }
+    });
+    if let Tip::Alpha(path) = &p.tip {
+        ui.weak(format!("Alpha {path}"));
+    }
+    ui.weak("Drop an alpha from the assets here to make it the tip, or a brush to load it.");
 }
 
 fn shape(ui: &mut Ui, p: &mut BrushPreset) {

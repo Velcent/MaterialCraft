@@ -53,6 +53,7 @@ pub use brush_state::BrushTools;
 pub use events::ToolEvent;
 use mask_stroke::{ActiveMaskStroke, MaskStrokeStart};
 use materialcraft::camera::Camera;
+use materialcraft::paint::brush::Tip;
 use materialcraft::paint::stroke::StrokeTool;
 use materialcraft::projection::ViewProjector;
 use materialcraft::stamp::{Stencil, TexelFactor};
@@ -60,7 +61,7 @@ use materialcraft::symmetry::SymmetrySpec;
 use materialcraft_brush::stroke::line::SNAP_DEGREES;
 use materialcraft_brush::stroke::{line_points, snap_angle};
 use materialcraft_brush::symmetry::to_record;
-use materialcraft_brush::{LineAnchor, PaintTarget, QuickMask};
+use materialcraft_brush::{FolderAlphas, LineAnchor, PaintTarget, QuickMask, alpha_for};
 use screen_image::ScreenImages;
 use std::time::{Duration, Instant};
 use surfaces::SurfaceCache;
@@ -118,6 +119,8 @@ pub struct Painting {
     retouch: retouch::RetouchState,
     /// The stencil and the projection tool's image over the view.
     pub images: ScreenImages,
+    /// Where alpha-image tips are found: the asset library folders (AS-06).
+    pub alphas: FolderAlphas,
 }
 
 impl Painting {
@@ -254,6 +257,10 @@ impl Painting {
         let base = self.see_through_base(doc, picking, &surface, &target, set);
         let set_ref = doc.doc().texture_sets.get(set)?;
         let preset = self.brush.preset(f.tool).cloned().unwrap_or_default();
+        let tip = alpha_for(&preset.tip, &self.alphas);
+        if let (Tip::Alpha(path), None) = (&preset.tip, &tip) {
+            report.message = Some(format!("The tip {path} was not found in the asset libraries; the brush paints round."));
+        }
         let mut values = self.brush.values_for(set_ref);
         let placement = match (tool, &mut self.images.projection, camera) {
             (StrokeTool::Projection, Some(image), Some(camera)) => {
@@ -292,6 +299,7 @@ impl Painting {
             retouch,
             base,
             placement,
+            tip,
         };
         let (factor, stencil) = (factor_for(&self.quick_mask, doc, set), self.stencil_for(camera.is_none()));
         let fs = factors(&factor, &stencil);

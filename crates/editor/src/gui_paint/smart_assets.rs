@@ -126,7 +126,7 @@ impl PaintMode {
     }
 
     /// The libraries an asset can be saved into: the user's own first, then the further library folders.
-    fn libraries(&self) -> Vec<Library> {
+    pub(super) fn libraries(&self) -> Vec<Library> {
         let user = self.tray.user_library().map(|p| p.to_path_buf());
         let mut out: Vec<Library> = user.iter().map(|p| Library { label: "My assets".into(), path: p.clone() }).collect();
         for p in self.tray.material_folders() {

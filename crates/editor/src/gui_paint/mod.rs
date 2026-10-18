@@ -13,6 +13,8 @@ mod axis_gizmo;
 mod bake_editor;
 mod bake_queue;
 mod baking;
+mod brush_drop;
+mod brush_presets;
 mod cache;
 mod camera_files;
 mod channel_display;
@@ -159,6 +161,8 @@ pub struct PaintMode {
     saving: unsaved::Saving,
     /// Naming a new smart material or mask; asking whether to bake the maps a dropped one needs.
     smart: smart_assets::SmartAssets,
+    /// Naming a brush preset saved from the brush panel (AS-06).
+    brush_presets: brush_presets::BrushPresets,
     /// Editing the selected fill's projection: the view gizmo and the panel's gestures (step 38).
     projection: projection_edit::ProjectionEditing,
     /// The shader settings panel's gesture and where its shader files come from (step 41).
@@ -208,6 +212,7 @@ impl PaintMode {
             stroke_test: launch.stroke_test.then_some(stroke_test::StrokeTest::Waiting),
             saving: unsaved::Saving::default(),
             smart: smart_assets::SmartAssets::default(),
+            brush_presets: brush_presets::BrushPresets::default(),
             tablet: input::tablet::TabletInput::none(),
             projection: projection_edit::ProjectionEditing::default(),
             shader_panel: shading_screen::ShaderPanelState::default(),
@@ -262,7 +267,7 @@ impl PaintMode {
         self.before_tray_frame();
         events.extend(self.draw(ui, history));
         events.extend(self.geometry_mask_window(ctx));
-        events.extend(self.tray.end_frame(ctx).map(PanelEvent::Assets));
+        events.extend(self.end_tray_frame(ctx));
         self.paint_strokes(ctx);
         let mut action = PaintAction::Stay;
         for ev in events {
@@ -277,6 +282,7 @@ impl PaintMode {
         }
         self.eyedrop(ctx);
         self.poll_smart_assets(ctx);
+        self.poll_brush_presets(ctx);
         self.poll_unsaved(ctx);
         let name = self.document.as_ref().map(|d| d.title());
         self.title.update(ctx, name.as_deref());

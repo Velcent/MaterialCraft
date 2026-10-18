@@ -151,6 +151,72 @@ fn dragging_a_material_out_ends_in_one_drop_event_with_ctrl_as_replace() {
     assert!(t.dragged_payload().is_none());
 }
 
+/// Step 45's library check, headless: the starter library's brushes and alphas show in the tray under their type
+/// filters with thumbnails, every brush loads as a preset and every alpha gives a tip (PhotoCraft's as the procedural
+/// tip itself), and dragging a brush out ends in a brush drop, not a layer-stack drop.
+#[test]
+fn the_tray_shows_the_starter_brushes_and_alphas_and_drags_them_to_the_brush() {
+    use super::brush_item::{BrushDrop, brush_drop};
+    use materialcraft::paint::brush::Tip;
+    let dir = std::env::temp_dir().join(format!("mc-tray-brushes-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    materialcraft_starter::build(&dir, &materialcraft_starter::Options { texture_size: 16, jobs: 4 }).expect("starter library");
+    let lib = Library::with_roots([LibraryRoot::folder("starter", "Starter", RootKind::Starter, &dir)], &NullSink);
+    let service = LibraryService::from_library(lib, Arc::new(NullSink));
+    let mut t = AssetTray::with_service(service, ThumbCache::new(None), None, &LibrarySettings::default());
+    let ctx = egui::Context::default();
+
+    t.filter.toggle(Usage::Brush);
+    let _ = frame(&ctx, &mut t, screen());
+    let brushes = t.results.items.clone();
+    assert!(brushes.len() >= 10, "{} brushes", brushes.len());
+    for b in &brushes {
+        assert!(matches!(b.thumb, results::ThumbSource::Image(_)), "{} has a thumbnail", b.path);
+        let Ok(BrushDrop::Preset(p)) = brush_drop(b) else { panic!("{} does not load as a preset", b.path) };
+        assert_eq!(p.name, b.name);
+    }
+    let airbrush = brushes.iter().find(|b| b.path == "brushes/airbrush.mcbrush").expect("the airbrush");
+    assert!(matches!(brush_drop(airbrush), Ok(BrushDrop::Preset(p)) if p.tip == Tip::Alpha("alphas/round-soft.png".into())));
+
+    t.filter.toggle(Usage::Brush);
+    t.filter.toggle(Usage::Alpha);
+    let _ = frame(&ctx, &mut t, screen());
+    let alphas = t.results.items.clone();
+    assert!(alphas.len() >= 11, "{} alphas", alphas.len());
+    let tips: Vec<Tip> = alphas
+        .iter()
+        .map(|a| match brush_drop(a) {
+            Ok(BrushDrop::Tip(tip)) => tip,
+            other => panic!("{}: {other:?}", a.path),
+        })
+        .collect();
+    for info in materialcraft_brush::PROCEDURAL_TIPS {
+        assert!(tips.contains(&Tip::Procedural(info.id.into())), "PhotoCraft's {} tip is a built-in alpha", info.id);
+    }
+    assert!(tips.contains(&Tip::Alpha("alphas/round-soft.png".into())));
+
+    // a brush dragged out and let go becomes a brush drop
+    t.filter.toggle(Usage::Alpha);
+    t.filter.toggle(Usage::Brush);
+    let _ = frame(&ctx, &mut t, screen());
+    let start = t.first_cell.expect("a cell was drawn").1.center();
+    let mut input = |pos: egui::Pos2, pressed: Option<bool>| {
+        let mut i = screen();
+        i.events.push(egui::Event::PointerMoved(pos));
+        if let Some(pressed) = pressed {
+            i.events.push(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+        }
+        frame(&ctx, &mut t, i).1
+    };
+    let _ = input(start, Some(true));
+    for k in 1..6 {
+        let _ = input(start + egui::vec2(0.0, 12.0 * k as f32), None);
+    }
+    let events = input(start + egui::vec2(-100.0, 80.0), Some(false));
+    assert!(matches!(events.as_slice(), [TrayEvent::DroppedBrush { brush: BrushDrop::Preset(_), image: false, .. }]), "{events:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn the_service_sees_files_added_to_a_library_folder() {
     let dir = std::env::temp_dir().join(format!("mc-tray-service-{}", std::process::id()));
