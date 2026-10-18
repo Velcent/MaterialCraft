@@ -62,8 +62,14 @@ fn recomposited(doc: &mut OpenDocument, ev: LayerEvent) -> Vec<usize> {
 /// Runs a maps worker over `sets` to the end; the maps of every set it composited.
 fn composite(doc: &OpenDocument, sets: Vec<usize>) -> Vec<SetMaps> {
     let materials = MaterialFills::new(Arc::new(FolderResolver::new([PathBuf::from("/nonexistent")])), Arc::new(MaterialCache::default()));
-    let setup =
-        RunSetup { shown: Shown { view: ChannelView::Material, channel: ChannelDisplay::default() }, isolate: None, materials, tint: None, surfaces: None };
+    let setup = RunSetup {
+        shown: Shown { view: ChannelView::Material, channel: ChannelDisplay::default() },
+        isolate: None,
+        materials,
+        tint: None,
+        surfaces: None,
+        cache: None,
+    };
     let jobs = sets.iter().map(|&s| (s, Want::Full)).collect();
     let mut worker = MapsWorker::start(doc.maps_view(&sets), jobs, setup);
     let start = Instant::now();

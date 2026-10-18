@@ -165,6 +165,51 @@ pub struct Layer {
     pub asset: Option<String>,
 }
 
+impl Layer {
+    /// A copy of the layer without its children (a folder's are left out; other layers are copied whole). Images
+    /// share their tiles with the original.
+    pub fn without_children(&self) -> Layer {
+        // destructured in full, so a new field is not forgotten here
+        let Layer { id, name, visible, opacity, blend, mask, geometry_mask, kind, effects, asset } = self;
+        let kind = match kind {
+            LayerKind::Group(_) => LayerKind::Group(Vec::new()),
+            other => other.clone(),
+        };
+        Layer {
+            id: id.clone(),
+            name: name.clone(),
+            visible: *visible,
+            opacity: *opacity,
+            blend: blend.clone(),
+            mask: mask.clone(),
+            geometry_mask: geometry_mask.clone(),
+            kind,
+            effects: effects.clone(),
+            asset: asset.clone(),
+        }
+    }
+
+    /// True if the layers are equal apart from their children (two folders with different children are; a folder
+    /// and another kind of layer are not).
+    pub fn same_without_children(&self, other: &Layer) -> bool {
+        let Layer { id, name, visible, opacity, blend, mask, geometry_mask, kind, effects, asset } = self;
+        let kinds = match (kind, &other.kind) {
+            (LayerKind::Group(_), LayerKind::Group(_)) => true,
+            (a, b) => a == b,
+        };
+        kinds
+            && *id == other.id
+            && *name == other.name
+            && *visible == other.visible
+            && opacity.to_bits() == other.opacity.to_bits()
+            && *blend == other.blend
+            && *mask == other.mask
+            && *geometry_mask == other.geometry_mask
+            && *effects == other.effects
+            && *asset == other.asset
+    }
+}
+
 /// Which image of a layer an image is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LayerImage {

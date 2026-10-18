@@ -15,6 +15,7 @@ use materialcraft::generators;
 use materialcraft::gpu3d::{GpuMaps, MapsPatch};
 use materialcraft::material_fill::MaterialFills;
 use materialcraft::paint::edit::LayerRef;
+use materialcraft::paint::stack::StackCache;
 use materialcraft::paint::{Document, FillContext, MaterialMaps, OutputOptions, diag_entries};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -80,6 +81,8 @@ pub struct RunSetup {
     /// The quick mask laid over the maps (PT-42).
     pub tint: Option<Arc<QuickMaskTint>>,
     pub surfaces: Option<Arc<FillSurfaces>>,
+    /// Expensive masks kept across runs (the same maps as without).
+    pub cache: Option<Arc<StackCache>>,
 }
 
 /// One run over a list of texture sets.
@@ -97,7 +100,7 @@ impl MapsWorker {
     pub fn start(doc: Arc<Document>, jobs: Vec<(usize, Want)>, setup: RunSetup) -> MapsWorker {
         let listed = jobs.clone();
         let job = Job::spawn(move |cancel, tx| {
-            let RunSetup { shown, isolate, materials, tint, surfaces } = setup;
+            let RunSetup { shown, isolate, materials, tint, surfaces, cache } = setup;
             let plain = FillContext::with_sources(&materials);
             let options = OutputOptions::for_document(&doc);
             for (set, want) in jobs {
@@ -131,7 +134,10 @@ impl MapsWorker {
                     }
                     continue;
                 }
-                let maps = MaterialMaps::build_with(ts, &options, generators::builtin(), &fills);
+                // what the fill context gives masks: the surface maps of this mesh, or none
+                let context = surface.as_ref().map_or(0, |_| surfaces.as_ref().map_or(0, |s| s.revision().wrapping_add(1)));
+                let session = cache.as_ref().map(|c| c.session(ts, context));
+                let maps = MaterialMaps::build_cached(ts, &options, generators::builtin(), &fills, session.as_ref());
                 if cancel.is_cancelled() {
                     return;
                 }

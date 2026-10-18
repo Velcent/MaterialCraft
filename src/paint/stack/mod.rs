@@ -40,6 +40,7 @@ use super::working_space::{SpaceConverter, WorkingSpace};
 use pass::{Pass, Scratch, affects};
 
 mod below;
+pub mod cache;
 mod content;
 mod fill_context;
 mod fill_eval;
@@ -52,6 +53,7 @@ mod preview;
 mod procedural;
 mod warnings;
 use crate::tex::Tex;
+pub use cache::{CacheSession, StackCache};
 pub use fill_context::{ChainedSources, FillContext, FillRequest, FillSources, NO_FILL_CONTEXT, NoFillSources};
 pub use warnings::CompositeWarning;
 
@@ -61,23 +63,32 @@ pub struct Compositor<'a> {
     set: &'a TextureSet,
     effects: &'a EffectRegistry,
     fills: &'a FillContext<'a>,
+    /// Mask results kept across builds (see [`cache`]).
+    cache: Option<&'a CacheSession<'a>>,
 }
 
 impl<'a> Compositor<'a> {
     /// A compositor without generator or filter implementations (they are all not computable) and without a
     /// fill context (uniform and texture-space/UV image fills only).
     pub fn new(set: &'a TextureSet) -> Compositor<'a> {
-        Compositor { set, effects: &EMPTY_REGISTRY, fills: &NO_FILL_CONTEXT }
+        Compositor { set, effects: &EMPTY_REGISTRY, fills: &NO_FILL_CONTEXT, cache: None }
     }
 
     /// A compositor that evaluates generators and filters through `effects`.
     pub fn with_effects(set: &'a TextureSet, effects: &'a EffectRegistry) -> Compositor<'a> {
-        Compositor { set, effects, fills: &NO_FILL_CONTEXT }
+        Compositor { set, effects, fills: &NO_FILL_CONTEXT, cache: None }
     }
 
     /// Builder: evaluates fills with `fills` (surface map, scene frame, source evaluators).
     pub fn with_fills(mut self, fills: &'a FillContext<'a>) -> Compositor<'a> {
         self.fills = fills;
+        self
+    }
+
+    /// Builder: takes the results of expensive masks from `cache` and keeps the ones it computes there. The
+    /// composite is the same as without.
+    pub fn with_cache(mut self, cache: Option<&'a CacheSession<'a>>) -> Compositor<'a> {
+        self.cache = cache;
         self
     }
 
@@ -87,7 +98,24 @@ impl<'a> Compositor<'a> {
         let pass = Pass { channel, r, space: SpaceConverter::new(self.working_space(channel)) };
         out.fill(pass.empty());
         let mut scratch = Scratch::default();
-        self.apply_layers(&self.set.layers, &pass, out, 0, &mut scratch);
+        // from the kept composite below the layer edited last, when there is one (the same values)
+        let kept = self.cache.and_then(|c| c.start(channel, r)).filter(|(_, acc)| acc.len() == out.len());
+        let from = match kept {
+            Some((index, acc)) => {
+                out.copy_from_slice(&acc);
+                index
+            }
+            None => 0,
+        };
+        let keep = self.cache.and_then(|c| c.keeps_below().map(|i| (c, i))).filter(|_| from == 0);
+        for (i, l) in self.set.layers.iter().enumerate().skip(from) {
+            if let Some((c, at)) = keep
+                && at == i
+            {
+                c.keep_below(channel, r, out);
+            }
+            self.apply_layer(l, &pass, out, 0, &mut scratch);
+        }
         pass.space.to_stored_all(out);
     }
 

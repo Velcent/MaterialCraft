@@ -78,6 +78,7 @@ fn run_set(doc: &mut OpenDocument, set: usize, surfaces: Option<Arc<FillSurfaces
         materials: materials(),
         tint: None,
         surfaces,
+        cache: None,
     };
     let mut worker = MapsWorker::start(doc.maps_view(&[set]), vec![(set, Want::Full)], setup);
     let start = Instant::now();

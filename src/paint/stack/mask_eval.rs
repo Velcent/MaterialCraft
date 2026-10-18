@@ -33,7 +33,10 @@ impl Compositor<'_> {
         if let Some(v) = mask.constant_value() {
             return (v > 0.0).then_some(Weights::Uniform(v * strength));
         }
-        let grey = self.mask_values(l, mask, mask.effects.len(), r);
+        let grey = match self.cache.and_then(|c| c.mask_key(&l.id).map(|k| (c, k))).filter(|_| super::native::at_top_level()) {
+            Some((cache, key)) => cache.mask(&l.id, key, r, || self.mask_values(l, mask, mask.effects.len(), r)),
+            None => self.mask_values(l, mask, mask.effects.len(), r),
+        };
         if grey.iter().all(|g| *g <= 0.0) {
             return None;
         }

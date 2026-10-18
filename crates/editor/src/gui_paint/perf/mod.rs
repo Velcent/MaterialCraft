@@ -21,6 +21,8 @@
 mod edit_play;
 #[cfg(test)]
 mod edits;
+#[cfg(test)]
+mod identity;
 mod measure;
 pub mod runner;
 mod source;

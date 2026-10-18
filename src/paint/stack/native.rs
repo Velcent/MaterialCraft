@@ -24,6 +24,11 @@ thread_local! {
     static REFERENCE_DEPTH: Cell<u32> = const { Cell::new(0) };
 }
 
+/// True unless a reference is being evaluated on this thread (what is read through references may be cut off).
+pub(super) fn at_top_level() -> bool {
+    REFERENCE_DEPTH.with(Cell::get) == 0
+}
+
 /// Where an anchor sits.
 #[derive(Debug, Clone, Copy)]
 pub(super) enum AnchorSite<'s> {

@@ -22,6 +22,7 @@ use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
 use materialcraft::material_fill::{ChainResolver, FolderResolver, MaterialCache, MaterialFills, MaterialResolver, MemoryResolver};
 use materialcraft::paint::edit::LayerRef;
+use materialcraft::paint::stack::StackCache;
 use materialcraft::shading::ShaderLibrary;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -66,6 +67,8 @@ pub struct SceneSync {
     pub error: Option<String>,
     /// What keeping the scene in step has cost so far.
     stats: SceneStats,
+    /// Expensive masks of the document's sets, kept across maps runs (dropped with the document).
+    stack_cache: Arc<StackCache>,
 }
 
 impl SceneSync {
@@ -169,7 +172,7 @@ impl SceneSync {
         let materials = self.material_fills(doc);
         let surfaces = self.fill_surfaces_for(doc, &sets);
         let shown = Shown { view, channel: self.channel };
-        let setup = RunSetup { shown, isolate: self.isolate.clone(), materials, tint: self.tint.clone(), surfaces };
+        let setup = RunSetup { shown, isolate: self.isolate.clone(), materials, tint: self.tint.clone(), surfaces, cache: Some(self.stack_cache.clone()) };
         self.maps.started(MapsWorker::start(doc.maps_view(&sets), jobs, setup), shown);
     }
 

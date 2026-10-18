@@ -20,7 +20,7 @@ use super::height_normal::{self, HeightFilter};
 use super::normal;
 use super::normal_combine;
 use super::par::for_each_mut;
-use super::stack::{CompositeWarning, Compositor, FillContext, NO_FILL_CONTEXT};
+use super::stack::{CacheSession, CompositeWarning, Compositor, FillContext, NO_FILL_CONTEXT};
 use super::texture_set::{BakedKind, TextureSet};
 use crate::tex::Tex;
 
@@ -76,8 +76,19 @@ impl MaterialMaps {
 
     /// The maps with generators and filters evaluated through `effects` and fills through `fills`.
     pub fn build_with(set: &TextureSet, options: &OutputOptions, effects: &EffectRegistry, fills: &FillContext) -> MaterialMaps {
+        MaterialMaps::build_cached(set, options, effects, fills, None)
+    }
+
+    /// Like [`MaterialMaps::build_with`], with expensive masks kept in and taken from `cache` (the same maps).
+    pub fn build_cached(
+        set: &TextureSet,
+        options: &OutputOptions,
+        effects: &EffectRegistry,
+        fills: &FillContext,
+        cache: Option<&CacheSession>,
+    ) -> MaterialMaps {
         let (w, h) = (set.resolution.0 as usize, set.resolution.1 as usize);
-        let compositor = Compositor::with_effects(set, effects).with_fills(fills);
+        let compositor = Compositor::with_effects(set, effects).with_fills(fills).with_cache(cache);
         let mut warnings = Vec::new();
         let mut channel = |c: Channel| {
             if !set.has_channel(c) {
