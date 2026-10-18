@@ -5,8 +5,8 @@
 //! stack holds). Which tiles a change reaches ([`MaterialMaps::tiles_reached`]): the changed tiles grown by how far
 //! the stack spreads a change of the changed layers ([`Compositor::reach`]: filters reading them), and, as the
 //! normal derived from the height reads one texel around each texel, their neighbours, whose heights are composited
-//! for the tiles asked for. Baked normal and ambient occlusion maps must have the set's resolution (others are
-//! resampled over the whole map).
+//! for the tiles asked for. Baked normal and ambient occlusion maps of another resolution are
+//! resampled whole, as the whole build does, once (the stack cache keeps them).
 
 use super::channel::Channel;
 use super::effect::EffectRegistry;
@@ -14,12 +14,14 @@ use super::height_normal::Slope;
 use super::image::{Rect, TILE_SIZE};
 use super::normal;
 use super::normal_combine;
-use super::output::{MaterialMaps, OutputOptions};
+use super::output::{MaterialMaps, OutputOptions, resample};
 use super::par::for_each_mut;
 use super::stack::{CacheSession, Compositor, FillContext};
 use super::texture_set::{BakedKind, TextureSet};
 use crate::paint::TiledImage;
+use crate::tex::Tex;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// One tile of a texture set's final maps, row by row over `rect` (see [`MaterialMaps`] for each map).
 #[derive(Debug, Clone, PartialEq)]
@@ -64,9 +66,6 @@ impl MaterialMaps {
         layers: &[&str],
         changed: &[(u32, u32)],
     ) -> Result<Reached, WholeReason> {
-        if same_size(set.baked(&BakedKind::Normal), set).is_none() || same_size(set.baked(&BakedKind::AmbientOcclusion), set).is_none() {
-            return Err(WholeReason::ResampledBaked);
-        }
         let reach = Compositor::with_effects(set, effects).with_fills(fills).reach(layers).ok_or(WholeReason::ReadsEverything)?;
         let grid = grid(set);
         let (w, h) = set.resolution;
@@ -104,8 +103,8 @@ impl MaterialMaps {
     ) -> Result<Vec<TileMaps>, WholeReason> {
         let compositor = Compositor::with_effects(set, effects).with_fills(fills).with_cache(cache);
         let (w, h) = (set.resolution.0 as usize, set.resolution.1 as usize);
-        let baked_normal = same_size(set.baked(&BakedKind::Normal), set).ok_or(WholeReason::ResampledBaked)?;
-        let baked_ao = same_size(set.baked(&BakedKind::AmbientOcclusion), set).ok_or(WholeReason::ResampledBaked)?;
+        let baked_normal = Baked::of(set, &BakedKind::Normal, cache);
+        let baked_ao = Baked::of(set, &BakedKind::AmbientOcclusion, cache);
         let grid = grid(set);
         let mut wanted: Vec<(u32, u32)> = tiles.iter().copied().filter(|t| inside(*t, grid)).collect();
         wanted.sort_unstable();
@@ -145,8 +144,6 @@ pub enum WholeReason {
     ReadsEverything,
     /// The change reaches most of the set.
     TooFar,
-    /// A baked normal or ambient occlusion map has another resolution (it is resampled whole).
-    ResampledBaked,
 }
 
 /// `r` grown by `by` on every side, clipped to `size`.
@@ -160,8 +157,8 @@ fn grow(r: Rect, by: u32, size: (u32, u32)) -> Rect {
 struct Builder<'a> {
     set: &'a TextureSet,
     compositor: Compositor<'a>,
-    baked_normal: Option<&'a TiledImage>,
-    baked_ao: Option<&'a TiledImage>,
+    baked_normal: Option<Baked<'a>>,
+    baked_ao: Option<Baked<'a>>,
     /// The height → normal conversion, when the set derives its normal from its height.
     slope: Option<Slope>,
     /// The composited height of the tiles asked for and their neighbours (alpha 1), by tile.
@@ -211,7 +208,7 @@ impl Builder<'_> {
         let emissive = self.channel(Channel::Emissive, r);
         let opacity = self.channel(Channel::Opacity, r);
 
-        let baked_normal = self.baked_normal.map(|img| read(img, r));
+        let baked_normal = self.baked_normal.as_ref().map(|b| b.read(r));
         if self.slope.is_some() || baked_normal.is_some() {
             for (i, p) in normal.iter_mut().enumerate() {
                 let (x, y) = (r.x as usize + i % r.w as usize, r.y as usize + i / r.w as usize);
@@ -223,7 +220,7 @@ impl Builder<'_> {
         } else {
             normal.iter_mut().for_each(|p| *p = normal::encode(normal::decode(*p)));
         }
-        if let Some(ao) = self.baked_ao.map(|img| read(img, r)) {
+        if let Some(ao) = self.baked_ao.as_ref().map(|b| b.read(r)) {
             for (i, p) in ambient_occlusion.iter_mut().enumerate() {
                 let k = ao.get(i).map_or(1.0, |a| a[0]);
                 *p = [p[0] * k, p[1] * k, p[2] * k, 1.0];
@@ -238,19 +235,41 @@ fn derives_normal(set: &TextureSet, options: &OutputOptions) -> bool {
     set.has_channel(Channel::Height) && options.height_normal_strength != 0.0
 }
 
-/// A baked map that can be read tile by tile: `Some(None)` without one, `None` for one of another size (the whole
-/// build resamples it).
-fn same_size<'a>(image: Option<&'a TiledImage>, set: &TextureSet) -> Option<Option<&'a TiledImage>> {
-    match image {
-        Some(img) if img.size() != set.resolution => None,
-        other => Some(other),
-    }
+/// A baked map as the whole build reads it: at the set's resolution, or resampled to it (whole, once: kept in the
+/// stack cache when there is one).
+enum Baked<'a> {
+    Same(&'a TiledImage),
+    Resampled(Arc<Tex>),
 }
 
-fn read(img: &TiledImage, r: Rect) -> Vec<[f32; 4]> {
-    let mut px = vec![[0.0f32; 4]; r.area()];
-    img.read_region(r, &mut px);
-    px
+impl<'a> Baked<'a> {
+    fn of(set: &'a TextureSet, kind: &BakedKind, cache: Option<&CacheSession>) -> Option<Baked<'a>> {
+        let img = set.baked(kind)?;
+        if img.size() == set.resolution {
+            return Some(Baked::Same(img));
+        }
+        let (w, h) = (set.resolution.0 as usize, set.resolution.1 as usize);
+        let compute = || Arc::new(resample(&img.to_tex(), w, h));
+        Some(Baked::Resampled(match cache {
+            Some(c) => c.resampled(kind.id(), compute),
+            None => compute(),
+        }))
+    }
+
+    /// Its texels over `r`, row by row.
+    fn read(&self, r: Rect) -> Vec<[f32; 4]> {
+        match self {
+            Baked::Same(img) => {
+                let mut px = vec![[0.0f32; 4]; r.area()];
+                img.read_region(r, &mut px);
+                px
+            }
+            Baked::Resampled(t) => (r.y as usize..(r.y + r.h) as usize)
+                .flat_map(|y| (r.x as usize..(r.x + r.w) as usize).map(move |x| (x, y)))
+                .map(|(x, y)| t.px.get(y * t.w + x).copied().unwrap_or([0.0; 4]))
+                .collect(),
+        }
+    }
 }
 
 /// Tiles per row and column of the set.

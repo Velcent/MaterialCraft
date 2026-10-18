@@ -24,13 +24,16 @@ use crate::paint::effect::EffectKind;
 use crate::paint::image::Rect;
 use crate::paint::layer::{FillSource, Layer, LayerKind, LayerWalk};
 use crate::paint::texture_set::TextureSet;
+use crate::tex::Tex;
 use revisions::{Revisions, SetRevs, hash};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use store::{TileKey, TileStore};
 
 /// Separates a layer id from what of it an entry holds (ids hold no control characters).
 const SEP: char = '\u{1}';
+/// Resampled baked maps kept.
+const RESAMPLED: usize = 4;
 /// The part name of kept fills.
 const FILL: &str = "fill";
 
@@ -49,6 +52,8 @@ struct Inner {
     store: TileStore,
     /// Fills apart, so many large fills can't push out the masks.
     fills: TileStore,
+    /// Baked maps resampled to their set's resolution: (set, map, baked revision, map), the latest last.
+    resampled: Vec<(String, String, u64, Arc<Tex>)>,
 }
 
 /// What the cache knows of one texture set: the context and layer revisions of its last build and the keys its
@@ -96,7 +101,9 @@ impl std::fmt::Debug for StackCache {
 impl StackCache {
     /// A cache keeping at most `budget` bytes of mask tiles.
     pub fn new(budget: usize) -> StackCache {
-        StackCache { inner: Mutex::new(Inner { sets: HashMap::new(), store: TileStore::new(budget), fills: TileStore::new(budget / 2) }) }
+        StackCache {
+            inner: Mutex::new(Inner { sets: HashMap::new(), store: TileStore::new(budget), fills: TileStore::new(budget / 2), resampled: Vec::new() }),
+        }
     }
 
     /// Starts a build of `set`. `context` stands for what the caller's fill context gives the masks (surface maps,
@@ -107,8 +114,9 @@ impl StackCache {
     pub fn session(&self, set: &TextureSet, context: u64, confined: Option<&[Rect]>) -> CacheSession<'_> {
         let mut keys = Keys::default();
         let mut below = None;
+        let mut baked = 0;
         if let Ok(mut inner) = self.inner.lock() {
-            let Inner { sets, store, fills } = &mut *inner;
+            let Inner { sets, store, fills, .. } = &mut *inner;
             let state = sets.entry(set.id.clone()).or_insert_with(|| SetState { context, revisions: Revisions::default(), keys: Keys::default() });
             if state.context != context {
                 *state = SetState { context, revisions: Revisions::default(), keys: Keys::default() };
@@ -117,6 +125,7 @@ impl StackCache {
                 keys.masks = mask_keys(set, &revs, context);
                 keys.fills = fill_keys(set, &revs, context);
                 below = Below::of(set, &revs, context);
+                baked = revs.baked;
             }
             keys.below = below.as_ref().map(|b| (b.layer.clone(), b.key));
             let old = std::mem::replace(&mut state.keys, keys.clone());
@@ -134,7 +143,7 @@ impl StackCache {
             store.retain_map(&keep);
             fills.retain_map(&keep);
         }
-        CacheSession { cache: self, set: set.id.clone(), keys: keys.masks, fills: keys.fills, below }
+        CacheSession { cache: self, set: set.id.clone(), keys: keys.masks, fills: keys.fills, below, baked }
     }
 
     /// Bytes of mask tiles kept.
@@ -153,6 +162,8 @@ pub struct CacheSession<'c> {
     fills: HashMap<String, u64>,
     /// Where the composite below a layer is kept (the layer edited last).
     below: Option<Below>,
+    /// Revision of the set's baked maps.
+    baked: u64,
 }
 
 impl std::fmt::Debug for CacheSession<'_> {
@@ -178,6 +189,29 @@ impl CacheSession<'_> {
             i.store.put(k, key, &v);
         }
         v
+    }
+
+    /// The baked map `kind` (its id) resampled to the set's resolution: kept, or `compute`d and kept (the few
+    /// used last, a map is large).
+    pub(crate) fn resampled(&self, kind: &str, compute: impl FnOnce() -> Arc<Tex>) -> Arc<Tex> {
+        let found = self.cache.inner.lock().ok().and_then(|mut i| {
+            let at = i.resampled.iter().position(|(s, k, rev, _)| *s == self.set && k == kind && *rev == self.baked)?;
+            let entry = i.resampled.remove(at);
+            let map = entry.3.clone();
+            i.resampled.push(entry);
+            Some(map)
+        });
+        if let Some(map) = found {
+            return map;
+        }
+        let map = compute();
+        if let Ok(mut i) = self.cache.inner.lock() {
+            i.resampled.retain(|(s, k, _, _)| !(*s == self.set && k == kind));
+            i.resampled.push((self.set.clone(), kind.to_string(), self.baked, map.clone()));
+            let extra = i.resampled.len().saturating_sub(RESAMPLED);
+            i.resampled.drain(..extra);
+        }
+        map
     }
 
     /// The key of `layer`'s fills if they are kept.

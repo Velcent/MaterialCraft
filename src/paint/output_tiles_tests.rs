@@ -171,7 +171,7 @@ fn strokes_through_the_cache_keep_it_exact() {
 
 #[test]
 fn whole_set_reasons() {
-    let (mut set, _) = stacks().remove(0);
+    let (set, _) = stacks().remove(0);
     let o = OutputOptions::default();
     let mut wide = EffectRegistry::new();
     wide.add_filter("wide", Box::new(Blur(400)));
@@ -187,9 +187,26 @@ fn whole_set_reasons() {
     }
     assert_eq!(MaterialMaps::tiles_reached(&big, &o, &wide, &NO_FILL_CONTEXT, &["paint"], &[(3, 3)]), Err(WholeReason::TooFar));
     assert_eq!(MaterialMaps::tiles_reached(&set, &o, &wide, &NO_FILL_CONTEXT, &["nope"], &[(0, 0)]), Err(WholeReason::ReadsEverything));
-    let mut small =
-        crate::paint::TiledImage::new(64, 64, crate::paint::PixelFormat::new(crate::paint::PixelLayout::Rgba, crate::paint::SampleType::U8)).expect("image");
-    small.fill([0.5, 0.5, 1.0, 1.0]);
-    set.baked.push(crate::paint::BakedMap { kind: BakedKind::Normal, image: small });
-    assert_eq!(MaterialMaps::tiles_reached(&set, &o, &wide, &NO_FILL_CONTEXT, &["paint"], &[(0, 0)]), Err(WholeReason::ResampledBaked));
+}
+
+#[test]
+fn baked_maps_of_another_size_are_resampled_as_the_whole_build_does() {
+    let o = OutputOptions::default();
+    for (k, (mut set, reg)) in stacks().into_iter().enumerate() {
+        let rgba = crate::paint::PixelFormat::new(crate::paint::PixelLayout::Rgba, crate::paint::SampleType::U8);
+        let mut normal = crate::paint::test_stacks::blobs((70, 50), 3, rgba);
+        paint_disc(&mut normal, (30, 20), 15, 4);
+        let ao = crate::paint::test_stacks::blobs((512, 512), 9, rgba);
+        set.baked.retain(|b| b.kind != BakedKind::Normal && b.kind != BakedKind::AmbientOcclusion);
+        set.baked.push(crate::paint::BakedMap { kind: BakedKind::Normal, image: normal });
+        set.baked.push(crate::paint::BakedMap { kind: BakedKind::AmbientOcclusion, image: ao });
+        let whole = full(&set, &o, &reg);
+        let cache = StackCache::default();
+        for session in [None, Some(cache.session(&set, 1, None)), Some(cache.session(&set, 1, None))] {
+            let rebuilt = patched(&whole, &tiles(&set, &o, &reg, session.as_ref(), &all_tiles(&set)));
+            let blank = MaterialMaps { normal: Tex::solid(whole.normal.w, whole.normal.h, [0.0; 4]), ..whole.clone() };
+            assert_same(&rebuilt, &whole, &format!("stack {k}"));
+            assert_same(&patched(&blank, &tiles(&set, &o, &reg, session.as_ref(), &all_tiles(&set))), &whole, &format!("stack {k}, from blank"));
+        }
+    }
 }

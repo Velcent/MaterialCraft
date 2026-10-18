@@ -161,7 +161,7 @@ fn par_pixels<F: Fn(usize, &mut [f32; 4]) + Sync>(px: &mut [[f32; 4]], f: F) {
 }
 
 /// `tex` at `w × h`, bilinear (unchanged if the size already matches).
-fn resample(tex: &Tex, w: usize, h: usize) -> Tex {
+pub(super) fn resample(tex: &Tex, w: usize, h: usize) -> Tex {
     if (tex.w, tex.h) == (w, h) || tex.px.is_empty() {
         return tex.clone();
     }
