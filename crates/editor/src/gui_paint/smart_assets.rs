@@ -11,7 +11,7 @@ use super::panels::layers::SaveAsset;
 use super::view_thumbnail::ViewShot;
 use crate::gui_settings::MissingMaps as MissingMapsAnswer;
 use eframe::egui;
-use materialcraft::assets::{Usage, new_asset_path};
+use materialcraft::assets::{AssetStore, Draft, LibraryRoot, RootKind, Usage};
 use materialcraft::bake::MapKind;
 use materialcraft::bake::MapSelection;
 use materialcraft::diag::{Area, SinkExt};
@@ -149,16 +149,17 @@ impl PaintMode {
             FragmentKind::SmartMaterial => (Usage::SmartMaterial, "smart material"),
             FragmentKind::SmartMask => (Usage::SmartMask, "smart mask"),
         };
-        let path = new_asset_path(&choice.library, usage, &f.name, fragment::EXTENSION);
         let options = SaveOptions { thumbnail: thumbnail.map_or(Thumbnail::FromDocument, Thumbnail::Image) };
-        let saved = match path.parent() {
-            Some(dir) => {
-                std::fs::create_dir_all(dir).map_err(|e| e.to_string()).and_then(|()| fragment::save_path_with(&f, &path, &options).map_err(|e| e.to_string()))
-            }
-            None => Err("no folder".to_string()),
-        };
+        let root = LibraryRoot::folder("library", "library", RootKind::User, &choice.library);
+        let mut bytes = Vec::new();
+        let saved = fragment::save_with(&f, &mut bytes, &options).map_err(|e| e.to_string()).and_then(|()| {
+            let change = AssetStore::new().create_named(&root, usage, &f.name, fragment::EXTENSION, &Draft::new(&bytes)).map_err(|e| e.to_string())?;
+            Ok(change.after.map(|a| a.path).unwrap_or_default())
+        });
+        let path = choice.library.clone();
         match saved {
-            Ok(()) => {
+            Ok(rel) => {
+                let path = path.join(rel);
                 let needs = if f.needs.is_empty() { String::new() } else { format!(" It needs these baked maps: {}.", map_names(&f.needs)) };
                 self.diag.info(Area::Assets, format!("Saved {what} \"{}\" to {}.{needs}", f.name, path.display()));
                 if !report.missing.is_empty() {

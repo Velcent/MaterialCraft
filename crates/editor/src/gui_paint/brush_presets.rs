@@ -1,11 +1,12 @@
 //! "Save brush as preset" (AS-06): the brush panel's button takes the shown brush tool's settings, paints a sample
 //! stroke of them for the thumbnail, asks for the name and the library ([`BrushPresetDialog`]) and writes
-//! `brushes/<name>.mcbrush` with its `.thumb.png` there, where the tray picks it up on its next poll.
+//! `brushes/<name>.mcbrush` with its sidecar and `.thumb.png` through the asset store, where the tray picks it up on its
+//! next poll.
 
 use super::PaintMode;
 use super::dialogs::brush_preset::{BrushPresetDialog, PresetChoice, PresetOutcome};
 use eframe::egui;
-use materialcraft::assets::{THUMBNAIL_SUFFIX, Usage, new_asset_path};
+use materialcraft::assets::{NewAsset, Provenance, Usage};
 use materialcraft::deflate::Level;
 use materialcraft::diag::{Area, SinkExt};
 use materialcraft::paint::brush::{BrushPreset, file};
@@ -34,21 +35,24 @@ pub fn thumbnail(preset: &BrushPreset, alphas: &dyn AlphaSource) -> Vec<f32> {
 }
 
 /// Writes `preset` named `name` into `library`'s brushes folder with `thumbnail` ([`THUMB_PX`] square coverage) as
-/// its picture; returns the preset's path. An existing preset is never replaced (the name gets a number).
+/// its picture, through the asset store; returns the preset's path. An existing preset is never replaced (the name
+/// gets a number).
 pub fn write_preset(library: &Path, name: &str, preset: &BrushPreset, thumbnail: &[f32]) -> Result<PathBuf, String> {
     let preset = BrushPreset { name: name.to_string(), ..preset.clone() };
-    let path = new_asset_path(library, Usage::Brush, name, file::EXTENSION);
-    let dir = path.parent().ok_or("no folder")?;
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    std::fs::write(&path, preset.to_file_text()).map_err(|e| e.to_string())?;
     let samples: Vec<u8> = thumbnail.iter().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8).collect();
-    if samples.len() == (THUMB_PX * THUMB_PX) as usize {
-        let png = encode_raw(THUMB_PX as usize, THUMB_PX as usize, ColorType::Gray, 8, &samples, Level::Default);
-        let mut thumb = path.clone().into_os_string();
-        thumb.push(THUMBNAIL_SUFFIX);
-        std::fs::write(PathBuf::from(thumb), png).map_err(|e| e.to_string())?;
-    }
-    Ok(path)
+    let thumbnail = (samples.len() == (THUMB_PX * THUMB_PX) as usize)
+        .then(|| encode_raw(THUMB_PX as usize, THUMB_PX as usize, ColorType::Gray, 8, &samples, Level::Default));
+    let asset = NewAsset {
+        usage: Usage::Brush,
+        name: name.to_string(),
+        extension: file::EXTENSION.to_string(),
+        bytes: preset.to_file_text().into_bytes(),
+        thumbnail,
+        tags: Vec::new(),
+        description: None,
+        provenance: Provenance::HandMade { author: None, notes: None },
+    };
+    asset.save(library).map(|saved| saved.path).map_err(|e| e.to_string())
 }
 
 impl PaintMode {
