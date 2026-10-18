@@ -1,5 +1,5 @@
 //! `view` (since 0.12): the document's [`SavedView`]: camera list, active camera, exposure and environment.
-//! Since 0.13 a camera may be `locked` and carry `imported` (its source and original values, see
+//! Since 0.14 a camera may be `locked` and carry `imported` (its source and original values, see
 //! [`camera_values`]). Optional; absent when the document has none. Unknown fields are kept like everywhere else
 //! (locations `view`, `view/cameras/<index>`, `…/depth_of_field`, `…/imported`, `…/imported/original`,
 //! `…/imported/original/depth_of_field`, `view/environment`). A view that cannot be read (an unknown

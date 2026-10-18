@@ -22,7 +22,7 @@ fn unknown_fields_are_kept() {
             return Some(data);
         }
         let mut v = json::parse(std::str::from_utf8(&data).unwrap()).unwrap();
-        v.insert("format_version", "0.14");
+        v.insert("format_version", "0.15");
         v.insert("udims", vec![1001, 1002]);
         let set = &mut v.get_mut("texture_sets").unwrap().as_array_mut().unwrap()[0];
         set.insert("color_profile", "ACEScg");

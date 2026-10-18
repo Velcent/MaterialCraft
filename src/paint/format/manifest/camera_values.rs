@@ -1,5 +1,5 @@
 //! A camera's pose and settings ([`CameraValues`]) as fields of a `view` camera object: `projection`,
-//! `fov_y_degrees`, `yaw`, `pitch`, `distance`, `pan`, `roll` (since 0.13), `aspect` (since 0.13) and
+//! `fov_y_degrees`, `yaw`, `pitch`, `distance`, `pan`, `roll` (since 0.14), `aspect` (since 0.14) and
 //! `depth_of_field`. The same fields describe a camera's current values and, under `imported.original`, the values
 //! it was imported with.
 
