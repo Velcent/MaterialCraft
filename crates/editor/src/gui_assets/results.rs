@@ -45,6 +45,8 @@ pub struct Item {
     pub procedural: Option<(String, Vec<(String, String)>)>,
     /// Baked maps a smart material or smart mask needs (AS-05), by map id.
     pub needs: Vec<String>,
+    /// True if the asset can be renamed, edited, moved and deleted (its library is a writable folder).
+    pub writable: bool,
 }
 
 impl Item {
@@ -64,6 +66,7 @@ impl Item {
             stamp: (asset.modified, asset.size),
             procedural: procedural(&asset.provenance),
             needs: asset.needs.clone(),
+            writable: !root.is_read_only() && root.path.is_some(),
         }
     }
 

@@ -1,7 +1,9 @@
 //! [`LibraryService`]: the asset library behind the tray, scanned and watched off the UI thread. A background
 //! thread owns the scanning: it applies new roots and polls the watched folders about once a second (AS-19);
 //! each change bumps a generation counter and asks for a repaint. The UI thread only reads, with `try_read`, so a
-//! running scan never stalls a frame (the tray keeps showing its last results meanwhile).
+//! running scan never stalls a frame (the tray keeps showing its last results meanwhile). Changes to assets (rename,
+//! edit, move, delete) run on the same thread through the asset store and show in the catalogue at once; their
+//! outcome goes to the diagnostics log.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
@@ -9,14 +11,15 @@ use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 use std::time::Duration;
 
 use eframe::egui;
-use materialcraft::assets::{Library, LibraryRoot};
-use materialcraft::diag::Sink;
+use materialcraft::assets::{AssetStore, Library, LibraryRoot, StoreRequest};
+use materialcraft::diag::{Area, Sink, SinkExt};
 
 /// How often the watched folders are polled.
 const POLL: Duration = Duration::from_millis(1000);
 
 enum Command {
     SetRoots(Vec<LibraryRoot>),
+    Store(StoreRequest),
 }
 
 /// The library and the thread keeping it current.
@@ -50,6 +53,12 @@ impl LibraryService {
                     Ok(Command::SetRoots(roots)) => {
                         if let Ok(mut l) = lib.write() {
                             l.set_roots(roots, &*s);
+                        }
+                        changed();
+                    }
+                    Ok(Command::Store(request)) => {
+                        if let Ok(mut l) = lib.write() {
+                            run(&mut l, &request, &*s);
                         }
                         changed();
                     }
@@ -112,6 +121,27 @@ impl LibraryService {
         }
     }
 
+    /// Changes an asset through the asset store (in the background); the outcome goes to the log.
+    pub fn store(&mut self, request: StoreRequest) {
+        let request = match &self.commands {
+            Some(tx) => match tx.send(Command::Store(request)) {
+                Ok(()) => return,
+                Err(e) => {
+                    self.commands = None;
+                    match e.0 {
+                        Command::Store(r) => r,
+                        Command::SetRoots(_) => return,
+                    }
+                }
+            },
+            None => request,
+        };
+        if let Ok(mut l) = self.library.write() {
+            run(&mut l, &request, &*self.sink);
+        }
+        self.generation.fetch_add(1, Ordering::Relaxed);
+    }
+
     /// The roots as configured (they may still be scanning).
     pub fn roots(&self) -> &[LibraryRoot] {
         &self.roots
@@ -131,5 +161,20 @@ impl LibraryService {
     #[cfg(test)]
     pub fn read(&self) -> Option<RwLockReadGuard<'_, Library>> {
         self.library.read().ok()
+    }
+}
+
+/// Runs `request` on `library` and logs what happened.
+fn run(library: &mut Library, request: &StoreRequest, sink: &dyn Sink) {
+    let (_, path) = request.asset();
+    match library.run(&AssetStore::new(), request, sink) {
+        Ok((change, _)) => {
+            let now = change.after.as_ref().map_or(String::new(), |a| format!(" (now {})", a.path));
+            sink.info(Area::Assets, format!("{} {path}{now}.", request.verb()));
+            for w in change.warnings {
+                sink.warn(Area::Assets, w);
+            }
+        }
+        Err(e) => sink.error(Area::Assets, format!("{path} was not changed: {e}.")),
     }
 }

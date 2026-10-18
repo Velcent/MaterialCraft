@@ -85,6 +85,7 @@ mod tests {
             stamp: (None, 0),
             procedural: None,
             needs: Vec::new(),
+            writable: true,
         }
     }
 

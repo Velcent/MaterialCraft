@@ -11,7 +11,9 @@
 //! - [`view`]: the filter (types, folder, query) and saved searches; [`results`]: what the filter matches;
 //! - [`header`], [`folders`], [`grid`], [`settings_page`]: drawing; [`icons`]: usage icons;
 //! - [`thumbs`]: thumbnails made off the UI thread and cached; [`drag`], [`payload`]: dragging into the stack;
-//!   [`brush_item`]: what a brush preset or alpha does on the brush tools.
+//!   [`brush_item`]: what a brush preset or alpha does on the brush tools;
+//! - [`manage`]: an asset's context menu (rename, edit, move to another library, delete), carried out by the asset
+//!   store on the library thread.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 pub mod brush_item;
@@ -20,6 +22,7 @@ mod folders;
 mod grid;
 mod header;
 pub mod icons;
+pub mod manage;
 pub mod payload;
 pub mod results;
 pub mod roots;
@@ -42,6 +45,7 @@ use materialcraft::paint::edit::ops::DropPayload;
 use crate::gui_settings::{LibrarySettings, SavedSearch, TrayLayout, TraySettings};
 use brush_item::BrushDrop;
 use drag::Drag;
+use manage::{Manage, MoveTarget};
 use results::{Item, Results};
 use service::LibraryService;
 use starter::StarterLibrary;
@@ -93,6 +97,8 @@ pub struct AssetTray {
     drag: Option<Drag>,
     /// The first asset in view last frame and where it was drawn.
     first_cell: Option<(usize, egui::Rect)>,
+    /// The asset dialog open (rename, edit, delete).
+    manage: Manage,
 }
 
 impl AssetTray {
@@ -128,6 +134,7 @@ impl AssetTray {
             settings: settings_page::SettingsState::default(),
             drag: None,
             first_cell: None,
+            manage: Manage::default(),
         }
     }
 
@@ -167,12 +174,17 @@ impl AssetTray {
         self.refresh();
         folders::breadcrumbs(ui, &self.results, &mut self.filter);
         ui.separator();
-        let body = |ui: &mut Ui, results: &Results, thumbs: &mut ThumbCache, drag: &mut Option<Drag>, first: &mut Option<(usize, egui::Rect)>, size| {
-            let shown = grid::show(ui, results, thumbs, size);
+        let targets = self.move_targets();
+        let mut picked = None;
+        let mut body = |ui: &mut Ui, results: &Results, thumbs: &mut ThumbCache, drag: &mut Option<Drag>, first: &mut Option<(usize, egui::Rect)>, size| {
+            let shown = grid::show(ui, results, thumbs, size, &targets);
             if let Some(d) = shown.started {
                 *drag = Some(d);
             }
             *first = shown.first;
+            if shown.menu.is_some() {
+                picked = shown.menu;
+            }
         };
         if wide {
             let area = ui.available_rect_before_wrap();
@@ -196,6 +208,19 @@ impl AssetTray {
             });
             body(ui, &self.results, &mut self.thumbs, &mut self.drag, &mut self.first_cell, self.view.thumbnails);
         }
+        if let Some((item, choice)) = picked
+            && let Some(request) = self.manage.choose(item, choice)
+        {
+            self.service.store(request);
+        }
+        if let Some(request) = self.manage.show(ui.ctx()) {
+            self.service.store(request);
+        }
+    }
+
+    /// The libraries assets can be moved into: every writable library folder.
+    fn move_targets(&self) -> Vec<MoveTarget> {
+        self.service.roots().iter().filter(|r| !r.is_read_only() && r.path.is_some()).map(|r| MoveTarget { root: r.id.clone(), name: r.name.clone() }).collect()
     }
 
     /// Ends a drag when the pointer is let go (anywhere on screen) and draws the dragged asset under the pointer.

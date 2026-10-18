@@ -247,3 +247,59 @@ fn the_service_sees_files_added_to_a_library_folder() {
     drop(service);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Collects log entries.
+#[derive(Default)]
+struct Log(std::sync::Mutex<Vec<materialcraft::diag::Entry>>);
+
+impl materialcraft::diag::Sink for Log {
+    fn emit(&self, entry: materialcraft::diag::Entry) {
+        self.0.lock().expect("log").push(entry);
+    }
+}
+
+/// The context menu's choices become asset-store requests that show in the catalogue at once; failures go to the
+/// log; the starter library's assets are not editable and it is no move target.
+#[test]
+fn managing_an_asset_changes_the_library_at_once_and_logs_failures() {
+    use manage::MenuChoice;
+    use materialcraft::assets::{AssetStore, Draft, RootId, StoreRequest};
+    let dir = std::env::temp_dir().join(format!("mc-tray-manage-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let (user, starter) = (dir.join("user"), dir.join("starter"));
+    std::fs::create_dir_all(&starter).expect("starter");
+    std::fs::write(starter.join("s.png"), b"s").expect("write");
+    let roots = roots::roots(Some(&user), &[], Some(&starter));
+    AssetStore::new().create(&roots[0], "alphas/a.png", &Draft::new(b"a")).expect("create");
+    let log = Arc::new(Log::default());
+    let lib = Library::with_roots(roots, &NullSink);
+    let mut tray =
+        AssetTray::with_service(LibraryService::from_library(lib, log.clone()), ThumbCache::new(None), Some(user.clone()), &LibrarySettings::default());
+    let targets = tray.move_targets();
+    assert_eq!(targets.iter().map(|t| t.root.as_str()).collect::<Vec<_>>(), ["user"], "the starter library takes nothing");
+
+    let generation = tray.service.generation();
+    let ctx = egui::Context::default();
+    let _ = frame(&ctx, &mut tray, screen());
+    let item = tray.results.items.iter().find(|i| i.path == "alphas/a.png").expect("listed").clone();
+    let starter_item = tray.results.items.iter().find(|i| i.path == "s.png").expect("listed");
+    assert!(item.writable && !starter_item.writable);
+
+    // Delete asks first: choosing it opens the dialog and sends nothing yet; a move is sent at once.
+    assert_eq!(tray.manage.choose(item.clone(), MenuChoice::Delete), None);
+    let moved = tray.manage.choose(item.clone(), MenuChoice::MoveTo(RootId::new("extra")));
+    assert_eq!(moved, Some(StoreRequest::Move { root: RootId::new("user"), path: "alphas/a.png".into(), to: RootId::new("extra"), folder: "alphas".into() }));
+    let rename = StoreRequest::Rename { root: RootId::new("user"), path: "alphas/a.png".into(), name: "Bee".into() };
+    tray.service.store(rename);
+    assert!(tray.service.generation() > generation);
+    let lib = tray.service.read().expect("library");
+    assert!(lib.catalogue().get(&RootId::new("user"), "alphas/Bee.png").is_some(), "renamed at once");
+    drop(lib);
+    assert!(user.join("alphas/Bee.png").is_file());
+
+    tray.service.store(StoreRequest::Delete { root: RootId::new("starter"), path: "s.png".into() });
+    let entries = log.0.lock().expect("log").clone();
+    assert!(entries.iter().any(|e| e.level == materialcraft::diag::Level::Error && e.text.contains("read-only")), "{entries:?}");
+    assert!(starter.join("s.png").is_file());
+    let _ = std::fs::remove_dir_all(&dir);
+}
