@@ -1,8 +1,8 @@
 //! [`MapsWorker`]: composites texture sets into [`MaterialMaps`] and prepares GPU maps for the
-//! current [`ChannelView`], off the UI thread. Sets are done one after another so only one set's
+//! current display mode ([`Shown`]), off the UI thread. Sets are done one after another so only one set's
 //! full-float maps are in memory at a time; each result is sent as soon as it is ready.
 
-use super::channel_view::ChannelView;
+use super::channel_view::Shown;
 use super::fill_surfaces::FillSurfaces;
 use super::job::Job;
 use super::quick_mask_tint::QuickMaskTint;
@@ -31,14 +31,14 @@ pub struct MapsWorker {
 }
 
 impl MapsWorker {
-    /// Composites `sets` for `view`, evaluating material fills with `materials`; the set of `isolate` shows that
+    /// Composites `sets` for `shown`, evaluating material fills with `materials`; the set of `isolate` shows that
     /// layer's mask alone instead (MK-05); `tint` lays the quick mask over the maps (PT-42). Sets with polygon fills or
     /// fills projected from a volume composite with their surface map from `surfaces` (built here the first time a set
     /// needs it, then reused by later runs).
     pub fn start(
         doc: Arc<Document>,
         sets: Vec<usize>,
-        view: ChannelView,
+        shown: Shown,
         isolate: Option<LayerRef>,
         materials: MaterialFills,
         tint: Option<Arc<QuickMaskTint>>,
@@ -71,7 +71,7 @@ impl MapsWorker {
                     return;
                 }
                 let warnings = diag_entries::composite_warnings(ts, &maps.warnings);
-                let mut maps = view.prepare(&maps, ts);
+                let mut maps = shown.prepare(&maps, ts);
                 if let Some(t) = &tint {
                     t.apply(&ts.id, &mut maps);
                 }

@@ -1,5 +1,5 @@
-//! The display settings panel (DS-01, ADR 0008 mc2-vq4/vq7): how the viewport shows the document, in four
-//! sections: environment and shadows, camera, post effects and viewport. It edits the viewport's
+//! The display settings panel (DS-01, ADR 0008 mc2-vq4/vq7): how the viewport shows the document: the view mode,
+//! then four sections: environment and shadows, camera, post effects and viewport. It edits the viewport's
 //! [`ViewState`] and the renderer's options directly: pure display state, nothing in the document changes
 //! (DS-14). Every change shows at once (DS-02); the document keeps its camera, exposure and environment when saved,
 //! everything else is remembered as a user default.
@@ -8,16 +8,19 @@ mod camera;
 mod camera_list;
 mod environment;
 mod post;
+mod view_mode;
 mod viewport;
 
 use eframe::egui::{self, Ui};
 
+use super::super::channel_view::ChannelView;
 use super::super::environment::EnvironmentStatus;
 use super::super::view_state::ViewState;
 use super::PanelEvent;
 use materialcraft::gpu3d::Shared;
 
-pub fn show(ui: &mut Ui, state: &mut ViewState, gpu: &Shared, environment: &EnvironmentStatus, events: &mut Vec<PanelEvent>) {
+pub fn show(ui: &mut Ui, state: &mut ViewState, gpu: &Shared, environment: &EnvironmentStatus, display: ChannelView, events: &mut Vec<PanelEvent>) {
+    section(ui, "View mode", |ui| view_mode::show(ui, state, display, events));
     section(ui, "Environment and shadows", |ui| environment::show(ui, state, gpu, environment));
     section(ui, "Camera", |ui| camera::show(ui, state, events));
     section(ui, "Post effects", |ui| post::show(ui, state));

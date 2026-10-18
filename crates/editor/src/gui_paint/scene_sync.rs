@@ -5,7 +5,8 @@
 //! Edits ask for new maps often (every frame of a slider drag). Only one maps worker runs at a time: a
 //! request while one runs cancels it and is started once it has stopped, with every set either asked for.
 
-use super::channel_view::ChannelView;
+use super::channel_display::ChannelDisplay;
+use super::channel_view::{ChannelView, Shown};
 use super::document_state::OpenDocument;
 use super::fill_surfaces::FillSurfaces;
 use super::geometry::{self, PartGeometry};
@@ -38,6 +39,8 @@ pub struct SceneSync {
     waiting: Vec<SetMaps>,
     /// Maps asked for while a worker was still running: started when it has stopped.
     pending: Option<(ChannelView, BTreeSet<usize>)>,
+    /// How channel and mesh-map views show their values (DS-07, DS-08).
+    channel: ChannelDisplay,
     /// The layer whose mask is shown alone (MK-05).
     isolate: Option<LayerRef>,
     /// Rendered materials of material fills, kept across maps runs (and documents: keyed by graph content).
@@ -136,7 +139,8 @@ impl SceneSync {
         self.waiting.retain(|m| !sets.contains(&m.set));
         let materials = self.material_fills(doc);
         let surfaces = self.fill_surfaces_for(doc, &sets);
-        self.maps = Some(MapsWorker::start(doc.maps_view(&sets), sets, view, self.isolate.clone(), materials, self.tint.clone(), surfaces));
+        let shown = Shown { view, channel: self.channel };
+        self.maps = Some(MapsWorker::start(doc.maps_view(&sets), sets, shown, self.isolate.clone(), materials, self.tint.clone(), surfaces));
     }
 
     /// The surface maps the sets' fills composite with, when one of them needs its surface: the kept ones while the
@@ -172,17 +176,28 @@ impl SceneSync {
         }
     }
 
+    /// Shows channels and mesh maps through `channel`; recomposites when it changed and `view` shows one.
+    pub fn set_channel_display(&mut self, doc: &mut OpenDocument, view: ChannelView, channel: ChannelDisplay) {
+        if self.channel != channel {
+            self.channel = channel;
+            if view != ChannelView::Material {
+                self.remap(doc, view);
+            }
+        }
+    }
+
     /// The quick mask tint the next maps runs lay over the sets (`None`: no tint). The caller recomposites.
     pub fn set_tint(&mut self, tint: Option<QuickMaskTint>) {
         self.tint = tint.map(Arc::new);
     }
 
-    /// Drops all work and the GPU scene (rendered materials are kept).
+    /// Drops all work and the GPU scene (rendered materials and the channel display are kept).
     pub fn clear(&mut self, gpu: &Shared) {
         *self = SceneSync {
             materials: self.materials.clone(),
             library_folders: std::mem::take(&mut self.library_folders),
             shaders: std::mem::take(&mut self.shaders),
+            channel: self.channel,
             ..SceneSync::default()
         };
         if let Ok(mut g) = gpu.lock() {

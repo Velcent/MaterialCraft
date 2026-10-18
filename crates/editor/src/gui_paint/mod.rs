@@ -15,6 +15,7 @@ mod bake_queue;
 mod baking;
 mod cache;
 mod camera_files;
+mod channel_display;
 mod channel_view;
 mod demo;
 mod dialogs;
@@ -259,6 +260,9 @@ impl PaintMode {
         }
         self.color.frame(ctx, &mut self.shell.settings);
         display_prefs::sync(&mut self.shell.settings, self.viewport.state(), &self.viewport.opts());
+        if let Some(doc) = &mut self.document {
+            self.scene.set_channel_display(doc, self.display, self.viewport.state().channel);
+        }
         self.eyedrop(ctx);
         self.poll_smart_assets(ctx);
         self.poll_unsaved(ctx);
@@ -357,14 +361,7 @@ impl PaintMode {
                 self.diag.info(Area::General, "New documents will start with this camera, exposure and environment.");
             }
             PanelEvent::ShowChannel(view) => self.show_channel(view),
-            PanelEvent::CycleChannel(step) => {
-                let all = ChannelView::ALL;
-                let at = all.iter().position(|(v, _)| *v == self.display).unwrap_or(0) as i64;
-                let next = (at + i64::from(step)).rem_euclid(all.len() as i64) as usize;
-                if let Some((view, _)) = all.get(next) {
-                    self.show_channel(*view);
-                }
-            }
+            PanelEvent::CycleChannel(step) => self.show_channel(self.display.cycled(step)),
             PanelEvent::SetVisible(set, visible) => {
                 if let Some(doc) = &mut self.document {
                     doc.set_visible(set, visible);

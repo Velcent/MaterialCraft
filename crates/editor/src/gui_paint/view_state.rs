@@ -6,6 +6,7 @@
 //! `display.camera` (the camera list's rules are [`CameraList`]'s; the operations on it are in
 //! [`super::view_cameras`]).
 
+use super::channel_display::ChannelDisplay;
 use super::channel_view::ChannelView;
 use materialcraft::gpu3d::{Display, Shading};
 use materialcraft::paint::camera_list::CameraList;
@@ -18,6 +19,8 @@ pub struct ViewState {
     pub display: Display,
     /// Channel and mesh-map views lit by the scene (DS-06; unlit by default, ADR 0008 mc2-vq8).
     pub lit_channels: bool,
+    /// How channel and mesh-map views show their values (component, scale, signed colours).
+    pub channel: ChannelDisplay,
     /// The document's cameras; the active one's stored values lag behind the live ones until [`ViewState::sync`].
     pub(super) cameras: CameraList,
     /// The environment's kind as the document named it (kept for documents from newer versions).
@@ -33,6 +36,7 @@ impl Default for ViewState {
             view: View { relief: RELIEF_NONE, ..View::default() },
             display: Display::default(),
             lit_channels: false,
+            channel: ChannelDisplay::default(),
             cameras: CameraList::default(),
             environment_kind: SavedEnvironment::STUDIO.to_string(),
             environment_map: None,

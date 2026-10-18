@@ -2,6 +2,8 @@
 //! fill context, and keeps the surface map across runs.
 
 use super::*;
+use crate::gui_paint::channel_display::ChannelDisplay;
+use crate::gui_paint::channel_view::ChannelView;
 use crate::gui_paint::document_state::OpenDocument;
 use materialcraft::material_fill::{FolderResolver, MaterialCache};
 use materialcraft::mesh::{Mesh, MeshPart, SurfaceKey, SurfaceMap};
@@ -64,7 +66,15 @@ fn materials() -> MaterialFills {
 
 /// Runs a maps worker over set `set` to the end.
 fn run_set(doc: &mut OpenDocument, set: usize, surfaces: Option<Arc<FillSurfaces>>) -> SetMaps {
-    let mut worker = MapsWorker::start(doc.maps_view(&[set]), vec![set], ChannelView::Material, None, materials(), None, surfaces);
+    let mut worker = MapsWorker::start(
+        doc.maps_view(&[set]),
+        vec![set],
+        Shown { view: ChannelView::Material, channel: ChannelDisplay::default() },
+        None,
+        materials(),
+        None,
+        surfaces,
+    );
     let start = Instant::now();
     let mut out = Vec::new();
     while !worker.is_finished() || out.is_empty() {
@@ -132,8 +142,12 @@ fn tri_planar_fills_composite_as_the_core_does() {
     let opts = OutputOptions::for_document(doc.doc());
     let core = MaterialMaps::build_with(ts, &opts, generators::builtin(), &full);
     assert!(core.warnings.is_empty(), "{:?}", core.warnings);
-    let expected = ChannelView::Material.prepare(&core, ts);
-    let without = ChannelView::Material.prepare(&MaterialMaps::build_with(ts, &opts, generators::builtin(), &FillContext::with_sources(&sources)), ts);
+    let expected = ChannelView::Material.prepare(&core, ts, &ChannelDisplay::default());
+    let without = ChannelView::Material.prepare(
+        &MaterialMaps::build_with(ts, &opts, generators::builtin(), &FillContext::with_sources(&sources)),
+        ts,
+        &ChannelDisplay::default(),
+    );
     assert_ne!(expected.base, without.base, "the fill shows only with the surface");
 
     let surfaces = Arc::new(FillSurfaces::new(doc.shared_mesh()));

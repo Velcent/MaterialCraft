@@ -88,7 +88,7 @@ impl DockContent<PaintPanel> for Bodies<'_> {
                     egui::ScrollArea::vertical().id_salt("paint_display").show(ui, |ui| {
                         let status = self.viewport.environment_status().clone();
                         let (state, gpu) = self.viewport.settings_mut();
-                        display_settings::show(ui, state, gpu, &status, self.events);
+                        display_settings::show(ui, state, gpu, &status, self.display, self.events);
                     })
                 });
             }
