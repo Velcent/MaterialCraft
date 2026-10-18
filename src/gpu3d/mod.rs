@@ -54,7 +54,7 @@ mod textures;
 pub use camera::{uv_camera, view_camera};
 pub use display::{Antialiasing, Display, MIP_BIAS_STEPS, Shading, ToneCurve};
 pub use lighting::{Backdrop, EnvironmentLook, ShadowQuality, Shadows};
-pub use maps::{GpuMaps, MapInputs, prepare};
+pub use maps::{GpuMaps, MapInputs, MapsPatch, prepare};
 pub use scene::ScenePart;
 pub use shading::{InstanceDisplacement, PartShading};
 
@@ -193,7 +193,17 @@ impl Gpu {
     }
     /// Replace the maps of one part (e.g. after the user edits that texture set). Out-of-range parts are ignored.
     pub fn set_part_maps(&mut self, part: usize, maps: GpuMaps) {
-        self.scene.set_part_maps(part, maps);
+        self.set_parts_maps(vec![part], maps);
+    }
+    /// Replace the maps of several parts with one set of textures they share (the parts of one texture set): one
+    /// upload instead of one per part.
+    pub fn set_parts_maps(&mut self, parts: Vec<usize>, maps: GpuMaps) {
+        self.scene.set_parts_maps(parts, maps);
+        self.content += 1;
+    }
+    /// Replace a rectangle of the maps of `parts` (uploaded with [`Self::set_parts_maps`] at the patch's size).
+    pub fn patch_parts_maps(&mut self, parts: Vec<usize>, patch: MapsPatch) {
+        self.scene.patch_parts_maps(parts, patch);
         self.content += 1;
     }
     /// Hide parts of the scene (`hidden[i]` for part `i`, as passed to `set_scene`); parts beyond the list are drawn.

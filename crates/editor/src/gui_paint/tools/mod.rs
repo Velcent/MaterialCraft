@@ -343,7 +343,8 @@ impl Painting {
         self.surfaces.get(doc, set).is_some()
     }
 
-    /// Dabs the stroke in progress has placed so far.
+    /// Dabs the stroke in progress has placed so far (the performance benchmarks count them).
+    #[cfg(test)]
     pub fn stroke_dabs(&self) -> Option<usize> {
         self.active.as_ref().map(ActiveStroke::dabs)
     }

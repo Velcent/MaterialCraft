@@ -1,4 +1,5 @@
 //! GPU textures: one material's map set (base, normal, rma, emissive, height), mip-mapped with anisotropic filtering.
+use super::maps::MapsPatch;
 use super::{GpuMaps, bytes_of};
 use eframe::egui_glow::glow;
 use glow::HasContext;
@@ -48,6 +49,21 @@ impl Tx {
         }
     }
 
+    /// Replaces the texels of the rectangle (`data` holds `w × h` texels of the texture's format) and rebuilds the
+    /// mip levels. A rectangle outside the texture is ignored.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn patch(&self, gl: &glow::Context, fmt: u32, ty: u32, x: usize, y: usize, w: usize, h: usize, data: &[u8]) {
+        if x + w > self.w || y + h > self.h || w == 0 || h == 0 {
+            return;
+        }
+        unsafe {
+            gl.bind_texture(glow::TEXTURE_2D, Some(self.id));
+            gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+            gl.tex_sub_image_2d(glow::TEXTURE_2D, 0, x as i32, y as i32, w as i32, h as i32, fmt, ty, glow::PixelUnpackData::Slice(Some(data)));
+            gl.generate_mipmap(glow::TEXTURE_2D);
+        }
+    }
+
     /// 1x1 zero height, bound when a material has no height map.
     pub unsafe fn flat_height(gl: &glow::Context) -> Result<Tx, String> {
         unsafe { Tx::new(gl, glow::R16F, glow::RED, glow::FLOAT, 1, 1, bytes_of(&[0.0f32]), 1.0) }
@@ -85,6 +101,34 @@ impl MapTextures {
                 None => None,
             };
             Ok(MapTextures { base, normal, rma, emis, height })
+        }
+    }
+
+    /// Writes a patch into the maps (a texture of a size other than the patch's map is left alone).
+    pub unsafe fn patch(&self, gl: &glow::Context, p: &MapsPatch) {
+        let (x, y, w, h) = (p.x, p.y, p.w, p.h);
+        let n = w * h;
+        unsafe {
+            if p.base.len() == n * 4 {
+                self.base.patch(gl, glow::RGBA, glow::UNSIGNED_BYTE, x, y, w, h, &p.base);
+            }
+            if p.normal.len() == n * 4 {
+                self.normal.patch(gl, glow::RGBA, glow::UNSIGNED_BYTE, x, y, w, h, &p.normal);
+            }
+            if p.rma.len() == n * 4 {
+                self.rma.patch(gl, glow::RGBA, glow::UNSIGNED_BYTE, x, y, w, h, &p.rma);
+            }
+            if let (Some(t), Some(e)) = (&self.emis, &p.emissive)
+                && e.len() == n * 4
+            {
+                t.patch(gl, glow::RGBA, glow::UNSIGNED_BYTE, x, y, w, h, e);
+            }
+            if let (Some(t), Some(v)) = (&self.height, &p.height)
+                && v.len() == n
+            {
+                t.patch(gl, glow::RED, glow::FLOAT, x, y, w, h, bytes_of(v));
+            }
+            gl.bind_texture(glow::TEXTURE_2D, None);
         }
     }
 

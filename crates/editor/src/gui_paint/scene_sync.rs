@@ -266,7 +266,8 @@ impl SceneSync {
         self.geometry.is_some() || self.maps.is_some() || self.pending.is_some() || !self.waiting.is_empty()
     }
 
-    /// What keeping the scene in step has cost so far.
+    /// What keeping the scene in step has cost so far (the performance benchmarks read it).
+    #[cfg(test)]
     pub fn stats(&self) -> SceneStats {
         self.stats
     }
@@ -313,28 +314,25 @@ impl SceneSync {
     }
 }
 
-/// Gives every part painted with `set` its maps; returns how many parts got them.
+/// Gives every part painted with `set` its maps (one upload the parts share); returns how many uploads that is.
 fn apply_set_maps(part_sets: &[Option<usize>], set: usize, maps: GpuMaps, gpu: &Shared) -> usize {
-    let parts: Vec<usize> = (0..part_sets.len()).filter(|&i| part_sets[i] == Some(set)).collect();
-    let Ok(mut g) = gpu.lock() else { return 0 };
-    let mut maps = Some(maps);
-    for (k, &part) in parts.iter().enumerate() {
-        let m = if k + 1 == parts.len() { maps.take() } else { maps.as_ref().map(copy) };
-        if let Some(m) = m {
-            g.set_part_maps(part, m);
-        }
+    let parts = parts_of(part_sets, set);
+    if parts.is_empty() {
+        return 0;
     }
-    parts.len()
+    let Ok(mut g) = gpu.lock() else { return 0 };
+    g.set_parts_maps(parts, maps);
+    1
+}
+
+/// The scene parts painted with `set`.
+fn parts_of(part_sets: &[Option<usize>], set: usize) -> Vec<usize> {
+    (0..part_sets.len()).filter(|&i| part_sets.get(i).copied().flatten() == Some(set)).collect()
 }
 
 /// Neutral grey maps shown until a set's own maps are ready.
 fn placeholder() -> GpuMaps {
     gpu3d::prepare(&MapInputs { base: None, normal: None, rough: None, metal: None, ao: None, emissive: None, height: None })
-}
-
-/// `GpuMaps` is not `Clone`; parts sharing a texture set each need their own copy.
-fn copy(m: &GpuMaps) -> GpuMaps {
-    GpuMaps { size: m.size, base: m.base.clone(), normal: m.normal.clone(), rma: m.rma.clone(), emissive: m.emissive.clone(), height: m.height.clone() }
 }
 
 /// Where material fill references are looked up: the document's embedded assets (AS-21, so it looks the same

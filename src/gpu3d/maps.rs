@@ -16,6 +16,27 @@ pub struct GpuMaps {
     pub height: Option<(usize, usize, Vec<f32>)>,
 }
 
+/// New texels for a rectangle of maps already uploaded (a brush stroke's tiles): the same layout as [`GpuMaps`],
+/// rows of `w` texels. Maps the uploaded set does not have are ignored, as is a patch outside their size.
+pub struct MapsPatch {
+    pub x: usize,
+    pub y: usize,
+    pub w: usize,
+    pub h: usize,
+    pub base: Vec<u8>,
+    pub normal: Vec<u8>,
+    pub rma: Vec<u8>,
+    pub emissive: Option<Vec<u8>>,
+    pub height: Option<Vec<f32>>,
+}
+
+impl MapsPatch {
+    /// Bytes this patch uploads.
+    pub fn bytes(&self) -> usize {
+        self.base.len() + self.normal.len() + self.rma.len() + self.emissive.as_ref().map_or(0, Vec::len) + self.height.as_ref().map_or(0, |h| h.len() * 4)
+    }
+}
+
 pub struct MapInputs<'a> {
     pub base: Option<&'a Tex>,
     pub normal: Option<&'a Tex>,

@@ -1,12 +1,18 @@
 //! Custom scenes: several meshes, each with its own maps (a model's parts / texture sets), drawn instead of the
 //! built-in shape. Changes are queued on the UI side and applied on the GL thread at the next paint.
+//!
+//! Parts painted with the same maps (the mesh parts of one texture set) share one set of textures: new maps for
+//! several parts are uploaded once. A patch replaces a rectangle of maps already uploaded (a brush stroke's tiles)
+//! instead of uploading them whole.
 use super::GpuMaps;
+use super::maps::MapsPatch;
 use super::mesh::{GpuMesh, uv_density};
 use super::pass::Drawable;
 use super::shading::PartShading;
 use super::textures::MapTextures;
 use crate::render3d::Mesh;
 use eframe::egui_glow::glow;
+use std::sync::Arc;
 
 /// One part of a custom model: its mesh (already scaled to about unit size by the caller) and its maps.
 pub struct ScenePart {
@@ -17,27 +23,41 @@ pub struct ScenePart {
     pub maps: GpuMaps,
 }
 
+/// A change of the maps of existing parts, applied in the order queued.
+enum Change {
+    /// New maps shared by the parts.
+    Maps { parts: Vec<usize>, maps: GpuMaps },
+    /// A rectangle of the parts' maps.
+    Patch { parts: Vec<usize>, patch: MapsPatch },
+}
+
+impl Change {
+    fn parts(&self) -> &[usize] {
+        match self {
+            Change::Maps { parts, .. } | Change::Patch { parts, .. } => parts,
+        }
+    }
+}
+
 /// Changes waiting for the next paint.
 #[derive(Default)]
-enum Pending {
-    #[default]
-    Nothing,
-    /// New parts (empty when the scene was cleared).
-    Replace(Vec<ScenePart>),
-    /// New maps for existing parts.
-    Maps(Vec<(usize, GpuMaps)>),
+struct Pending {
+    /// New parts (empty when the scene was cleared), uploaded before `changes`.
+    replace: Option<Vec<ScenePart>>,
+    changes: Vec<Change>,
 }
 
 /// A part as uploaded to the GPU.
 struct GpuPart {
     mesh: GpuMesh,
-    maps: MapTextures,
+    /// Shared with the other parts painted with the same maps.
+    maps: Arc<MapTextures>,
     /// Vertices per uv unit (for the vertex height-map LOD).
     density: f32,
 }
 
 // SAFETY (GpuPart and Scene): GL calls on the current context (module invariant); parts are uploaded and freed
-// only by the scene that owns them.
+// only by the scene that owns them, and shared maps are freed by whoever drops the last reference to them.
 impl GpuPart {
     unsafe fn upload(gl: &glow::Context, p: &ScenePart, aniso: f32) -> Result<GpuPart, String> {
         unsafe {
@@ -49,15 +69,22 @@ impl GpuPart {
                     return Err(e);
                 }
             };
-            Ok(GpuPart { mesh, maps, density: uv_density(&p.mesh) })
+            Ok(GpuPart { mesh, maps: Arc::new(maps), density: uv_density(&p.mesh) })
         }
     }
 
-    unsafe fn free(&self, gl: &glow::Context) {
+    unsafe fn free(self, gl: &glow::Context) {
         unsafe {
             self.mesh.free(gl);
-            self.maps.free(gl);
+            release(gl, self.maps);
         }
+    }
+}
+
+/// Drops one reference to shared maps, freeing them with the last.
+unsafe fn release(gl: &glow::Context, maps: Arc<MapTextures>) {
+    if let Some(m) = Arc::into_inner(maps) {
+        unsafe { m.free(gl) };
     }
 }
 
@@ -82,12 +109,12 @@ impl Scene {
 
     pub fn set(&mut self, parts: Vec<ScenePart>) {
         self.active = true;
-        self.pending = Pending::Replace(parts);
+        self.pending = Pending { replace: Some(parts), changes: Vec::new() };
     }
 
     pub fn clear(&mut self) {
         self.active = false;
-        self.pending = Pending::Replace(Vec::new());
+        self.pending = Pending { replace: Some(Vec::new()), changes: Vec::new() };
     }
 
     /// Which parts are not drawn (`hidden[i]` for part `i`; parts beyond the list are drawn). Takes effect at the
@@ -118,38 +145,48 @@ impl Scene {
         self.uv_hidden = hidden;
     }
 
-    pub fn set_part_maps(&mut self, part: usize, maps: GpuMaps) {
-        match &mut self.pending {
-            Pending::Replace(parts) => {
-                if let Some(p) = parts.get_mut(part) {
-                    p.maps = maps;
-                }
-            }
-            Pending::Maps(list) => {
-                list.retain(|(i, _)| *i != part);
-                list.push((part, maps));
-            }
-            Pending::Nothing => self.pending = Pending::Maps(vec![(part, maps)]),
-        }
+    /// New maps shared by `parts`; replaces what is queued for no other parts than these.
+    pub fn set_parts_maps(&mut self, parts: Vec<usize>, maps: GpuMaps) {
+        self.pending.changes.retain(|c| !c.parts().iter().all(|p| parts.contains(p)));
+        self.pending.changes.push(Change::Maps { parts, maps });
+    }
+
+    /// New texels for a rectangle of the maps of `parts`.
+    pub fn patch_parts_maps(&mut self, parts: Vec<usize>, patch: MapsPatch) {
+        self.pending.changes.push(Change::Patch { parts, patch });
     }
 
     /// Apply queued changes: upload new parts / maps and free what they replace.
     pub unsafe fn sync(&mut self, gl: &glow::Context, aniso: f32) -> Result<(), String> {
         unsafe {
-            match std::mem::take(&mut self.pending) {
-                Pending::Nothing => {}
-                Pending::Replace(parts) => {
-                    self.free(gl);
-                    self.parts.reserve(parts.len());
-                    for p in &parts {
-                        self.parts.push(GpuPart::upload(gl, p, aniso)?);
-                    }
+            let Pending { replace, changes } = std::mem::take(&mut self.pending);
+            if let Some(parts) = replace {
+                self.free(gl);
+                self.parts.reserve(parts.len());
+                for p in &parts {
+                    self.parts.push(GpuPart::upload(gl, p, aniso)?);
                 }
-                Pending::Maps(list) => {
-                    for (i, maps) in list {
-                        if let Some(p) = self.parts.get_mut(i) {
-                            let new = MapTextures::upload(gl, &maps, aniso)?;
-                            std::mem::replace(&mut p.maps, new).free(gl);
+            }
+            for change in changes {
+                match change {
+                    Change::Maps { parts, maps } => {
+                        if !parts.iter().any(|&i| i < self.parts.len()) {
+                            continue;
+                        }
+                        let new = Arc::new(MapTextures::upload(gl, &maps, aniso)?);
+                        for i in parts {
+                            if let Some(p) = self.parts.get_mut(i) {
+                                release(gl, std::mem::replace(&mut p.maps, new.clone()));
+                            }
+                        }
+                    }
+                    Change::Patch { parts, patch } => {
+                        let mut done: Vec<&Arc<MapTextures>> = Vec::new();
+                        for p in parts.iter().filter_map(|&i| self.parts.get(i)) {
+                            if !done.iter().any(|d| Arc::ptr_eq(d, &p.maps)) {
+                                p.maps.patch(gl, &patch);
+                                done.push(&p.maps);
+                            }
                         }
                     }
                 }
