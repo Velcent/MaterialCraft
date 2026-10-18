@@ -49,7 +49,7 @@ use super::input::{PointerSample, StrokeInput};
 use super::shell::tools::Tool;
 use super::view_pick::ViewPicking;
 use super::view2d::UvMap;
-use active::{ActiveStroke, StrokeStart, Through};
+use active::{ActiveStroke, Changes, StrokeStart, Through};
 pub use brush_state::BrushTools;
 pub use events::ToolEvent;
 use mask_stroke::{ActiveMaskStroke, MaskStrokeStart};
@@ -67,7 +67,8 @@ use screen_image::ScreenImages;
 use std::time::{Duration, Instant};
 use surfaces::SurfaceCache;
 
-/// How often the painted set is recomposited during a stroke.
+/// How often the painted set is recomposited during a quick mask stroke (which recomposites it whole); document
+/// strokes update the tiles they painted every frame.
 const REFRESH: Duration = Duration::from_millis(120);
 
 /// What one frame of painting asks of the screen.
@@ -75,6 +76,8 @@ const REFRESH: Duration = Duration::from_millis(120);
 pub struct PaintReport {
     /// Recomposite this texture set.
     pub refresh: Option<usize>,
+    /// Only these tiles of its grid changed (`None`: recomposite it whole).
+    pub tiles: Option<Vec<(u32, u32)>>,
     /// Something to tell the user.
     pub message: Option<String>,
     /// True while a stroke is in progress (keep frames coming).
@@ -225,12 +228,18 @@ impl Painting {
                 StrokeInput::Up => self.end(f.doc, f.picking, &mut report),
             }
         }
+        // every frame, the tiles the stroke painted (a stroke that ended recomposites its set whole)
         if report.refresh.is_none()
             && let Some(set) = painted
-            && self.last_refresh.is_none_or(|t| t.elapsed() >= REFRESH)
         {
-            report.refresh = Some(set);
-            self.last_refresh = Some(Instant::now());
+            match self.active.as_mut().filter(|a| a.set() == set).map(ActiveStroke::take_changes) {
+                Some(None) => {}
+                Some(Some(Changes::Tiles(tiles))) => {
+                    report.refresh = Some(set);
+                    report.tiles = Some(tiles);
+                }
+                Some(Some(Changes::Whole)) | None => report.refresh = Some(set),
+            }
         }
         report.busy = self.active.is_some() || self.surfaces.is_building();
         report

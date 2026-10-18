@@ -1,25 +1,62 @@
 //! [`MapsWorker`]: composites texture sets into [`MaterialMaps`] and prepares GPU maps for the
 //! current display mode ([`Shown`]), off the UI thread. Sets are done one after another so only one set's
 //! full-float maps are in memory at a time; each result is sent as soon as it is ready.
+//!
+//! A set can be asked for whole or for some of its tiles ([`Want`]): a brush stroke asks for the tiles it painted,
+//! and gets a patch for the maps on the GPU ([`super::maps_patch`]) when the set allows it, else the whole set.
 
 use super::channel_view::Shown;
 use super::fill_surfaces::FillSurfaces;
 use super::job::Job;
+use super::maps_patch;
 use super::quick_mask_tint::QuickMaskTint;
 use materialcraft::diag::Entry;
 use materialcraft::generators;
-use materialcraft::gpu3d::GpuMaps;
+use materialcraft::gpu3d::{GpuMaps, MapsPatch};
 use materialcraft::material_fill::MaterialFills;
 use materialcraft::paint::edit::LayerRef;
 use materialcraft::paint::{Document, FillContext, MaterialMaps, OutputOptions, diag_entries};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+/// What a run should make of one set.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Want {
+    /// The whole set.
+    Full,
+    /// The tiles whose composite changed (tile coordinates of the set's grid); the maps on the GPU are otherwise
+    /// up to date for the run's display mode.
+    Tiles(Vec<(u32, u32)>),
+}
+
+impl Want {
+    /// Both wants at once: the whole set if either is, else the tiles of both.
+    pub fn merged(self, other: Want) -> Want {
+        match (self, other) {
+            (Want::Tiles(mut a), Want::Tiles(b)) => {
+                a.extend(b);
+                a.sort_unstable();
+                a.dedup();
+                Want::Tiles(a)
+            }
+            _ => Want::Full,
+        }
+    }
+}
+
+/// A set's new maps on the GPU.
+pub enum SetContent {
+    /// The whole maps.
+    Full(GpuMaps),
+    /// Some tiles of the maps already there.
+    Patch(MapsPatch),
+}
+
 /// The prepared maps of one texture set.
 pub struct SetMaps {
     pub set: usize,
-    pub maps: GpuMaps,
-    /// What compositing the set could not do exactly, as log entries.
+    pub content: SetContent,
+    /// What compositing the set could not do exactly, as log entries (none for a patch).
     pub warnings: Vec<Entry>,
     /// Where the worker's time went (benchmarks and the log).
     pub timing: SetTiming,
@@ -34,41 +71,45 @@ pub struct SetTiming {
     pub prepare: Duration,
 }
 
+/// What every set of a run is composited with.
+pub struct RunSetup {
+    pub shown: Shown,
+    /// The layer whose mask is shown alone (MK-05).
+    pub isolate: Option<LayerRef>,
+    pub materials: MaterialFills,
+    /// The quick mask laid over the maps (PT-42).
+    pub tint: Option<Arc<QuickMaskTint>>,
+    pub surfaces: Option<Arc<FillSurfaces>>,
+}
+
 /// One run over a list of texture sets.
 pub struct MapsWorker {
     job: Job<SetMaps>,
-    sets: Vec<usize>,
-    total: usize,
+    jobs: Vec<(usize, Want)>,
     done: usize,
 }
 
 impl MapsWorker {
-    /// Composites `sets` for `shown`, evaluating material fills with `materials`; the set of `isolate` shows that
-    /// layer's mask alone instead (MK-05); `tint` lays the quick mask over the maps (PT-42). Sets with polygon fills or
-    /// fills projected from a volume composite with their surface map from `surfaces` (built here the first time a set
-    /// needs it, then reused by later runs).
-    pub fn start(
-        doc: Arc<Document>,
-        sets: Vec<usize>,
-        shown: Shown,
-        isolate: Option<LayerRef>,
-        materials: MaterialFills,
-        tint: Option<Arc<QuickMaskTint>>,
-        surfaces: Option<Arc<FillSurfaces>>,
-    ) -> MapsWorker {
-        let total = sets.len();
-        let listed = sets.clone();
+    /// Composites `jobs` for `setup.shown`, evaluating material fills with `setup.materials`; the set of
+    /// `setup.isolate` shows that layer's mask alone instead (MK-05); `setup.tint` lays the quick mask over the maps
+    /// (PT-42). Sets with polygon fills or fills projected from a volume composite with their surface map from
+    /// `setup.surfaces` (built here the first time a set needs it, then reused by later runs).
+    pub fn start(doc: Arc<Document>, jobs: Vec<(usize, Want)>, setup: RunSetup) -> MapsWorker {
+        let listed = jobs.clone();
         let job = Job::spawn(move |cancel, tx| {
-            let fills = FillContext::with_sources(&materials);
-            for set in sets {
+            let RunSetup { shown, isolate, materials, tint, surfaces } = setup;
+            let plain = FillContext::with_sources(&materials);
+            let options = OutputOptions::for_document(&doc);
+            for (set, want) in jobs {
                 if cancel.is_cancelled() {
                     return;
                 }
-                let ts = &doc.texture_sets[set];
-                if let Some(r) = isolate.as_ref().filter(|r| r.set == ts.id)
+                let Some(ts) = doc.texture_sets.get(set) else { continue };
+                let isolated = isolate.as_ref().filter(|r| r.set == ts.id);
+                if let Some(r) = isolated
                     && let Some(maps) = super::isolate::mask_maps(ts, &r.layer, surfaces.as_deref())
                 {
-                    if tx.send(SetMaps { set, maps, warnings: Vec::new(), timing: SetTiming::default() }).is_err() {
+                    if tx.send(SetMaps { set, content: SetContent::Full(maps), warnings: Vec::new(), timing: SetTiming::default() }).is_err() {
                         return;
                     }
                     continue;
@@ -78,8 +119,19 @@ impl MapsWorker {
                 if cancel.is_cancelled() {
                     return;
                 }
-                let fills = surface.as_ref().map_or(fills, |s| s.context(&materials));
-                let maps = MaterialMaps::build_with(ts, &OutputOptions::for_document(&doc), generators::builtin(), &fills);
+                let fills = surface.as_ref().map_or(plain, |s| s.context(&materials));
+                if let Want::Tiles(tiles) = &want
+                    && tint.is_none()
+                    && isolated.is_none()
+                    && let Some(patch) = maps_patch::patch(ts, &options, &fills, &shown, tiles)
+                {
+                    let timing = SetTiming { composite: started.elapsed(), prepare: Duration::ZERO };
+                    if tx.send(SetMaps { set, content: SetContent::Patch(patch), warnings: Vec::new(), timing }).is_err() {
+                        return;
+                    }
+                    continue;
+                }
+                let maps = MaterialMaps::build_with(ts, &options, generators::builtin(), &fills);
                 if cancel.is_cancelled() {
                     return;
                 }
@@ -90,12 +142,12 @@ impl MapsWorker {
                     t.apply(&ts.id, &mut maps);
                 }
                 let timing = SetTiming { composite: composited - started, prepare: composited.elapsed() };
-                if tx.send(SetMaps { set, maps, warnings, timing }).is_err() {
+                if tx.send(SetMaps { set, content: SetContent::Full(maps), warnings, timing }).is_err() {
                     return;
                 }
             }
         });
-        MapsWorker { job, sets: listed, total, done: 0 }
+        MapsWorker { job, jobs: listed, done: 0 }
     }
 
     /// Sets finished since the last call.
@@ -110,9 +162,9 @@ impl MapsWorker {
         self.job.cancel();
     }
 
-    /// The sets this run was started for.
-    pub fn sets(&self) -> &[usize] {
-        &self.sets
+    /// What this run was started for.
+    pub fn jobs(&self) -> &[(usize, Want)] {
+        &self.jobs
     }
 
     pub fn is_finished(&self) -> bool {
@@ -121,7 +173,7 @@ impl MapsWorker {
 
     /// (sets done, sets total)
     pub fn progress(&self) -> (usize, usize) {
-        (self.done, self.total)
+        (self.done, self.jobs.len())
     }
 }
 

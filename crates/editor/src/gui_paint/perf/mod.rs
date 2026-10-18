@@ -78,6 +78,7 @@ impl Bench {
 pub fn delta(a: SceneStats, b: SceneStats) -> SceneStats {
     SceneStats {
         sets: b.sets - a.sets,
+        patches: b.patches - a.patches,
         composite: b.composite - a.composite,
         prepare: b.prepare - a.prepare,
         upload_bytes: b.upload_bytes - a.upload_bytes,

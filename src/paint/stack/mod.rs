@@ -44,6 +44,7 @@ mod content;
 mod fill_context;
 mod fill_eval;
 mod geometry;
+mod locality;
 mod mask_eval;
 mod native;
 mod pass;

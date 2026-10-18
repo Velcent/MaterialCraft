@@ -68,6 +68,17 @@ pub struct ActiveStroke {
     /// The last point painted (view coordinates).
     last: Option<[f32; 2]>,
     placement: Option<ScreenImageTransform>,
+    /// What changed since the last [`ActiveStroke::take_changes`].
+    changes: Changes,
+}
+
+/// Where a stroke changed the composite of its texture set.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Changes {
+    /// Anywhere (preparing the target changed more than pixels).
+    Whole,
+    /// In these tiles of the set's grid.
+    Tiles(Vec<(u32, u32)>),
 }
 
 /// How a stroke ended.
@@ -118,11 +129,13 @@ impl ActiveStroke {
             retouch: start.retouch,
         };
         let mut prepared = DocumentStroke::prepare(doc.doc_for_strokes(), start.target, &start.values)?;
+        let whole: bool;
         let result = {
             let (mesh, set) = split(doc.doc_for_strokes(), start.set)?;
             if let Some(base) = start.base {
                 prepared.see_through(set, base);
             }
+            whole = prepared.changed_document();
             let projector = projector_for(picking, mesh, start.camera)?;
             let view = projector.as_ref().map(|p| p as &dyn ViewProjector);
             let projected = view.and_then(|v| projected(through, start.placement, &start.surface, v));
@@ -154,9 +167,19 @@ impl ActiveStroke {
             lazy: start.lazy,
             last: None,
             placement: start.placement,
+            changes: if whole { Changes::Whole } else { Changes::Tiles(Vec::new()) },
         };
         active.add(doc, picking, &[at], through)?;
         Ok(active)
+    }
+
+    /// What the stroke changed since the last call, for recompositing (`None`: nothing).
+    pub fn take_changes(&mut self) -> Option<Changes> {
+        let empty = Changes::Tiles(Vec::new());
+        match std::mem::replace(&mut self.changes, empty) {
+            Changes::Tiles(t) if t.is_empty() => None,
+            c => Some(c),
+        }
     }
 
     /// True for a stroke from the 2D view.
@@ -200,7 +223,13 @@ impl ActiveStroke {
         let projected = view.and_then(|v| projected(through, self.placement, &self.surface, v));
         let scene =
             SessionScene { surface: &self.surface.map, index: &self.surface.index, projector: view, factors: through.factors, projected: projected.as_ref() };
-        Ok(!self.stroke.add(&scene, &points, set)?.is_empty())
+        let changed = self.stroke.add(&scene, &points, set)?;
+        if let Changes::Tiles(t) = &mut self.changes {
+            t.extend(changed.iter().copied());
+            t.sort_unstable();
+            t.dedup();
+        }
+        Ok(!changed.is_empty())
     }
 
     /// The lazy mouse's string `(brush, pointer)` while the brush lags behind.

@@ -2,8 +2,10 @@
 //! on background threads; the scene is set once per geometry build (with neutral placeholder maps)
 //! and each texture set's maps replace the placeholders of its parts as they arrive.
 //!
-//! Edits ask for new maps often (every frame of a slider drag). Only one maps worker runs at a time: a
-//! request while one runs cancels it and is started once it has stopped, with every set either asked for.
+//! Edits ask for new maps often (every frame of a slider drag or a brush stroke). Only one maps worker runs at a
+//! time ([`MapsQueue`]): what is asked for meanwhile is merged into the next run. A brush stroke asks for the tiles it
+//! painted ([`SceneSync::refresh_tiles`]); they are patched into the set's maps on the GPU when the set's whole maps
+//! for the current display mode are there (or on their way), else the whole set is composited.
 
 use super::channel_display::ChannelDisplay;
 use super::channel_view::{ChannelView, Shown};
@@ -11,7 +13,8 @@ use super::document_state::OpenDocument;
 use super::fill_surfaces::FillSurfaces;
 use super::geometry::{self, PartGeometry};
 use super::job::Job;
-use super::maps_worker::{MapsWorker, SetMaps};
+use super::maps_queue::{MapsQueue, Start};
+use super::maps_worker::{MapsWorker, RunSetup, SetContent, SetMaps, Want};
 use super::quick_mask_tint::QuickMaskTint;
 use super::scene_shading::{self, ModelScale, Subdivision};
 use super::scene_stats::{self, SceneStats};
@@ -20,7 +23,7 @@ use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
 use materialcraft::material_fill::{ChainResolver, FolderResolver, MaterialCache, MaterialFills, MaterialResolver, MemoryResolver};
 use materialcraft::paint::edit::LayerRef;
 use materialcraft::shading::ShaderLibrary;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -29,7 +32,9 @@ type GeometryResult = Result<Vec<PartGeometry>, String>;
 #[derive(Default)]
 pub struct SceneSync {
     geometry: Option<Job<GeometryResult>>,
-    maps: Option<MapsWorker>,
+    maps: MapsQueue,
+    /// The display mode of each set's whole maps last handed to the GPU (patches apply only onto those).
+    uploaded: BTreeMap<usize, Shown>,
     /// Texture set of each scene part, once the geometry is on its way to the GPU.
     part_sets: Option<Vec<Option<usize>>>,
     /// Mesh part of each scene part (parts of hidden texture sets are not in the scene).
@@ -38,10 +43,8 @@ pub struct SceneSync {
     hidden: Vec<bool>,
     /// The texture set the 2D view shows (its parts only).
     uv_set: Option<usize>,
-    /// Maps that arrived before the geometry.
-    waiting: Vec<SetMaps>,
-    /// Maps asked for while a worker was still running: started when it has stopped.
-    pending: Option<(ChannelView, BTreeSet<usize>)>,
+    /// Maps that arrived before the geometry, with the display mode they were made for.
+    waiting: Vec<(SetMaps, Shown)>,
     /// How channel and mesh-map views show their values (DS-07, DS-08).
     channel: ChannelDisplay,
     /// The layer whose mask is shown alone (MK-05).
@@ -129,23 +132,45 @@ impl SceneSync {
         let visible = doc.visible_sets();
         let sets: Vec<usize> = sets.into_iter().filter(|s| visible.contains(s)).collect();
         doc.invalidate_sets(&sets);
-        match &self.maps {
-            Some(worker) if !worker.is_finished() => {
-                worker.cancel();
-                let pending = self.pending.get_or_insert_with(|| (view, BTreeSet::new()));
-                pending.0 = view;
-                pending.1.extend(worker.sets().iter().copied().chain(sets));
-            }
-            _ => self.start_maps(doc, view, sets),
+        let wants = sets.into_iter().map(|s| (s, Want::Full)).collect();
+        self.ask(doc, view, wants);
+    }
+
+    /// A brush frame painted set `set`: in `tiles` (tile coordinates of its grid), or anywhere (`None`).
+    pub fn painted(&mut self, doc: &mut OpenDocument, view: ChannelView, set: usize, tiles: Option<Vec<(u32, u32)>>) {
+        match tiles {
+            Some(tiles) => self.refresh_tiles(doc, view, set, tiles),
+            None => self.refresh(doc, view, vec![set]),
         }
     }
 
-    fn start_maps(&mut self, doc: &mut OpenDocument, view: ChannelView, sets: Vec<usize>) {
-        self.waiting.retain(|m| !sets.contains(&m.set));
+    /// Updates the maps of set `set` where the composite changed in `tiles` (tile coordinates of the set's grid), as
+    /// a brush stroke does: patched onto the set's maps on the GPU, or the whole set when that can't be done.
+    fn refresh_tiles(&mut self, doc: &mut OpenDocument, view: ChannelView, set: usize, tiles: Vec<(u32, u32)>) {
+        if !doc.visible_sets().contains(&set) {
+            return;
+        }
+        let shown = Shown { view, channel: self.channel };
+        let patchable = self.uploaded.get(&set) == Some(&shown) || self.maps.brings_whole(set, &shown);
+        let want = if patchable { Want::Tiles(tiles) } else { Want::Full };
+        self.ask(doc, view, vec![(set, want)]);
+    }
+
+    fn ask(&mut self, doc: &mut OpenDocument, view: ChannelView, wants: Vec<(usize, Want)>) {
+        if let Some(start) = self.maps.ask(view, wants) {
+            self.start_maps(doc, start);
+        }
+    }
+
+    fn start_maps(&mut self, doc: &mut OpenDocument, (view, jobs): Start) {
+        let whole: Vec<usize> = jobs.iter().filter(|(_, w)| *w == Want::Full).map(|(s, _)| *s).collect();
+        self.waiting.retain(|(m, _)| !whole.contains(&m.set));
+        let sets: Vec<usize> = jobs.iter().map(|(s, _)| *s).collect();
         let materials = self.material_fills(doc);
         let surfaces = self.fill_surfaces_for(doc, &sets);
         let shown = Shown { view, channel: self.channel };
-        self.maps = Some(MapsWorker::start(doc.maps_view(&sets), sets, shown, self.isolate.clone(), materials, self.tint.clone(), surfaces));
+        let setup = RunSetup { shown, isolate: self.isolate.clone(), materials, tint: self.tint.clone(), surfaces };
+        self.maps.started(MapsWorker::start(doc.maps_view(&sets), jobs, setup), shown);
     }
 
     /// The surface maps the sets' fills composite with, when one of them needs its surface: the kept ones while the
@@ -229,26 +254,30 @@ impl SceneSync {
                 Err(e) => self.error = Some(e),
             }
         }
-        if let Some(worker) = &mut self.maps {
-            let arrived = worker.poll();
-            // A cancelled run's results are outdated.
-            if self.pending.is_none() {
-                self.waiting.extend(arrived);
-            }
-            if worker.is_finished() {
-                self.maps = None;
-                if let Some((view, sets)) = self.pending.take() {
-                    self.start_maps(doc, view, sets.into_iter().collect());
-                }
-            }
+        let (arrived, next) = self.maps.poll();
+        self.waiting.extend(arrived);
+        if let Some(start) = next {
+            self.start_maps(doc, start);
         }
         if let Some(part_sets) = &self.part_sets {
-            for SetMaps { set, maps, warnings, timing } in self.waiting.drain(..) {
+            for (SetMaps { set, content, warnings, timing }, shown) in self.waiting.drain(..) {
                 let started = std::time::Instant::now();
                 self.stats.arrived(timing);
-                let bytes = scene_stats::bytes_of(&maps);
-                let copies = apply_set_maps(part_sets, set, maps, gpu);
-                self.stats.handed(bytes, copies, started.elapsed());
+                let parts = parts_of(part_sets, set);
+                let (bytes, uploads) = match content {
+                    SetContent::Full(maps) => {
+                        self.uploaded.insert(set, shown);
+                        (scene_stats::bytes_of(&maps), hand_over(gpu, |g| g.set_parts_maps(parts, maps)))
+                    }
+                    // a patch made for other maps than those on the GPU (a scene rebuilt meanwhile) is dropped: the
+                    // whole maps for the new scene are on their way
+                    SetContent::Patch(patch) if self.uploaded.get(&set) == Some(&shown) => {
+                        self.stats.patches += 1;
+                        (patch.bytes(), hand_over(gpu, |g| g.patch_parts_maps(parts, patch)))
+                    }
+                    SetContent::Patch(_) => (0, 0),
+                };
+                self.stats.handed(bytes, uploads, started.elapsed());
                 if doc.mark_ready(set) {
                     warnings.into_iter().for_each(|w| sink.emit(w));
                 }
@@ -263,7 +292,7 @@ impl SceneSync {
 
     /// True while geometry or maps are still being built.
     pub fn is_busy(&self) -> bool {
-        self.geometry.is_some() || self.maps.is_some() || self.pending.is_some() || !self.waiting.is_empty()
+        self.geometry.is_some() || self.maps.is_busy() || !self.waiting.is_empty()
     }
 
     /// What keeping the scene in step has cost so far (the performance benchmarks read it).
@@ -274,7 +303,7 @@ impl SceneSync {
 
     /// (texture sets done, total) of the running maps job.
     pub fn progress(&self) -> Option<(usize, usize)> {
-        self.maps.as_ref().map(|m| m.progress())
+        self.maps.progress()
     }
 
     /// Hides the mesh parts with `hidden[i]` set in the view (others are drawn); kept for later scenes.
@@ -310,18 +339,16 @@ impl SceneSync {
             g.set_scene(scene);
         }
         self.part_sets = Some(part_sets);
+        // the new parts show placeholders until their whole maps arrive
+        self.uploaded.clear();
         self.send_hidden(gpu);
     }
 }
 
-/// Gives every part painted with `set` its maps (one upload the parts share); returns how many uploads that is.
-fn apply_set_maps(part_sets: &[Option<usize>], set: usize, maps: GpuMaps, gpu: &Shared) -> usize {
-    let parts = parts_of(part_sets, set);
-    if parts.is_empty() {
-        return 0;
-    }
+/// Hands maps to the GPU queue; returns the uploads queued (one, shared by the set's parts).
+fn hand_over(gpu: &Shared, give: impl FnOnce(&mut gpu3d::Gpu)) -> usize {
     let Ok(mut g) = gpu.lock() else { return 0 };
-    g.set_parts_maps(parts, maps);
+    give(&mut g);
     1
 }
 

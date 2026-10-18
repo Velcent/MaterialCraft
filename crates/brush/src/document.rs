@@ -155,6 +155,12 @@ impl Prepared {
         &self.resolved
     }
 
+    /// True if preparing the target changed the document beyond pixels (a mask got a paint effect, a see-through
+    /// layer took the composite below it): the composite may have changed anywhere, not only where the stroke paints.
+    pub fn changed_document(&self) -> bool {
+        !self.inverses.is_empty() || self.base.is_some()
+    }
+
     /// The target is see-through content and `base` the composite below it
     /// ([`materialcraft::paint::see_through::base_images`], taken after the layer was brought up to date): the
     /// layer's images take the base's tiles where they have none, so the stroke works on the composite below.

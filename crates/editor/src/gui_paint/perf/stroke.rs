@@ -5,6 +5,7 @@
 
 use super::{Bench, corpus_file, mean_max, ms};
 use crate::gui_paint::input::{PointerSample, StrokeInput};
+use crate::gui_paint::scene_stats::SceneStats;
 use crate::gui_paint::shell::tools::Tool;
 use crate::gui_paint::tools::{PaintFrame, Painting};
 use crate::gui_paint::view_pick::ViewPicking;
@@ -56,8 +57,9 @@ fn perf_stroke_on_new_project() {
     }
     frames.push(vec![StrokeInput::Up]);
 
-    let before = b.scene.stats();
-    let (mut stamp, mut poll, mut latency) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut stamp, mut ask, mut poll) = (Vec::new(), Vec::new(), Vec::new());
+    // per recomposite: its latency and what the scene did, split into tile patches and whole sets
+    let (mut patches, mut wholes): (Vec<(Duration, SceneStats)>, Vec<(Duration, SceneStats)>) = (Vec::new(), Vec::new());
     let mut dabs = 0;
     let started = Instant::now();
     for input in frames {
@@ -66,31 +68,45 @@ fn perf_stroke_on_new_project() {
         let report = painting.frame(input, frame);
         stamp.push(t.elapsed());
         dabs = painting.stroke_dabs().unwrap_or(dabs);
-        poll.push(b.poll());
         if let Some(s) = report.refresh {
-            latency.push(b.refresh(vec![s]).0);
+            // what the screen does with the report (`PaintMode::after_painting`), then waiting for the result
+            let before = b.scene.stats();
+            let t = Instant::now();
+            b.scene.painted(&mut b.doc, b.view, s, report.tiles);
+            ask.push(t.elapsed());
+            b.settle();
+            let latency = t.elapsed();
+            let did = super::delta(before, b.scene.stats());
+            if did.patches > 0 { patches.push((latency, did)) } else { wholes.push((latency, did)) }
         }
+        poll.push(b.poll());
     }
     let total = started.elapsed();
-    let stats = super::delta(before, b.scene.stats());
-    let refreshes = latency.len().max(1);
     let (stamp_mean, stamp_max) = mean_max(&stamp);
+    let (ask_mean, ask_max) = mean_max(&ask);
     let (poll_mean, poll_max) = mean_max(&poll);
-    let (lat_mean, lat_max) = mean_max(&latency);
-    eprintln!("stroke: {} frames, {dabs} dabs, {} recomposites, {:.0} ms in all", stamp.len(), latency.len(), ms(total));
+    eprintln!("stroke: {} frames, {dabs} dabs, {} tile patches, {} whole recomposites, {:.0} ms in all", stamp.len(), patches.len(), wholes.len(), ms(total));
     eprintln!(
-        "  stamping (UI thread)     per frame {stamp_mean:.2} ms (max {stamp_max:.2}), per dab {:.3} ms",
+        "  stamping (UI thread)       per frame {stamp_mean:.2} ms (max {stamp_max:.2}), per dab {:.3} ms",
         ms(stamp.iter().sum::<Duration>()) / dabs.max(1) as f64
     );
-    eprintln!("  scene poll (UI thread)   per frame {poll_mean:.2} ms (max {poll_max:.2})");
-    eprintln!("  recomposite latency      mean {lat_mean:.1} ms (max {lat_max:.1})");
-    eprintln!(
-        "  per recomposite: compositing {:.1} ms, preview maps {:.1} ms, GPU hand-off {:.2} ms, upload {:.1} MB",
-        ms(stats.composite) / refreshes as f64,
-        ms(stats.prepare) / refreshes as f64,
-        ms(stats.handoff) / refreshes as f64,
-        stats.upload_bytes as f64 / refreshes as f64 / 1e6
-    );
+    eprintln!("  asking for maps (UI)       per refresh {ask_mean:.2} ms (max {ask_max:.2})");
+    eprintln!("  scene poll (UI thread)     per frame {poll_mean:.2} ms (max {poll_max:.2})");
+    for (what, list) in [("tile patch", &patches), ("whole set", &wholes)] {
+        if list.is_empty() {
+            continue;
+        }
+        let n = list.len() as f64;
+        let (lat_mean, lat_max) = mean_max(&list.iter().map(|(d, _)| *d).collect::<Vec<_>>());
+        let sum = |f: &dyn Fn(&SceneStats) -> f64| list.iter().map(|(_, s)| f(s)).sum::<f64>() / n;
+        eprintln!(
+            "  {what:<11} latency {lat_mean:6.1} ms (max {lat_max:6.1}): compositing {:.1} ms, preview maps {:.1} ms, GPU hand-off {:.2} ms, upload {:.2} MB",
+            sum(&|s| ms(s.composite)),
+            sum(&|s| ms(s.prepare)),
+            sum(&|s| ms(s.handoff)),
+            sum(&|s| s.upload_bytes as f64 / 1e6)
+        );
+    }
     let history = b.doc.history().len();
     eprintln!("  history: {history} steps");
     assert!(dabs > 0, "the stroke painted nothing");

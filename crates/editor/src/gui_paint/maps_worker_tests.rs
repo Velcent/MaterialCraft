@@ -64,17 +64,22 @@ fn materials() -> MaterialFills {
     MaterialFills::new(Arc::new(FolderResolver::new([PathBuf::from("/nonexistent")])), Arc::new(MaterialCache::default()))
 }
 
+/// A whole set's result.
+struct Ran {
+    maps: GpuMaps,
+    warnings: Vec<materialcraft::diag::Entry>,
+}
+
 /// Runs a maps worker over set `set` to the end.
-fn run_set(doc: &mut OpenDocument, set: usize, surfaces: Option<Arc<FillSurfaces>>) -> SetMaps {
-    let mut worker = MapsWorker::start(
-        doc.maps_view(&[set]),
-        vec![set],
-        Shown { view: ChannelView::Material, channel: ChannelDisplay::default() },
-        None,
-        materials(),
-        None,
+fn run_set(doc: &mut OpenDocument, set: usize, surfaces: Option<Arc<FillSurfaces>>) -> Ran {
+    let setup = RunSetup {
+        shown: Shown { view: ChannelView::Material, channel: ChannelDisplay::default() },
+        isolate: None,
+        materials: materials(),
+        tint: None,
         surfaces,
-    );
+    };
+    let mut worker = MapsWorker::start(doc.maps_view(&[set]), vec![(set, Want::Full)], setup);
     let start = Instant::now();
     let mut out = Vec::new();
     while !worker.is_finished() || out.is_empty() {
@@ -82,15 +87,16 @@ fn run_set(doc: &mut OpenDocument, set: usize, surfaces: Option<Arc<FillSurfaces
         assert!(start.elapsed() < Duration::from_secs(60), "the maps worker did not finish");
         std::thread::sleep(Duration::from_millis(2));
     }
-    out.pop().expect("the set's maps")
+    let SetMaps { content: SetContent::Full(maps), warnings, .. } = out.pop().expect("the set's maps") else { panic!("a whole set was asked for") };
+    Ran { maps, warnings }
 }
 
-fn run(doc: &mut OpenDocument, surfaces: Option<Arc<FillSurfaces>>) -> SetMaps {
+fn run(doc: &mut OpenDocument, surfaces: Option<Arc<FillSurfaces>>) -> Ran {
     run_set(doc, 0, surfaces)
 }
 
 /// Needs-mesh warnings among a run's log entries.
-fn needs_mesh(maps: &SetMaps) -> usize {
+fn needs_mesh(maps: &Ran) -> usize {
     maps.warnings.iter().filter(|e| e.text.contains("needs the mesh")).count()
 }
 

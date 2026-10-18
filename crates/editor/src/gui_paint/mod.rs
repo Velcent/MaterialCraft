@@ -38,6 +38,8 @@ mod job;
 mod launch;
 mod library_import;
 mod loader;
+mod maps_patch;
+mod maps_queue;
 mod maps_worker;
 mod navigation;
 mod new_project;

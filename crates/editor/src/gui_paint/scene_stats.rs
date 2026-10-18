@@ -9,6 +9,8 @@ use std::time::Duration;
 pub struct SceneStats {
     /// Set results handed to the GPU.
     pub sets: usize,
+    /// How many of them were patches of some tiles.
+    pub patches: usize,
     /// The maps worker's compositing time, summed.
     pub composite: Duration,
     /// The maps worker's GPU map preparation time, summed.

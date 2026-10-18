@@ -47,6 +47,7 @@ pub mod new_project;
 pub mod normal;
 pub mod normal_combine;
 pub mod output;
+pub mod output_tiles;
 pub(crate) mod par;
 pub mod pixel;
 pub mod probe;
@@ -58,6 +59,8 @@ pub mod see_through;
 pub mod set_changes;
 pub mod stack;
 pub mod stroke;
+#[cfg(test)]
+pub(crate) mod test_stacks;
 pub mod texture_set;
 pub mod validate;
 pub mod working_space;

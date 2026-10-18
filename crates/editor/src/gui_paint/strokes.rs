@@ -112,7 +112,7 @@ impl PaintMode {
             self.scene.set_tint(QuickMaskTint::of(&self.painting.quick_mask, doc.doc()));
         }
         if let (Some(set), Some(doc)) = (report.refresh, self.document.as_mut()) {
-            self.scene.refresh(doc, self.display, vec![set]);
+            self.scene.painted(doc, self.display, set, report.tiles);
         }
     }
 }

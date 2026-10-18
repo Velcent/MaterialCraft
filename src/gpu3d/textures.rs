@@ -49,17 +49,26 @@ impl Tx {
         }
     }
 
-    /// Replaces the texels of the rectangle (`data` holds `w × h` texels of the texture's format) and rebuilds the
-    /// mip levels. A rectangle outside the texture is ignored.
+    /// Replaces the texels of the rectangle in the top level (`data` holds `w × h` texels of the texture's format);
+    /// the mip levels are rebuilt by [`Tx::rebuild_mips`]. False (and nothing written) for a rectangle outside the
+    /// texture.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn patch(&self, gl: &glow::Context, fmt: u32, ty: u32, x: usize, y: usize, w: usize, h: usize, data: &[u8]) {
+    pub unsafe fn write(&self, gl: &glow::Context, fmt: u32, ty: u32, x: usize, y: usize, w: usize, h: usize, data: &[u8]) -> bool {
         if x + w > self.w || y + h > self.h || w == 0 || h == 0 {
-            return;
+            return false;
         }
         unsafe {
             gl.bind_texture(glow::TEXTURE_2D, Some(self.id));
             gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
             gl.tex_sub_image_2d(glow::TEXTURE_2D, 0, x as i32, y as i32, w as i32, h as i32, fmt, ty, glow::PixelUnpackData::Slice(Some(data)));
+        }
+        true
+    }
+
+    /// Derives the mip levels from the top level again.
+    pub unsafe fn rebuild_mips(&self, gl: &glow::Context) {
+        unsafe {
+            gl.bind_texture(glow::TEXTURE_2D, Some(self.id));
             gl.generate_mipmap(glow::TEXTURE_2D);
         }
     }
@@ -104,29 +113,41 @@ impl MapTextures {
         }
     }
 
-    /// Writes a patch into the maps (a texture of a size other than the patch's map is left alone).
+    /// Writes a patch's rectangles into the maps and rebuilds the mip levels of the maps it wrote (once each).
+    /// Rectangles outside a map and maps the set lacks are left alone.
     pub unsafe fn patch(&self, gl: &glow::Context, p: &MapsPatch) {
-        let (x, y, w, h) = (p.x, p.y, p.w, p.h);
-        let n = w * h;
+        let rgba = (glow::RGBA, glow::UNSIGNED_BYTE);
+        // base, normal, rma, emissive, height
+        let mut wrote = [false; 5];
         unsafe {
-            if p.base.len() == n * 4 {
-                self.base.patch(gl, glow::RGBA, glow::UNSIGNED_BYTE, x, y, w, h, &p.base);
+            for t in &p.tiles {
+                let (x, y, w, h) = (t.x, t.y, t.w, t.h);
+                let n = w * h;
+                if t.base.len() == n * 4 {
+                    wrote[0] |= self.base.write(gl, rgba.0, rgba.1, x, y, w, h, &t.base);
+                }
+                if t.normal.len() == n * 4 {
+                    wrote[1] |= self.normal.write(gl, rgba.0, rgba.1, x, y, w, h, &t.normal);
+                }
+                if t.rma.len() == n * 4 {
+                    wrote[2] |= self.rma.write(gl, rgba.0, rgba.1, x, y, w, h, &t.rma);
+                }
+                if let (Some(tx), Some(e)) = (&self.emis, &t.emissive)
+                    && e.len() == n * 4
+                {
+                    wrote[3] |= tx.write(gl, rgba.0, rgba.1, x, y, w, h, e);
+                }
+                if let (Some(tx), Some(v)) = (&self.height, &t.height)
+                    && v.len() == n
+                {
+                    wrote[4] |= tx.write(gl, glow::RED, glow::FLOAT, x, y, w, h, bytes_of(v));
+                }
             }
-            if p.normal.len() == n * 4 {
-                self.normal.patch(gl, glow::RGBA, glow::UNSIGNED_BYTE, x, y, w, h, &p.normal);
-            }
-            if p.rma.len() == n * 4 {
-                self.rma.patch(gl, glow::RGBA, glow::UNSIGNED_BYTE, x, y, w, h, &p.rma);
-            }
-            if let (Some(t), Some(e)) = (&self.emis, &p.emissive)
-                && e.len() == n * 4
-            {
-                t.patch(gl, glow::RGBA, glow::UNSIGNED_BYTE, x, y, w, h, e);
-            }
-            if let (Some(t), Some(v)) = (&self.height, &p.height)
-                && v.len() == n
-            {
-                t.patch(gl, glow::RED, glow::FLOAT, x, y, w, h, bytes_of(v));
+            let maps = [Some(&self.base), Some(&self.normal), Some(&self.rma), self.emis.as_ref(), self.height.as_ref()];
+            for (tx, w) in maps.into_iter().zip(wrote) {
+                if let (Some(tx), true) = (tx, w) {
+                    tx.rebuild_mips(gl);
+                }
             }
             gl.bind_texture(glow::TEXTURE_2D, None);
         }

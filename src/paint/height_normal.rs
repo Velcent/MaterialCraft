@@ -64,24 +64,46 @@ pub fn normal_from_height(height: &Tex, filter: HeightFilter, strength: f32) -> 
     if w == 0 || h == 0 || height.px.len() < w * h {
         return out;
     }
-    let (kx, ky) = (strength * UV_SLOPE * w as f32, strength * UV_SLOPE * h as f32);
-    let at = |x: usize, y: usize, dx: isize, dy: isize| {
-        let xx = x.saturating_add_signed(dx).min(w - 1);
-        let yy = y.saturating_add_signed(dy).min(h - 1);
-        height.px[yy * w + xx][0]
-    };
+    let slope = Slope::new(filter, strength, (w, h));
     let mut rows: Vec<&mut [[f32; 4]]> = out.px.chunks_mut(w).collect();
     for_each_mut(&mut rows, |y, row| {
         for (x, p) in row.iter_mut().enumerate() {
-            let (gx, gy) = filter.gradient(|dx, dy| at(x, y, dx, dy));
-            // Image y runs against +v, so a height rising down the image tilts the normal up (+Y).
-            let (nx, ny, nz) = (-gx * kx, gy * ky, 1.0f32);
-            let l = (nx * nx + ny * ny + nz * nz).sqrt();
-            let n = if l.is_finite() && l > 0.0 { [nx / l, ny / l, nz / l] } else { [0.0, 0.0, 1.0] };
-            *p = [n[0] * 0.5 + 0.5, n[1] * 0.5 + 0.5, n[2] * 0.5 + 0.5, 1.0];
+            *p = slope.normal_at(x, y, |xx, yy| height.px[yy * w + xx][0]);
         }
     });
     out
+}
+
+/// The height → normal conversion of one texture size, texel by texel: [`normal_from_height`] over the whole map, or
+/// a part of it (a brush stroke's tiles) with the same values.
+#[derive(Debug, Clone, Copy)]
+pub struct Slope {
+    filter: HeightFilter,
+    kx: f32,
+    ky: f32,
+    w: usize,
+    h: usize,
+}
+
+impl Slope {
+    /// For a `size` map (both sides above 0) with Painter's scale times `strength`.
+    pub fn new(filter: HeightFilter, strength: f32, size: (usize, usize)) -> Slope {
+        let (w, h) = size;
+        Slope { filter, kx: strength * UV_SLOPE * w as f32, ky: strength * UV_SLOPE * h as f32, w, h }
+    }
+
+    /// The encoded normal at texel `(x, y)`; `height(x, y)` reads the height of a texel of the map (the
+    /// neighbours asked for are clamped to the map, so at most one texel beyond `(x, y)` on each side).
+    pub fn normal_at(&self, x: usize, y: usize, height: impl Fn(usize, usize) -> f32) -> [f32; 4] {
+        let (w, h) = (self.w.max(1), self.h.max(1));
+        let at = |dx: isize, dy: isize| height(x.saturating_add_signed(dx).min(w - 1), y.saturating_add_signed(dy).min(h - 1));
+        let (gx, gy) = self.filter.gradient(at);
+        // Image y runs against +v, so a height rising down the image tilts the normal up (+Y).
+        let (nx, ny, nz) = (-gx * self.kx, gy * self.ky, 1.0f32);
+        let l = (nx * nx + ny * ny + nz * nz).sqrt();
+        let n = if l.is_finite() && l > 0.0 { [nx / l, ny / l, nz / l] } else { [0.0, 0.0, 1.0] };
+        [n[0] * 0.5 + 0.5, n[1] * 0.5 + 0.5, n[2] * 0.5 + 0.5, 1.0]
+    }
 }
 
 #[cfg(test)]

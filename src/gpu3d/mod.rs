@@ -54,7 +54,7 @@ mod textures;
 pub use camera::{uv_camera, view_camera};
 pub use display::{Antialiasing, Display, MIP_BIAS_STEPS, Shading, ToneCurve};
 pub use lighting::{Backdrop, EnvironmentLook, ShadowQuality, Shadows};
-pub use maps::{GpuMaps, MapInputs, MapsPatch, prepare};
+pub use maps::{GpuMaps, MapInputs, MapsPatch, MapsTile, TileInputs, prepare, prepare_patch};
 pub use scene::ScenePart;
 pub use shading::{InstanceDisplacement, PartShading};
 

@@ -5,7 +5,7 @@ use super::*;
 use crate::gui_paint::channel_display::ChannelDisplay;
 use crate::gui_paint::channel_view::{ChannelView, Shown};
 use crate::gui_paint::document_state::OpenDocument;
-use crate::gui_paint::maps_worker::{MapsWorker, SetMaps};
+use crate::gui_paint::maps_worker::{MapsWorker, RunSetup, SetContent, SetMaps, Want};
 use crate::gui_paint::stack_editor;
 use materialcraft::history::CoalesceKey;
 use materialcraft::material_fill::{FolderResolver, MaterialCache, MaterialFills};
@@ -62,8 +62,10 @@ fn recomposited(doc: &mut OpenDocument, ev: LayerEvent) -> Vec<usize> {
 /// Runs a maps worker over `sets` to the end; the maps of every set it composited.
 fn composite(doc: &OpenDocument, sets: Vec<usize>) -> Vec<SetMaps> {
     let materials = MaterialFills::new(Arc::new(FolderResolver::new([PathBuf::from("/nonexistent")])), Arc::new(MaterialCache::default()));
-    let mut worker =
-        MapsWorker::start(doc.maps_view(&sets), sets, Shown { view: ChannelView::Material, channel: ChannelDisplay::default() }, None, materials, None, None);
+    let setup =
+        RunSetup { shown: Shown { view: ChannelView::Material, channel: ChannelDisplay::default() }, isolate: None, materials, tint: None, surfaces: None };
+    let jobs = sets.iter().map(|&s| (s, Want::Full)).collect();
+    let mut worker = MapsWorker::start(doc.maps_view(&sets), jobs, setup);
     let start = Instant::now();
     let mut out = Vec::new();
     while !worker.is_finished() {
@@ -76,7 +78,10 @@ fn composite(doc: &OpenDocument, sets: Vec<usize>) -> Vec<SetMaps> {
 }
 
 fn roughness(maps: &SetMaps) -> u8 {
-    maps.maps.rma[0]
+    match &maps.content {
+        SetContent::Full(m) => m.rma[0],
+        SetContent::Patch(_) => panic!("whole sets were asked for"),
+    }
 }
 
 #[test]
