@@ -6,15 +6,18 @@
 //! the document changes hands in between.
 
 use crate::BrushError;
-use crate::engine::{DabEngine, InputPoint};
+use crate::engine::{DabEngine, InputPoint, SmudgeKernel};
 use crate::symmetry::copies;
 use crate::target::PaintValues;
 use materialcraft::camera::Camera;
 use materialcraft::mesh::{Mesh, Sphere, SurfaceMap};
-use materialcraft::paint::brush::{BrushPreset, RecordedBrush, SizeSpace};
+use materialcraft::paint::brush::{BrushPreset, RecordedBrush, Retouch, SizeSpace};
 use materialcraft::paint::stroke::{self, Stroke, StrokeSample, StrokeTool, Symmetry, ViewKind};
 use materialcraft::projection::ViewProjector;
-use materialcraft::stamp::{ChannelTarget, DabSample, DepthMap, StampContext, StampStroke, StrokeSpace, TexelFactor, TexelIndex, ViewSpace, screen_scale_at};
+use materialcraft::stamp::{
+    BlurKernel, ChannelTarget, DabSample, DepthMap, LocalKernel, StampContext, StampMode, StampStroke, StrokeSpace, TexelFactor, TexelIndex, ViewSpace,
+    screen_scale_at,
+};
 
 /// What a session paints through, lent per call.
 #[derive(Clone, Copy)]
@@ -31,7 +34,8 @@ pub struct SessionScene<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StrokeSetup {
     pub preset: BrushPreset,
-    /// [`StrokeTool::Paint`] or [`StrokeTool::Eraser`].
+    /// [`StrokeTool::Paint`], [`StrokeTool::Eraser`] or a retouch tool ([`StrokeTool::Smudge`], [`StrokeTool::Blur`],
+    /// [`StrokeTool::Clone`]); the targets' mode must match ([`crate::target::mode_for`]).
     pub tool: StrokeTool,
     /// Seed of the brush's random variation.
     pub seed: u32,
@@ -46,6 +50,8 @@ pub struct StrokeSetup {
     pub model: Sphere,
     /// Test occlusion (3D view).
     pub occlusion: bool,
+    /// Smudge and blur strength, clone offset (recorded with the stroke).
+    pub retouch: Retouch,
 }
 
 /// A finished stroke.
@@ -74,6 +80,8 @@ pub struct StrokeSession {
     samples: Vec<StrokeSample>,
     dabs: Vec<DabSample>,
     placed: usize,
+    /// Per target, whether it runs a local kernel (smudge, blur).
+    local: Vec<bool>,
 }
 
 impl StrokeSession {
@@ -88,6 +96,7 @@ impl StrokeSession {
     ) -> Result<StrokeSession, BrushError> {
         // 2D-view strokes are mirrored through the mesh as well (ADR 0008 mc2-q-pt-04c)
         let stamp = StampStroke::with_copies(copies(&setup.symmetry), targets)?;
+        let local = targets.iter().map(|t| t.mode == StampMode::Local).collect();
         let (camera, depth) = match setup.view {
             ViewKind::Mesh => {
                 let projector = scene.projector.ok_or(BrushError::NoView)?;
@@ -109,7 +118,23 @@ impl StrokeSession {
             samples: Vec::new(),
             dabs: Vec::new(),
             placed: 0,
+            local,
         })
+    }
+
+    /// The kernels of a smudge or blur stroke, one per target that runs one, for dabs about `diameter` across.
+    fn kernels(&self, diameter: f32) -> Vec<Option<Box<dyn LocalKernel>>> {
+        let strength = self.setup.retouch.strength;
+        let tool = self.setup.tool;
+        let kernel = || -> Option<Box<dyn LocalKernel>> {
+            match tool {
+                // room for dabs that grow along the stroke (model-sized brushes, pressure)
+                StrokeTool::Smudge => Some(Box::new(SmudgeKernel::new(strength, diameter * 2.0))),
+                StrokeTool::Blur => Some(Box::new(BlurKernel { strength })),
+                _ => None,
+            }
+        };
+        self.local.iter().map(|&l| if l { kernel() } else { None }).collect()
     }
 
     /// The stroke's camera (3D-view strokes).
@@ -131,6 +156,10 @@ impl StrokeSession {
             if self.engine.is_none() {
                 let diameter = self.diameter(scene);
                 self.engine = Some(DabEngine::new(&self.preset, diameter, u64::from(self.setup.seed)));
+                if self.local.iter().any(|l| *l) {
+                    let kernels = self.kernels(diameter);
+                    self.stamp.set_kernels(kernels);
+                }
             }
             self.samples.push(self.sample(scene, p));
             scaled.push(InputPoint { scale, ..*p });
@@ -160,6 +189,7 @@ impl StrokeSession {
                 Some(c) => c.viewport,
                 None => [scene.surface.width() as f32, scene.surface.height() as f32],
             },
+            retouch: self.setup.retouch,
         };
         let stroke = Stroke {
             tool: self.setup.tool,

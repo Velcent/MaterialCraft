@@ -3,10 +3,11 @@
 //! and stroke-record owner that follow from it.
 
 use crate::BrushError;
+use materialcraft::paint::brush::Retouch;
 use materialcraft::paint::edit::ops::{NewEffect, new_effect};
 use materialcraft::paint::edit::{Edit, ImageRef, LayerRef, StackId};
 use materialcraft::paint::effect::EffectKind;
-use materialcraft::paint::stroke::StrokeOwner;
+use materialcraft::paint::stroke::{StrokeOwner, StrokeTool};
 use materialcraft::paint::{Channel, ColorSpace, Layer, LayerImage, LayerKind, TextureSet};
 use materialcraft::stamp::{ChannelTarget, StampMode};
 
@@ -112,11 +113,12 @@ impl PaintTarget {
         }
     }
 
-    /// The resolved images as stamp targets, borrowed from `set` (they must still exist: resolve again after the
-    /// document changed). `erase` lowers coverage instead; on masks it paints black (PT-20).
-    pub fn channel_targets<'a>(&self, set: &'a mut TextureSet, resolved: &Resolved, erase: bool) -> Result<Vec<ChannelTarget<'a>>, BrushError> {
+    /// The resolved images as stamp targets in `mode` ([`mode_for`]), borrowed from `set` (they must still exist:
+    /// resolve again after the document changed). On masks the eraser paints black (PT-20).
+    pub fn channel_targets<'a>(&self, set: &'a mut TextureSet, resolved: &Resolved, mode: StampMode) -> Result<Vec<ChannelTarget<'a>>, BrushError> {
         let layer = set.layer_mut(&self.layer.layer).ok_or(BrushError::NotPaintable("the layer is gone"))?;
-        let mode = if erase && self.part == TargetPart::Content { StampMode::Erase } else { StampMode::Paint };
+        let erase = mode == StampMode::Erase;
+        let mode = if erase && self.part == TargetPart::Mask { StampMode::Paint } else { mode };
         let mut out = Vec::with_capacity(resolved.images.len());
         match (self.part, &mut layer.kind) {
             (TargetPart::Content, LayerKind::Paint(p)) => {
@@ -148,6 +150,17 @@ impl PaintTarget {
             return Err(BrushError::NotPaintable("the layer belongs to another texture set"));
         }
         set.layer(&self.layer.layer).ok_or(BrushError::NotPaintable("the layer is gone"))
+    }
+}
+
+/// How a stroke of `tool` lands in its images: the eraser erases, smudge and blur run local kernels, clone copies
+/// from the recorded offset, everything else paints.
+pub fn mode_for(tool: StrokeTool, retouch: &Retouch) -> StampMode {
+    match tool {
+        StrokeTool::Eraser => StampMode::Erase,
+        StrokeTool::Smudge | StrokeTool::Blur => StampMode::Local,
+        StrokeTool::Clone => StampMode::Clone { offset: retouch.clone_offset },
+        StrokeTool::Paint | StrokeTool::Projection => StampMode::Paint,
     }
 }
 

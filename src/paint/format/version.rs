@@ -14,7 +14,7 @@ pub struct Version {
 
 impl Version {
     /// The version this code writes ([`super::FORMAT_VERSION`]).
-    pub const CURRENT: Version = Version { major: 0, minor: 10 };
+    pub const CURRENT: Version = Version { major: 0, minor: 11 };
 
     /// Parses `major.minor` (decimal, no sign, no leading zeros except `0` itself).
     pub fn parse(text: &str) -> Option<Version> {
@@ -56,7 +56,7 @@ mod tests {
             assert_eq!(Version::parse(bad), None, "{bad}");
         }
         assert!(Version::check_readable("0.1").is_ok());
-        assert!(Version::check_readable("0.11").is_ok(), "newer minor is read");
+        assert!(Version::check_readable("0.12").is_ok(), "newer minor is read");
         assert!(matches!(Version::check_readable("1.0"), Err(FormatError::NewerVersion { .. })));
         assert!(matches!(Version::check_readable("x"), Err(FormatError::Manifest { .. })));
     }

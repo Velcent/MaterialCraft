@@ -325,5 +325,6 @@ fn painted(strokes: Option<materialcraft::paint::stroke::StrokeData>) -> PaintCo
     PaintContent {
         images: Vec::new(),
         strokes,
+        see_through: false,
     }
 }

@@ -54,6 +54,26 @@ impl Compositor<'_> {
         acc
     }
 
+    /// The composite of `channel` below layer `id` of the set (stored encoding, alpha = coverage) as an image in
+    /// `format`, every tile computed (see-through content, PT-25). `None` if the set has no such layer or the
+    /// format can't make an image of the set's size.
+    pub fn below_image(&self, id: &str, channel: Channel, format: crate::paint::PixelFormat) -> Option<crate::paint::TiledImage> {
+        let layer = self.set.layer(id)?;
+        let (w, h) = self.set.resolution;
+        let mut img = crate::paint::TiledImage::new(w, h, format).ok()?;
+        let all = img.all_tiles();
+        let space = self.working_space(channel);
+        img.update_tiles(&all, |r, px| {
+            let pass = Pass { channel, r, space: SpaceConverter::new(space) };
+            let mut acc = self.stack_below(layer, &pass);
+            pass.space.to_stored_all(&mut acc);
+            for (p, a) in px.iter_mut().zip(acc) {
+                *p = a;
+            }
+        });
+        Some(img)
+    }
+
     /// Applies `layers` in order until `stop`; true if `stop` was reached.
     fn apply_until(&self, layers: &[Layer], stop: &Layer, pass: &Pass, acc: &mut [[f32; 4]], depth: usize, s: &mut Scratch) -> bool {
         for l in layers {

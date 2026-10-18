@@ -5,15 +5,24 @@
 //! The document is lent in pieces so the caller can hold a view of the mesh while the texture sets are painted:
 //! [`DocumentStroke::prepare`] (whole document) → [`Prepared::start`], [`DocumentStroke::add`],
 //! [`DocumentStroke::finish`] (the texture set) → [`Ended::record`] (whole document, returns the inverses).
+//!
+//! On see-through content ([`Prepared::see_through`]) the stroke starts from the composite below where the layer has
+//! no pixels yet, and the tiles it did not touch are given back before the step is recorded, so the step holds
+//! only what the stroke changed.
 
 use crate::BrushError;
 use crate::engine::InputPoint;
 use crate::session::{Finished, SessionScene, StrokeSession, StrokeSetup};
-use crate::target::{PaintTarget, Resolved};
+use crate::target::{PaintTarget, Resolved, TargetPart, mode_for};
 use materialcraft::mesh::Mesh;
 use materialcraft::paint::edit::{Edit, EditError, TileCapture};
-use materialcraft::paint::stroke::{StrokeOwner, StrokeTool};
-use materialcraft::paint::{Document, TextureSet};
+use materialcraft::paint::see_through::{fill_from, trim_to};
+use materialcraft::paint::stroke::StrokeOwner;
+use materialcraft::paint::{Channel, Document, LayerKind, TextureSet, TiledImage};
+use materialcraft::stamp::StampMode;
+
+/// The composite below a see-through layer, per channel (see [`materialcraft::paint::see_through`]).
+pub type Base = Vec<(Channel, TiledImage)>;
 
 /// A target made ready for painting: preparation applied, images resolved, old tiles held.
 pub struct Prepared {
@@ -21,15 +30,17 @@ pub struct Prepared {
     resolved: Resolved,
     inverses: Vec<Edit>,
     captures: Vec<TileCapture>,
+    base: Option<Base>,
 }
 
 /// A stroke in progress on a document.
 pub struct DocumentStroke {
     target: PaintTarget,
     resolved: Resolved,
-    erase: bool,
+    mode: StampMode,
     inverses: Vec<Edit>,
     captures: Vec<TileCapture>,
+    base: Option<Base>,
     session: StrokeSession,
 }
 
@@ -39,6 +50,7 @@ pub struct Ended {
     owner: StrokeOwner,
     inverses: Vec<Edit>,
     captures: Vec<TileCapture>,
+    base: Option<Base>,
     finished: Option<Finished>,
 }
 
@@ -52,7 +64,7 @@ impl DocumentStroke {
         }
         let ready = Self::resolve(doc, &target, values);
         match ready {
-            Ok((resolved, captures)) => Ok(Prepared { target, resolved, inverses, captures }),
+            Ok((resolved, captures)) => Ok(Prepared { target, resolved, inverses, captures, base: None }),
             Err(e) => {
                 for inv in inverses.into_iter().rev() {
                     // putting back what was just done; it applied a moment ago, so it applies now
@@ -77,21 +89,21 @@ impl DocumentStroke {
     /// Gives up the stroke without painting more; [`Ended::record`] still records what was painted (without a
     /// stroke record entry).
     pub fn abandon(self) -> Ended {
-        let DocumentStroke { target, resolved, inverses, captures, .. } = self;
-        Ended { owner: resolved.owner, target, inverses, captures, finished: None }
+        let DocumentStroke { target, resolved, inverses, captures, base, .. } = self;
+        Ended { owner: resolved.owner, target, inverses, captures, base, finished: None }
     }
 
     /// Paints `points` (see [`StrokeSession::add`]); returns the changed tiles of the set's images.
     pub fn add(&mut self, scene: &SessionScene, points: &[InputPoint], set: &mut TextureSet) -> Result<Vec<(u32, u32)>, BrushError> {
-        let mut targets = self.target.channel_targets(set, &self.resolved, self.erase)?;
+        let mut targets = self.target.channel_targets(set, &self.resolved, self.mode)?;
         self.session.add(scene, points, &mut targets)
     }
 
     /// Paints the stroke's last dabs. The result's [`Ended::record`] must follow, also after an error here (the
     /// pixels painted so far stay and are recorded).
     pub fn finish(self, scene: &SessionScene, set: &mut TextureSet) -> (Ended, Result<Vec<(u32, u32)>, BrushError>) {
-        let DocumentStroke { target, resolved, erase, inverses, captures, session } = self;
-        let result = target.channel_targets(set, &resolved, erase).and_then(|mut t| session.finish(scene, &mut t));
+        let DocumentStroke { target, resolved, mode, inverses, captures, base, session } = self;
+        let result = target.channel_targets(set, &resolved, mode).and_then(|mut t| session.finish(scene, &mut t));
         let (finished, out) = match result {
             Ok(f) => {
                 let touched = f.touched.clone();
@@ -99,7 +111,7 @@ impl DocumentStroke {
             }
             Err(e) => (None, Err(e)),
         };
-        (Ended { owner: resolved.owner, target, inverses, captures, finished }, out)
+        (Ended { owner: resolved.owner, target, inverses, captures, base, finished }, out)
     }
 
     /// The stroke's camera (3D-view strokes).
@@ -118,18 +130,35 @@ impl Prepared {
         shown: &dyn Fn(usize) -> bool,
         set: &mut TextureSet,
     ) -> Result<DocumentStroke, Box<(Ended, BrushError)>> {
-        let erase = setup.tool == StrokeTool::Eraser;
-        let Prepared { target, resolved, inverses, captures } = self;
-        let session = target.channel_targets(set, &resolved, erase).and_then(|t| StrokeSession::begin(setup, scene, mesh, shown, &t));
+        let mode = mode_for(setup.tool, &setup.retouch);
+        let Prepared { target, resolved, inverses, captures, base } = self;
+        let session = target.channel_targets(set, &resolved, mode).and_then(|t| StrokeSession::begin(setup, scene, mesh, shown, &t));
         match session {
-            Ok(session) => Ok(DocumentStroke { target, resolved, erase, inverses, captures, session }),
-            Err(e) => Err(Box::new((Ended { owner: resolved.owner, target, inverses, captures, finished: None }, e))),
+            Ok(session) => Ok(DocumentStroke { target, resolved, mode, inverses, captures, base, session }),
+            Err(e) => Err(Box::new((Ended { owner: resolved.owner, target, inverses, captures, base, finished: None }, e))),
         }
     }
 
     /// What the stroke resolved to (images painted, channels the layer lacks).
     pub fn resolved(&self) -> &Resolved {
         &self.resolved
+    }
+
+    /// The target is see-through content and `base` the composite below it
+    /// ([`materialcraft::paint::see_through::base_images`], taken after the layer was brought up to date): the
+    /// layer's images take the base's tiles where they have none, so the stroke works on the composite below.
+    pub fn see_through(&mut self, set: &mut TextureSet, base: Base) {
+        if self.target.part != TargetPart::Content {
+            return;
+        }
+        if let Some(LayerKind::Paint(p)) = set.layer_mut(&self.target.layer.layer).map(|l| &mut l.kind) {
+            for (c, img) in p.images.iter_mut() {
+                if let Some((_, b)) = base.iter().find(|(bc, _)| bc == c) {
+                    fill_from(img, b);
+                }
+            }
+        }
+        self.base = Some(base);
     }
 }
 
@@ -138,7 +167,10 @@ impl Ended {
     /// for one history step. A record that can't take the stroke (unreadable) is left as it is; the error comes
     /// back with the inverses so the pixels are still undoable.
     pub fn record(self, doc: &mut Document) -> (Vec<Edit>, Option<EditError>) {
-        let Ended { target, owner, mut inverses, captures, finished } = self;
+        let Ended { target, owner, mut inverses, captures, base, finished } = self;
+        if let Some(base) = &base {
+            give_back_untouched(doc, &target, base);
+        }
         let mut problem = None;
         for c in captures {
             match c.finish(doc) {
@@ -154,5 +186,16 @@ impl Ended {
             }
         }
         (inverses, problem)
+    }
+}
+
+/// Frees the see-through layer's tiles that still hold the base (no stroke wrote them).
+fn give_back_untouched(doc: &mut Document, target: &PaintTarget, base: &Base) {
+    let Some(set) = doc.texture_sets.iter_mut().find(|s| s.id == target.layer.set) else { return };
+    let Some(LayerKind::Paint(p)) = set.layer_mut(&target.layer.layer).map(|l| &mut l.kind) else { return };
+    for (c, img) in p.images.iter_mut() {
+        if let Some((_, b)) = base.iter().find(|(bc, _)| bc == c) {
+            trim_to(img, b);
+        }
     }
 }

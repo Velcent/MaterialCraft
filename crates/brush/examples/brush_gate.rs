@@ -98,6 +98,7 @@ fn timing(mesh: &Mesh, map: &SurfaceMap, index: &TexelIndex, view: &ViewScene, c
         values: PaintValues { channels: Vec::new(), mask: 1.0 },
         model: mesh.bounding_sphere().unwrap_or_else(|| fail("empty mesh")),
         occlusion: true,
+        retouch: Default::default(),
     };
     let scene = SessionScene { surface: map, index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
     let mut img = image(map.width() as u32);
@@ -236,6 +237,7 @@ fn seams(mesh: &Mesh, map: &SurfaceMap, index: &TexelIndex, view: &ViewScene, ma
             values: PaintValues { channels: Vec::new(), mask: 1.0 },
             model,
             occlusion: true,
+            retouch: Default::default(),
         };
         let scene = SessionScene { surface: map, index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
         let mut img = TiledImage::new(map.width() as u32, map.height() as u32, PixelFormat::from_id("graya32f").unwrap_or_else(|| fail("format")))

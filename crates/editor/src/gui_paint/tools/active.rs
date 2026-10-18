@@ -82,6 +82,7 @@ impl ActiveStroke {
             values: start.values.clone(),
             model,
             occlusion: start.occlusion,
+            retouch: Default::default(),
         };
         let prepared = DocumentStroke::prepare(doc.doc_for_strokes(), start.target, &start.values)?;
         let result = {

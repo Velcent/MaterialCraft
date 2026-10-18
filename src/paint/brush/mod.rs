@@ -16,4 +16,4 @@ mod tests;
 
 pub use json::PRESET_VERSION;
 pub use preset::{BrushPreset, Jitter, Placement, PressureUse, SizeSpace, Tip};
-pub use recorded::{REFERENCE_PREFIX, RecordedBrush};
+pub use recorded::{REFERENCE_PREFIX, RecordedBrush, Retouch};

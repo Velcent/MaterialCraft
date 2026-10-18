@@ -1444,6 +1444,7 @@ name = "materialcraft-brush"
 version = "0.1.0"
 dependencies = [
  "materialcraft",
+ "photocraft-geom",
  "photocraft-paint",
 ]
 

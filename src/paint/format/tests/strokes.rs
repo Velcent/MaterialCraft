@@ -101,7 +101,7 @@ fn files_without_records_load_as_before() {
         if name != "document.json" {
             return Some(data);
         }
-        Some(String::from_utf8(data).unwrap().replace("\"format_version\": \"0.10\"", "\"format_version\": \"0.3\"").into_bytes())
+        Some(String::from_utf8(data).unwrap().replace("\"format_version\": \"0.11\"", "\"format_version\": \"0.3\"").into_bytes())
     });
     assert_eq!(manifest(&old)["format_version"].as_str(), Some("0.3"));
     let back = from_bytes(&old).unwrap();
@@ -172,4 +172,23 @@ fn empty_records_are_kept_as_records() {
     *doc.texture_sets[0].layer_mut("p3").unwrap().strokes_mut(StrokeOwner::Paint).unwrap() = Some(StrokeRecord::default().into());
     let back = from_bytes(&to_bytes(&doc)).unwrap();
     assert_eq!(back, doc);
+}
+
+/// Format 0.11: see-through paint content keeps its flag, and clone and blur strokes keep their tools.
+#[test]
+fn see_through_content_and_retouch_tools_round_trip() {
+    let mut doc = full_document();
+    let layer = doc.texture_sets[0].layer_mut("p3").unwrap();
+    let crate::paint::LayerKind::Paint(p) = &mut layer.kind else { panic!("p3 is a paint layer") };
+    p.see_through = true;
+    let mut record = sample_record(5);
+    record.strokes[0].tool = stroke::StrokeTool::Clone;
+    record.strokes[1].tool = stroke::StrokeTool::Blur;
+    p.strokes = Some(record.into());
+    let bytes = to_bytes(&doc);
+    assert_eq!(layer_json(&manifest(&bytes), 0, "p3")["see_through"].as_bool(), Some(true));
+    assert!(layer_json(&manifest(&bytes), 0, "p1").get("see_through").is_none(), "written only when set");
+    let back = from_bytes(&bytes).unwrap();
+    assert_eq!(back, doc);
+    assert_eq!(to_bytes(&back), bytes);
 }

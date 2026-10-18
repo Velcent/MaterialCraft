@@ -10,9 +10,11 @@ publish = false
 [dependencies]
 materialcraft = { path = "../.." }
 # PhotoCraft's brush engine, pinned (ADR 0007: depend at a pinned revision; nothing goes upstream). Only
-# `engine::photocraft` (the dab engine), `engine::photocraft_tips` (procedural tips) and `engine::photocraft_curve`
-# (the response curve) may name it.
+# `engine::photocraft` (the dab engine), `engine::photocraft_tips` (procedural tips), `engine::photocraft_curve`
+# (the response curve) and `engine::photocraft_smudge` (the smudge kernel) may name it; the last also names its
+# geometry types (`photocraft-geom`, same revision).
 photocraft-paint = { git = "https://github.com/storytold/photocraft", rev = "5f65579ecb44047c2a619036c18ff273202e1389" }
+photocraft-geom = { git = "https://github.com/storytold/photocraft", rev = "5f65579ecb44047c2a619036c18ff273202e1389" }
 
 [lints]
 workspace = true

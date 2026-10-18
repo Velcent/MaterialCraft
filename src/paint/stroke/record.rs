@@ -71,10 +71,14 @@ pub enum StrokeTool {
     Smudge,
     /// Paints through a projected image or material (a stencil/projection tool).
     Projection,
+    /// Copies paint from a source point at an offset (PT-27).
+    Clone,
+    /// Softens what is painted under the stroke (PT-26).
+    Blur,
 }
 
 impl StrokeTool {
-    pub const ALL: [StrokeTool; 4] = [StrokeTool::Paint, StrokeTool::Eraser, StrokeTool::Smudge, StrokeTool::Projection];
+    pub const ALL: [StrokeTool; 6] = [StrokeTool::Paint, StrokeTool::Eraser, StrokeTool::Smudge, StrokeTool::Projection, StrokeTool::Clone, StrokeTool::Blur];
 
     pub fn id(self) -> &'static str {
         match self {
@@ -82,6 +86,8 @@ impl StrokeTool {
             StrokeTool::Eraser => "eraser",
             StrokeTool::Smudge => "smudge",
             StrokeTool::Projection => "projection",
+            StrokeTool::Clone => "clone",
+            StrokeTool::Blur => "blur",
         }
     }
 }

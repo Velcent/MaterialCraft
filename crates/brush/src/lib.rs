@@ -3,15 +3,20 @@
 //!
 //! - [`engine`]: [`DabEngine`] turns input points into dabs. It is PhotoCraft's brush engine (`photocraft-paint`
 //!   at a pinned revision) behind one adapter file, `engine::photocraft`, the only code naming it (ADR 0007)
-//!   besides `engine::photocraft_tips`, which hands out PhotoCraft's procedural tips ([`procedural_tip`]), and
-//!   `engine::photocraft_curve`, its response curve ([`ResponseCurve`], the pen pressure curve).
+//!   besides `engine::photocraft_tips`, which hands out PhotoCraft's procedural tips ([`procedural_tip`]),
+//!   `engine::photocraft_curve`, its response curve ([`ResponseCurve`], the pen pressure curve), and
+//!   `engine::photocraft_smudge`, its smudge as the stamp stage's local kernel ([`SmudgeKernel`], PT-23).
 //!   Model-sized brushes get a per-point dab scale there (ADR 0006 Q-PT-12).
 //! - [`session`]: [`StrokeSession`] drives one stroke through the core's stamp stage and records its samples.
-//! - [`target`]: [`PaintTarget`], what a tool paints (a paint layer's channels or a mask, ADR 0008) and with which
+//! - [`target`]: [`PaintTarget`], what a tool paints (a paint layer's channels or a mask, ADR 0008), [`mode_for`] how
+//!   each tool lands in it (paint, erase, clone, smudge and blur kernels), and with which
 //!   values.
+//! - [`clone_source`]: [`CloneSource`], the clone tool's source and its aligned or fixed offset (PT-27, PT-28).
 //! - [`document`]: [`DocumentStroke`], a stroke into a document with the inverses for one undo step.
 //! - [`quick_mask`]: [`QuickMask`], the session mask every stroke honours, and [`QuickMaskStroke`] to paint it.
 //! - [`replay`]: painting a recorded stroke again, bit for bit.
+//! - [`see_through`]: see-through layers (PT-25): their strokes painted again on the composite below whenever it
+//!   changes ([`SeeThroughCache`]).
 //! - [`stroke`]: input transforms in front of a session: [`LazyMouse`], straight lines ([`LineAnchor`]).
 //! - [`symmetry`]: symmetric copies in a stroke record's form, built the same way live and on replay.
 //!
@@ -19,22 +24,26 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod clone_source;
 pub mod document;
 pub mod engine;
 pub mod quick_mask;
 pub mod replay;
+pub mod see_through;
 pub mod session;
 pub mod stroke;
 pub mod symmetry;
 pub mod target;
 
-pub use document::{DocumentStroke, Ended, Prepared};
-pub use engine::{DabEngine, InputPoint, PROCEDURAL_TIPS, ResponseCurve, TipInfo, procedural_tip};
+pub use clone_source::{CloneSource, SourceMode, texel_under};
+pub use document::{Base, DocumentStroke, Ended, Prepared};
+pub use engine::{DabEngine, InputPoint, PROCEDURAL_TIPS, ResponseCurve, SmudgeKernel, TipInfo, procedural_tip};
 pub use quick_mask::{QuickMask, QuickMaskState, QuickMaskStroke};
 pub use replay::{ReplayScene, recorded_brush, recorded_values, replay};
+pub use see_through::{BelowSource, Refreshed, SeeThroughCache, repaint};
 pub use session::{Finished, SessionScene, StrokeSession, StrokeSetup};
 pub use stroke::{LazyMouse, LineAnchor};
-pub use target::{PaintTarget, PaintValues, Resolved, TargetPart};
+pub use target::{PaintTarget, PaintValues, Resolved, TargetPart, mode_for};
 
 use materialcraft::paint::edit::EditError;
 use materialcraft::stamp::StampError;

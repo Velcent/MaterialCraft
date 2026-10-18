@@ -31,12 +31,16 @@ pub struct PaintContent {
     pub images: Vec<(Channel, TiledImage)>,
     /// The strokes the pixels were painted with, if recorded (see [`super::stroke`]).
     pub strokes: Option<StrokeData>,
+    /// See-through content (ADR 0008 mc2-q-pt-03c, PT-25, PT-29): the strokes work on the composite of the layers
+    /// below, and the images are what the recorded strokes made of it; they are painted again from the record
+    /// whenever the layers below change (see [`super::see_through`]). Only the tiles the strokes touched hold pixels.
+    pub see_through: bool,
 }
 
 impl PaintContent {
     /// Pixels without a stroke record.
     pub fn from_images(images: Vec<(Channel, TiledImage)>) -> PaintContent {
-        PaintContent { images, strokes: None }
+        PaintContent { images, strokes: None, see_through: false }
     }
 
     pub fn image(&self, channel: Channel) -> Option<&TiledImage> {

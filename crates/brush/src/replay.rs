@@ -32,7 +32,8 @@ pub fn recorded_values(brush: &RecordedBrush) -> PaintValues {
     PaintValues { channels: brush.values.iter().map(|(c, v)| (*c, *v, true)).collect(), mask: brush.mask }
 }
 
-/// Paints `stroke` again into `targets` (built with [`recorded_values`] and the stroke's tool).
+/// Paints `stroke` again into `targets` (built with [`recorded_values`] and [`crate::target::mode_for`] of the stroke's
+/// tool and recorded retouch settings).
 pub fn replay(stroke: &Stroke, scene: &ReplayScene, targets: &mut [ChannelTarget]) -> Result<Finished, BrushError> {
     let brush = recorded_brush(stroke)?;
     let model = scene.mesh.bounding_sphere().unwrap_or(Sphere { centre: [0.0; 3], radius: 1.0 });
@@ -45,6 +46,7 @@ pub fn replay(stroke: &Stroke, scene: &ReplayScene, targets: &mut [ChannelTarget
         values: recorded_values(&brush),
         model,
         occlusion: true,
+        retouch: brush.retouch,
     };
     let (w, h) = (scene.surface.width() as f32, scene.surface.height() as f32);
     let camera = stroke.camera.on_viewport(brush.viewport);

@@ -1,6 +1,7 @@
 //! Layers: `{"id", "name", "kind", "visible", "opacity", "blend", "mask", "geometry_mask", "asset", …}` plus `images`
 //! and `strokes` (paint), `fill` (fill) or `children` (group), and `effects` (the content effects, since 0.3).
-//! `asset` (since 0.6) names the asset a smart-material folder was made from.
+//! `asset` (since 0.6) names the asset a smart-material folder was made from. `see_through: true` (since 0.11, written
+//! only when set) marks see-through paint content, whose images are its strokes replayed on the composite below.
 
 use super::extras::loc;
 use super::fields::{Obj, as_f32, num, num4};
@@ -66,6 +67,9 @@ fn write(l: &Layer, set: &SetScope, ctx: &WriteCtx) -> Value {
             }
             v.insert("images", images);
             strokes::write(&StrokeSlot { set: set.index, layer: l.id.clone(), owner: StrokeOwner::Paint }, ctx, &mut v);
+            if p.see_through {
+                v.insert("see_through", true);
+            }
         }
         LayerKind::Fill(f) => {
             let at = FillAt { set, layer: &l.id, effect: None, here: format!("{here}/fill") };
@@ -169,6 +173,7 @@ fn read(v: &Value, at: String, set: &SetScope, ctx: &mut ReadCtx) -> Result<Laye
                 content.images.push((c, img));
             }
             strokes::read(&mut o, StrokeSlot { set: set.index, layer: id.clone(), owner: StrokeOwner::Paint }, ctx)?;
+            content.see_through = o.bool_or("see_through", false)?;
             LayerKind::Paint(content)
         }
         "fill" => {

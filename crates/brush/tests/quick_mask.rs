@@ -38,6 +38,7 @@ fn setup(doc: &Document, size: f32) -> StrokeSetup {
         values: PaintValues { channels: vec![(Channel::Roughness, [1.0; 4], true)], mask: 1.0 },
         model: doc.mesh.bounding_sphere().unwrap(),
         occlusion: true,
+        retouch: Default::default(),
     }
 }
 

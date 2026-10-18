@@ -90,6 +90,7 @@ fn create_label(what: ops::NewLayer) -> &'static str {
         ops::NewLayer::Paint => "New paint layer",
         ops::NewLayer::Fill => "New fill layer",
         ops::NewLayer::Folder => "New folder",
+        ops::NewLayer::SeeThrough => "New see-through layer",
     }
 }
 

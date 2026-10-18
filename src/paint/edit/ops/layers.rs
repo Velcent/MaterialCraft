@@ -16,12 +16,14 @@ pub enum NewLayer {
     Fill,
     /// An empty folder.
     Folder,
+    /// An empty see-through paint layer (PT-25): its strokes work on the composite below it.
+    SeeThrough,
 }
 
 impl NewLayer {
     fn id_base(self) -> &'static str {
         match self {
-            NewLayer::Paint => "layer",
+            NewLayer::Paint | NewLayer::SeeThrough => "layer",
             NewLayer::Fill => "fill",
             NewLayer::Folder => "folder",
         }
@@ -32,6 +34,7 @@ impl NewLayer {
             NewLayer::Paint => "Layer",
             NewLayer::Fill => "Fill layer",
             NewLayer::Folder => "Folder",
+            NewLayer::SeeThrough => "See-through layer",
         }
     }
 
@@ -39,9 +42,9 @@ impl NewLayer {
     fn build(self, set: &TextureSet, id: String) -> Layer {
         let number = id.trim_start_matches(|c: char| !c.is_ascii_digit()).to_string();
         let kind = match self {
-            NewLayer::Paint => {
+            NewLayer::Paint | NewLayer::SeeThrough => {
                 let images = set.channels.iter().filter_map(|spec| Some((spec.channel, empty_image(set, spec.layer_format())?))).collect();
-                LayerKind::Paint(PaintContent::from_images(images))
+                LayerKind::Paint(PaintContent { see_through: self == NewLayer::SeeThrough, ..PaintContent::from_images(images) })
             }
             NewLayer::Fill => LayerKind::Fill(Fill::uniform(channels(set).into_iter().map(|c| (c, c.default_value())).collect())),
             NewLayer::Folder => LayerKind::Group(Vec::new()),

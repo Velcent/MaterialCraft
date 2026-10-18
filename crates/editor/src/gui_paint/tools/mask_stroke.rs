@@ -53,6 +53,7 @@ impl ActiveMaskStroke {
             values: PaintValues { channels: Vec::new(), mask: 1.0 },
             model: d.mesh.bounding_sphere().unwrap_or(Sphere { centre: [0.0; 3], radius: 1.0 }),
             occlusion: start.occlusion,
+            retouch: Default::default(),
         };
         let projector = picking.projector_on(&d.mesh, start.camera).ok_or(BrushError::NoView)?;
         let scene = SessionScene { surface: &start.surface.map, index: &start.surface.index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };

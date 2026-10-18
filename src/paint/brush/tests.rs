@@ -57,10 +57,14 @@ fn recorded_brushes_round_trip_through_their_reference() {
         values: vec![(Channel::BaseColor, [0.1, 0.2, 0.3, 1.0]), (Channel::User(3), [0.5; 4])],
         mask: 0.25,
         viewport: [1600.0, 900.0],
+        retouch: Retouch { strength: 0.3, clone_offset: [-40, 7] },
     };
     let reference = r.to_reference();
     assert!(reference.starts_with(REFERENCE_PREFIX));
     assert_eq!(RecordedBrush::from_reference(&reference), Some(r.clone()));
+    let plain = RecordedBrush { retouch: Retouch::default(), ..r.clone() };
+    assert!(!plain.to_reference().contains("retouch"), "default retouch settings are not written");
+    assert_eq!(RecordedBrush::from_reference(&plain.to_reference()), Some(plain));
     assert_eq!(r.value(Channel::User(3)), Some([0.5; 4]));
     assert_eq!(r.value(Channel::Height), None);
     assert!(RecordedBrush::from_reference("substance:DataBrush/12").is_none());

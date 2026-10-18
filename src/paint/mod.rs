@@ -11,6 +11,7 @@
 //! - [`edit`]: [`edit::Edit`], every document change with its inverse (for the GUI and the history).
 //! - [`bake_config`]: per texture set bake settings with link, copy and check commands.
 //! - [`stroke`]: stroke records, the strokes behind painted pixels; [`brush`]: brush presets (our format).
+//! - [`see_through`]: see-through paint content, whose strokes work on the composite below it.
 //! - [`stack`]: [`Compositor`], layer stack → channel; [`layer_preview`]: layer thumbnails on a reduced grid.
 //! - [`probe`]: [`probe::TexelProbe`], the composited channel values under a point of the mesh (eyedropper, material picker).
 //! - [`diag_entries`]: import summaries and compositing warnings as session log entries.
@@ -42,6 +43,7 @@ pub(crate) mod par;
 pub mod pixel;
 pub mod probe;
 pub mod report;
+pub mod see_through;
 pub mod stack;
 pub mod stroke;
 pub mod texture_set;

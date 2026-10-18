@@ -2,7 +2,8 @@
 //!
 //! ```text
 //! "MCSTROKE"  u16 major (1)  u16 minor (0, 1 or 2)  u32 stroke count
-//! per stroke: u8 tool  u8 view  u16 preset length  preset (UTF-8)
+//! per stroke: u8 tool (0 paint, 1 eraser, 2 smudge, 3 projection, 4 clone, 5 blur)  u8 view  u16 preset length
+//!             preset (UTF-8)
 //!             u32 seed  u32 symmetry copies  [1.1+: u8 symmetry flips, bit 0 = U, bit 1 = V]
 //!             f32×16 symmetry transform  f32×16 view  f32×16 projection
 //!             u32 sample count, then six columns of that many f32: x, y, pressure, tilt x, tilt y, time
@@ -16,6 +17,9 @@
 //! Minor 2 adds the pen's barrel rotation (tablet input, roadmap step 35) and keeps 1.1's flips byte. It is written
 //! only when a sample has a rotation (any bits set), so mouse and imported strokes keep the older layouts; a 1.2
 //! entry without any rotation is refused for the same reason.
+//!
+//! Tool codes 4 (clone) and 5 (blur) came with document format 0.11 (roadmap step 36); an older reader keeps such an
+//! entry as unreadable bytes.
 //!
 //! Decoding is strict (known codes, valid UTF-8, no bytes left over), so every readable entry encodes back to
 //! the same bytes. Floats keep their bits.
@@ -44,6 +48,8 @@ fn tool_code(t: StrokeTool) -> u8 {
         StrokeTool::Eraser => 1,
         StrokeTool::Smudge => 2,
         StrokeTool::Projection => 3,
+        StrokeTool::Clone => 4,
+        StrokeTool::Blur => 5,
     }
 }
 
@@ -184,6 +190,8 @@ impl<'a> Reader<'a> {
             1 => StrokeTool::Eraser,
             2 => StrokeTool::Smudge,
             3 => StrokeTool::Projection,
+            4 => StrokeTool::Clone,
+            5 => StrokeTool::Blur,
             other => return Err(format!("unknown tool code {other}")),
         };
         let view = match self.u8()? {

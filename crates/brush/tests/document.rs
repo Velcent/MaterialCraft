@@ -52,6 +52,7 @@ fn setup(doc: &Document, tool: StrokeTool) -> StrokeSetup {
         values: values(),
         model: doc.mesh.bounding_sphere().unwrap(),
         occlusion: true,
+        retouch: Default::default(),
     }
 }
 
@@ -131,7 +132,7 @@ fn a_stroke_is_one_undo_step_with_a_record_and_replays_bit_for_bit() {
         let mut d = clean.clone();
         let set = &mut d.texture_sets[0];
         let resolved = target.resolve(set, &materialcraft_brush::recorded_values(&materialcraft_brush::recorded_brush(stroke).unwrap())).unwrap();
-        let mut targets = target.channel_targets(set, &resolved, false).unwrap();
+        let mut targets = target.channel_targets(set, &resolved, materialcraft::stamp::StampMode::Paint).unwrap();
         let scene = ReplayScene { mesh: &clean.mesh, view: &view, surface: &map, index: &index, factors: &[] };
         replay(stroke, &scene, &mut targets).unwrap();
         drop(targets);
@@ -201,7 +202,7 @@ fn symmetric_strokes_record_their_symmetry_and_replay_bit_for_bit() {
             let set = &mut d.texture_sets[0];
             let stroke = &record.strokes[0];
             let resolved = target.resolve(set, &materialcraft_brush::recorded_values(&materialcraft_brush::recorded_brush(stroke).unwrap())).unwrap();
-            let mut targets = target.channel_targets(set, &resolved, false).unwrap();
+            let mut targets = target.channel_targets(set, &resolved, materialcraft::stamp::StampMode::Paint).unwrap();
             let scene = ReplayScene { mesh: &clean.mesh, view: &view, surface: &map, index: &index, factors: &[] };
             replay(stroke, &scene, &mut targets).unwrap();
             drop(targets);
