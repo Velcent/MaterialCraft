@@ -1,6 +1,6 @@
 //! The brush tools' visual aids over the 3D view: the lazy mouse's ring and string (PT-35), the straight line's
 //! dotted guide (PT-31), symmetry's plane or axis, where it meets the mesh, and an extra cursor at each symmetric
-//! place (PT-39), and the clone source (PT-27). [`Overlay`] is plain view-space geometry built from the tools' state;
+//! place (PT-39), the clone source (PT-27) and the brush cursor ([`super::brush_cursor`]). [`Overlay`] is plain view-space geometry built from the tools' state;
 //! drawing it is a few egui shapes.
 
 use super::super::document_state::OpenDocument;
@@ -8,6 +8,7 @@ use super::super::shell::tools::Tool;
 use super::super::view_pick::ViewPicking;
 use super::super::viewport::Hover;
 use super::Painting;
+use super::brush_cursor::{CursorSize, add_cursor};
 use eframe::egui::{self, Color32, Pos2, Stroke};
 use materialcraft::camera::Camera;
 use materialcraft::mesh::{Mesh, Vec3};
@@ -30,6 +31,8 @@ pub enum Aid {
     Plane,
     Meeting,
     Cursor,
+    /// The brush itself under the pointer.
+    Brush,
     /// The clone source (PT-27).
     Source,
 }
@@ -42,6 +45,7 @@ impl Aid {
             Aid::Plane => Color32::from_rgba_unmultiplied(110, 190, 255, 170),
             Aid::Meeting => Color32::from_rgb(255, 205, 90),
             Aid::Cursor => Color32::from_gray(200),
+            Aid::Brush => Color32::from_gray(240),
             Aid::Source => Color32::from_rgb(120, 230, 140),
         }
     }
@@ -142,6 +146,12 @@ impl Painting {
         {
             let to = if snap { snap_angle(from, h.pos, SNAP_DEGREES) } else { h.pos };
             out.lines.push((from, to, Aid::Line, true));
+        }
+        // the brush itself: its footprint on the surface under the pointer
+        if let Some(h) = hover {
+            let model_radius = mesh.bounding_sphere().map_or(1.0, |s| s.radius);
+            let size = CursorSize { space: preset.size_space, size: preset.size, model_radius };
+            add_cursor(&mut out, view, view.and_then(|v| v.pick(h.pos)), h.pos, size);
         }
         let spec = helpers.symmetry.spec();
         let (Some(view), true) = (view, spec.is_active()) else { return out };

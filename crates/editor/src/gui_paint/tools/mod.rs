@@ -29,6 +29,7 @@
 //! by the screen, which owns the composite's fill context.
 
 mod active;
+mod brush_cursor;
 pub mod brush_state;
 mod events;
 pub mod helpers;
