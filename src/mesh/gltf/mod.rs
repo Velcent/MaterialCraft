@@ -11,10 +11,12 @@
 //! into the vertices), several primitives per mesh (part `name.i`), triangle strips and fans,
 //! interleaved and normalised-integer accessors. Rejected with [`GltfError::Unsupported`]:
 //! external or data-URI buffers, sparse accessors, required extensions (Draco, meshopt, …),
-//! point/line primitives other than our marker. Skins, morph targets, colours and cameras are
-//! ignored. Primitives without a material get a slot named `default`.
+//! point/line primitives other than our marker. Skins, morph targets and colours are ignored;
+//! cameras are read separately ([`read_cameras`], [`Mesh::to_glb_with_cameras`]). Primitives
+//! without a material get a slot named `default`.
 
 mod accessor;
+mod cameras;
 mod error;
 mod glb;
 mod read;
@@ -22,11 +24,14 @@ mod transform;
 mod write;
 
 #[cfg(test)]
+mod camera_tests;
+#[cfg(test)]
 mod tests;
 
 pub use error::GltfError;
 
 use super::Mesh;
+use crate::camera::SceneCamera;
 use crate::json;
 
 /// Key under a node's `extras` for MaterialCraft data.
@@ -38,15 +43,30 @@ impl Mesh {
     /// The mesh as a glTF 2.0 binary file. Fails if the mesh does not validate or is 4 GiB or
     /// larger. Same mesh, same bytes.
     pub fn to_glb(&self) -> Result<Vec<u8>, GltfError> {
-        let (root, bin) = write::to_gltf(self)?;
+        self.to_glb_with_cameras(&[])
+    }
+
+    /// The mesh and `cameras` (in the mesh's coordinates) as a glTF 2.0 binary file.
+    pub fn to_glb_with_cameras(&self, cameras: &[SceneCamera]) -> Result<Vec<u8>, GltfError> {
+        let (mut root, bin) = write::to_gltf(self)?;
+        cameras::write(&mut root, cameras);
         glb::Glb::assemble(&root.to_string(), &bin)
     }
 
     /// Reads a glTF 2.0 binary file (see the module docs for what is supported).
     pub fn from_glb(bytes: &[u8]) -> Result<Mesh, GltfError> {
         let glb = glb::Glb::parse(bytes)?;
-        let text = std::str::from_utf8(glb.json).map_err(|_| GltfError::Json("JSON chunk is not UTF-8".into()))?;
-        let root = json::parse(text).map_err(|e| GltfError::Json(e.to_string()))?;
+        let root = json_of(&glb)?;
         read::GltfReader::new(&root, glb.bin.unwrap_or(&[]))?.read()
     }
+}
+
+/// The cameras of a glTF 2.0 binary file's default scene, in the mesh's coordinates (see `cameras`).
+pub fn read_cameras(bytes: &[u8]) -> Result<Vec<SceneCamera>, GltfError> {
+    cameras::read(&json_of(&glb::Glb::parse(bytes)?)?)
+}
+
+fn json_of(glb: &glb::Glb) -> Result<json::Value, GltfError> {
+    let text = std::str::from_utf8(glb.json).map_err(|_| GltfError::Json("JSON chunk is not UTF-8".into()))?;
+    json::parse(text).map_err(|e| GltfError::Json(e.to_string()))
 }

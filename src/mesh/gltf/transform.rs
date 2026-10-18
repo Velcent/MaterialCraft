@@ -89,6 +89,19 @@ impl Transform {
         }
     }
 
+    /// Where a camera on this node sits and looks: the transformed origin, the transformed −z axis and the
+    /// transformed +y axis made perpendicular to it (both unit length); `None` when they degenerate.
+    pub fn camera_axes(&self) -> Option<([f32; 3], [f32; 3], [f32; 3])> {
+        let col = |c: usize| [self.at(0, c), self.at(1, c), self.at(2, c)];
+        let forward = normalized(col(2).map(|v| -v));
+        let y = col(1);
+        let along = y[0] * forward[0] + y[1] * forward[1] + y[2] * forward[2];
+        let up = normalized(std::array::from_fn(|i| y[i] - along * forward[i]));
+        let unit = |v: [f64; 3]| ((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) - 1.0).abs() < 1e-6;
+        let to32 = |v: [f64; 3]| v.map(|x| x as f32);
+        (unit(forward) && unit(up) && col(3).iter().all(|v| v.is_finite())).then(|| (to32(col(3)), to32(forward), to32(up)))
+    }
+
     fn at(&self, row: usize, col: usize) -> f64 {
         self.0[col * 4 + row]
     }

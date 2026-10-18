@@ -45,23 +45,11 @@ impl<'a> GltfReader<'a> {
     }
 
     pub fn read(mut self) -> Result<Mesh, GltfError> {
-        for node in self.scene_roots()? {
+        for node in scene_roots(self.root)? {
             self.visit(node, &Transform::IDENTITY, 0)?;
         }
         self.mesh.validate()?;
         Ok(self.mesh)
-    }
-
-    /// Root nodes of the default scene; without scenes, every node that is no other node's child.
-    fn scene_roots(&self) -> Result<Vec<usize>, GltfError> {
-        let scenes = list(self.root, "scenes");
-        if scenes.is_empty() {
-            let children: Vec<usize> = list(self.root, "nodes").iter().flat_map(|n| list(n, "children")).filter_map(Value::as_usize).collect();
-            return Ok((0..list(self.root, "nodes").len()).filter(|i| !children.contains(i)).collect());
-        }
-        let index = self.root.get("scene").map_or(Some(0), Value::as_usize);
-        let scene = index.and_then(|i| scenes.get(i)).ok_or_else(|| GltfError::invalid("scene", "does not exist"))?;
-        indices(scene, "nodes", "scenes[].nodes")
     }
 
     fn visit(&mut self, index: usize, parent: &Transform, depth: usize) -> Result<(), GltfError> {
@@ -158,6 +146,18 @@ impl<'a> GltfReader<'a> {
     }
 }
 
+/// Root nodes of the default scene; without scenes, every node that is no other node's child.
+pub(super) fn scene_roots(root: &Value) -> Result<Vec<usize>, GltfError> {
+    let scenes = list(root, "scenes");
+    if scenes.is_empty() {
+        let children: Vec<usize> = list(root, "nodes").iter().flat_map(|n| list(n, "children")).filter_map(Value::as_usize).collect();
+        return Ok((0..list(root, "nodes").len()).filter(|i| !children.contains(i)).collect());
+    }
+    let index = root.get("scene").map_or(Some(0), Value::as_usize);
+    let scene = index.and_then(|i| scenes.get(i)).ok_or_else(|| GltfError::invalid("scene", "does not exist"))?;
+    indices(scene, "nodes", "scenes[].nodes")
+}
+
 /// Rejects other glTF versions and required extensions.
 fn check_asset(root: &Value) -> Result<(), GltfError> {
     let version = root.get("asset").and_then(|a| a.get("version")).and_then(Value::as_str).ok_or_else(|| GltfError::invalid("asset.version", "missing"))?;
@@ -172,11 +172,11 @@ fn check_asset(root: &Value) -> Result<(), GltfError> {
 }
 
 /// The array under `key`, or an empty slice.
-fn list<'v>(v: &'v Value, key: &str) -> &'v [Value] {
+pub(super) fn list<'v>(v: &'v Value, key: &str) -> &'v [Value] {
     v.get(key).and_then(Value::as_array).map_or(&[], Vec::as_slice)
 }
 
 /// An array of indices under `key` (missing = empty).
-fn indices(v: &Value, key: &str, at: &str) -> Result<Vec<usize>, GltfError> {
+pub(super) fn indices(v: &Value, key: &str, at: &str) -> Result<Vec<usize>, GltfError> {
     list(v, key).iter().map(|i| i.as_usize().ok_or_else(|| GltfError::invalid(at, "not an index"))).collect()
 }
