@@ -1,5 +1,6 @@
 //! How an asset was made (ADR 0007 starter assets, ADR 0008 rm-starter-scope): every starter asset
-//! records it, so the shipped library can be regenerated and its origin checked.
+//! records it, so the shipped library can be regenerated and its origin checked. Assets the import review copied
+//! out of a user's Painter project (roadmap step 46) record the project and whether they may be shared.
 
 use crate::json::Value;
 
@@ -33,6 +34,16 @@ pub enum Provenance {
         licence: String,
         author: Option<String>,
     },
+    /// Taken from a project the user imported (roadmap step 46): the user's own file, never shipped. Assets from the
+    /// vendor's shelf are recorded as not shareable; the starter library refuses every imported asset.
+    Imported {
+        /// The project file it came from.
+        project: String,
+        /// Where the project had it from (its embedded resource, the user's shelf, the vendor's shelf …), as text.
+        origin: String,
+        /// False for vendor content: it stays with the user ("from this project, not shareable").
+        shareable: bool,
+    },
 }
 
 /// The licence id written when a CC0 source records none.
@@ -47,7 +58,13 @@ impl Provenance {
             Provenance::Generator { .. } => "generator",
             Provenance::HandMade { .. } => "hand-made",
             Provenance::Cc0 { .. } => "cc0",
+            Provenance::Imported { .. } => "imported",
         }
+    }
+
+    /// True for assets taken from a user's imported project; they never go into the starter library.
+    pub fn is_imported(&self) -> bool {
+        matches!(self, Provenance::Imported { .. })
     }
 
     /// Read the sidecar's `provenance` object. Errors describe what is wrong, for the Assets log.
@@ -79,6 +96,14 @@ impl Provenance {
                 }
                 Ok(Provenance::Cc0 { url: required("url")?, licence, author: text("author")? })
             }
+            "imported" => {
+                let shareable = match v.get("shareable") {
+                    None | Some(Value::Null) => false,
+                    Some(Value::Bool(b)) => *b,
+                    Some(_) => return Err("provenance.shareable must be true or false".into()),
+                };
+                Ok(Provenance::Imported { project: required("project")?, origin: text("origin")?.unwrap_or_default(), shareable })
+            }
             other => Err(format!("unknown provenance kind {other:?}")),
         }
     }
@@ -100,6 +125,9 @@ impl Provenance {
             Provenance::Generator { generator, preset } => Some(raw(base.with("generator", generator.as_str()), "preset", preset)),
             Provenance::HandMade { author, notes } => Some(opt(opt(base, "author", author), "notes", notes)),
             Provenance::Cc0 { url, licence, author } => Some(opt(base.with("url", url.as_str()).with("licence", licence.as_str()), "author", author)),
+            Provenance::Imported { project, origin, shareable } => {
+                Some(base.with("project", project.as_str()).with("origin", origin.as_str()).with("shareable", *shareable))
+            }
         }
     }
 }

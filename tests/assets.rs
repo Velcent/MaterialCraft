@@ -304,6 +304,8 @@ fn sidecars_round_trip_with_provenance() {
         Provenance::Generator { generator: "edge-wear".into(), preset: None },
         Provenance::HandMade { author: Some("Felix".into()), notes: None },
         Provenance::Cc0 { url: "https://example.org/rock".into(), licence: "CC0-1.0".into(), author: None },
+        Provenance::Imported { project: "/p/Cup.spp".into(), origin: "Painter's shelf (allegorithmic)".into(), shareable: false },
+        Provenance::Imported { project: "Cup.spp".into(), origin: "embedded in the project".into(), shareable: true },
     ];
     for provenance in cases {
         let s = Sidecar {
