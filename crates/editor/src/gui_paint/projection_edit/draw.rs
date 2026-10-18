@@ -1,6 +1,6 @@
 //! Drawing the projection gizmo over the view: the volume's box, its handles in the axis colours (x red, y green,
 //! z blue, the centre handles light), the handle under the pointer brighter; in UV mode the frame of one image
-//! repetition over the mesh with its knobs.
+//! repetition over the mesh with its knobs; in warp mode the grid's lines, and its points when they are edited.
 
 use super::view::{GizmoHit, GizmoView, KNOB_RADIUS};
 use eframe::egui::{self, Color32, Pos2, Stroke};
@@ -8,6 +8,7 @@ use materialcraft::projection::gizmo::{ScreenShape, ShapeKind};
 
 const BOX: Color32 = Color32::from_rgba_premultiplied(150, 150, 150, 150);
 const FRAME: Color32 = Color32::from_rgb(255, 205, 90);
+const GRID: Color32 = Color32::from_rgb(120, 220, 230);
 
 fn axis_color(axis: Option<usize>) -> Color32 {
     match axis {
@@ -24,6 +25,7 @@ pub fn draw(gizmo: &GizmoView, painter: &egui::Painter, origin: Pos2, hover: Opt
     let at = |p: [f32; 2]| Pos2::new(origin.x + p[0], origin.y + p[1]);
     match gizmo {
         GizmoView::Volume(v) => {
+            lines(painter, &v.grid, GRID.gamma_multiply(0.6), &at);
             for [a, b] in &v.outline {
                 painter.line_segment([at(*a), at(*b)], Stroke::new(1.0, BOX));
             }
@@ -46,6 +48,18 @@ pub fn draw(gizmo: &GizmoView, painter: &egui::Painter, origin: Pos2, hover: Opt
                 }
             }
         }
+        GizmoView::WarpGrid(w) => {
+            lines(painter, &w.lines, GRID, &at);
+            for s in &w.knobs {
+                shape(painter, s, GRID, hover == Some(GizmoHit::WarpPoint(s.handle)), &at);
+            }
+        }
+    }
+}
+
+fn lines(painter: &egui::Painter, runs: &[Vec<[f32; 2]>], color: Color32, at: &impl Fn([f32; 2]) -> Pos2) {
+    for run in runs {
+        painter.add(egui::Shape::line(run.iter().map(|p| at(*p)).collect(), Stroke::new(1.0, color)));
     }
 }
 

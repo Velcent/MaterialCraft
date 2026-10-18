@@ -73,7 +73,7 @@ pub fn show(ui: &mut Ui, p: ProjectionUi, events: &mut Vec<PanelEvent>) {
                     ui.weak(format!("This projection ({}) comes from a newer version and can't be edited here.", u.mode));
                 } else {
                     placement::show(ui, &mut edited);
-                    volume::show(ui, &mut edited, p.symmetry);
+                    volume::show(ui, &mut edited, p.symmetry, &mut gizmo_settings);
                 }
                 if edited != fill.projection {
                     let gesture = ui.input(|i| i.pointer.any_down());

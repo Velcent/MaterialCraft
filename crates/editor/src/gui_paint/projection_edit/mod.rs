@@ -1,16 +1,18 @@
 //! Editing the selected fill's projection in the view (roadmap step 38, PJ-23 … PJ-25): the 3D gizmo of the
 //! volume modes (move, rotate, scale; stepped with Ctrl; local or world axes), snapping planar and warp volumes
-//! onto the surface (Shift while dragging the centre), and the UV handle of UV mode laid over the mesh. The maths is
-//! `materialcraft::projection::gizmo`; this module turns the viewport's pointer into drags and every drag into
-//! edits recorded under one history key, so one drag is one undo step.
+//! onto the surface (Shift while dragging the centre), the UV handle of UV mode laid over the mesh, and the warp
+//! grid's points (step 43, PJ-20). The maths is `materialcraft::projection::gizmo`; this module turns the viewport's
+//! pointer into drags and every drag into edits recorded under one history key, so one drag is one undo step.
 //!
 //! - [`GizmoSettings`]: what the gizmo shows and its steps (session settings, edited in the projection panel);
-//! - [`view`]: the gizmo on screen this frame and what the pointer is over; [`draw`]: drawing it.
+//! - [`view`]: the gizmo on screen this frame and what the pointer is over ([`warp_view`]: the warp grid);
+//!   [`draw`]: drawing it.
 
 pub mod draw;
 #[cfg(test)]
 mod tests;
 pub mod view;
+pub mod warp_view;
 
 use super::document_state::OpenDocument;
 use super::shared_mesh::SharedMesh;
@@ -18,8 +20,8 @@ use materialcraft::history::CoalesceKey;
 use materialcraft::mesh::SurfaceMap;
 use materialcraft::paint::edit::EditError;
 use materialcraft::paint::edit::ops::{FillRef, set_projection};
-use materialcraft::projection::gizmo::{GizmoMode, Space, Steps, UvDrag, UvHandle, VolumeDrag, snap_to_surface};
-use materialcraft::projection::{Projection, SceneFrame, ViewProjector};
+use materialcraft::projection::gizmo::{GizmoMode, Space, Steps, UvDrag, UvHandle, VolumeDrag, WarpPointDrag, snap_to_surface};
+use materialcraft::projection::{Projection, ProjectionMode, SceneFrame, ViewProjector};
 use view::{GizmoHit, GizmoView, uv_under};
 
 /// The gizmo's session settings (PJ-23: step sizes and gizmo size are settings).
@@ -31,11 +33,13 @@ pub struct GizmoSettings {
     pub steps: Steps,
     /// Arm length on screen (UI points).
     pub size: f32,
+    /// Warp: the view shows the grid's points to drag instead of the volume gizmo.
+    pub warp_points: bool,
 }
 
 impl Default for GizmoSettings {
     fn default() -> GizmoSettings {
-        GizmoSettings { shown: true, mode: GizmoMode::Move, space: Space::Local, steps: Steps::default(), size: 90.0 }
+        GizmoSettings { shown: true, mode: GizmoMode::Move, space: Space::Local, steps: Steps::default(), size: 90.0, warp_points: false }
     }
 }
 
@@ -83,6 +87,7 @@ enum DragKind {
         drag: UvDrag,
         material: usize,
     },
+    WarpPoint(WarpPointDrag),
 }
 
 /// The session's projection editing state.
@@ -186,6 +191,10 @@ impl ProjectionEditing {
                 let from = uv_under(f.view, doc.doc(), v.material, p.at)?;
                 DragKind::Uv { drag: UvDrag::begin(handle, &projection.image, from, None), material: v.material }
             }
+            (GizmoHit::WarpPoint(index), GizmoView::WarpGrid(_)) => {
+                let ProjectionMode::Warp(warp) = &projection.mode else { return None };
+                DragKind::WarpPoint(WarpPointDrag::begin(warp, f.frame?, index, f.view.ray(p.at)?)?)
+            }
             _ => return None,
         };
         Some(ActiveDrag { target: target.clone(), key: self.key(), kind })
@@ -218,6 +227,13 @@ impl ProjectionEditing {
                 let step = (p.step && d.handle == UvHandle::Rotate).then_some(self.settings.steps.angle);
                 next.image = d.update(uv, p.shift, step);
                 "Place image"
+            }
+            DragKind::WarpPoint(d) => {
+                let (Some(grid), ProjectionMode::Warp(warp)) = (f.view.ray(p.at).and_then(|ray| d.update(ray)), &mut next.mode) else {
+                    return Ok(GizmoOutcome::default());
+                };
+                warp.grid = grid;
+                "Move warp point"
             }
         };
         if next == current {

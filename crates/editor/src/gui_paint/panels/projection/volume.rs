@@ -1,17 +1,19 @@
 //! The volume of the volume modes (PJ-09 … PJ-11) and each mode's own settings: the tri-planar blend (PJ-16), the
 //! planar depth and facing falloffs (PJ-17), the cylindrical coverage, facing falloff and caps (PJ-19), the warp
-//! grid's depth (PJ-20; editing the grid itself comes with the warp projection), and fill symmetry (PJ-22), which
-//! takes over the symmetry tool's settings.
+//! grid (PJ-20: depth, size while regular, resetting points and handles, and the switch that puts its points in
+//! the view to drag), and fill symmetry (PJ-22), which takes over the symmetry tool's settings.
 
 use super::heading;
+use crate::gui_paint::projection_edit::GizmoSettings;
 use crate::gui_paint::tools::helpers::SymmetrySettings;
-use eframe::egui::{DragValue, Slider, Ui};
-use materialcraft::projection::{FacingFalloff, Falloff, Projection, ProjectionMode, Volume};
+use eframe::egui::{Button, DragValue, Slider, Ui};
+use materialcraft::projection::warp::MAX_SIDE;
+use materialcraft::projection::{FacingFalloff, Falloff, Projection, ProjectionMode, Volume, WarpGrid};
 use materialcraft::symmetry::SymmetrySpec;
 
 const AXES: [&str; 3] = ["x", "y", "z"];
 
-pub fn show(ui: &mut Ui, p: &mut Projection, symmetry: SymmetrySettings) {
+pub fn show(ui: &mut Ui, p: &mut Projection, symmetry: SymmetrySettings, gizmo: &mut GizmoSettings) {
     if let Some(v) = p.mode.volume_mut() {
         heading(ui, "Volume");
         volume(ui, v);
@@ -35,7 +37,7 @@ pub fn show(ui: &mut Ui, p: &mut Projection, symmetry: SymmetrySettings) {
                 ui.add(DragValue::new(&mut m.grid.depth).speed(0.005).range(0.0..=f32::MAX).max_decimals(4));
             });
             depth_falloff(ui, &mut m.depth_falloff, "Depth falloff");
-            ui.weak(format!("Warp grid: {} × {} points. Editing the grid comes with the warp projection.", m.grid.rows, m.grid.columns));
+            warp_grid(ui, &mut m.grid, gizmo);
         }
         _ => {}
     }
@@ -70,6 +72,39 @@ fn volume(ui: &mut Ui, v: &mut Volume) {
         }
     });
     ui.checkbox(&mut v.clip, "Clip to the volume").on_hover_text("Stop the projection at the volume's edge instead of continuing beyond it");
+}
+
+/// The warp grid: its size (only while no point was moved), resets, and dragging its points in the view.
+fn warp_grid(ui: &mut Ui, g: &mut WarpGrid, gizmo: &mut GizmoSettings) {
+    heading(ui, "Warp grid");
+    let regular = g.is_regular();
+    ui.horizontal(|ui| {
+        let (mut rows, mut columns) = (g.rows, g.columns);
+        ui.add_enabled_ui(regular, |ui| {
+            ui.label("Rows");
+            ui.add(DragValue::new(&mut rows).range(2..=MAX_SIDE));
+            ui.label("Columns");
+            ui.add(DragValue::new(&mut columns).range(2..=MAX_SIDE));
+        })
+        .response
+        .on_disabled_hover_text("The size is fixed once a point was moved; reset the points to change it");
+        if (rows, columns) != (g.rows, g.columns)
+            && let Some(resized) = g.resized(rows, columns)
+        {
+            *g = resized;
+        }
+    });
+    ui.checkbox(&mut gizmo.warp_points, "Drag the grid points in the view")
+        .on_hover_text("Shows the grid's points instead of the volume gizmo; each drag is one undo step");
+    ui.horizontal(|ui| {
+        if ui.add_enabled(!regular, Button::new("Reset points")).on_hover_text("Back to the regular grid of this size").clicked() {
+            *g = g.reset_points();
+        }
+        let bent = g.points.iter().any(|p| p.tangents != [[0.0; 3]; 4]);
+        if ui.add_enabled(bent, Button::new("Automatic handles")).on_hover_text("Smooth handles through every point").clicked() {
+            *g = g.automatic_tangents();
+        }
+    });
 }
 
 fn depth_falloff(ui: &mut Ui, f: &mut Falloff, label: &str) {

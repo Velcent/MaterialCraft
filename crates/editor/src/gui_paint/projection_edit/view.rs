@@ -3,6 +3,7 @@
 //! shapes ([`materialcraft::projection::gizmo::hit`]).
 
 use super::GizmoSettings;
+use super::warp_view::WarpGridView;
 use materialcraft::mesh::{SurfaceMap, TexelKind, Vec3};
 use materialcraft::paint::edit::ops::FillRef;
 use materialcraft::paint::{Document, Fill};
@@ -26,6 +27,8 @@ pub struct VolumeView {
     pub direction: Option<[[f32; 2]; 2]>,
     /// The mode can be snapped onto the surface.
     pub snaps: bool,
+    /// Warp: the grid's lines (view coordinates).
+    pub grid: Vec<Vec<[f32; 2]>>,
 }
 
 /// The UV handle on screen: the frame of one image repetition laid over the mesh.
@@ -42,6 +45,8 @@ pub struct UvView {
 pub enum GizmoView {
     Volume(VolumeView),
     Uv(UvView),
+    /// The warp grid's points, edited instead of the volume ([`GizmoSettings::warp_points`]).
+    WarpGrid(WarpGridView),
 }
 
 /// What the pointer is over.
@@ -49,6 +54,8 @@ pub enum GizmoView {
 pub enum GizmoHit {
     Volume(Handle),
     Uv(UvHandle),
+    /// A warp grid anchor (its index).
+    WarpPoint(usize),
 }
 
 impl GizmoView {
@@ -72,6 +79,7 @@ impl GizmoView {
                 let set = doc.texture_set(&target.layer.set)?;
                 Some(GizmoView::Uv(uv_view(fill, view, surface?, set.material_slot)))
             }
+            ProjectionMode::Warp(warp) if settings.warp_points => Some(GizmoView::WarpGrid(WarpGridView::build(warp, frame?, view)?)),
             mode => {
                 let volume = mode.volume()?;
                 let placed = PlacedVolume::of(volume, frame?);
@@ -81,7 +89,11 @@ impl GizmoView {
                 let shapes = gizmo::to_screen(&g.shapes(), at);
                 let outline = placed.edges().iter().filter_map(|[a, b]| Some([at(*a)?, at(*b)?])).collect();
                 let direction = matches!(mode, ProjectionMode::Planar(_)).then(|| Some([at(placed.front())?, at(placed.centre)?])).flatten();
-                Some(GizmoView::Volume(VolumeView { gizmo: g, shapes, outline, direction, snaps: mode.snaps_to_surface() }))
+                let grid = match mode {
+                    ProjectionMode::Warp(warp) => frame.and_then(|f| WarpGridView::build(warp, f, view)).map(|w| w.lines).unwrap_or_default(),
+                    _ => Vec::new(),
+                };
+                Some(GizmoView::Volume(VolumeView { gizmo: g, shapes, outline, direction, snaps: mode.snaps_to_surface(), grid }))
             }
         }
     }
@@ -95,6 +107,7 @@ impl GizmoView {
                 Some(h) => Some(GizmoHit::Uv(h)),
                 None => uv_under(view, doc, v.material, at).map(|uv| GizmoHit::Uv(if v.frame.contains(uv) { UvHandle::Move } else { UvHandle::Rotate })),
             },
+            GizmoView::WarpGrid(w) => gizmo::pick(&w.knobs, at, LINE_TOLERANCE, KNOB_RADIUS).map(GizmoHit::WarpPoint),
         }
     }
 }

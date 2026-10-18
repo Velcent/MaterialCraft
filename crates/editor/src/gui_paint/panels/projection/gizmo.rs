@@ -31,7 +31,8 @@ pub fn show(ui: &mut Ui, s: &mut GizmoSettings) {
         });
         ui.weak(
             "Drag the arrows, rings or knobs; the centre moves in the view plane (Shift: onto the surface, planar and warp). \
-             UV mode: drag inside the frame to move (Shift: one axis), the knobs to scale, outside to turn.",
+             UV mode: drag inside the frame to move (Shift: one axis), the knobs to scale, outside to turn. \
+             Warp: with the grid points shown, drag a point.",
         );
     });
 }

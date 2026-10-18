@@ -1,5 +1,5 @@
-//! The gate of step 38: gizmo drags, surface snaps, UV handle drags and panel slider drags on an open document are
-//! one history step each, and undo returns the projection they started from. Headless: a 2 × 2 quad facing +z
+//! The gates of steps 38 and 43: gizmo drags, surface snaps, UV handle drags, warp grid point drags and panel slider
+//! drags on an open document are one history step each, and undo returns the projection they started from. Headless: a 2 × 2 quad facing +z
 //! seen straight on through an orthographic camera (100 × 100 view units over 2 object units, the centre at
 //! (50, 50), y down), picked on the CPU.
 
@@ -183,4 +183,36 @@ fn a_panel_slider_drag_is_one_step() {
     doc.undo().unwrap();
     doc.undo().unwrap();
     assert_eq!(projection(&doc), start);
+}
+
+#[test]
+fn a_warp_point_drag_is_one_step() {
+    let mut doc = open("warp");
+    let mesh = doc.doc().mesh.clone();
+    let scene = ViewScene::new(&mesh, Fit::IDENTITY);
+    let view = scene.projector(&mesh, camera()).unwrap();
+    let frame = SceneFrame::of_mesh(&mesh);
+    let f = GizmoFrame { view: &view, frame: frame.as_ref(), surface: None };
+    let mut editing = ProjectionEditing::default();
+    let start = projection(&doc);
+    // the volume gizmo first; with the grid points shown, the middle anchor sits at the view's centre
+    assert_eq!(editing.hover(&doc, &target(), &f, [50.0, 50.0]), Some(GizmoHit::Volume(Handle::MoveView)));
+    editing.settings.warp_points = true;
+    assert_eq!(editing.hover(&doc, &target(), &f, [50.0, 50.0]), Some(GizmoHit::WarpPoint(4)));
+    assert_eq!(editing.hover(&doc, &target(), &f, [100.0, 0.0]), Some(GizmoHit::WarpPoint(2)), "the top-right corner");
+    let (before, after) = drag(&mut editing, &mut doc, &f, &[[50.0, 50.0], [53.0, 49.0], [57.0, 46.0], [60.0, 45.0], [60.0, 45.0]], false, false);
+    assert_eq!(after, before + 1, "one step for the whole drag");
+    // 10 view units right and 5 up = (0.2, 0.1) object units = grid units (the volume is the 2-unit scene)
+    let ProjectionMode::Warp(w) = &projection(&doc).mode else { panic!() };
+    let p = w.grid.point_position(4).unwrap();
+    assert!((p[0] - 0.2).abs() < 1e-4 && (p[1] - 0.1).abs() < 1e-4 && p[2].abs() < 1e-4, "{p:?}");
+    assert_eq!(w.grid.points.len(), 9);
+    let moved = projection(&doc);
+    doc.undo().unwrap();
+    assert_eq!(projection(&doc), start, "one undo returns to the regular grid");
+    doc.redo().unwrap();
+    assert_eq!(projection(&doc), moved);
+    // a press away from every point grabs nothing
+    let (before, after) = drag(&mut editing, &mut doc, &f, &[[25.0, 75.0], [30.0, 70.0], [30.0, 70.0]], false, false);
+    assert_eq!(after, before);
 }
