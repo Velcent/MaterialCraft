@@ -6,7 +6,8 @@
 //! - [`masks`]: adding, removing, switching and inverting masks;
 //! - [`drop`]: what dropping an asset onto the stack does (ADR 0008, q-effect-drop); [`drop_layers`]: the
 //!   layers a dropped material or smart material makes;
-//! - [`polygon_fill`]: the polygon fill tool's pick into the target stack's polygon fill effect.
+//! - [`polygon_fill`]: the polygon fill tool's pick into the target stack's polygon fill effect;
+//! - [`projection`]: a fill layer's or fill effect's projection.
 //!
 //! Selections name layers by id. Before an operation a selection is put in stack order and layers whose
 //! group is selected too are left out (the group carries them), see [`normalize`].
@@ -17,6 +18,7 @@ mod effects;
 mod layers;
 mod masks;
 mod polygon_fill;
+mod projection;
 
 #[cfg(test)]
 mod tests;
@@ -27,6 +29,7 @@ pub use effects::{NewEffect, add_effect, new_effect, set_effect_enabled};
 pub use layers::{NewLayer, create, delete, duplicate, duplicate_to, group, move_layers};
 pub use masks::{MaskStart, add_mask, invert_mask, remove_mask, set_mask_enabled};
 pub use polygon_fill::{PolygonFillChange, edit_polygon_fill};
+pub use projection::{FillAt, FillRef, set_projection};
 
 use super::tree::locate;
 use super::{EditError, LayerRef, LayerSlot, Transaction};

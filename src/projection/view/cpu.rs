@@ -86,6 +86,12 @@ impl ViewProjector for CpuViewProjector<'_> {
         Some(ScreenPoint { pos: p.screen, depth: p.depth, view_depth: p.view_depth })
     }
 
+    fn ray(&self, screen: [f32; 2]) -> Option<crate::projection::gizmo::Ray> {
+        let ray = self.transform.ray(screen)?;
+        // the fit moves and scales uniformly: the direction stays
+        crate::projection::gizmo::Ray::new(self.to_object(ray.origin), ray.dir)
+    }
+
     fn occluded(&self, pos: Vec3) -> bool {
         let world = self.to_world(pos);
         let dir = self.transform.towards_camera(world);

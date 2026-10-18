@@ -198,4 +198,21 @@ impl ProjectionMode {
             _ => None,
         }
     }
+
+    /// The projection volume to change, for the volume-based modes.
+    pub fn volume_mut(&mut self) -> Option<&mut Volume> {
+        match self {
+            ProjectionMode::TriPlanar(m) => Some(&mut m.volume),
+            ProjectionMode::Planar(m) => Some(&mut m.volume),
+            ProjectionMode::Spherical(m) => Some(&mut m.volume),
+            ProjectionMode::Cylindrical(m) => Some(&mut m.volume),
+            ProjectionMode::Warp(m) => Some(&mut m.volume),
+            _ => None,
+        }
+    }
+
+    /// True for the modes the volume can be snapped onto the surface in (ADR 0008 mc2-q-pj-14: planar and warp).
+    pub fn snaps_to_surface(&self) -> bool {
+        matches!(self, ProjectionMode::Planar(_) | ProjectionMode::Warp(_))
+    }
 }

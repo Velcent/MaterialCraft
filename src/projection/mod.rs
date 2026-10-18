@@ -17,6 +17,9 @@
 //! [`view`] maps between the screen and the mesh for one camera ([`ViewProjector`]) and places images on screen
 //! ([`ScreenImageTransform`], [`ScreenProjector`]) for projection painting and stencils.
 //!
+//! [`gizmo`] holds the maths of the projection editing gizmos (volume move/rotate/scale, surface snap, the UV
+//! handle); the GUI draws and drives them.
+//!
 //! [`sampling`] samples images with a [`Filter`] and [`Repeat`] from a prefiltered level chain ([`ImageLevels`]).
 //!
 //! Design: `MaterialCraft-docs/requirements/projections.md` (section 3); decisions in ADR 0006–0008.
@@ -26,6 +29,7 @@
 mod data;
 pub mod falloff;
 mod frame;
+pub mod gizmo;
 mod mirrored;
 mod modes;
 mod placement;

@@ -72,6 +72,10 @@ pub trait ViewProjector: Send + Sync {
     /// Where the object-space point `pos` lands on screen, or `None` when it is behind the camera.
     fn to_screen(&self, pos: Vec3) -> Option<ScreenPoint>;
 
+    /// The camera ray through `screen` in object space (from the near plane, unit direction), for gizmo drags;
+    /// `None` for a singular camera.
+    fn ray(&self, screen: [f32; 2]) -> Option<super::gizmo::Ray>;
+
     /// True if another surface lies between the object-space point `pos` and the camera.
     fn occluded(&self, pos: Vec3) -> bool;
 
