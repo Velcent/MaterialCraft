@@ -16,6 +16,7 @@ use crate::tools::verify_layers::project_mesh::ProjectMesh;
 use crate::translate::BakedMaps;
 use crate::translate::cache_channels::CacheChannels;
 use crate::translate::layers::cache_score::final_look;
+use crate::translate::layers::replay::ReplayChoice;
 use crate::translate::layers::{BlendTable, Computability, ImageSource, ProjectImages};
 use crate::translate::replacements::ProceduralPlan;
 use materialcraft::paint::Channel;
@@ -149,7 +150,10 @@ pub(super) fn analyse(
     table: &BlendTable,
     images: &dyn ImageSource,
 ) -> SetAnalysis {
-    let import = |s: &PainterTextureSet| set.import_copy(s, table, images, &set.plan).verdict;
+    let import = |s: &PainterTextureSet| {
+        set.import_copy_replaying(s, table, images, &set.plan, ReplayChoice::Keep)
+            .verdict
+    };
     SetAnalysis::new(painter, &set.channels, &import)
 }
 
@@ -165,9 +169,12 @@ impl Composer for StackComposer<'_, '_> {
         &self,
         painter: &PainterTextureSet,
         procedurals: &ProceduralPlan,
+        replay: ReplayChoice,
         channel: Channel,
     ) -> (Tex, Computability) {
-        let stack = self.set.import_copy(painter, self.table, self.images, procedurals);
+        let stack = self
+            .set
+            .import_copy_replaying(painter, self.table, self.images, procedurals, replay);
         (self.set.composite(&stack, channel), stack.verdict.channel(channel))
     }
 }

@@ -5,6 +5,7 @@
 //! followed by its other entries, uniform fills grey fills, bitmap fills painted images, procedural fills
 //! generators, reference fills references; filters, levels, colour selection, polygon fill and anchors keep
 //! their kind; a polygon fill becomes one polygon fill per run of picks with the same value ([`super::decal`]).
+//! Painted masks are computable when their strokes are replayed ([`super::replay`], status "replaced").
 //! Computable are uniform and bitmap fills, empty paint, levels, colour selection (on the set's baked ID map),
 //! reference fills whose anchor is computable, polygon fills resolved on the mesh, plus the procedural
 //! fills the plan replaces with MaterialCraft's generators ([`crate::translate::replacements`], status
@@ -18,6 +19,7 @@ use super::decal::{self, geometry::SetGeometry};
 use super::effect_data::{self as data, AnchorIds};
 use super::images::{ImageSource, grey_values, resample};
 use super::projection_map::ProjectionTable;
+use super::replay::StrokeReplay;
 use super::set_surface::{SurfaceSource, project_image};
 use super::strokes;
 use crate::model::{EffectHeader, MaskInitial, PainterEffect, PainterMask, PainterSource};
@@ -51,6 +53,8 @@ pub struct MaskEvaluator<'a> {
     pub geometry: Option<&'a SetGeometry<'a>>,
     /// The set's surface at `resolution`, which bitmaps projected from a volume are laid on over.
     pub surface: Option<&'a dyn SurfaceSource>,
+    /// Paints painted masks again; `None` keeps them empty with their stroke records.
+    pub replay: Option<&'a StrokeReplay<'a>>,
     /// What the set's anchors hold, for fills that read one.
     pub anchors: &'a AnchorTable,
 }
@@ -152,9 +156,28 @@ impl Walk<'_, '_> {
                 self.effects(&g.effects, on);
             }
             PainterEffect::Paint(p) => {
-                self.push(header, blend, self.empty_paint(strokes::record([p])), on);
-                if p.stroke_count() > 0 {
-                    self.stop(on, "painted mask (strokes)".into());
+                let record = strokes::record([p]);
+                if p.stroke_count() == 0 {
+                    self.push(header, blend, self.empty_paint(record), on);
+                    return;
+                }
+                match self.evaluator.replay.map(|r| r.mask(p)) {
+                    Some(Ok(replayed)) => {
+                        self.note(on, replayed.status("painted mask"));
+                        let pixels = MaskPixels {
+                            image: replayed.pixels,
+                            strokes: record,
+                        };
+                        self.push(header, blend, EffectKind::Paint(pixels), on);
+                    }
+                    Some(Err(why)) => {
+                        self.push(header, blend, self.empty_paint(record), on);
+                        self.stop(on, format!("painted mask (strokes not replayable: {why})"));
+                    }
+                    None => {
+                        self.push(header, blend, self.empty_paint(record), on);
+                        self.stop(on, "painted mask (strokes)".into());
+                    }
                 }
             }
             PainterEffect::Anchor(h) => {
@@ -322,7 +345,7 @@ impl Walk<'_, '_> {
         }
     }
 
-    /// A paint effect without pixels (strokes are not replayed yet), with the stroke record of the brush work.
+    /// A paint effect without pixels (strokes not replayed), with the stroke record of the brush work.
     fn empty_paint(&self, strokes: Option<StrokeData>) -> EffectKind<Grey> {
         let (w, h) = self.evaluator.resolution;
         match TiledImage::new(w, h, PAINT_FORMAT) {

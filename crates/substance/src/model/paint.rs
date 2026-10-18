@@ -1,6 +1,7 @@
 //! [`PaintEffect`]: brush work (`DataActionPaint` and its projection, eraser and smudge variants) with its
 //! strokes ([`PainterStroke`]). 3D path strokes (`DataStroke3D`, format 78) are only counted.
 
+use super::brush::PainterBrush;
 use super::effect::EffectHeader;
 use super::source::PainterSource;
 use super::stroke::PainterStroke;
@@ -51,6 +52,10 @@ pub struct PaintEffect {
     pub path_strokes: usize,
     /// `brush`: uid of the `DataBrush` (size, flow, spacing, jitter, emitter) the strokes were painted with.
     pub brush_uid: Option<u64>,
+    /// `brush`: its settings, if the effect has one.
+    pub brush: Option<PainterBrush>,
+    /// `stampBlendingMode` (0 ×12126, 1 ×688; absent in old files): how stamps of one stroke combine.
+    pub stamp_blending: u64,
     /// `sourceColor`: what the brush paints, per channel (uniform colours are linear).
     pub colors: Vec<PainterSource>,
     /// `sourceTransparent`: the brush alpha (usually the `shape.sbsar` procedural or a bitmap).

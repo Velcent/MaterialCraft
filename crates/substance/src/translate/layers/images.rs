@@ -17,8 +17,8 @@ pub struct LoadedImage {
     pub float: bool,
 }
 
-/// Where bitmap sources come from.
-pub trait ImageSource {
+/// Where bitmap sources come from. Shared by the threads that replay strokes, hence `Sync`.
+pub trait ImageSource: Sync {
     /// The image a `DataBitmap.urlToBitmapRes` URL names, or why it cannot be read.
     fn load(&self, url: &str) -> Result<LoadedImage, String>;
 }

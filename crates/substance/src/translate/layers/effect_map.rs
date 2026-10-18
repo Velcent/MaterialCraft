@@ -3,12 +3,14 @@
 //!
 //! - The base: a fill layer's first fill when it is switched on and writes every channel at full strength
 //!   (its values, or a paint image for a bitmap, as [`core_content`] builds them); a paint layer's first effect
-//!   group (its brush work; strokes are not replayed yet, so the base has no pixels). Otherwise the base is an
+//!   group (its brush work: the replayed strokes' pixels, see [`super::replay`], or none where they cannot be
+//!   replayed). Otherwise the base is an
 //!   empty fill or paint content and the first effect stays an effect.
 //! - Every other Painter effect becomes one of ours: uniform and bitmap fills become fill and paint effects,
 //!   the channels a fill takes from a procedural, an anchor or an unknown source become a generator, reference
 //!   or unknown effect next to it (a Substance material the user replaced with one of ours becomes a material
-//!   fill, and the base of a fill layer that is nothing else); an effect group becomes a paint effect followed by its own entries; filters,
+//!   fill, and the base of a fill layer that is nothing else); an effect group becomes a paint effect (replayed
+//!   like the base) followed by its own entries; filters,
 //!   levels, colour selection, polygon fill and anchors keep their kind.
 //!
 //! Each effect gets a blend entry for every declared channel it writes, with the mode and opacity Painter
@@ -16,6 +18,7 @@
 
 use super::blend_table::Holder;
 use super::blending::ResolvedBlend;
+use super::content::brush_work;
 use super::content::{ChannelContent, ChannelValue, ContentEvaluator, filter_replacement};
 use super::decal::{self, geometry::SetGeometry};
 use super::effect_data::{self as data, AnchorIds};
@@ -61,7 +64,7 @@ impl ContentMapper<'_, '_> {
                 self.brush_work(&group.effects, anchors, &mut effects);
                 self.effects(rest, anchors, &mut effects);
                 return MappedContent {
-                    base: LayerKind::Paint(painted(strokes::group_record(&group.effects))),
+                    base: LayerKind::Paint(self.painted(&group.effects)),
                     effects,
                 };
             }
@@ -128,6 +131,29 @@ impl ContentMapper<'_, '_> {
         })
     }
 
+    /// The paint pixels of brush work (an effect group's paint effects, or one bare paint effect): replayed when
+    /// the replay can, empty otherwise; with the stroke record either way.
+    fn painted(&self, effects: &[PainterEffect]) -> PaintContent {
+        let strokes = strokes::group_record(effects);
+        let paints = brush_work(effects);
+        let images = match self
+            .evaluator
+            .replay
+            .filter(|_| paints.iter().any(|p| p.stroke_count() > 0))
+        {
+            Some(r) => r
+                .content(&paints, self.evaluator.channels)
+                .map(|r| r.pixels)
+                .unwrap_or_default(),
+            None => Vec::new(),
+        };
+        PaintContent {
+            images,
+            strokes,
+            see_through: false,
+        }
+    }
+
     fn effects(&self, effects: &[PainterEffect], anchors: &mut AnchorIds, out: &mut Vec<ContentEffect>) {
         for e in effects {
             self.effect(e, anchors, out);
@@ -157,11 +183,11 @@ impl ContentMapper<'_, '_> {
         let kind = match effect {
             PainterEffect::Fill(fill) => return self.fill(fill, out),
             PainterEffect::Group(g) => {
-                let content = painted(strokes::group_record(&g.effects));
+                let content = self.painted(&g.effects);
                 out.push(self.with_header(header, Holder::EffectGroup, EffectKind::Paint(content)));
                 return self.brush_work(&g.effects, anchors, out);
             }
-            PainterEffect::Paint(p) => EffectKind::Paint(painted(strokes::record([p]))),
+            PainterEffect::Paint(_) => EffectKind::Paint(self.painted(std::slice::from_ref(effect))),
             PainterEffect::Filter(f) => match filter_replacement(f, self.evaluator.plan) {
                 Some((_, ours)) => EffectKind::Filter(ours),
                 None => EffectKind::Filter(data::procedural(f.procedural.as_ref())),
@@ -317,14 +343,5 @@ impl ContentMapper<'_, '_> {
             mode: b.mode(),
             opacity: b.opacity,
         }
-    }
-}
-
-/// Paint content without pixels (strokes are not replayed yet), with the stroke record of its brush work.
-fn painted(strokes: Option<materialcraft::paint::stroke::StrokeData>) -> PaintContent {
-    PaintContent {
-        images: Vec::new(),
-        strokes,
-        see_through: false,
     }
 }

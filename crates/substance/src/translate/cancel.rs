@@ -3,10 +3,11 @@
 
 use super::error::ImportError;
 
-/// A borrowed cancel hook. `Cancel::NEVER` never stops.
+/// A borrowed cancel hook. `Cancel::NEVER` never stops. The hook may be asked from the threads that replay
+/// strokes, hence `Sync`.
 #[derive(Clone, Copy)]
 pub struct Cancel<'a> {
-    asked: Option<&'a dyn Fn() -> bool>,
+    asked: Option<&'a (dyn Fn() -> bool + Sync)>,
 }
 
 impl<'a> Cancel<'a> {
@@ -14,7 +15,7 @@ impl<'a> Cancel<'a> {
     pub const NEVER: Cancel<'static> = Cancel { asked: None };
 
     /// Stops the import once `asked` returns true.
-    pub fn new(asked: &'a dyn Fn() -> bool) -> Self {
+    pub fn new(asked: &'a (dyn Fn() -> bool + Sync)) -> Self {
         Cancel { asked: Some(asked) }
     }
 
@@ -36,16 +37,16 @@ impl<'a> Cancel<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::Cell;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     #[test]
     fn checks_ask_the_hook_each_time() {
         assert!(Cancel::NEVER.check().is_ok());
-        let stop = Cell::new(false);
-        let asked = || stop.get();
+        let stop = AtomicBool::new(false);
+        let asked = || stop.load(Ordering::Relaxed);
         let cancel = Cancel::new(&asked);
         assert!(cancel.check().is_ok());
-        stop.set(true);
+        stop.store(true, Ordering::Relaxed);
         assert!(matches!(cancel.check(), Err(ImportError::Cancelled)));
     }
 }

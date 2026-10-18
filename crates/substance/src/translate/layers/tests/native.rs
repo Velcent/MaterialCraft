@@ -230,6 +230,8 @@ fn polygon_fill_picks_are_resolved_on_the_mesh() {
         projections: &crate::translate::layers::ProjectionTable::painter(),
         images: &NoImages,
         plan: &crate::translate::replacements::ProceduralPlan::default(),
+        replay: Default::default(),
+        replay_cache: None,
     };
     let stack = import.import_on(&set(layers.clone()), &channels(), SIZE, Some(&geometry), None);
     assert!(stack.verdict.all_exact(), "{:?}", stack.verdict.channels());
@@ -290,6 +292,8 @@ fn content_filters_follow_the_replacement_plan() {
             projections: &crate::translate::layers::ProjectionTable::painter(),
             images: &NoImages,
             plan,
+            replay: Default::default(),
+            replay_cache: None,
         }
         .import(&set(layers.clone()), &channels(), SIZE)
     };

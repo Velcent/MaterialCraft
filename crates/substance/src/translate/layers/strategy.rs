@@ -11,7 +11,7 @@
 //!   rounding ([`CacheAgreement`], e.g. a stale cache). Arranged like "Painter result on top", so an import
 //!   never looks worse than the flattened one.
 //! - **Replacements**: every channel is exact apart from Substance procedurals the user chose to replace with
-//!   MaterialCraft's generators. Arranged like the real stack (the layers are the result, editable; Painter's
+//!   MaterialCraft's generators and brush strokes replayed by our brush pipeline. Arranged like the real stack (the layers are the result, editable; Painter's
 //!   flattened result is the hidden reference), but not compared with the cache: replacements are measured
 //!   approximations.
 //! - **Best effort**: not computable and no texture cache to fall back on; the layers are all there is.
@@ -64,7 +64,7 @@ impl StackStrategy {
                 "layers reproduce Painter exactly and are the result; Painter's flattened result kept hidden as a reference"
             }
             StackStrategy::Replacements => {
-                "layers reproduce Painter with MaterialCraft's replacements for Substance procedurals and are the result; Painter's flattened result kept hidden as a reference"
+                "layers reproduce Painter with MaterialCraft's replacements for Substance procedurals or replayed brush strokes and are the result; Painter's flattened result kept hidden as a reference"
             }
             StackStrategy::PainterResultOnTop => {
                 "not every layer is computable: Painter's flattened result is shown on top of the imported layers"

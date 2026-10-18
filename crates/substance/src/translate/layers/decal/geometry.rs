@@ -3,7 +3,7 @@
 //! pieces and UV islands a picked triangle grows to. Topology and BVH are built on first use and kept, so a set
 //! re-imported for blend fits picks from the same structures.
 
-use materialcraft::mesh::{Bvh, FaceGroups, Mesh, MeshPart, Topology, Triangles, Vec3};
+use materialcraft::mesh::{Bvh, FaceGroups, Mesh, MeshPart, Sphere, Topology, Triangles, Vec3};
 use std::sync::OnceLock;
 
 /// One part of the set.
@@ -55,6 +55,9 @@ impl Triangles for AllTriangles<'_> {
 
 pub struct SetGeometry<'m> {
     pub parts: Vec<GeometryPart<'m>>,
+    /// The bounding sphere of the whole mesh (every set), which Painter's model-sized brushes are measured
+    /// against.
+    pub scene: Option<Sphere>,
     /// (part, triangle, corners) of every valid triangle, and the BVH over them.
     triangles: OnceLock<(Vec<(usize, usize, [Vec3; 3])>, Bvh)>,
 }
@@ -80,6 +83,7 @@ impl<'m> SetGeometry<'m> {
             .collect();
         SetGeometry {
             parts,
+            scene: mesh.bounding_sphere(),
             triangles: OnceLock::new(),
         }
     }

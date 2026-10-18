@@ -17,6 +17,7 @@ use super::images::ImageSource;
 use super::layer_content::is_flat_normal;
 use super::mask::MaskEvaluator;
 use super::projection_map::ProjectionTable;
+use super::replay::{ReplayTally, StrokeReplay};
 use super::set_surface::SurfaceSource;
 use super::verdict::{LayerNote, MaskFailure, StackVerdict};
 use crate::model::{LayerKind as PainterKind, PainterLayer};
@@ -47,6 +48,8 @@ pub struct ImportedStack {
     /// Bottom → top.
     pub layers: Vec<Layer>,
     pub verdict: StackVerdict,
+    /// What the stroke replay did (empty without one).
+    pub replayed: ReplayTally,
 }
 
 pub struct StackBuilder<'a> {
@@ -60,6 +63,8 @@ pub struct StackBuilder<'a> {
     pub geometry: Option<&'a SetGeometry<'a>>,
     /// The set's surface, for mask bitmaps projected from a volume.
     pub surface: Option<&'a dyn SurfaceSource>,
+    /// Paints painted masks again (`None`: they stay empty with their stroke records).
+    pub replay: Option<&'a StrokeReplay<'a>>,
     /// What the set's anchors hold (see [`AnchorTable::measure`]).
     pub anchors: &'a AnchorTable,
 }
@@ -79,6 +84,7 @@ impl StackBuilder<'_> {
             resolution: self.resolution,
             geometry: self.geometry,
             surface: self.surface,
+            replay: self.replay,
             anchors: self.anchors,
         }
     }
@@ -92,7 +98,12 @@ impl StackBuilder<'_> {
         };
         let mut ids = Ids::default();
         let layers = self.stack(layers, &top, &mut verdict, &mut ids);
-        ImportedStack { layers, verdict }
+        let replayed = self.replay.map(StrokeReplay::tally).unwrap_or_default();
+        ImportedStack {
+            layers,
+            verdict,
+            replayed,
+        }
     }
 
     fn stack(&self, layers: &[PainterLayer], ctx: &Context, v: &mut StackVerdict, ids: &mut Ids) -> Vec<Layer> {
@@ -198,6 +209,7 @@ impl StackBuilder<'_> {
             resolution: self.resolution,
             anchors: self.anchors,
             plan: self.plan,
+            replay: self.replay,
         }
     }
 

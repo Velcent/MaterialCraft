@@ -12,6 +12,7 @@ use crate::translate::channel_table::{channel_for_bit, channel_spec};
 use crate::translate::layers::cache_score::{Score, score};
 use crate::translate::layers::decal::geometry::SetGeometry;
 use crate::translate::layers::island_texels::IslandTexels;
+use crate::translate::layers::replay::{ReplayCache, ReplayChoice};
 use crate::translate::layers::{
     BlendTable, ImageSource, ImportedStack, LayerImport, ProjectionTable, SetChannels, SurfaceSource,
 };
@@ -41,6 +42,10 @@ pub struct PreparedSet<'a> {
     pub plan: ProceduralPlan,
     /// The set's baked mesh maps, which the generators read (empty unless loaded).
     pub baked: Vec<BakedMap>,
+    /// Whether painted masks and paint layers are replayed.
+    pub replay: ReplayChoice,
+    /// Replays kept across this set's imports.
+    replay_cache: ReplayCache,
 }
 
 impl<'a> PreparedSet<'a> {
@@ -81,6 +86,8 @@ impl<'a> PreparedSet<'a> {
             geometry: mesh.zip(painter.material_uid).map(|(m, uid)| m.geometry(uid)),
             plan: ProceduralPlan::default(),
             baked: Vec::new(),
+            replay: ReplayChoice::default(),
+            replay_cache: ReplayCache::default(),
         })
     }
 
@@ -100,6 +107,8 @@ impl<'a> PreparedSet<'a> {
             projections,
             images,
             plan: &self.plan,
+            replay: self.replay,
+            replay_cache: Some(&self.replay_cache),
         }
         .import_on(
             self.painter,
@@ -119,11 +128,25 @@ impl<'a> PreparedSet<'a> {
         images: &dyn ImageSource,
         plan: &ProceduralPlan,
     ) -> ImportedStack {
+        self.import_copy_replaying(painter, table, images, plan, self.replay)
+    }
+
+    /// [`Self::import_copy`] with strokes replayed or not as `replay` says.
+    pub fn import_copy_replaying(
+        &self,
+        painter: &PainterTextureSet,
+        table: &BlendTable,
+        images: &dyn ImageSource,
+        plan: &ProceduralPlan,
+        replay: ReplayChoice,
+    ) -> ImportedStack {
         LayerImport {
             table,
             projections: &ProjectionTable::painter(),
             images,
             plan,
+            replay,
+            replay_cache: Some(&self.replay_cache),
         }
         .import_on(
             painter,

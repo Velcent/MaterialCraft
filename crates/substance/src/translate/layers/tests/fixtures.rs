@@ -110,6 +110,8 @@ pub fn import_with(layers: Vec<PainterLayer>, images: &dyn ImageSource) -> Impor
         projections: &super::super::ProjectionTable::painter(),
         images,
         plan: &crate::translate::replacements::ProceduralPlan::default(),
+        replay: Default::default(),
+        replay_cache: None,
     }
     .import(&set(layers), &channels(), SIZE)
 }

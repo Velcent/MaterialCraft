@@ -17,8 +17,10 @@
 //!     mcsub maps <in> <out dir>                    final maps per texture set as PNGs
 //!     mcsub compare <in> <export dir> [--diff <dir>] [--height-normal <factor>]
 //!                                                  compare with Painter's exported textures
-//!     mcsub verify-layers <file.spp> [--fit]       imported layer stacks against Painter's texture cache
-//!     mcsub verify-layers --all <folder> [--fit] [--jobs N]   the same for every .spp below the folder
+//!     mcsub verify-layers <file.spp> [--fit] [--strokes keep|replay]
+//!                                                  imported layer stacks against Painter's texture cache
+//!     mcsub verify-layers --all <folder> [--fit] [--strokes keep|replay] [--jobs N]
+//!                                                  the same for every .spp below the folder
 //!     mcsub isolate <file.spp|folder|list.txt> [--measure] [--cases] [--joint] [--jobs N]
 //!                                                  isolated effect cases per effect id (procedural fills and
 //!                                                  filters measurable against the texture cache), see
@@ -57,6 +59,7 @@ use materialcraft_substance::tools::verify_layers::isolate::joint_cases::JointOp
 use materialcraft_substance::tools::verify_layers::isolate::joint_census::{JOINT_CASE_HEADER, joint_census_files};
 use materialcraft_substance::tools::verify_layers::{VerifyOptions, verify_path};
 use materialcraft_substance::tools::{compare, convert, maps, model_corpus};
+use materialcraft_substance::translate::layers::replay::ReplayChoice;
 use materialcraft_substance::translate::replacements::{Choice, ProceduralPlan};
 use materialcraft_substance::translate::{Cancel, import_spp_with};
 use std::path::{Path, PathBuf};
@@ -80,6 +83,8 @@ struct Args {
     library: Vec<PathBuf>,
     /// `--materials keep|auto`.
     materials: Option<String>,
+    /// `--strokes keep|replay`.
+    strokes: Option<String>,
 }
 
 impl Args {
@@ -94,6 +99,7 @@ impl Args {
             procedurals: None,
             library: Vec::new(),
             materials: None,
+            strokes: None,
         };
         let mut it = raw.into_iter();
         while let Some(a) = it.next() {
@@ -105,6 +111,7 @@ impl Args {
                 "--procedurals" => args.procedurals = it.next(),
                 "--library" => args.library.extend(it.next().map(PathBuf::from)),
                 "--materials" => args.materials = it.next(),
+                "--strokes" => args.strokes = it.next(),
                 f if f.starts_with("--") => args.flags.push(a),
                 _ => args.words.push(a),
             }
@@ -157,6 +164,15 @@ impl Args {
     /// The materials of the `--library` folders.
     fn tray(&self) -> TrayMaterials {
         TrayMaterials::load(&self.library)
+    }
+    /// `--strokes keep|replay`: whether painted masks are replayed (default: [`ReplayChoice::default`]).
+    fn replay(&self) -> Result<ReplayChoice, String> {
+        match self.strokes.as_deref() {
+            None => Ok(ReplayChoice::default()),
+            Some("keep") => Ok(ReplayChoice::Keep),
+            Some("replay") => Ok(ReplayChoice::Replay),
+            Some(other) => Err(format!("--strokes {other}: expected keep or replay")),
+        }
     }
 }
 
@@ -304,6 +320,7 @@ fn run(args: Args) -> Result<(), String> {
             let options = VerifyOptions {
                 fit: args.has("--fit"),
                 planner: args.planner()?,
+                replay: args.replay()?,
             };
             let result = verify_path(Path::new(path), options, args.pool(), &|p| eprintln!("{}", p.display()));
             print!("{result}");

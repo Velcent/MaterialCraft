@@ -91,6 +91,8 @@ fn generator_masks_the_plan_replaces_become_ours() {
         projections: &crate::translate::layers::ProjectionTable::painter(),
         images: &NoImages,
         plan: &plan,
+        replay: Default::default(),
+        replay_cache: None,
     }
     .import(&set(layers), &channels(), SIZE);
     let m = stack.layers[1].mask.as_ref().unwrap();
@@ -228,6 +230,8 @@ fn volume_mask_bitmaps_are_laid_on_over_the_surface() {
         projections: &ProjectionTable::painter(),
         images: &HalfWhite,
         plan: &Default::default(),
+        replay: Default::default(),
+        replay_cache: None,
     };
     let on = import.import_on(&set(layers.clone()), &channels(), SIZE, None, Some(&surface));
     let off = import.import(&set(layers), &channels(), SIZE);

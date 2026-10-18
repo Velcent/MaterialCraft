@@ -2,6 +2,8 @@
 //! a constant from uniform fills, an image from a bitmap fill, a stack the compositor evaluates from the mapped
 //! effects (levels, fills stacked over images, references to anchors whose content is computable), or nothing
 //! computable (procedurals, strokes, filters, …) with the reason. Anchors only mark a place and change nothing.
+//! Brush work is computable when its strokes are replayed ([`super::replay`]): one replay per effect group (or
+//! bare paint effect), the same one the effect mapping puts into the layer's pixels.
 
 use super::anchors::AnchorTable;
 use super::blend_table::{BlendTable, Holder};
@@ -11,7 +13,8 @@ use super::computability::Computability;
 use super::effect_data;
 use super::images::{ImageSource, channel_pixels};
 use super::projection_map::ProjectionTable;
-use crate::model::{EffectHeader, FillEffect, FilterEffect, PainterEffect, PainterSource};
+use super::replay::StrokeReplay;
+use crate::model::{EffectHeader, FillEffect, FilterEffect, PaintEffect, PainterEffect, PainterSource};
 use crate::translate::replacements::{self, ProceduralPlan, Replacement, materials};
 use materialcraft::paint::{BlendMode, Channel, TiledImage};
 use materialcraft::projection::Projection;
@@ -67,6 +70,8 @@ pub struct ContentEvaluator<'a> {
     pub anchors: &'a AnchorTable,
     /// Which Substance filters are replaced by MaterialCraft's, and which material fills by our materials.
     pub plan: &'a ProceduralPlan,
+    /// Paints brush work again (`None`: strokes are not computable).
+    pub replay: Option<&'a StrokeReplay<'a>>,
 }
 
 impl ContentEvaluator<'_> {
@@ -118,6 +123,17 @@ impl ContentEvaluator<'_> {
                     if !blend.contributes() {
                         continue;
                     }
+                    if self.replayed(&brush_work(&group.effects), channel, Some(&blend), state) {
+                        // the group's other entries follow it as effects of their own
+                        let rest: Vec<PainterEffect> = group
+                            .effects
+                            .iter()
+                            .filter(|e| !matches!(e, PainterEffect::Paint(_)))
+                            .cloned()
+                            .collect();
+                        self.walk(&rest, channel, state);
+                        continue;
+                    }
                     if blend.mode() == BlendMode::Passthrough {
                         self.walk(&group.effects, channel, state);
                         continue;
@@ -132,6 +148,7 @@ impl ContentEvaluator<'_> {
                         opaque(state, "effect group with its own blending");
                     }
                 }
+                PainterEffect::Paint(p) if self.replayed(&[p], channel, None, state) => {}
                 PainterEffect::Paint(p) if p.stroke_count() > 0 && self.writes(&p.header, channel) => {
                     let colours = p.colors.is_empty() || p.colors.iter().any(|c| c.channels().contains(painter));
                     if colours {
@@ -163,6 +180,39 @@ impl ContentEvaluator<'_> {
                 _ => {}
             }
         }
+    }
+
+    /// Brush work replayed for `channel` (bare, or an effect group's with `blend`): true when the replay took care of
+    /// the channel (composited with the replay's status, or not painted at all), false when there is no replay or
+    /// no stroke in `paints`.
+    fn replayed(
+        &self,
+        paints: &[&PaintEffect],
+        channel: Channel,
+        blend: Option<&ResolvedBlend>,
+        state: &mut State,
+    ) -> bool {
+        let Some(replay) = self.replay else { return false };
+        if !paints.iter().any(|p| p.stroke_count() > 0) {
+            return false;
+        }
+        match replay.content(paints, self.channels) {
+            Ok(r) => {
+                if r.pixels.iter().any(|(c, _)| *c == channel) {
+                    let mut status = r.status("paint layer");
+                    if let Some(b) = blend {
+                        status.and(&b.status());
+                    }
+                    composited(state, status);
+                }
+            }
+            Err(why) => {
+                if paints.iter().any(|p| self.writes(&p.header, channel)) {
+                    opaque(state, format!("brush strokes not replayable: {why}"));
+                }
+            }
+        }
+        true
     }
 
     /// True if the effect's `channelTypes` includes the channel and its blending does not switch it off.
@@ -294,6 +344,17 @@ pub(super) fn filter_replacement(
 pub(super) fn harmless(blend: &ResolvedBlend, top: [f32; 4]) -> bool {
     let flat = (top[0] - 0.5).abs() < 1e-3 && (top[1] - 0.5).abs() < 1e-3 && (top[2] - 1.0).abs() < 1e-3;
     blend.mode().is_normal_map() && flat
+}
+
+/// The paint effects directly in `effects` (an effect group's brush work).
+pub(super) fn brush_work(effects: &[PainterEffect]) -> Vec<&PaintEffect> {
+    effects
+        .iter()
+        .filter_map(|e| match e {
+            PainterEffect::Paint(p) if p.header.enabled => Some(p),
+            _ => None,
+        })
+        .collect()
 }
 
 /// The compositor takes over the channel from here, unless something before is already not computable.

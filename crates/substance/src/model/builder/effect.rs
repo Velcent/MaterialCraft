@@ -116,6 +116,8 @@ impl ModelBuilder {
             strokes,
             path_strokes,
             brush_uid: e.object("brush").and_then(|b| b.uid()),
+            brush: e.object("brush").map(|b| self.brush(b)),
+            stamp_blending: e.u64("stampBlendingMode").unwrap_or(0),
             colors: e.objects("sourceColor").map(|s| self.source(s, depth)).collect(),
             alpha: e.objects("sourceTransparent").map(|s| self.source(s, depth)).collect(),
             stencil: e.object("sourceStencil").map(|s| self.source(s, depth)),

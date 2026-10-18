@@ -5,6 +5,7 @@ use super::fit::FitTally;
 use super::kinds::KindTally;
 use super::{ChannelResult, SetResult};
 use crate::translate::layers::cache_score::EXACT_STEPS;
+use crate::translate::layers::replay::REPLAYED;
 use crate::translate::layers::{Computability, StackStrategy};
 use std::fmt;
 
@@ -86,6 +87,25 @@ impl Verification {
                 of.len()
             )?;
         }
+        // channels the replayed strokes made computable (alone or with replacements)
+        let replays = |c: &ChannelResult| c.status.reasons().iter().any(|r| r.starts_with(REPLAYED));
+        let with: Vec<_> = self
+            .sets
+            .iter()
+            .flat_map(|s| &s.channels)
+            .filter(|c| c.status.is_computable() && replays(c))
+            .collect();
+        let compared = with.iter().filter(|c| c.score.is_some()).count();
+        let ok = with.iter().filter(|c| c.score.is_some_and(|s| s.reproduced())).count();
+        let only = with
+            .iter()
+            .filter(|c| c.status.reasons().iter().all(|r| r.starts_with(REPLAYED)))
+            .count();
+        writeln!(
+            f,
+            "channels with replayed strokes: {} computable ({only} apart from the replay alone), {compared} compared, {ok} reproduced",
+            with.len()
+        )?;
         let computable = self
             .sets
             .iter()

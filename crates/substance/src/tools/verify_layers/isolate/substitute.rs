@@ -4,7 +4,8 @@
 //!
 //! - [`Swap::Output`]: a candidate's output becomes the constant `v` and keeps the candidate's blending (a mask
 //!   generator becomes a grey fill with its blend; a procedural content fill a uniform fill of `v` in the
-//!   channels it fed; a filter a fill of `v` replacing what is below at the filter's opacity).
+//!   channels it fed; a filter a fill of `v` replacing what is below at the filter's opacity; brush work in a
+//!   mask a fill of `v` replacing what is below).
 //! - [`Swap::Nuisance`]: a mask effect becomes black or white at full strength (overriding what is below it);
 //!   a layer is switched off, or its content becomes black or white at normal blending, full opacity; a whole
 //!   mask becomes black or white; a layer with unknown content and mask is switched off or black or white
@@ -101,6 +102,10 @@ fn output(set: &mut PainterTextureSet, at: &EffectAddress, v: f32, channels: &Se
     let Some(e) = effect_mut(set, at) else { return };
     match e {
         PainterEffect::Fill(f) if in_mask => f.sources = vec![uniform(ChannelMask(0), [v; 3])],
+        // brush work in a mask: the mask right after it is `v` (what the strokes made of what was below)
+        PainterEffect::Group(_) | PainterEffect::Paint(_) if in_mask => {
+            *e = PainterEffect::Fill(mask_fill(header_of(e), v, 1.0))
+        }
         PainterEffect::Fill(f) => {
             let mut sources = Vec::new();
             for s in std::mem::take(&mut f.sources) {

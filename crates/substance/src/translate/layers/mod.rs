@@ -11,7 +11,8 @@
 //! - [`cache_score`] and [`cache_agreement`]: a fully computable stack measured against Painter's cache, on
 //!   the texels of the mesh ([`island_texels`]).
 //! - [`strategy`]: the per-set decision between the real stack and Painter's flattened result.
-//! - [`strokes`]: Painter's brush strokes → stroke records next to the (empty) paint pixels.
+//! - [`strokes`]: Painter's brush strokes → stroke records next to the paint pixels.
+//! - [`replay`]: those strokes painted again by our brush pipeline (painted masks become real paint).
 //! - [`decal`]: Painter's polygon-fill hits resolved on the set's mesh into picked triangles.
 //! - [`set_surface`]: the set's surface map and scene frame, for mask bitmaps projected from a volume.
 //! - [`anchors`]: how exactly what each anchor holds is computable, for the effects that read it.
@@ -33,6 +34,7 @@ pub mod island_texels;
 pub mod layer_content;
 pub mod mask;
 pub mod projection_map;
+pub mod replay;
 pub mod report;
 pub mod set_surface;
 pub mod stack_builder;
@@ -56,16 +58,21 @@ use crate::model::PainterTextureSet;
 use crate::translate::replacements::ProceduralPlan;
 use anchors::AnchorTable;
 use decal::geometry::SetGeometry;
+use replay::{ReplayCache, ReplayChoice, StrokeReplay};
 use stack_builder::StackBuilder;
 
-/// Imports layer stacks with one blend table, one image source and the user's choice of procedural
-/// replacements.
+/// Imports layer stacks with one blend table, one image source, the user's choice of procedural
+/// replacements and whether strokes are replayed.
 pub struct LayerImport<'a> {
     pub table: &'a BlendTable,
     /// How Painter's projection settings map to ours.
     pub projections: &'a ProjectionTable,
     pub images: &'a dyn ImageSource,
     pub plan: &'a ProceduralPlan,
+    /// Replay painted masks and paint layers (needs the mesh: [`Self::import_on`] with geometry).
+    pub replay: ReplayChoice,
+    /// Replays kept across imports of the same set (else each import replays on its own).
+    pub replay_cache: Option<&'a ReplayCache>,
 }
 
 impl LayerImport<'_> {
@@ -76,7 +83,8 @@ impl LayerImport<'_> {
     }
 
     /// [`Self::import`] with the set's mesh, which polygon-fill picks are resolved on, and its surface at
-    /// `resolution`, which mask bitmaps in a volume projection are laid on over (else in texture space).
+    /// `resolution`, which mask bitmaps in a volume projection are laid on over (else in texture space). Strokes
+    /// are replayed on the mesh.
     pub fn import_on(
         &self,
         set: &PainterTextureSet,
@@ -85,6 +93,13 @@ impl LayerImport<'_> {
         geometry: Option<&SetGeometry>,
         surface: Option<&dyn SurfaceSource>,
     ) -> ImportedStack {
+        let replay = match (geometry, self.replay) {
+            (Some(g), ReplayChoice::Replay) => Some(StrokeReplay::new(g, self.images, resolution, self.replay_cache)),
+            _ => None,
+        };
+        if let Some(r) = &replay {
+            r.prefetch(set, channels);
+        }
         let builder = |anchors| StackBuilder {
             channels,
             table: self.table,
@@ -94,6 +109,7 @@ impl LayerImport<'_> {
             resolution,
             geometry,
             surface,
+            replay: replay.as_ref(),
             anchors,
         };
         // anchors read through other anchors need a second pass

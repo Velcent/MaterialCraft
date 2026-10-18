@@ -8,8 +8,10 @@
 use super::frames::{Frame, FrameGrid, Independence};
 use super::inverse::{Coupling, Inversion, InversionSettings, Probes, TexelState};
 use super::plan::CasePlan;
+use super::slots::{Family, Nuisance};
 use super::substitute::{Swap, apply};
 use crate::model::PainterTextureSet;
+use crate::translate::layers::replay::ReplayChoice;
 use crate::translate::layers::{Computability, SetChannels};
 use crate::translate::replacements::{Choice, ProceduralPlan};
 use materialcraft::paint::Channel;
@@ -28,10 +30,12 @@ pub fn probe_values(plan: &CasePlan) -> [f32; 5] {
 pub trait Composer {
     /// The channel's final look (stored encoding, over Painter's defaults) at the set's resolution, and the
     /// import's verdict on the channel.
+    /// Strokes are replayed with `replay` (only our side of a stroke candidate needs them).
     fn composite(
         &self,
         painter: &PainterTextureSet,
         procedurals: &ProceduralPlan,
+        replay: ReplayChoice,
         channel: Channel,
     ) -> (Tex, Computability);
 }
@@ -90,7 +94,11 @@ impl Measurer<'_> {
         let mut probes = Probes::new(components);
         let values = probe_values(plan);
         for v in values {
-            probes.push(v, self.frame(plan, Some(v), &base, &keep, &mut stats).0);
+            probes.push(
+                v,
+                self.frame(plan, Some(v), &base, &keep, ReplayChoice::Keep, &mut stats)
+                    .0,
+            );
         }
         let ends = [values[0], values[values.len() - 1]];
         let reference: Vec<Frame> = ends
@@ -100,16 +108,28 @@ impl Measurer<'_> {
         let mut independence = Independence::new(reference, components);
         for state in states.iter().skip(1) {
             for (i, v) in ends.iter().enumerate() {
-                independence.compare(i, &self.frame(plan, Some(*v), state, &keep, &mut stats).0);
+                independence.compare(
+                    i,
+                    &self
+                        .frame(plan, Some(*v), state, &keep, ReplayChoice::Keep, &mut stats)
+                        .0,
+                );
             }
         }
         let theirs = probes.invert(observed, coupling, &self.settings);
         let ours = match (with_ours, plan.candidate.ours) {
             (true, Some(_)) => {
                 let replace = ProceduralPlan::all(Choice::Replace);
-                let (frame, verdict) = self.frame(plan, None, &base, &replace, &mut stats);
+                let replay = match plan.candidate.family {
+                    Family::Strokes => ReplayChoice::Replay,
+                    _ => ReplayChoice::Keep,
+                };
+                let (frame, verdict) = self.frame(plan, None, &base, &replace, replay, &mut stats);
+                // replayed strokes may also leave the channel exact (nothing replaced reaches it)
+                let strokes = plan.candidate.family == Family::Strokes;
                 match verdict {
                     Computability::Replaced(_) => Some(probes.invert(&frame, coupling, &self.settings)),
+                    Computability::Exact if strokes => Some(probes.invert(&frame, coupling, &self.settings)),
                     other => {
                         notes.push(format!(
                             "our replacement did not import as replaced: {:?}",
@@ -169,6 +189,7 @@ impl Measurer<'_> {
         v: Option<f32>,
         state: &[usize],
         procedurals: &ProceduralPlan,
+        replay: ReplayChoice,
         stats: &mut TexelStats,
     ) -> (Frame, Computability) {
         let mut swaps: Vec<Swap> = plan
@@ -181,20 +202,29 @@ impl Measurer<'_> {
             swaps.push(Swap::Output(plan.candidate.address.clone(), v));
         }
         let swapped = apply(self.painter, &swaps, self.channels);
-        let (tex, verdict) = self.composer.composite(&swapped, procedurals, plan.channel);
+        let (tex, verdict) = self.composer.composite(&swapped, procedurals, replay, plan.channel);
         stats.composites += 1;
         (self.grid.frame(&tex), verdict)
     }
 }
 
-/// Every combination of nuisance states, the all-first one first.
+/// Every combination of nuisance states, the base one first: each nuisance in its first state, except the
+/// content of the candidate's own layer, which starts shown (white) — switched off, the layer would hide a
+/// mask candidate in every probe.
 fn state_combinations(plan: &CasePlan) -> Vec<Vec<usize>> {
+    let own = &plan.candidate.address.layer;
     let mut out = vec![Vec::new()];
     for n in plan.swapped() {
+        let shown_first =
+            plan.candidate.in_mask() && matches!(&n, Nuisance::Layer(l) | Nuisance::LayerWithMask(l) if l == own);
+        let order: Vec<usize> = match shown_first {
+            true => (0..n.states()).rev().collect(),
+            false => (0..n.states()).collect(),
+        };
         out = out
             .into_iter()
             .flat_map(|prefix| {
-                (0..n.states()).map(move |s| {
+                order.clone().into_iter().map(move |s| {
                     let mut p = prefix.clone();
                     p.push(s);
                     p

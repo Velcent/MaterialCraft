@@ -67,4 +67,6 @@ pub struct PainterStroke {
     pub duplicate_matrix: StoredMat4,
     /// `randomSeed`.
     pub random_seed: u32,
+    /// `lazyDistance`: the lazy mouse's string (0 = off; 0.08 most common otherwise).
+    pub lazy_distance: f32,
 }

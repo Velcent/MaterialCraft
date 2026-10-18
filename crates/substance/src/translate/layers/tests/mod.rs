@@ -5,6 +5,7 @@ mod fixtures;
 mod masks_and_bitmaps;
 mod materials;
 mod native;
+mod replay;
 mod stacks;
 mod strategies;
 mod strokes;

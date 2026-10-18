@@ -72,7 +72,13 @@ impl SetLayers<'_> {
                 };
                 let strategy = StackStrategy::choose(&stack.verdict, flattened.layer.is_some(), &agreement);
                 report_stack(report, &name, &stack, strategy, &channels);
-                report_strokes(report, &name, &StrokeCount::of_set(painter), &stack.layers);
+                report_strokes(
+                    report,
+                    &name,
+                    &StrokeCount::of_set(painter),
+                    &stack.layers,
+                    &stack.replayed,
+                );
                 report_cache_disagreement(report, &name, &agreement, &channels);
                 if !strategy.shows_painter_result() {
                     report_hidden_masks(report, &name, &stack.verdict.mask_failures);

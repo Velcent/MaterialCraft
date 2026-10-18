@@ -73,7 +73,8 @@ pub fn components(channel: Channel) -> usize {
 pub fn joint_plans(plans: &[CasePlan]) -> Vec<JointPlan> {
     let mut seen: Vec<&Candidate> = Vec::new();
     let mut out = Vec::new();
-    for p in plans {
+    // brush work is measured on its own (its replay is composited only there, see `measure`)
+    for p in plans.iter().filter(|p| p.candidate.family != Family::Strokes) {
         if seen.contains(&&p.candidate) {
             continue;
         }

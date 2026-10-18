@@ -7,6 +7,7 @@ use super::cache_channels::CacheChannels;
 use super::cancel::Cancel;
 use super::error::ImportError;
 use super::foreign::ForeignFiles;
+use super::layers::replay::ReplayChoice;
 use super::layers::strokes::{StrokeCount, report_unimported_strokes};
 use super::layers::{BlendTable, LayerImport, ProjectImages, ProjectionTable};
 use super::normal_conventions::NormalConventions;
@@ -79,6 +80,8 @@ pub struct Importer {
     plan: ProceduralPlan,
     /// Where the materials the plan picks are read from to embed them (not embedded without one).
     library: Option<Arc<dyn MaterialResolver>>,
+    /// Whether painted masks are replayed (see [`ReplayChoice`] for the default).
+    replay: ReplayChoice,
 }
 
 impl Importer {
@@ -87,6 +90,7 @@ impl Importer {
             project: SppProject::open(path)?,
             plan: ProceduralPlan::default(),
             library: None,
+            replay: ReplayChoice::default(),
         })
     }
 
@@ -114,6 +118,12 @@ impl Importer {
             let note = "not found in the asset library: the material fill shows nothing until the material is there";
             report.add(format!("material \"{missing}\""), Fidelity::Approximated, note);
         }
+    }
+
+    /// Builder: whether painted masks are replayed.
+    pub fn with_replay(mut self, replay: ReplayChoice) -> Importer {
+        self.replay = replay;
+        self
     }
 
     /// Builds the document; `cancel` is asked between stages, per texture set and per image.
@@ -147,6 +157,8 @@ impl Importer {
             projections: &ProjectionTable::painter(),
             images: &images,
             plan: &self.plan,
+            replay: self.replay,
+            replay_cache: None,
         };
         let layers = SetLayers {
             import: &import,

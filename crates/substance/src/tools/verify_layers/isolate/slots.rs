@@ -2,7 +2,8 @@
 //! can be swapped for constants ([`super::substitute`]).
 //!
 //! Two roles: a **candidate** is an effect whose output we want to measure (a procedural fill — mask generator,
-//! texture, material — or a filter, in a mask or in a layer's content); a **nuisance** is anything else we
+//! texture, material — or a filter, in a mask or in a layer's content; or brush work in a mask, which the import
+//! replays); a **nuisance** is anything else we
 //! cannot compute (brush strokes, levels, polygon fill, anchors …). Every candidate can also act as a nuisance
 //! when another effect is measured. Nuisances in a mask are single effects (an effect group counts as one);
 //! nuisances in a layer's content stand for the layer's whole content (the content of a paint layer is its
@@ -39,7 +40,13 @@ pub enum Family {
     /// A material feeding several channels.
     Material,
     Filter,
+    /// Brush work in a mask (a paint effect, or an effect group holding only brush work), replayed by
+    /// `translate::layers::replay`.
+    Strokes,
 }
+
+/// The id stroke candidates carry as "ours" (the `brush.replay` parity subject).
+pub const STROKES_ID: &str = "stroke_replay";
 
 impl Family {
     pub fn id(self) -> &'static str {
@@ -48,6 +55,7 @@ impl Family {
             Family::Texture => "texture",
             Family::Material => "material",
             Family::Filter => "filter",
+            Family::Strokes => "brush",
         }
     }
 }
@@ -139,6 +147,7 @@ impl Slot {
             Slot::Candidate(c) => {
                 let kind = match c.family {
                     Family::Filter => NuisanceKind::Filter,
+                    Family::Strokes => NuisanceKind::Strokes,
                     _ => NuisanceKind::Procedural,
                 };
                 match c.address.place {
@@ -198,6 +207,14 @@ fn mask_slot(e: &PainterEffect, at: EffectAddress, path: &str) -> Option<Slot> {
             candidate(e, at, path)
         }
         PainterEffect::Filter(_) => candidate(e, at, path),
+        PainterEffect::Paint(_) | PainterEffect::Group(_) if brush_work_only(e) => Some(Slot::Candidate(Candidate {
+            address: at,
+            graph: "strokes".into(),
+            ours: Some(STROKES_ID),
+            family: Family::Strokes,
+            path: path.to_string(),
+            projection: 0,
+        })),
         other => unknown(other).map(|kind| Slot::MaskEffect(at, kind)),
     }
 }
@@ -244,6 +261,27 @@ fn content_slots(l: &PainterLayer, layer: LayerAddress, path: &str, out: &mut Ve
         Some(kind) => out.push(Slot::Layer(layer, kind)),
         None => out.extend(candidates),
     }
+}
+
+/// True for brush work with strokes and nothing else unknown: a paint effect, or a group of paint effects,
+/// anchors, computable fills and such groups.
+fn brush_work_only(e: &PainterEffect) -> bool {
+    fn walk(e: &PainterEffect, strokes: &mut bool) -> bool {
+        if !e.is_enabled() {
+            return true;
+        }
+        match e {
+            PainterEffect::Paint(p) => {
+                *strokes |= p.stroke_count() > 0;
+                true
+            }
+            PainterEffect::Group(g) => g.effects.iter().all(|x| walk(x, strokes)),
+            PainterEffect::Anchor(_) => true,
+            other => unknown(other).is_none(),
+        }
+    }
+    let mut strokes = false;
+    walk(e, &mut strokes) && strokes
 }
 
 /// What makes an effect unknown when it is not a candidate (inside effect groups too), if anything.

@@ -1,7 +1,9 @@
 //! Painter's brush strokes ([`PainterStroke`]) as our stroke records ([`StrokeRecord`]), and the import report
-//! line that counts them. The pixels stay as imported (Painter's cache); nothing replays the records yet.
+//! line that counts them and their replay ([`super::replay`]).
 //!
-//! Mapping (Painter → ours): `DataStrokeKey` position and time → sample position and time; the pressure
+//! Mapping (Painter → ours): `DataStrokeKey` position and time → sample position and time (3D-view positions are
+//! 0 … 1 with y up and become normalised device coordinates; 2D-view positions are texture coordinates with V down
+//! as ours, unlike polygon-fill picks; both found by replaying painted masks against the texture cache: 3D-view strokes land where Painter's do, 2D-view ones in the islands Painter painted); the pressure
 //! timeline (`DataTimelineKey` x/value) is sampled at each point's time, linearly between keys and held at the
 //! ends (no keys: pressure 1, a mouse); `tilt` is never filled in the corpus → 0; `viewMatrix` /
 //! `projectionMatrix` → the camera (same column-major order); `viewType` 0/1 → UV/3D view; `duplicateCount` /
@@ -10,6 +12,7 @@
 //! 3D path strokes (`DataStroke3D`) have no record yet; they are counted.
 
 use crate::model::{PaintEffect, PaintTool, PainterEffect, PainterStroke, PainterTextureSet, PainterView, TimelineKey};
+use crate::translate::layers::replay::ReplayTally;
 use crate::translate::report::Reporter;
 use materialcraft::paint::stroke::{
     Camera, Stroke, StrokeData, StrokeRecord, StrokeSample, StrokeTool, Symmetry, ViewKind,
@@ -67,13 +70,22 @@ fn stroke(effect: &PaintEffect, s: &PainterStroke) -> Stroke {
             .points
             .iter()
             .map(|p| StrokeSample {
-                position: p.position,
+                position: position(view, p.position),
                 pressure: pressure_at(&s.pressure, p.time),
                 tilt: [0.0; 2],
                 rotation: 0.0,
                 time: p.time,
             })
             .collect(),
+    }
+}
+
+/// A stored point position in our record's space for `view`: 3D-view points are 0 … 1 with y up, 2D-view points
+/// are texture coordinates as ours.
+pub fn position(view: ViewKind, p: [f32; 2]) -> [f32; 2] {
+    match view {
+        ViewKind::Mesh => [2.0 * p[0] - 1.0, 2.0 * p[1] - 1.0],
+        ViewKind::Uv => p,
     }
 }
 
@@ -151,17 +163,38 @@ pub fn recorded(layers: &[Layer]) -> (usize, usize, usize) {
     out
 }
 
-/// One line per set with strokes: how many became stroke records.
-pub fn report_strokes(reporter: &mut Reporter, set: &str, painter: &StrokeCount, layers: &[Layer]) {
+/// One line per set with strokes: how many became stroke records and how many were replayed.
+pub fn report_strokes(
+    reporter: &mut Reporter,
+    set: &str,
+    painter: &StrokeCount,
+    layers: &[Layer],
+    replayed: &ReplayTally,
+) {
     if painter.strokes + painter.path_strokes == 0 {
         return;
     }
     let (strokes, samples, records) = recorded(layers);
     let mut note = format!(
-        "{strokes} strokes ({samples} samples, {} with pen pressure) kept as stroke records in {records} paint effects; \
-         not replayed yet, the pixels come from Painter",
+        "{strokes} strokes ({samples} samples, {} with pen pressure) kept as stroke records in {records} paint effects",
         painter.with_pressure
     );
+    match (replayed.replayed, replayed.refused.is_empty()) {
+        (0, true) => note.push_str("; not replayed, the pixels come from Painter"),
+        (n, _) => note.push_str(&format!(
+            "; {} strokes replayed into the pixels of {n} paint effects or layers",
+            replayed.strokes
+        )),
+    }
+    if !replayed.refused.is_empty() {
+        let why: Vec<String> = replayed
+            .refused
+            .iter()
+            .take(4)
+            .map(|(r, n)| format!("{r} ×{n}"))
+            .collect();
+        note.push_str(&format!("; not replayable: {}", why.join(", ")));
+    }
     if strokes != painter.strokes {
         note.push_str(&format!(
             "; {} of Painter's {} strokes have no record",

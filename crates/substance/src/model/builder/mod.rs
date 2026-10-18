@@ -2,6 +2,7 @@
 //! [`RawEntry`] and is counted in the [`ModelReport`]. Split by level: texture sets, layers, effects, sources,
 //! strokes.
 
+mod brush;
 mod decal;
 mod effect;
 mod fill_projection;

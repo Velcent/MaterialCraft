@@ -150,6 +150,8 @@ fn a_paint_layer_holds_its_brush_work_and_effects() {
         strokes: vec![],
         path_strokes: 3,
         brush_uid: None,
+        brush: None,
+        stamp_blending: 0,
         colors: vec![],
         alpha: vec![],
         stencil: None,

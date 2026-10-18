@@ -4,33 +4,35 @@
 use crate::translate::layers::ImageSource;
 use crate::translate::layers::images::LoadedImage;
 use materialcraft::paint::TiledImage;
-use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 /// A decoded bitmap (image, float format) or why it could not be read.
 type Loaded = Result<(TiledImage, bool), String>;
 
 pub struct CachedImages<'a> {
     inner: &'a dyn ImageSource,
-    loaded: RefCell<HashMap<String, Loaded>>,
+    loaded: Mutex<HashMap<String, Loaded>>,
 }
 
 impl<'a> CachedImages<'a> {
     pub fn new(inner: &'a dyn ImageSource) -> Self {
         CachedImages {
             inner,
-            loaded: RefCell::new(HashMap::new()),
+            loaded: Mutex::new(HashMap::new()),
         }
     }
 }
 
 impl ImageSource for CachedImages<'_> {
     fn load(&self, url: &str) -> Result<LoadedImage, String> {
-        if let Some(hit) = self.loaded.borrow().get(url) {
-            return hit.clone().map(|(image, float)| LoadedImage { image, float });
+        if let Some(hit) = self.loaded.lock().ok().and_then(|l| l.get(url).cloned()) {
+            return hit.map(|(image, float)| LoadedImage { image, float });
         }
         let result = self.inner.load(url).map(|l| (l.image, l.float));
-        self.loaded.borrow_mut().insert(url.to_string(), result.clone());
+        if let Ok(mut l) = self.loaded.lock() {
+            l.insert(url.to_string(), result.clone());
+        }
         result.map(|(image, float)| LoadedImage { image, float })
     }
 }

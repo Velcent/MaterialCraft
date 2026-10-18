@@ -15,6 +15,8 @@ fn import_planned(layers: Vec<PainterLayer>, plan: &ProceduralPlan) -> ImportedS
         projections: &crate::translate::layers::ProjectionTable::painter(),
         images: &NoImages,
         plan,
+        replay: Default::default(),
+        replay_cache: None,
     }
     .import(&set(layers), &channels(), SIZE)
 }

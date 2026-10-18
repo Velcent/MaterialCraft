@@ -13,6 +13,7 @@
 
 pub mod baking;
 mod blending;
+mod brush;
 mod builder;
 mod channel;
 mod decal;
@@ -35,6 +36,7 @@ mod tests;
 mod texture_set;
 
 pub use blending::{ChannelBlending, PainterBlendMode, blending_for};
+pub use brush::{PainterBrush, PainterEmitter, PressureResponse, StrokeEmitter};
 pub use channel::{ChannelMask, PainterChannel};
 pub use decal::{DecalHit, HitGranularity, HitShape};
 pub use document::PainterDocument;

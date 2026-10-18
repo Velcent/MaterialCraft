@@ -71,6 +71,8 @@ fn mask(effects: Vec<PainterEffect>) -> Option<PainterMask> {
 
 fn strokes(channels: u64) -> PainterEffect {
     let paint = PaintEffect {
+        brush: None,
+        stamp_blending: 0,
         header: header(channels),
         tool: PaintTool::Brush,
         opacity: 1.0,
@@ -163,6 +165,8 @@ fn import(
         projections: &crate::translate::layers::ProjectionTable::painter(),
         images: &HalfMask,
         plan: procedurals,
+        replay: Default::default(),
+        replay_cache: None,
     }
     .import(s, channels, SIZE)
 }
@@ -180,6 +184,7 @@ impl Composer for TestComposer<'_> {
         &self,
         painter: &PainterTextureSet,
         procedurals: &ProceduralPlan,
+        _replay: crate::translate::layers::replay::ReplayChoice,
         channel: Channel,
     ) -> (Tex, Computability) {
         let stack = import(painter, self.channels, procedurals);
@@ -276,7 +281,14 @@ impl super::joint_measure::MultiComposer for TestComposer<'_> {
     ) -> Vec<(Tex, Computability)> {
         channels
             .iter()
-            .map(|c| self.composite(painter, procedurals, *c))
+            .map(|c| {
+                self.composite(
+                    painter,
+                    procedurals,
+                    crate::translate::layers::replay::ReplayChoice::Keep,
+                    *c,
+                )
+            })
             .collect()
     }
 }

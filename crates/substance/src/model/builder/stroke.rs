@@ -41,6 +41,7 @@ impl ModelBuilder {
                 .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX)),
             duplicate_matrix: mat4("duplicateMatrix"),
             random_seed: s.u64("randomSeed").map_or(0, |n| n as u32),
+            lazy_distance: s.f32("lazyDistance").unwrap_or(0.0),
         }
     }
 

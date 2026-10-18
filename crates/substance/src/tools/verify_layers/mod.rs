@@ -26,6 +26,7 @@ use crate::tools::parallel::CorpusPool;
 use crate::translate::BakedMaps;
 use crate::translate::cache_channels::CacheChannels;
 use crate::translate::layers::cache_agreement::{CacheAgreement, disagrees};
+use crate::translate::layers::replay::ReplayChoice;
 use crate::translate::layers::{BlendTable, Computability, ProjectImages, StackStrategy};
 use crate::translate::replacements::ProceduralPlan;
 use materialcraft::paint::Channel;
@@ -40,6 +41,8 @@ pub struct VerifyOptions {
     /// Which Substance procedurals are replaced by MaterialCraft's generators (and material fills by our
     /// materials) before comparing.
     pub planner: ProjectPlanner,
+    /// Whether painted masks are replayed before comparing.
+    pub replay: ReplayChoice,
 }
 
 /// One channel of one set.
@@ -127,6 +130,7 @@ fn verify_project(path: &Path, label: &str, options: &VerifyOptions) -> Result<P
             continue;
         };
         set.plan = plan.clone();
+        set.replay = options.replay;
         let kinds = NativeKinds::of(painter, &set.channels);
         let reads_baked = kinds.uses(kinds::COLOUR_SELECTION);
         if plan != ProceduralPlan::default() || reads_baked {

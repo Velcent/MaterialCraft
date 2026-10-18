@@ -26,6 +26,7 @@ fn painter_stroke(points: usize, view: PainterView, pressure: Vec<TimelineKey>) 
         duplicate_count: 1,
         duplicate_matrix: [-1.0; 16],
         random_seed: 99,
+        lazy_distance: 0.0,
     }
 }
 
@@ -37,6 +38,8 @@ fn paint(tool: PaintTool, strokes: Vec<PainterStroke>, path_strokes: usize) -> P
         strokes,
         path_strokes,
         brush_uid: Some(2978),
+        brush: None,
+        stamp_blending: 0,
         colors: vec![],
         alpha: vec![],
         stencil: None,
@@ -118,7 +121,18 @@ fn brush_work_becomes_stroke_records() {
     let pressures: Vec<f32> = brush.samples.iter().map(|s| s.pressure).collect();
     assert!((pressures[1] - 0.4).abs() < 1e-6, "{pressures:?}");
     assert_eq!((pressures[0], pressures[2]), (0.2, 0.6));
-    assert_eq!(brush.samples[2].position, [0.2, 0.5]);
+    // Painter's 0 … 1 (y up) in the 3D view: normalised device coordinates; texture coordinates in the 2D view
+    let near = |a: [f32; 2], b: [f32; 2]| (a[0] - b[0]).abs() < 1e-6 && (a[1] - b[1]).abs() < 1e-6;
+    assert!(
+        near(brush.samples[2].position, [-0.6, 0.0]),
+        "{:?}",
+        brush.samples[2].position
+    );
+    assert!(
+        near(eraser.samples[1].position, [0.1, 0.5]),
+        "{:?}",
+        eraser.samples[1].position
+    );
     assert_eq!(brush.samples[2].time, 0.2);
     assert!(
         eraser.samples.iter().all(|s| s.pressure == 1.0 && s.tilt == [0.0; 2]),
@@ -191,8 +205,14 @@ fn the_report_counts_strokes_per_set() {
     );
     let stack = import(vec![l]);
     let mut reporter = Reporter::new("test".into());
-    report_strokes(&mut reporter, "Set", &count, &stack.layers);
-    report_strokes(&mut reporter, "Empty", &StrokeCount::default(), &[]);
+    report_strokes(&mut reporter, "Set", &count, &stack.layers, &stack.replayed);
+    report_strokes(
+        &mut reporter,
+        "Empty",
+        &StrokeCount::default(),
+        &[],
+        &Default::default(),
+    );
     let report = reporter.finish();
     assert_eq!(report.entries.len(), 1);
     let e = &report.entries[0];
