@@ -20,7 +20,7 @@ use crate::translate::layers::{BlendTable, ProjectImages};
 use crate::translate::replacements::{Choice, ProceduralPlan};
 use materialcraft::generators;
 use materialcraft::paint::layer_preview::PreviewGrid;
-use materialcraft::paint::{EffectKind, Layer, LayerKind, TextureSet};
+use materialcraft::paint::{EffectKind, Layer, LayerKind, NO_FILL_CONTEXT, TextureSet};
 
 /// Longer edge of the grid masks are evaluated on.
 const GRID: u32 = 96;
@@ -188,7 +188,7 @@ fn weights(grid: &PreviewGrid, chain: &[&Layer], failed: &[&str]) -> (Vec<f32>, 
             continue;
         }
         let reduced = grid.reduce(l);
-        let Some(tex) = grid.mask(&reduced, generators::builtin()) else {
+        let Some(tex) = grid.mask(&reduced, generators::builtin(), &NO_FILL_CONTEXT) else {
             continue;
         };
         for (wt, px) in weights.iter_mut().zip(&tex.px) {
