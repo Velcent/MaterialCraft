@@ -15,7 +15,7 @@ use super::images::{ImageSource, channel_pixels};
 use super::projection_map::ProjectionTable;
 use super::replay::StrokeReplay;
 use crate::model::{EffectHeader, FillEffect, FilterEffect, PaintEffect, PainterEffect, PainterSource};
-use crate::translate::replacements::{self, ProceduralPlan, Replacement, materials};
+use crate::translate::replacements::{self, ProceduralPlan, Replacement, channel_textures, materials};
 use materialcraft::paint::{BlendMode, Channel, TiledImage};
 use materialcraft::projection::Projection;
 
@@ -297,7 +297,22 @@ impl ContentEvaluator<'_> {
                         }
                         composited(state, status);
                     }
-                    None => opaque(state, format!("procedural fill \"{name}\"")),
+                    None => match channel_textures::chosen(p, self.plan) {
+                        // one of our textures, laid on by the fill's projection: a look-alike, so projection
+                        // guesses add reasons, not a worse state
+                        Some(t) => {
+                            let why = format!("procedural fill \"{name}\" replaced by {}", t.replacement.generator);
+                            let mut status = Computability::replaced(why);
+                            for reason in self.projections.map(fill).status.reasons() {
+                                status.and(&Computability::replaced(format!("texture placement: {reason}")));
+                            }
+                            if !matches!(state.value, Acc::Empty) {
+                                status.and(&blend.status());
+                            }
+                            composited(state, status);
+                        }
+                        None => opaque(state, format!("procedural fill \"{name}\"")),
+                    },
                 }
             }
             PainterSource::Reference(r) => {

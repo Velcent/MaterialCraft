@@ -9,3 +9,4 @@ mod replay;
 mod stacks;
 mod strategies;
 mod strokes;
+mod textures;

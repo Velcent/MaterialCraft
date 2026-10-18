@@ -9,7 +9,8 @@
 //! - Every other Painter effect becomes one of ours: uniform and bitmap fills become fill and paint effects,
 //!   the channels a fill takes from a procedural, an anchor or an unknown source become a generator, reference
 //!   or unknown effect next to it (a Substance material the user replaced with one of ours becomes a material
-//!   fill, and the base of a fill layer that is nothing else); an effect group becomes a paint effect (replayed
+//!   fill, a texture the plan replaces a texture fill, either the base of a fill layer that is nothing else); an
+//!   effect group becomes a paint effect (replayed
 //!   like the base) followed by its own entries; filters,
 //!   levels, colour selection, polygon fill and anchors keep their kind.
 //!
@@ -26,8 +27,9 @@ use super::layer_content::core_content;
 use super::strokes;
 use crate::model::{
     EffectHeader, FillEffect, LayerKind as PainterKind, PainterEffect, PainterLayer, PainterSource, PolygonFillEffect,
+    ProceduralSource,
 };
-use crate::translate::replacements::materials;
+use crate::translate::replacements::{channel_textures, materials};
 use materialcraft::json::Value;
 use materialcraft::paint::effect::{PolygonFill, Selection};
 use materialcraft::paint::{Channel, ChannelBlend, ContentEffect, EffectKind, Fill, LayerKind, PaintContent};
@@ -114,8 +116,14 @@ impl ContentMapper<'_, '_> {
         self.values(fill)
             .into_iter()
             .filter(|c| !matches!(c.value, ChannelValue::Nothing))
-            .filter(|c| !matches!(self.source_of(fill, c.channel), Some(PainterSource::Procedural(p)) if materials::chosen(p, self.evaluator.plan).is_some()))
+            .filter(|c| !matches!(self.source_of(fill, c.channel), Some(PainterSource::Procedural(p)) if self.replaced_source(p)))
             .collect()
+    }
+
+    /// True for a procedural source that becomes a fill of its own: a picked material or a replaced texture.
+    fn replaced_source(&self, p: &ProceduralSource) -> bool {
+        let plan = self.evaluator.plan;
+        materials::chosen(p, plan).is_some() || channel_textures::chosen(p, plan).is_some()
     }
 
     /// The source the fill takes `channel` from.
@@ -281,7 +289,10 @@ impl ContentMapper<'_, '_> {
                         reference,
                         ev.projections.map(fill).projection,
                     )),
-                    None => EffectKind::Generator(data::procedural(p.procedural.as_ref())),
+                    None => match channel_textures::chosen(p, ev.plan) {
+                        Some(t) => EffectKind::Fill(t.fill(&channels, ev.projections.map(fill).projection)),
+                        None => EffectKind::Generator(data::procedural(p.procedural.as_ref())),
+                    },
                 },
                 PainterSource::Reference(r) => EffectKind::Reference(data::reference(r)),
                 PainterSource::Other(raw) => EffectKind::Unknown(data::unknown(raw)),

@@ -12,6 +12,7 @@
 //! and values, what they do on the user's projects) and calibrated only by black-box measurement against
 //! Painter's saved results (`mcparity run generator…`).
 
+pub mod channel_textures;
 mod filters;
 pub mod materials;
 mod params;
