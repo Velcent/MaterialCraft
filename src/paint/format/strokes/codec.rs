@@ -1,16 +1,21 @@
 //! The stroke record entry (`*.mcstroke`): a small binary layout, little-endian, written and read exactly.
 //!
 //! ```text
-//! "MCSTROKE"  u16 major (1)  u16 minor (0 or 1)  u32 stroke count
+//! "MCSTROKE"  u16 major (1)  u16 minor (0, 1 or 2)  u32 stroke count
 //! per stroke: u8 tool  u8 view  u16 preset length  preset (UTF-8)
-//!             u32 seed  u32 symmetry copies  [1.1: u8 symmetry flips, bit 0 = U, bit 1 = V]
+//!             u32 seed  u32 symmetry copies  [1.1+: u8 symmetry flips, bit 0 = U, bit 1 = V]
 //!             f32×16 symmetry transform  f32×16 view  f32×16 projection
 //!             u32 sample count, then six columns of that many f32: x, y, pressure, tilt x, tilt y, time
+//!             [1.2: a seventh column, pen rotation]
 //! ```
 //!
 //! Minor 1 adds the symmetry flips (radial copies flipped for lettering, roadmap step 30). It is written only when a
 //! stroke has a flip, so records without one keep the 1.0 layout byte for byte; a 1.1 entry without any flip is
 //! not one this writer makes and is refused.
+//!
+//! Minor 2 adds the pen's barrel rotation (tablet input, roadmap step 35) and keeps 1.1's flips byte. It is written
+//! only when a sample has a rotation (any bits set), so mouse and imported strokes keep the older layouts; a 1.2
+//! entry without any rotation is refused for the same reason.
 //!
 //! Decoding is strict (known codes, valid UTF-8, no bytes left over), so every readable entry encodes back to
 //! the same bytes. Floats keep their bits.
@@ -19,14 +24,19 @@ use crate::paint::stroke::{Camera, Mat4, Stroke, StrokeRecord, StrokeSample, Str
 
 pub const MAGIC: &[u8; 8] = b"MCSTROKE";
 pub const MAJOR: u16 = 1;
-pub const MINOR: u16 = 1;
+pub const MINOR: u16 = 2;
 /// Extension of stroke record entries.
 pub const EXTENSION: &str = "mcstroke";
 
 /// Bytes of a stroke without its preset and samples.
 const STROKE_FIXED: usize = 1 + 1 + 2 + 4 + 4 + 3 * 64 + 4;
-/// Bytes per sample (six f32).
+/// Bytes per sample (six f32; seven from 1.2).
 const SAMPLE_BYTES: usize = 24;
+
+/// Does any sample of `record` carry a rotation (bits, so -0.0 counts and round-trips)?
+fn has_rotation(record: &StrokeRecord) -> bool {
+    record.strokes.iter().any(|s| s.samples.iter().any(|p| p.rotation.to_bits() != 0))
+}
 
 fn tool_code(t: StrokeTool) -> u8 {
     match t {
@@ -50,9 +60,11 @@ pub fn encode(record: &StrokeRecord) -> Result<Vec<u8>, String> {
     let samples = record.sample_count();
     let mut out = Vec::with_capacity(16 + record.strokes.len() * STROKE_FIXED + samples * SAMPLE_BYTES);
     out.extend_from_slice(MAGIC);
-    let flips = record.strokes.iter().any(|s| s.symmetry.flip != [false; 2]);
+    let rotation = has_rotation(record);
+    let flips = rotation || record.strokes.iter().any(|s| s.symmetry.flip != [false; 2]);
+    let minor: u16 = if rotation { 2 } else { u16::from(flips) };
     out.extend_from_slice(&MAJOR.to_le_bytes());
-    out.extend_from_slice(&u16::from(flips).to_le_bytes());
+    out.extend_from_slice(&minor.to_le_bytes());
     out.extend_from_slice(&count(record.strokes.len(), "strokes")?.to_le_bytes());
     for s in &record.strokes {
         out.push(tool_code(s.tool));
@@ -73,6 +85,9 @@ pub fn encode(record: &StrokeRecord) -> Result<Vec<u8>, String> {
         for column in columns {
             s.samples.iter().for_each(|p| out.extend_from_slice(&column(p).to_le_bytes()));
         }
+        if rotation {
+            s.samples.iter().for_each(|p| out.extend_from_slice(&p.rotation.to_le_bytes()));
+        }
     }
     Ok(out)
 }
@@ -91,20 +106,24 @@ pub fn decode(bytes: &[u8]) -> Result<StrokeRecord, String> {
     if major != MAJOR || minor > MINOR {
         return Err(format!("stroke record version {major}.{minor}; this program reads {MAJOR}.0 … {MAJOR}.{MINOR}"));
     }
-    let flips = minor >= 1;
+    let (flips, rotation) = (minor >= 1, minor >= 2);
     let n = r.u32()? as usize;
     r.fits(n, STROKE_FIXED)?;
     let mut strokes = Vec::with_capacity(n);
     for _ in 0..n {
-        strokes.push(r.stroke(flips)?);
+        strokes.push(r.stroke(flips, rotation)?);
     }
-    if flips && strokes.iter().all(|s| s.symmetry.flip == [false; 2]) {
+    if minor == 1 && strokes.iter().all(|s| s.symmetry.flip == [false; 2]) {
         return Err("stroke record 1.1 without symmetry flips".into());
+    }
+    let record = StrokeRecord { strokes };
+    if rotation && !has_rotation(&record) {
+        return Err("stroke record 1.2 without pen rotation".into());
     }
     if r.pos != bytes.len() {
         return Err(format!("{} bytes after the last stroke", bytes.len() - r.pos));
     }
-    Ok(StrokeRecord { strokes })
+    Ok(record)
 }
 
 /// A cursor over the entry; every read checks the length.
@@ -159,7 +178,7 @@ impl<'a> Reader<'a> {
         }
     }
 
-    fn stroke(&mut self, flips: bool) -> Result<Stroke, String> {
+    fn stroke(&mut self, flips: bool, rotation: bool) -> Result<Stroke, String> {
         let tool = match self.u8()? {
             0 => StrokeTool::Paint,
             1 => StrokeTool::Eraser,
@@ -183,19 +202,20 @@ impl<'a> Reader<'a> {
         let symmetry = Symmetry { copies, transform: self.mat4()?, flip };
         let camera = Camera { view: self.mat4()?, projection: self.mat4()? };
         let n = self.u32()? as usize;
-        self.fits(n, SAMPLE_BYTES)?;
-        let mut columns: [Vec<f32>; 6] = Default::default();
-        for column in &mut columns {
+        self.fits(n, SAMPLE_BYTES + if rotation { 4 } else { 0 })?;
+        let mut columns: [Vec<f32>; 7] = Default::default();
+        let read = if rotation { 7 } else { 6 };
+        for column in columns.iter_mut().take(read) {
             column.reserve_exact(n);
             for _ in 0..n {
                 column.push(self.f32()?);
             }
         }
-        let [x, y, pressure, tilt_x, tilt_y, time] = &columns;
+        let [x, y, pressure, tilt_x, tilt_y, time, rotation] = &columns;
         let samples = (0..n)
             .map(|i| {
                 let at = |c: &Vec<f32>| c.get(i).copied().unwrap_or(0.0);
-                StrokeSample { position: [at(x), at(y)], pressure: at(pressure), tilt: [at(tilt_x), at(tilt_y)], time: at(time) }
+                StrokeSample { position: [at(x), at(y)], pressure: at(pressure), tilt: [at(tilt_x), at(tilt_y)], rotation: at(rotation), time: at(time) }
             })
             .collect();
         Ok(Stroke { tool, preset, view, camera, seed, symmetry, samples })

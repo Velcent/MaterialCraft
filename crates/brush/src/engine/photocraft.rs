@@ -57,6 +57,7 @@ impl Engine {
                 pressure: p.pressure,
                 tilt_x: p.tilt[0],
                 tilt_y: p.tilt[1],
+                rotation: p.rotation,
                 time: p.time * 1000.0,
                 ..StrokePoint::default()
             };

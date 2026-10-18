@@ -198,7 +198,7 @@ impl StrokeSession {
             Some(c) => c.screen_to_ndc(p.pos),
             None => [p.pos[0] / scene.surface.width().max(1) as f32, p.pos[1] / scene.surface.height().max(1) as f32],
         };
-        StrokeSample { position, pressure: p.pressure, tilt: p.tilt, time: p.time as f32 }
+        StrokeSample { position, pressure: p.pressure, tilt: p.tilt, rotation: p.rotation, time: p.time as f32 }
     }
 
     /// Dab diameter in frame units at the stroke's start.

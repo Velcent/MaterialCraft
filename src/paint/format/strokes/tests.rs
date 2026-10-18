@@ -14,7 +14,7 @@ pub fn sample_record(seed: u32) -> StrokeRecord {
         seed: seed.wrapping_mul(n + 1),
         symmetry: Symmetry { copies: n % 3, transform: mirror, flip: [false; 2] },
         samples: (0..n * 5)
-            .map(|i| StrokeSample { position: [f(i), f(i + 1)], pressure: f(i + 2).abs() / 4.0, tilt: [f(i + 3), -0.0], time: i as f32 * 0.016 })
+            .map(|i| StrokeSample { position: [f(i), f(i + 1)], pressure: f(i + 2).abs() / 4.0, tilt: [f(i + 3), -0.0], rotation: 0.0, time: i as f32 * 0.016 })
             .collect(),
     };
     StrokeRecord {
@@ -80,7 +80,7 @@ fn damaged_entries_are_errors_not_panics() {
     };
     assert!(edit(0, b'X').unwrap_err().contains("not a stroke record"));
     assert!(edit(8, 2).unwrap_err().contains("version 2.0"));
-    assert!(edit(10, 2).unwrap_err().contains("version 1.2"));
+    assert!(edit(10, 3).unwrap_err().contains("version 1.3"));
     assert!(edit(16, 9).unwrap_err().contains("tool"));
     assert!(edit(17, 9).unwrap_err().contains("view"));
     assert!(edit(15, 0xff).is_err(), "a stroke count that cannot fit");
@@ -119,6 +119,37 @@ fn symmetry_flips_use_minor_one_and_older_records_keep_their_bytes() {
     odd[10] = 1;
     assert!(decode(&odd).is_err());
     let mut newer = bytes;
-    newer[10] = 2;
-    assert!(decode(&newer).unwrap_err().contains("version 1.2"));
+    newer[10] = 3;
+    assert!(decode(&newer).unwrap_err().contains("version 1.3"));
+}
+
+#[test]
+fn pen_rotation_uses_minor_two_and_keeps_its_bits() {
+    let plain = sample_record(6);
+    let bytes = encode(&plain).unwrap();
+    let mut turned = plain.clone();
+    turned.strokes[2].samples[1].rotation = 45.5;
+    turned.strokes[2].samples[2].rotation = -0.0;
+    let tb = encode(&turned).unwrap();
+    assert_eq!(&tb[10..12], &[2, 0]);
+    let samples: usize = turned.strokes.iter().map(|s| s.samples.len()).sum();
+    // a flips byte per stroke and a rotation column
+    assert_eq!(tb.len(), bytes.len() + turned.strokes.len() + samples * 4);
+    let back = decode(&tb).unwrap();
+    assert_eq!(back.strokes[2].samples[2].rotation.to_bits(), (-0.0f32).to_bits());
+    assert_eq!(back.strokes[2].samples[1].rotation, 45.5);
+    assert_eq!(encode(&back).unwrap(), tb);
+    // flips and rotation together
+    let mut both = turned.clone();
+    both.strokes[0].symmetry.flip = [true, false];
+    let bb = encode(&both).unwrap();
+    assert_eq!(decode(&bb).unwrap(), both);
+    // a 1.2 entry without any rotation is not canonical (the last stroke's rotation column ends the entry)
+    let mut one = StrokeRecord { strokes: vec![plain.strokes[2].clone()] };
+    one.strokes[0].samples.iter_mut().for_each(|p| p.rotation = 90.0);
+    let mut ob = encode(&one).unwrap();
+    let n = one.strokes[0].samples.len();
+    let end = ob.len();
+    ob[end - 4 * n..].fill(0);
+    assert!(decode(&ob).unwrap_err().contains("without pen rotation"));
 }

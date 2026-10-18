@@ -63,7 +63,7 @@ pub fn replay(stroke: &Stroke, scene: &ReplayScene, targets: &mut [ChannelTarget
                 ViewKind::Mesh => camera.ndc_to_screen(s.position),
                 ViewKind::Uv => [s.position[0] * w, s.position[1] * h],
             };
-            InputPoint { pos, pressure: s.pressure, tilt: s.tilt, time: f64::from(s.time), scale: 1.0 }
+            InputPoint { pos, pressure: s.pressure, tilt: s.tilt, rotation: s.rotation, time: f64::from(s.time), scale: 1.0 }
         })
         .collect();
     session.add(&session_scene, &points, targets)?;

@@ -18,6 +18,8 @@ pub struct InputPoint {
     pub pressure: f32,
     /// Pen tilt in degrees, x and y.
     pub tilt: [f32; 2],
+    /// Pen barrel rotation in degrees (0 … 360, clockwise).
+    pub rotation: f32,
     /// Seconds since the stroke started.
     pub time: f64,
     /// Dab size here relative to the stroke's start (model-sized brushes, ADR 0006 Q-PT-12); 1 otherwise.
@@ -25,9 +27,9 @@ pub struct InputPoint {
 }
 
 impl InputPoint {
-    /// A mouse sample: full pressure, no tilt, scale 1.
+    /// A mouse sample: full pressure, no tilt or rotation, scale 1.
     pub fn at(pos: [f32; 2], time: f64) -> InputPoint {
-        InputPoint { pos, pressure: 1.0, tilt: [0.0; 2], time, scale: 1.0 }
+        InputPoint { pos, pressure: 1.0, tilt: [0.0; 2], rotation: 0.0, time, scale: 1.0 }
     }
 }
 

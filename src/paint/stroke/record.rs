@@ -47,14 +47,16 @@ pub struct StrokeSample {
     pub pressure: f32,
     /// Pen tilt in degrees, x and y (−90 … 90; 0 = upright or unknown).
     pub tilt: [f32; 2],
+    /// Pen barrel rotation in degrees (0 … 360, clockwise; 0 = unknown).
+    pub rotation: f32,
     /// Seconds since the stroke started.
     pub time: f32,
 }
 
 impl StrokeSample {
-    /// A sample at `position` with full pressure, no tilt.
+    /// A sample at `position` with full pressure, no tilt or rotation.
     pub fn at(position: [f32; 2], time: f32) -> StrokeSample {
-        StrokeSample { position, pressure: 1.0, tilt: [0.0; 2], time }
+        StrokeSample { position, pressure: 1.0, tilt: [0.0; 2], rotation: 0.0, time }
     }
 }
 

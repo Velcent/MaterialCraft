@@ -70,6 +70,7 @@ fn stroke(effect: &PaintEffect, s: &PainterStroke) -> Stroke {
                 position: p.position,
                 pressure: pressure_at(&s.pressure, p.time),
                 tilt: [0.0; 2],
+                rotation: 0.0,
                 time: p.time,
             })
             .collect(),
