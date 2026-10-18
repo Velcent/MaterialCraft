@@ -251,6 +251,7 @@ impl StampStroke {
         let tiles = &self.tiles;
         let tiles_x = self.tiles_x;
         for (target, (before, blend)) in targets.iter_mut().zip(&self.before) {
+            let source = target.source.filter(|_| blend.paints());
             target.image.update_tiles(&coords, |rect, px| {
                 let ti = (rect.y as usize / T) * tiles_x + rect.x as usize / T;
                 let Some(acc) = tiles.get(&ti).map(|s| &s.acc) else { return };
@@ -263,13 +264,18 @@ impl StampStroke {
                 };
                 for (i, (p, o)) in px.iter_mut().zip(&orig).enumerate() {
                     let c = acc.get((i / w) * T + i % w).copied().unwrap_or(0.0);
-                    *p = match offset {
-                        Some(d) => {
+                    *p = match (offset, source) {
+                        (Some(d), _) => {
                             let (sx, sy) = (i64::from(rect.x) + (i % w) as i64 + i64::from(d[0]), i64::from(rect.y) + (i / w) as i64 + i64::from(d[1]));
                             let inside = sx >= 0 && sy >= 0 && sx < i64::from(before.width()) && sy < i64::from(before.height());
                             if inside { blend.copy(*o, before.get(sx as u32, sy as u32), c) } else { *o }
                         }
-                        None => blend.apply(*o, c),
+                        // a value per texel, looked up only where the stroke reached
+                        (None, Some(src)) if c > 0.0 => match src.value(rect.x + (i % w) as u32, rect.y + (i / w) as u32) {
+                            Some(v) => blend.with_value(v).apply(*o, c),
+                            None => *o,
+                        },
+                        _ => blend.apply(*o, c),
                     };
                 }
             });

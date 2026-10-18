@@ -38,11 +38,11 @@ pub(super) fn disc(center: [f32; 2], radius: f32, index: u64, flow: f32, opacity
 }
 
 fn erase(img: &mut TiledImage) -> ChannelTarget<'_> {
-    ChannelTarget { image: img, value: [0.0; 4], mode: StampMode::Erase, srgb: false }
+    ChannelTarget { image: img, value: [0.0; 4], mode: StampMode::Erase, srgb: false, source: None }
 }
 
 pub(super) fn red(img: &mut TiledImage) -> ChannelTarget<'_> {
-    ChannelTarget { image: img, value: [1.0, 0.0, 0.0, 1.0], mode: StampMode::Paint, srgb: false }
+    ChannelTarget { image: img, value: [1.0, 0.0, 0.0, 1.0], mode: StampMode::Paint, srgb: false, source: None }
 }
 
 #[test]

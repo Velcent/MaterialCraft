@@ -15,8 +15,8 @@ use materialcraft::paint::brush::{BrushPreset, RecordedBrush, Retouch, SizeSpace
 use materialcraft::paint::stroke::{self, Stroke, StrokeSample, StrokeTool, Symmetry, ViewKind};
 use materialcraft::projection::ViewProjector;
 use materialcraft::stamp::{
-    BlurKernel, ChannelTarget, DabSample, DepthMap, LocalKernel, StampContext, StampMode, StampStroke, StrokeSpace, TexelFactor, TexelIndex, ViewSpace,
-    screen_scale_at,
+    BlurKernel, ChannelTarget, DabSample, DepthMap, LocalKernel, ProjectedPaint, StampContext, StampMode, StampStroke, StrokeSpace, TexelFactor, TexelIndex,
+    ViewSpace, screen_scale_at,
 };
 
 /// What a session paints through, lent per call.
@@ -28,6 +28,9 @@ pub struct SessionScene<'a> {
     /// during a stroke.
     pub projector: Option<&'a dyn ViewProjector>,
     pub factors: &'a [&'a dyn TexelFactor],
+    /// Projection painting (PJ-26): what the stroke lays down per texel, and that it stays inside the image (added
+    /// to `factors`). The targets must be built with it ([`crate::PaintTarget::projected_targets`]).
+    pub projected: Option<&'a ProjectedPaint<'a>>,
 }
 
 /// How a stroke is painted.
@@ -211,7 +214,11 @@ impl StrokeSession {
             }
             (ViewKind::Mesh, None) => return Err(BrushError::NoView),
         };
-        let ctx = StampContext { surface: scene.surface, index: scene.index, space, factors: scene.factors };
+        let mut factors: Vec<&dyn TexelFactor> = scene.factors.to_vec();
+        if let Some(p) = scene.projected {
+            factors.push(p);
+        }
+        let ctx = StampContext { surface: scene.surface, index: scene.index, space, factors: &factors };
         let mut changed = Vec::new();
         for d in dabs {
             changed.extend(self.stamp.apply(&ctx, d, targets)?);

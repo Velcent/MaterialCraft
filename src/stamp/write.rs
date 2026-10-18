@@ -28,6 +28,16 @@ pub struct ChannelTarget<'a> {
     pub mode: StampMode,
     /// The image stores sRGB-encoded colour: blend in linear light (as layers composite).
     pub srgb: bool,
+    /// A value per texel instead of `value` (projection painting, PJ-26); ignored by [`StampMode::Erase`]. Texels it
+    /// has no value for keep their pixels.
+    pub source: Option<&'a dyn TexelValue>,
+}
+
+/// A value per texel of a texture set, for [`ChannelTarget::source`].
+pub trait TexelValue: Sync {
+    /// Straight RGBA in the target image's stored encoding at texel `(x, y)` (alpha scales the coverage); `None`
+    /// where there is nothing to paint.
+    fn value(&self, x: u32, y: u32) -> Option<[f32; 4]>;
 }
 
 /// The per-pixel blend of one target, prepared once per stroke.
@@ -42,9 +52,20 @@ pub(super) struct Blend {
 
 impl Blend {
     pub fn new(t: &ChannelTarget) -> Blend {
-        let v = t.value.map(|c| if c.is_finite() { c } else { 0.0 });
-        let value = if t.srgb { [srgb_to_linear(v[0]), srgb_to_linear(v[1]), srgb_to_linear(v[2]), v[3]] } else { v };
-        Blend { mode: t.mode, value, srgb: t.srgb, has_alpha: t.image.format().layout.has_alpha() }
+        Blend { mode: t.mode, value: [0.0; 4], srgb: t.srgb, has_alpha: t.image.format().layout.has_alpha() }.with_value(t.value)
+    }
+
+    /// The same blend painting `value` (straight RGBA in the image's stored encoding) instead.
+    #[inline]
+    pub fn with_value(self, value: [f32; 4]) -> Blend {
+        let v = value.map(|c| if c.is_finite() { c } else { 0.0 });
+        let value = if self.srgb { [srgb_to_linear(v[0]), srgb_to_linear(v[1]), srgb_to_linear(v[2]), v[3]] } else { v };
+        Blend { value, ..self }
+    }
+
+    /// True if the blend lays a value down (where a per-texel source applies).
+    pub fn paints(&self) -> bool {
+        self.mode == StampMode::Paint
     }
 
     pub fn mode(&self) -> StampMode {
@@ -124,7 +145,7 @@ mod tests {
     use crate::paint::PixelFormat;
 
     fn target(img: &mut TiledImage, value: [f32; 4], mode: StampMode) -> Blend {
-        Blend::new(&ChannelTarget { image: img, value, mode, srgb: false })
+        Blend::new(&ChannelTarget { image: img, value, mode, srgb: false, source: None })
     }
 
     #[test]
@@ -146,7 +167,7 @@ mod tests {
     #[test]
     fn clone_copies_exactly_at_full_coverage_and_mixes_premultiplied_below() {
         let mut img = TiledImage::new(4, 4, PixelFormat::from_id("rgba8").unwrap()).unwrap();
-        let b = Blend::new(&ChannelTarget { image: &mut img, value: [0.0; 4], mode: StampMode::Clone { offset: [3, 0] }, srgb: true });
+        let b = Blend::new(&ChannelTarget { image: &mut img, value: [0.0; 4], mode: StampMode::Clone { offset: [3, 0] }, srgb: true, source: None });
         let src = [0.3, 0.6, 0.9, 0.7];
         assert_eq!(b.copy([0.1, 0.1, 0.1, 1.0], src, 1.0), src);
         assert_eq!(b.copy([0.1, 0.1, 0.1, 1.0], src, 0.0), [0.1, 0.1, 0.1, 1.0]);
@@ -159,7 +180,7 @@ mod tests {
     #[test]
     fn srgb_images_blend_in_linear_light() {
         let mut img = TiledImage::new(4, 4, PixelFormat::from_id("rgb8").unwrap()).unwrap();
-        let b = Blend::new(&ChannelTarget { image: &mut img, value: [1.0, 1.0, 1.0, 1.0], mode: StampMode::Paint, srgb: true });
+        let b = Blend::new(&ChannelTarget { image: &mut img, value: [1.0, 1.0, 1.0, 1.0], mode: StampMode::Paint, srgb: true, source: None });
         let half = b.apply([0.0, 0.0, 0.0, 1.0], 0.5);
         assert!((half[0] - linear_to_srgb(0.5)).abs() < 1e-5);
     }

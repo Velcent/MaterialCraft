@@ -101,7 +101,13 @@ impl ActiveStroke {
                 prepared.see_through(set, base);
             }
             let projector = picking.projector_on(mesh, start.camera).ok_or(BrushError::NoView)?;
-            let scene = SessionScene { surface: &start.surface.map, index: &start.surface.index, projector: Some(&projector as &dyn ViewProjector), factors };
+            let scene = SessionScene {
+                surface: &start.surface.map,
+                index: &start.surface.index,
+                projector: Some(&projector as &dyn ViewProjector),
+                factors,
+                projected: None,
+            };
             prepared.start(setup, &scene, mesh, &|part| picking.is_shown(part), set)
         };
         let stroke = match result {
@@ -139,7 +145,13 @@ impl ActiveStroke {
         self.last = Some(last.pos);
         let (mesh, set) = split(doc.doc_for_strokes(), self.set)?;
         let projector = picking.projector_on(mesh, self.camera).ok_or(BrushError::NoView)?;
-        let scene = SessionScene { surface: &self.surface.map, index: &self.surface.index, projector: Some(&projector as &dyn ViewProjector), factors };
+        let scene = SessionScene {
+            surface: &self.surface.map,
+            index: &self.surface.index,
+            projector: Some(&projector as &dyn ViewProjector),
+            factors,
+            projected: None,
+        };
         Ok(!self.stroke.add(&scene, &points, set)?.is_empty())
     }
 
@@ -156,7 +168,13 @@ impl ActiveStroke {
             Ok((mesh, set_ref)) => match picking.projector_on(mesh, camera) {
                 Some(projector) => {
                     anchor = last.map(|end| LineAnchor::at(end, Some(&projector as &dyn ViewProjector)));
-                    let scene = SessionScene { surface: &surface.map, index: &surface.index, projector: Some(&projector as &dyn ViewProjector), factors };
+                    let scene = SessionScene {
+                        surface: &surface.map,
+                        index: &surface.index,
+                        projector: Some(&projector as &dyn ViewProjector),
+                        factors,
+                        projected: None,
+                    };
                     let (ended, result) = stroke.finish(&scene, set_ref);
                     (ended, result.err().map(|e| e.to_string()))
                 }

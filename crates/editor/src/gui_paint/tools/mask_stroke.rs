@@ -56,7 +56,13 @@ impl ActiveMaskStroke {
             retouch: Default::default(),
         };
         let projector = picking.projector_on(&d.mesh, start.camera).ok_or(BrushError::NoView)?;
-        let scene = SessionScene { surface: &start.surface.map, index: &start.surface.index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
+        let scene = SessionScene {
+            surface: &start.surface.map,
+            index: &start.surface.index,
+            projector: Some(&projector as &dyn ViewProjector),
+            factors: &[],
+            projected: None,
+        };
         let stroke = QuickMaskStroke::begin(mask, &set.id, set.resolution, setup, &scene, &d.mesh, &|part| picking.is_shown(part))?;
         let mut active = ActiveMaskStroke { stroke, set: start.set, camera: start.camera, surface: start.surface, t0: at.time };
         active.add(mask, doc, picking, &[at])?;
@@ -79,7 +85,13 @@ impl ActiveMaskStroke {
         }
         let mesh = &doc.doc().mesh;
         let projector = picking.projector_on(mesh, self.camera).ok_or(BrushError::NoView)?;
-        let scene = SessionScene { surface: &self.surface.map, index: &self.surface.index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
+        let scene = SessionScene {
+            surface: &self.surface.map,
+            index: &self.surface.index,
+            projector: Some(&projector as &dyn ViewProjector),
+            factors: &[],
+            projected: None,
+        };
         Ok(!self.stroke.add(mask, &scene, &points)?.is_empty())
     }
 
@@ -87,7 +99,13 @@ impl ActiveMaskStroke {
     pub fn end(self, mask: &mut QuickMask, doc: &OpenDocument, picking: &ViewPicking) -> Option<String> {
         let mesh = &doc.doc().mesh;
         let projector = picking.projector_on(mesh, self.camera)?;
-        let scene = SessionScene { surface: &self.surface.map, index: &self.surface.index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
+        let scene = SessionScene {
+            surface: &self.surface.map,
+            index: &self.surface.index,
+            projector: Some(&projector as &dyn ViewProjector),
+            factors: &[],
+            projected: None,
+        };
         self.stroke.finish(mask, &scene).err().map(|e| e.to_string())
     }
 }

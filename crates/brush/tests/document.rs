@@ -69,7 +69,7 @@ fn paint(
     let prepared = DocumentStroke::prepare(doc, target, &values()).unwrap();
     let Document { mesh, texture_sets, .. } = doc;
     let projector = view.projector(mesh, camera()).unwrap();
-    let scene = SessionScene { surface: map, index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
+    let scene = SessionScene { surface: map, index, projector: Some(&projector as &dyn ViewProjector), factors: &[], projected: None };
     let set = &mut texture_sets[0];
     let mut stroke = prepared.start(StrokeSetup { symmetry, ..setup_for(mesh, tool) }, &scene, mesh, &|_| true, set).map_err(|b| b.1).unwrap();
     for i in 0..40 {

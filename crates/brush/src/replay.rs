@@ -8,7 +8,7 @@ use crate::session::{Finished, SessionScene, StrokeSession, StrokeSetup};
 use crate::target::PaintValues;
 use materialcraft::mesh::{Mesh, Sphere, SurfaceMap};
 use materialcraft::paint::brush::RecordedBrush;
-use materialcraft::paint::stroke::{Stroke, ViewKind};
+use materialcraft::paint::stroke::{Stroke, StrokeTool, ViewKind};
 use materialcraft::projection::ViewScene;
 use materialcraft::stamp::{ChannelTarget, TexelFactor, TexelIndex};
 
@@ -35,6 +35,10 @@ pub fn recorded_values(brush: &RecordedBrush) -> PaintValues {
 /// Paints `stroke` again into `targets` (built with [`recorded_values`] and [`crate::target::mode_for`] of the stroke's
 /// tool and recorded retouch settings).
 pub fn replay(stroke: &Stroke, scene: &ReplayScene, targets: &mut [ChannelTarget]) -> Result<Finished, BrushError> {
+    if stroke.tool == StrokeTool::Projection {
+        // the record keeps the camera but not the projected image and its placement (PJ-28)
+        return Err(BrushError::NotReplayable("projection strokes do not record their image yet"));
+    }
     let brush = recorded_brush(stroke)?;
     let model = scene.mesh.bounding_sphere().unwrap_or(Sphere { centre: [0.0; 3], radius: 1.0 });
     let setup = StrokeSetup {
@@ -54,7 +58,8 @@ pub fn replay(stroke: &Stroke, scene: &ReplayScene, targets: &mut [ChannelTarget
         ViewKind::Mesh => Some(scene.view.projector(scene.mesh, camera).ok_or(BrushError::NotReplayable("the stroke was painted on another mesh"))?),
         ViewKind::Uv => None,
     };
-    let session_scene = SessionScene { surface: scene.surface, index: scene.index, projector: projector.as_ref().map(|p| p as _), factors: scene.factors };
+    let session_scene =
+        SessionScene { surface: scene.surface, index: scene.index, projector: projector.as_ref().map(|p| p as _), factors: scene.factors, projected: None };
     let shown = |part: usize| scene.view.is_shown(part);
     let mut session = StrokeSession::begin(setup, &session_scene, scene.mesh, &shown, targets)?;
     let points: Vec<InputPoint> = stroke

@@ -17,6 +17,8 @@
 //!   flow building up under the stroke's opacity ceiling, [`StampMode::Paint`] / [`StampMode::Erase`] /
 //!   [`StampMode::Clone`], or [`StampMode::Local`] kernels ([`LocalKernel`], [`BlurKernel`]) for smudge and blur; it reports
 //!   the image tiles each dab changed (the caller records them in the history).
+//! - [`ProjectedPaint`]: projection painting (PJ-26), an image or material over the view painted through a stroke:
+//!   a per-texel value for each [`ChannelTarget`] ([`TexelValue`]) and a factor that keeps paint inside the image.
 //!
 //! Design: `MaterialCraft-docs/requirements/painting-tools.md` section 10.
 
@@ -28,6 +30,9 @@ mod frame;
 mod index;
 mod local;
 mod occlusion;
+mod projected;
+#[cfg(test)]
+mod projected_tests;
 #[cfg(test)]
 mod retouch_tests;
 mod stroke;
@@ -45,5 +50,6 @@ pub use frame::screen_scale_at;
 pub use index::{Aabb, CELL, TexelIndex};
 pub use local::{BlurKernel, LocalGrid, LocalKernel};
 pub use occlusion::DepthMap;
+pub use projected::{ProjectedChannel, ProjectedPaint};
 pub use stroke::{StampContext, StampError, StampStroke, StrokeSpace, ViewSpace};
-pub use write::{ChannelTarget, StampMode};
+pub use write::{ChannelTarget, StampMode, TexelValue};

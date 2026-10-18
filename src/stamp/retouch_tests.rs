@@ -24,7 +24,7 @@ fn clone_copies_texel_for_texel_under_full_coverage() {
     pattern(&mut img);
     let source = img.clone();
     fn target(img: &mut TiledImage) -> ChannelTarget<'_> {
-        ChannelTarget { image: img, value: [0.0; 4], mode: StampMode::Clone { offset: [40, -12] }, srgb: false }
+        ChannelTarget { image: img, value: [0.0; 4], mode: StampMode::Clone { offset: [40, -12] }, srgb: false, source: None }
     }
     let ctx = StampContext { surface: &map, index: &index, space: StrokeSpace::Texture, factors: &[] };
     let mut stroke = StampStroke::new(SymmetrySpec::None, &[target(&mut img)]).unwrap();
@@ -59,7 +59,7 @@ fn local_strokes_need_their_kernels_and_blur_softens_an_edge() {
     });
     let before = img.clone();
     fn target(img: &mut TiledImage) -> ChannelTarget<'_> {
-        ChannelTarget { image: img, value: [0.0; 4], mode: StampMode::Local, srgb: false }
+        ChannelTarget { image: img, value: [0.0; 4], mode: StampMode::Local, srgb: false, source: None }
     }
     let ctx = StampContext { surface: &map, index: &index, space: StrokeSpace::Texture, factors: &[] };
     let mut stroke = StampStroke::new(SymmetrySpec::None, &[target(&mut img)]).unwrap();

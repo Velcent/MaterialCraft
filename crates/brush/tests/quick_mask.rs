@@ -54,7 +54,7 @@ fn paint_document(mut doc: Document, layer: &str, surface: (&SurfaceMap, &TexelI
     let setup = setup(&doc, 0.15);
     let Document { mesh, texture_sets, .. } = &mut doc;
     let projector = view.projector(mesh, camera()).unwrap();
-    let scene = SessionScene { surface: surface.0, index: surface.1, projector: Some(&projector as &dyn ViewProjector), factors };
+    let scene = SessionScene { surface: surface.0, index: surface.1, projector: Some(&projector as &dyn ViewProjector), factors, projected: None };
     let set = &mut texture_sets[0];
     let mut stroke = prepared.start(setup, &scene, mesh, &|_| true, set).map_err(|b| b.1).unwrap();
     stroke.add(&scene, &points(), set).unwrap();
@@ -69,7 +69,7 @@ fn a_painted_quick_mask_holds_back_document_strokes() {
     let index = TexelIndex::build(&surface);
     let view = ViewScene::new(&doc.mesh, doc.mesh.fit());
     let projector = view.projector(&doc.mesh, camera()).unwrap();
-    let scene = SessionScene { surface: &surface, index: &index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
+    let scene = SessionScene { surface: &surface, index: &index, projector: Some(&projector as &dyn ViewProjector), factors: &[], projected: None };
 
     // editing: a wider stroke along the same line protects it
     let mut mask = QuickMask::default();

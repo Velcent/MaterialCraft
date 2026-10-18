@@ -118,7 +118,7 @@ fn stroke(
         prepared.see_through(set, base);
     }
     let projector = scene.view.projector(mesh, camera()).unwrap();
-    let ss = SessionScene { surface: &scene.map, index: &scene.index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
+    let ss = SessionScene { surface: &scene.map, index: &scene.index, projector: Some(&projector as &dyn ViewProjector), factors: &[], projected: None };
     let mut s = prepared.start(setup, &ss, mesh, &|_| true, set).map_err(|b| b.1).unwrap();
     for i in 0..30 {
         let t = i as f32 / 29.0;

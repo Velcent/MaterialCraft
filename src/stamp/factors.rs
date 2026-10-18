@@ -39,8 +39,10 @@ impl TexelFactor for Stencil<'_> {
         if !self.transform.covers(uv) {
             return 0.0;
         }
-        let (w, h) = (self.image.width().max(1) as f32, self.image.height().max(1) as f32);
+        let (w, h) = (self.image.width().max(1), self.image.height().max(1));
         let (u, v) = (uv[0].rem_euclid(1.0), uv[1].rem_euclid(1.0));
-        self.image.get((u * w) as u32, (v * h) as u32)[0].clamp(0.0, 1.0)
+        // u = 1 (the image's right edge, or rounding just below 1) is the last texel
+        let (x, y) = (((u * w as f32) as u32).min(w - 1), ((v * h as f32) as u32).min(h - 1));
+        self.image.get(x, y)[0].clamp(0.0, 1.0)
     }
 }

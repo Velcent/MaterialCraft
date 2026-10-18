@@ -9,7 +9,7 @@ use materialcraft::paint::edit::{Edit, ImageRef, LayerRef, StackId};
 use materialcraft::paint::effect::EffectKind;
 use materialcraft::paint::stroke::{StrokeOwner, StrokeTool};
 use materialcraft::paint::{Channel, ColorSpace, Layer, LayerImage, LayerKind, TextureSet};
-use materialcraft::stamp::{ChannelTarget, StampMode};
+use materialcraft::stamp::{ChannelTarget, ProjectedPaint, StampMode};
 
 /// Which part of a layer is painted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,6 +116,19 @@ impl PaintTarget {
     /// The resolved images as stamp targets in `mode` ([`mode_for`]), borrowed from `set` (they must still exist:
     /// resolve again after the document changed). On masks the eraser paints black (PT-20).
     pub fn channel_targets<'a>(&self, set: &'a mut TextureSet, resolved: &Resolved, mode: StampMode) -> Result<Vec<ChannelTarget<'a>>, BrushError> {
+        self.projected_targets(set, resolved, mode, None)
+    }
+
+    /// [`Self::channel_targets`] painting through `projected` (projection painting, PJ-26): each channel image
+    /// takes its values from the projection's image for that channel, a mask from its grey image; images the
+    /// projection has nothing for paint their resolved value.
+    pub fn projected_targets<'a>(
+        &self,
+        set: &'a mut TextureSet,
+        resolved: &Resolved,
+        mode: StampMode,
+        projected: Option<&'a ProjectedPaint<'_>>,
+    ) -> Result<Vec<ChannelTarget<'a>>, BrushError> {
         let layer = set.layer_mut(&self.layer.layer).ok_or(BrushError::NotPaintable("the layer is gone"))?;
         let erase = mode == StampMode::Erase;
         let mode = if erase && self.part == TargetPart::Mask { StampMode::Paint } else { mode };
@@ -124,7 +137,8 @@ impl PaintTarget {
             (TargetPart::Content, LayerKind::Paint(p)) => {
                 for (c, img) in p.images.iter_mut() {
                     if let Some(t) = resolved.images.iter().find(|t| t.image.image == LayerImage::Paint(*c)) {
-                        out.push(ChannelTarget { image: img, value: t.value, mode, srgb: t.srgb });
+                        let source = projected.and_then(|p| p.channel(*c));
+                        out.push(ChannelTarget { image: img, value: t.value, mode, srgb: t.srgb, source });
                     }
                 }
             }
@@ -135,7 +149,7 @@ impl PaintTarget {
                 let effect = layer.mask.as_mut().and_then(|m| m.effects.get_mut(effect));
                 let Some(EffectKind::Paint(px)) = effect.map(|e| &mut e.kind) else { return Err(BrushError::NotPaintable("the mask has no paint effect")) };
                 let value = if erase { [0.0, 0.0, 0.0, 1.0] } else { t.value };
-                out.push(ChannelTarget { image: &mut px.image, value, mode, srgb: false });
+                out.push(ChannelTarget { image: &mut px.image, value, mode, srgb: false, source: projected.and_then(ProjectedPaint::mask) });
             }
             _ => return Err(BrushError::NotPaintable("only paint layers have pixels to paint")),
         }

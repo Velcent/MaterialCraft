@@ -30,7 +30,7 @@ pub fn repaint(set: &TextureSet, record: &StrokeRecord, base: &Base, scene: &Rep
             .filter_map(|(c, image)| {
                 let value = values.value(*c)?;
                 let srgb = set.channel_spec(*c).map_or(c.default_color_space(), |s| s.color_space) == ColorSpace::Srgb;
-                Some(ChannelTarget { image, value, mode, srgb })
+                Some(ChannelTarget { image, value, mode, srgb, source: None })
             })
             .collect();
         if targets.is_empty() {

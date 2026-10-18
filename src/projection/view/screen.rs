@@ -3,7 +3,7 @@
 
 use super::ViewProjector;
 use crate::projection::data::Repeat;
-use crate::projection::projector::{Projector, SurfacePoint, Taps};
+use crate::projection::projector::{Projector, SurfacePoint, Tap, Taps};
 
 /// Where an image sits on screen: its centre, the size of one repetition and its rotation, plus along which axes
 /// it repeats. Image coordinates run 0 … 1 across one repetition (origin top-left, v down, like UVs).
@@ -94,15 +94,23 @@ pub struct ScreenProjector<'a> {
     pub image: ScreenImageTransform,
 }
 
+impl ScreenProjector<'_> {
+    /// Where the object-space point `pos` lies on the image, ignoring visibility: `None` behind the camera. For
+    /// callers that test visibility their own way (a brush stroke's depth test).
+    pub fn image_tap(&self, pos: crate::mesh::Vec3) -> Option<Tap> {
+        let s = self.view.to_screen(pos)?;
+        // the footprint of one screen unit; a texel's own size on screen needs the surface's derivatives
+        Some(Tap { uv: self.image.to_image(s.pos), weight: 1.0, footprint: self.image.image_per_screen() })
+    }
+}
+
 impl Projector for ScreenProjector<'_> {
     fn project(&self, p: &SurfacePoint) -> Taps {
-        let Some(s) = self.view.to_screen(p.pos) else {
+        let Some(tap) = self.image_tap(p.pos) else {
             return Taps { coverage: 0.0, ..Taps::default() };
         };
-        let uv = self.image.to_image(s.pos);
-        // the footprint of one screen unit; a texel's own size on screen needs the surface's derivatives
-        let mut taps = Taps::one(uv, self.image.image_per_screen());
-        taps.coverage = if self.image.covers(uv) { self.view.visibility(p.pos, p.normal) } else { 0.0 };
+        let mut taps = Taps::one(tap.uv, tap.footprint);
+        taps.coverage = if self.image.covers(tap.uv) { self.view.visibility(p.pos, p.normal) } else { 0.0 };
         taps
     }
 }

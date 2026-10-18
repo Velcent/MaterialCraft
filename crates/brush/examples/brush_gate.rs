@@ -73,7 +73,7 @@ fn image(size: u32) -> TiledImage {
 }
 
 fn target(img: &mut TiledImage) -> ChannelTarget<'_> {
-    ChannelTarget { image: img, value: [0.8, 0.3, 0.1, 1.0], mode: StampMode::Paint, srgb: true }
+    ChannelTarget { image: img, value: [0.8, 0.3, 0.1, 1.0], mode: StampMode::Paint, srgb: true, source: None }
 }
 
 /// A camera at `distance` (fitted units) from `target` (world) along `dir`.
@@ -100,7 +100,7 @@ fn timing(mesh: &Mesh, map: &SurfaceMap, index: &TexelIndex, view: &ViewScene, c
         occlusion: true,
         retouch: Default::default(),
     };
-    let scene = SessionScene { surface: map, index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
+    let scene = SessionScene { surface: map, index, projector: Some(&projector as &dyn ViewProjector), factors: &[], projected: None };
     let mut img = image(map.width() as u32);
     let t = Instant::now();
     let mut session = StrokeSession::begin(setup, &scene, mesh, &|_| true, &[target(&mut img)]).unwrap_or_else(|e| fail(&e.to_string()));
@@ -239,7 +239,7 @@ fn seams(mesh: &Mesh, map: &SurfaceMap, index: &TexelIndex, view: &ViewScene, ma
             occlusion: true,
             retouch: Default::default(),
         };
-        let scene = SessionScene { surface: map, index, projector: Some(&projector as &dyn ViewProjector), factors: &[] };
+        let scene = SessionScene { surface: map, index, projector: Some(&projector as &dyn ViewProjector), factors: &[], projected: None };
         let mut img = TiledImage::new(map.width() as u32, map.height() as u32, PixelFormat::from_id("graya32f").unwrap_or_else(|| fail("format")))
             .unwrap_or_else(|e| fail(&e.to_string()));
         let Ok(mut session) = StrokeSession::begin(setup, &scene, mesh, &|_| true, &[white(&mut img)]) else { continue };
@@ -336,7 +336,7 @@ fn bilinear(img: &TiledImage, x: f32, y: f32) -> f32 {
 }
 
 fn white(img: &mut TiledImage) -> ChannelTarget<'_> {
-    ChannelTarget { image: img, value: [1.0; 4], mode: StampMode::Paint, srgb: false }
+    ChannelTarget { image: img, value: [1.0; 4], mode: StampMode::Paint, srgb: false, source: None }
 }
 
 fn sub(a: Vec3, b: Vec3) -> Vec3 {

@@ -95,7 +95,7 @@ impl DocumentStroke {
 
     /// Paints `points` (see [`StrokeSession::add`]); returns the changed tiles of the set's images.
     pub fn add(&mut self, scene: &SessionScene, points: &[InputPoint], set: &mut TextureSet) -> Result<Vec<(u32, u32)>, BrushError> {
-        let mut targets = self.target.channel_targets(set, &self.resolved, self.mode)?;
+        let mut targets = self.target.projected_targets(set, &self.resolved, self.mode, scene.projected)?;
         self.session.add(scene, points, &mut targets)
     }
 
@@ -103,7 +103,7 @@ impl DocumentStroke {
     /// pixels painted so far stay and are recorded).
     pub fn finish(self, scene: &SessionScene, set: &mut TextureSet) -> (Ended, Result<Vec<(u32, u32)>, BrushError>) {
         let DocumentStroke { target, resolved, mode, inverses, captures, base, session } = self;
-        let result = target.channel_targets(set, &resolved, mode).and_then(|mut t| session.finish(scene, &mut t));
+        let result = target.projected_targets(set, &resolved, mode, scene.projected).and_then(|mut t| session.finish(scene, &mut t));
         let (finished, out) = match result {
             Ok(f) => {
                 let touched = f.touched.clone();
@@ -132,7 +132,7 @@ impl Prepared {
     ) -> Result<DocumentStroke, Box<(Ended, BrushError)>> {
         let mode = mode_for(setup.tool, &setup.retouch);
         let Prepared { target, resolved, inverses, captures, base } = self;
-        let session = target.channel_targets(set, &resolved, mode).and_then(|t| StrokeSession::begin(setup, scene, mesh, shown, &t));
+        let session = target.projected_targets(set, &resolved, mode, scene.projected).and_then(|t| StrokeSession::begin(setup, scene, mesh, shown, &t));
         match session {
             Ok(session) => Ok(DocumentStroke { target, resolved, mode, inverses, captures, base, session }),
             Err(e) => Err(Box::new((Ended { owner: resolved.owner, target, inverses, captures, base, finished: None }, e))),

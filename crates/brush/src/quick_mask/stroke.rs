@@ -17,7 +17,7 @@ pub struct QuickMaskStroke {
 }
 
 fn target(image: &mut materialcraft::paint::TiledImage, mode: StampMode) -> [ChannelTarget<'_>; 1] {
-    [ChannelTarget { image, value: [1.0; 4], mode, srgb: false }]
+    [ChannelTarget { image, value: [1.0; 4], mode, srgb: false, source: None }]
 }
 
 impl QuickMaskStroke {
