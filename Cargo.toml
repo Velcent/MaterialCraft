@@ -70,6 +70,11 @@ name = "viewport_bench"
 path = "examples/viewport_bench.rs"
 required-features = ["gui"]
 
+[[example]]
+name = "uv_view_check"
+path = "examples/uv_view_check.rs"
+required-features = ["gui"]
+
 [profile.release]
 opt-level = 3
 lto = true

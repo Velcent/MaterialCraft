@@ -80,6 +80,8 @@ pub const RESERVED_UNIFORMS: &[&str] = &[
     "uDomCount",
     "uDomDir",
     "uDomE",
+    // the 2D view (step 34): the mesh laid out flat in UV space
+    "uUvSpace",
 ];
 
 /// A parsed, checked declaration.

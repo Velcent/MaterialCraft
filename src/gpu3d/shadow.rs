@@ -119,7 +119,7 @@ impl DepthMap {
             gl.clear(glow::DEPTH_BUFFER_BIT);
             gl.enable(glow::POLYGON_OFFSET_FILL);
             gl.polygon_offset(1.5, 4.0);
-            let shade = Shade { self_shadow: false, unlit: false, mip_bias: 0.0 };
+            let shade = Shade { self_shadow: false, unlit: false, mip_bias: 0.0, uv_space: false };
             let pass = MaterialPass::begin(gl, prog, view, &cam, &shade, flat_height);
             pass.draw(items);
             gl.disable(glow::POLYGON_OFFSET_FILL);

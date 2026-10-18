@@ -1,19 +1,19 @@
 //! GL resources that live as long as the viewport (programs, the built-in shape and its maps, the environment, the
-//! shadow maps, the HDR targets) and the frame they draw: the scene into the HDR target (one accumulation sample,
-//! with the shadow map that sample needs), the background and the post stage into egui's framebuffer, then the
-//! wireframe overlay.
+//! shadow maps, the HDR targets of the 3D and the 2D view) and the frame they draw: the scene into the view's HDR
+//! target (one accumulation sample, with the shadow map that sample needs), the background and the post stage into
+//! egui's framebuffer, then the wireframe overlay. The 2D view has no scene shadows, backdrop or wireframe.
 use super::GpuMaps;
 use super::camera::CamOut;
 use super::display::{Display, Shading};
 use super::env::{EnvTextures, Lighting};
 use super::pass::{Drawable, MaterialPass, Shade, WireDepth};
-use super::progress::{FrameKey, Progress, Step};
+use super::progress::{FrameKey, Step};
 use super::scene::Scene;
 use super::shaders::Program;
 use super::shading::{PartShading, Programs};
 use super::shadow::{Bound, ShadowMaps, Want};
 use super::shape::{self, ShapeMesh};
-use super::target::{Accumulation, HdrTarget};
+use super::target::{HdrTarget, ViewTargets};
 use super::textures::{MapTextures, Tx, aniso_level, max_aniso};
 use crate::camera::{Camera, inverse, lens_point, pixel_jitter};
 use crate::envmap::EnvMap;
@@ -30,8 +30,27 @@ pub(super) struct ViewRect {
     pub height: i32,
 }
 
+/// Which view a frame draws.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum Space {
+    /// The 3D view: the model through the view's orbit camera.
+    Mesh,
+    /// The 2D view: the meshes laid out flat in UV space, seen through this camera ([`super::uv_camera`]).
+    Uv(Camera),
+}
+
+impl Space {
+    fn index(self) -> usize {
+        match self {
+            Space::Mesh => 0,
+            Space::Uv(_) => 1,
+        }
+    }
+}
+
 /// One paint's input besides the scene.
 pub(super) struct Frame<'a> {
+    pub space: Space,
     pub view: &'a View,
     pub display: &'a Display,
     pub self_shadow: bool,
@@ -58,16 +77,10 @@ pub(super) struct Renderer {
     maps: MapTextures,
     flat_height: Tx,
     max_aniso: f32,
-    /// Samples per pixel of egui's framebuffer, used for the HDR target too.
+    /// Samples per pixel of egui's framebuffer, used for the HDR targets too.
     samples: i32,
-    target: Option<HdrTarget>,
-    accum: Option<Accumulation>,
-    progress: Progress,
-    /// Samples averaged in the accumulation target so far.
-    averaged: u32,
-    /// The plain frame of the current accumulation has everything (it lacks its shadows when they were skipped
-    /// while moving): only then does it start the average.
-    plain_complete: bool,
+    /// The 3D view's and the 2D view's targets (indexed by [`Space::index`]).
+    views: [ViewTargets; 2],
     studio: EnvTextures,
     /// An image environment replacing the studio while set.
     image: Option<EnvTextures>,
@@ -106,11 +119,7 @@ impl Renderer {
                 flat_height,
                 max_aniso,
                 samples,
-                target: None,
-                accum: None,
-                progress: Progress::default(),
-                averaged: 0,
-                plain_complete: true,
+                views: Default::default(),
                 studio,
                 image: None,
                 shadows,
@@ -122,9 +131,9 @@ impl Renderer {
         aniso_level(req, self.max_aniso)
     }
 
-    /// True while a still view wants more accumulation samples.
-    pub fn refining(&self, display: &Display) -> bool {
-        self.progress.refining(display.frames())
+    /// True while a still view in `space` wants more accumulation samples.
+    pub fn refining(&self, space: Space, display: &Display) -> bool {
+        self.views[space.index()].progress.refining(frames_of(space, display))
     }
 
     /// Replace the maps of the built-in shape.
@@ -165,22 +174,31 @@ impl Renderer {
         self.programs.take_errors()
     }
 
-    /// The resolved HDR target (depth read-backs).
+    /// The 3D view's resolved HDR target (depth read-backs).
     pub fn target(&self) -> Option<&HdrTarget> {
-        self.target.as_ref()
+        self.views[Space::Mesh.index()].target.as_ref()
     }
 
-    /// Draws the frame: a scene sample into the HDR target when one is due, then background, post stage and
+    /// Draws the frame: a scene sample into the view's HDR target when one is due, then background, post stage and
     /// wireframe into egui's framebuffer at `frame.rect`. Returns the plain camera of the frame.
     pub unsafe fn draw(&mut self, gl: &glow::Context, frame: &Frame, scene: &Scene) -> Result<Camera, String> {
         unsafe {
             let ViewRect { left, bottom, width: w, height: h } = frame.rect;
-            let (view, display) = (frame.view, frame.display);
-            let camera = view.camera(&display.camera, [w as f32, h as f32]);
-            self.ensure_targets(gl, w, h)?;
-            let key = FrameKey::new(view, display, (frame.self_shadow, frame.aniso_req), frame.content, (w, h));
-            let frames = display.frames();
-            let step = self.progress.next(key, frames, frame.restart);
+            let (view, display, space) = (frame.view, frame.display, frame.space);
+            let (at, uv) = (space.index(), matches!(space, Space::Uv(_)));
+            let mut key = FrameKey::new(view, display, (frame.self_shadow, frame.aniso_req), frame.content, (w, h));
+            let camera = match space {
+                Space::Mesh => view.camera(&display.camera, [w as f32, h as f32]),
+                Space::Uv(c) => {
+                    key = key.in_uv(c);
+                    c.with_viewport([w as f32, h as f32])
+                }
+            };
+            if self.views[at].ensure(gl, w, h, self.samples)? && !uv {
+                self.shadows.invalidate();
+            }
+            let frames = frames_of(space, display);
+            let step = self.views[at].progress.next(key, frames, frame.restart);
             // egui's scissor box: restored for the passes into its framebuffer
             let mut scissor = [0i32; 4];
             gl.get_parameter_i32_slice(glow::SCISSOR_BOX, &mut scissor);
@@ -194,7 +212,8 @@ impl Renderer {
             if let Step::Draw { index } = step {
                 gl.disable(glow::SCISSOR_TEST);
                 gl.disable(glow::BLEND);
-                let shadow = if display.shadows_drawn() {
+                // the 2D view lies flat in UV space: no scene shadows there
+                let shadow = if display.shadows_drawn() && !uv {
                     let want = Want {
                         view,
                         lighting: &lighting,
@@ -211,18 +230,21 @@ impl Renderer {
                     None
                 };
                 if index == 0 {
-                    self.averaged = 0;
-                    self.plain_complete = shadow.is_some() || !display.shadows_drawn() || lighting.shadow_lights.is_empty();
-                } else if index == 1 && self.plain_complete {
+                    self.views[at].averaged = 0;
+                    self.views[at].plain_complete = uv || shadow.is_some() || !display.shadows_drawn() || lighting.shadow_lights.is_empty();
+                } else if index == 1 && self.views[at].plain_complete {
                     // the plain frame still in the resolved target starts the average
-                    self.accumulate(gl, 1.0);
-                    self.averaged = 1;
+                    self.accumulate(gl, &self.views[at], 1.0);
+                    self.views[at].averaged = 1;
                 }
-                let sample = sample_camera(&camera, display, index, frames, [w as f32, h as f32]);
-                self.draw_scene(gl, view, display, frame.self_shadow, &sample, &items, &lighting, shadow.as_ref());
+                let sample = sample_camera(&camera, space, display, index, frames, [w as f32, h as f32]);
+                let shade = Shade { self_shadow: frame.self_shadow, unlit: display.shading == Shading::Unlit, mip_bias: display.mip_bias(), uv_space: uv };
+                let scene_light = SceneLight { lighting: &lighting, shadow: shadow.as_ref() };
+                self.draw_scene(gl, &self.views[at], view, display, &shade, &sample, &items, &scene_light);
                 if index >= 1 {
-                    self.averaged += 1;
-                    self.accumulate(gl, 1.0 / self.averaged as f32);
+                    self.views[at].averaged += 1;
+                    let weight = 1.0 / self.views[at].averaged as f32;
+                    self.accumulate(gl, &self.views[at], weight);
                 }
             }
             // into egui's framebuffer
@@ -232,13 +254,14 @@ impl Renderer {
             gl.scissor(scissor[0], scissor[1], scissor[2], scissor[3]);
             gl.disable(glow::DEPTH_TEST);
             gl.depth_mask(false);
-            self.background(gl, view, display, &camera, &lighting);
-            self.post(gl, display, [left as f32, bottom as f32]);
+            self.background(gl, view, display, &camera, &lighting, uv);
+            self.post(gl, &self.views[at], display, [left as f32, bottom as f32]);
             gl.depth_mask(true);
             if view.wireframe
-                && let Some(depth) = self.target.as_ref().and_then(HdrTarget::depth)
+                && !uv
+                && let Some(depth) = self.views[at].target.as_ref().and_then(HdrTarget::depth)
             {
-                let shade = Shade { self_shadow: false, unlit: false, mip_bias: 0.0 };
+                let shade = Shade { self_shadow: false, unlit: false, mip_bias: 0.0, uv_space: false };
                 let prog = self.programs.builtin();
                 let pass = MaterialPass::begin(gl, prog, view, &CamOut::of(&camera), &shade, self.flat_height.id);
                 // every sampler gets its own unit (types must never share one), though the wire pass samples none
@@ -261,36 +284,22 @@ impl Renderer {
         }
     }
 
-    /// (Re)creates the HDR and accumulation targets for a view of `w` × `h` pixels.
-    unsafe fn ensure_targets(&mut self, gl: &glow::Context, w: i32, h: i32) -> Result<(), String> {
-        unsafe {
-            if self.target.as_ref().is_some_and(|t| t.fits(w, h, self.samples)) {
-                return Ok(());
-            }
-            self.free_targets(gl);
-            self.progress.invalidate();
-            self.shadows.invalidate();
-            self.target = Some(HdrTarget::new(gl, w, h, self.samples)?);
-            self.accum = Some(Accumulation::new(gl, w, h)?);
-            Ok(())
-        }
-    }
-
-    /// One scene sample into the HDR target, resolved.
+    /// One scene sample into the view's HDR target, resolved.
     #[allow(clippy::too_many_arguments)]
     unsafe fn draw_scene(
         &self,
         gl: &glow::Context,
+        targets: &ViewTargets,
         view: &View,
         display: &Display,
-        self_shadow: bool,
+        shade: &Shade,
         camera: &Camera,
         items: &[Drawable],
-        lighting: &Lighting,
-        shadow: Option<&Bound>,
+        light: &SceneLight,
     ) {
         unsafe {
-            let Some(target) = &self.target else { return };
+            let (lighting, shadow) = (light.lighting, light.shadow);
+            let Some(target) = &targets.target else { return };
             target.bind_draw(gl);
             gl.enable(glow::DEPTH_TEST);
             gl.depth_func(glow::LESS);
@@ -298,24 +307,25 @@ impl Renderer {
             gl.clear_color(0.0, 0.0, 0.0, 0.0);
             gl.clear_depth_f32(1.0);
             gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-            let shade = Shade { self_shadow, unlit: display.shading == Shading::Unlit, mip_bias: display.mip_bias() };
-            // one pass per program, in the order the parts first use them
+            // one pass per program, in the order the parts first use them; the 2D view lays every part out with the
+            // built-in program (shader files only know the 3D layout), so it shows the maps, not the instances' shading
             let mut drawn: Vec<u64> = Vec::new();
             for d in items {
-                let key = d.shading.shader.program_key;
+                let key = if shade.uv_space { 0 } else { d.shading.shader.program_key };
                 if drawn.contains(&key) {
                     continue;
                 }
                 drawn.push(key);
-                let prog = self.programs.get(&d.shading.shader);
-                let pass = MaterialPass::begin(gl, prog, view, &CamOut::of(camera), &shade, self.flat_height.id);
+                let prog = if shade.uv_space { self.programs.builtin() } else { self.programs.get(&d.shading.shader) };
+                let pass = MaterialPass::begin(gl, prog, view, &CamOut::of(camera), shade, self.flat_height.id);
                 lighting.apply(gl, prog, display.environment.scale());
+                pass.keep_uv_lights();
                 self.environment().bind(gl, prog, lighting);
                 match shadow {
                     Some(s) => s.bind(gl, prog, lighting.shadow_mode, display.shadows.opacity()),
                     None => Bound::off(gl, prog),
                 }
-                pass.draw(items.iter().filter(|x| x.shading.shader.program_key == key));
+                pass.draw(items.iter().filter(|x| shade.uv_space || x.shading.shader.program_key == key));
             }
             EnvTextures::unbind(gl);
             Bound::unbind(gl);
@@ -325,9 +335,9 @@ impl Renderer {
     }
 
     /// Weighs the resolved frame into the running average: average = frame · `weight` + average · (1 − `weight`).
-    unsafe fn accumulate(&self, gl: &glow::Context, weight: f32) {
+    unsafe fn accumulate(&self, gl: &glow::Context, targets: &ViewTargets, weight: f32) {
         unsafe {
-            let (Some(target), Some(accum)) = (&self.target, &self.accum) else { return };
+            let (Some(target), Some(accum)) = (&targets.target, &targets.accum) else { return };
             accum.bind_draw(gl);
             gl.enable(glow::BLEND);
             gl.blend_equation(glow::FUNC_ADD);
@@ -344,13 +354,14 @@ impl Renderer {
     }
 
     /// The backdrop into egui's framebuffer: the gradient, and the environment over it at the backdrop's opacity
-    /// (never in unlit views).
-    unsafe fn background(&self, gl: &glow::Context, view: &View, display: &Display, camera: &Camera, lighting: &Lighting) {
+    /// (never in unlit views or the 2D view, `uv`).
+    unsafe fn background(&self, gl: &glow::Context, view: &View, display: &Display, camera: &Camera, lighting: &Lighting, uv: bool) {
         unsafe {
             let p = &self.bg_prog;
             gl.use_program(Some(p.id));
             let look = &display.environment;
-            let opacity = if display.shading == Shading::Lit && look.backdrop.opacity.is_finite() { look.backdrop.opacity.clamp(0.0, 1.0) } else { 0.0 };
+            let lit = display.shading == Shading::Lit && !uv;
+            let opacity = if lit && look.backdrop.opacity.is_finite() { look.backdrop.opacity.clamp(0.0, 1.0) } else { 0.0 };
             gl.uniform_1_f32(p.loc("uOpacity"), opacity);
             if opacity > 0.0 {
                 let inv = inverse(&camera.view_projection()).unwrap_or(crate::camera::IDENTITY);
@@ -372,10 +383,10 @@ impl Renderer {
     }
 
     /// Exposure, tone curve and display transform of the picture, blended over the background.
-    unsafe fn post(&self, gl: &glow::Context, display: &Display, origin: [f32; 2]) {
+    unsafe fn post(&self, gl: &glow::Context, targets: &ViewTargets, display: &Display, origin: [f32; 2]) {
         unsafe {
-            let source = match (&self.accum, &self.target) {
-                (Some(a), _) if self.progress.averaged() => a.color(),
+            let source = match (&targets.accum, &targets.target) {
+                (Some(a), _) if targets.progress.averaged() => a.color(),
                 (_, Some(t)) => t.color(),
                 _ => return,
             };
@@ -398,20 +409,11 @@ impl Renderer {
         }
     }
 
-    unsafe fn free_targets(&mut self, gl: &glow::Context) {
-        unsafe {
-            if let Some(t) = self.target.take() {
-                t.free(gl);
-            }
-            if let Some(a) = self.accum.take() {
-                a.free(gl);
-            }
-        }
-    }
-
     pub unsafe fn free(mut self, gl: &glow::Context) {
         unsafe {
-            self.free_targets(gl);
+            for v in &mut self.views {
+                v.free(gl);
+            }
             self.programs.free(gl);
             self.bg_prog.free(gl);
             self.post_prog.free(gl);
@@ -436,9 +438,23 @@ fn shape_drawable<'a>(shape: &'a ShapeMesh, maps: &'a MapTextures, shading: &'a 
     shape.current().map(|mesh| Drawable { mesh, maps, vtx_lod, cull, shading }).into_iter().collect()
 }
 
+/// The scene's lighting for one sample and the shadow map it uses (none in the 2D view).
+struct SceneLight<'a> {
+    lighting: &'a Lighting,
+    shadow: Option<&'a Bound>,
+}
+
+/// Frames to accumulate for a still view in `space`: the 2D view has no lens, so only anti-aliasing accumulates.
+fn frames_of(space: Space, display: &Display) -> u32 {
+    match space {
+        Space::Mesh => display.frames(),
+        Space::Uv(_) => display.antialiasing.frames(),
+    }
+}
+
 /// The camera of accumulation sample `index` of `frames`: sub-pixel jitter when anti-aliasing accumulates, a point
-/// of the lens when depth of field is on; sample 0 is the plain camera.
-fn sample_camera(camera: &Camera, display: &Display, index: u32, frames: u32, size: [f32; 2]) -> Camera {
+/// of the lens when depth of field is on (3D view); sample 0 is the plain camera.
+fn sample_camera(camera: &Camera, space: Space, display: &Display, index: u32, frames: u32, size: [f32; 2]) -> Camera {
     let mut c = *camera;
     if index == 0 {
         return c;
@@ -446,7 +462,7 @@ fn sample_camera(camera: &Camera, display: &Display, index: u32, frames: u32, si
     if display.antialiasing.frames() > 1 {
         c = c.jittered(pixel_jitter(index), size);
     }
-    if display.camera.blurs() {
+    if space == Space::Mesh && display.camera.blurs() {
         let dof = &display.camera.depth_of_field;
         let p = lens_point(index, frames);
         c = c.through_lens([p[0] * dof.aperture, p[1] * dof.aperture], dof.focus_distance);

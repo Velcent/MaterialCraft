@@ -29,6 +29,7 @@ uniform int uShadow;
 uniform int uCull;
 uniform int uUnlit;
 uniform float uMipBias;
+uniform int uUvSpace; // 1: the 2D view (texels show as crisp squares when magnified)
 // wireframe overlay: drawn after the post stage, tested against the scene's depth by hand
 uniform sampler2D uSceneDepth;
 uniform vec2 uDepthOrigin;
@@ -196,6 +197,12 @@ void main() {
     gdx = dFdx(vUv) * exp2(uMipBias);
     gdy = dFdy(vUv) * exp2(uMipBias);
     vec2 uv = vUv;
+    if (uUvSpace == 1) {
+        // magnified (less than a texel per pixel): sample texel centres, so texels show as crisp squares (V2-09)
+        vec2 size = vec2(textureSize(uBase, 0));
+        vec2 px = vUv * size;
+        if (max(length(dFdx(px)), length(dFdy(px))) < 1.01) uv = (floor(px) + 0.5) / size;
+    }
     float cav = 1.0;
     bool hasH = uHasHeight == 1 && uDepth > 0.0;
     if (uMode == 2 && hasH) {

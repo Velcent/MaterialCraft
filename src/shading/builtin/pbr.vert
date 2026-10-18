@@ -10,6 +10,7 @@ uniform sampler2D uHeight;
 uniform float uDisp;
 uniform float uDispLevel; // the height that stays on the surface
 uniform float uVtxLod;
+uniform int uUvSpace; // 1: the 2D view, the mesh laid out flat in UV space (x = u, y = -v, facing +z)
 out vec3 vPos;
 out vec3 vN;
 out vec3 vT;
@@ -28,5 +29,13 @@ void main() {
     vUv = aUv;
     vScale = aMisc.xy;
     vTanW = aTanW;
+    if (uUvSpace == 1) {
+        // flat in UV space the tangent frame is the texture's own: u to the right, v down (the bitangent up)
+        p = vec3(aUv.x, -aUv.y, 0.0);
+        vPos = p;
+        vN = vec3(0.0, 0.0, 1.0);
+        vT = vec3(1.0, 0.0, 0.0);
+        vTanW = 1.0;
+    }
     gl_Position = uVP * vec4(p, 1.0);
 }

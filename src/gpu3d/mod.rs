@@ -10,6 +10,10 @@
 //! starts again from the plain frame, so moving costs nothing extra; soft shadows refine the same way. Unlit shading shows the maps as they are and
 //! skips exposure and the curve. Textures are mip-mapped with anisotropic filtering and an optional sharpening bias.
 //!
+//! The same scene and maps also draw the 2D (UV) view ([`paint_uv`]): every part laid out flat in UV space and seen
+//! through a parallel camera ([`uv_camera`]), with its own targets, so both views can be shown side by side and show
+//! the same uploaded composite. Magnified texels show as crisp squares.
+//!
 //! The material program comes from a shader file (`crate::shading`): the built-in default, or another file a
 //! part's shader instance names, compiled when first needed (one that fails is drawn with the built-in program).
 //! Each part carries its instance's parameter values and displacement ([`PartShading`]).
@@ -47,20 +51,21 @@ mod shape;
 mod target;
 mod textures;
 
-pub use camera::view_camera;
+pub use camera::{uv_camera, view_camera};
 pub use display::{Antialiasing, Display, MIP_BIAS_STEPS, Shading, ToneCurve};
 pub use lighting::{Backdrop, EnvironmentLook, ShadowQuality, Shadows};
 pub use maps::{GpuMaps, MapInputs, prepare};
 pub use scene::ScenePart;
 pub use shading::{InstanceDisplacement, PartShading};
 
+use crate::camera::Camera;
 use crate::diag::{Area, Sink, SinkExt};
 use crate::envmap::EnvMap;
 use crate::render3d::View;
 use eframe::egui::PaintCallbackInfo;
 use eframe::egui_glow::{self, glow};
 use glow::HasContext;
-use renderer::{Frame, Renderer, ViewRect};
+use renderer::{Frame, Renderer, Space, ViewRect};
 use scene::Scene;
 use std::sync::{Arc, Mutex};
 
@@ -105,6 +110,21 @@ pub struct ColorShot {
     pub rgba: Option<[u8; 4]>,
 }
 
+/// Read-back requests of the 2D view and their answers (the 3D view's are [`Gpu`]'s own fields).
+#[derive(Default)]
+pub struct UvReads {
+    /// Request a pixel read-back of the next 2D frame.
+    pub want_shot: bool,
+    /// Result of a read-back: (width, height, RGBA8 rows from the TOP).
+    pub shot: Option<(usize, usize, Vec<u8>)>,
+    /// Request the displayed colour at this point (UI points from the 2D view's top-left corner) of the next frame.
+    pub want_color: Option<[f32; 2]>,
+    /// The answer to `want_color`.
+    pub color: Option<ColorShot>,
+    /// Frames of the 2D view drawn so far.
+    pub frames: u64,
+}
+
 #[derive(Default)]
 pub struct Gpu {
     pub opts: GpuOpts,
@@ -123,6 +143,8 @@ pub struct Gpu {
     pub want_color: Option<[f32; 2]>,
     /// The answer to `want_color`, set by the next drawn frame.
     pub color: Option<ColorShot>,
+    /// The 2D view's read-backs.
+    pub uv: UvReads,
     /// GPU name reported by the driver, for the UI.
     pub renderer: String,
     res: Option<Renderer>,
@@ -137,6 +159,8 @@ pub struct Gpu {
     pending_env: Option<Option<Arc<EnvMap>>>,
     /// The last frame left the accumulation incomplete: paint again soon (the view is still refining).
     refining: bool,
+    /// The same for the 2D view.
+    uv_refining: bool,
     /// The anisotropic filtering request the uploaded textures have.
     applied_aniso: Option<f32>,
 }
@@ -156,7 +180,7 @@ impl Gpu {
 
     /// True while the last drawn frame wants more accumulation samples: the UI should paint again.
     pub fn refining(&self) -> bool {
-        self.refining && self.error.is_none()
+        (self.refining || self.uv_refining) && self.error.is_none()
     }
     pub fn ready(&self) -> bool {
         self.error.is_none()
@@ -210,8 +234,19 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
 /// Draw the viewport into the rectangle of the paint callback with `display`'s camera, post stage and accumulation.
 /// While [`Gpu::refining`] is true the UI should keep painting. Shader compile and link failures and GL errors go to
 /// `sink` once, when they stop the viewer; the GPU's name is reported when the renderer starts.
-// SAFETY (every block in `paint_with`): it runs inside an egui_glow paint callback, so `painter.gl()` is current.
 pub fn paint_with(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Painter, view: &View, display: &Display, sink: &dyn Sink) {
+    paint_space(shared, info, painter, view, display, Space::Mesh, sink);
+}
+
+/// Draw the 2D (UV) view into the rectangle of the paint callback: the scene's parts laid out flat in UV space, seen
+/// through `camera` ([`uv_camera`]), with `display`'s shading, post stage and anti-aliasing (`view` supplies the
+/// light intensity and normal strength). Read-backs are requested and answered in [`Gpu::uv`].
+pub fn paint_uv(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Painter, view: &View, display: &Display, camera: &Camera, sink: &dyn Sink) {
+    paint_space(shared, info, painter, view, display, Space::Uv(*camera), sink);
+}
+
+// SAFETY (every block in `paint_space`): it runs inside an egui_glow paint callback, so `painter.gl()` is current.
+fn paint_space(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Painter, view: &View, display: &Display, space: Space, sink: &dyn Sink) {
     let mut g = match shared.lock() {
         Ok(g) => g,
         Err(_) => return,
@@ -268,14 +303,18 @@ pub fn paint_with(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow
     }
     g.applied_aniso = Some(aniso_req);
     let self_shadow = g.opts.self_shadow;
-    let want_shot = std::mem::take(&mut g.want_shot);
-    let want_depth = std::mem::take(&mut g.want_depth);
-    let want_color = g.want_color.take();
+    let uv = matches!(space, Space::Uv(_));
+    let (want_shot, want_depth, want_color) = if uv {
+        (std::mem::take(&mut g.uv.want_shot), false, g.uv.want_color.take())
+    } else {
+        (std::mem::take(&mut g.want_shot), std::mem::take(&mut g.want_depth), g.want_color.take())
+    };
     let vp_px = info.viewport_in_pixels();
     if vp_px.width_px <= 0 || vp_px.height_px <= 0 {
         return;
     }
     let frame = Frame {
+        space,
         view,
         display,
         self_shadow,
@@ -289,9 +328,19 @@ pub fn paint_with(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow
     for e in r.take_shader_errors() {
         sink.warn(Area::Gpu, e);
     }
-    g.refining = r.refining(display);
+    let refining = r.refining(space, display);
+    if uv {
+        g.uv_refining = refining;
+    } else {
+        g.refining = refining;
+    }
     if want_shot && result.is_ok() {
-        g.shot = Some(read_back(gl, info));
+        let shot = Some(read_back(gl, info));
+        if uv {
+            g.uv.shot = shot;
+        } else {
+            g.shot = shot;
+        }
     }
     if want_depth && let Ok(camera) = &result {
         let (width, height) = (vp_px.width_px as usize, vp_px.height_px as usize);
@@ -300,9 +349,18 @@ pub fn paint_with(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow
     if let Some(at) = want_color
         && result.is_ok()
     {
-        g.color = Some(ColorShot { at, rgba: read_color(gl, info, at) });
+        let shot = Some(ColorShot { at, rgba: read_color(gl, info, at) });
+        if uv {
+            g.uv.color = shot;
+        } else {
+            g.color = shot;
+        }
     }
-    g.frames += 1;
+    if uv {
+        g.uv.frames += 1;
+    } else {
+        g.frames += 1;
+    }
     if let Err(e) = result {
         fail(&mut g.error, sink, e);
     }

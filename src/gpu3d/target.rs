@@ -1,7 +1,9 @@
 //! [`HdrTarget`]: the off-screen frame the scene is drawn into: half-float colour (linear radiance, coverage in
 //! alpha) and depth, multisampled like the window and resolved into textures the post stage, the accumulation
-//! and the wireframe overlay read. [`Accumulation`]: the running average of jittered frames (PP-02).
+//! and the wireframe overlay read. [`Accumulation`]: the running average of jittered frames (PP-02). [`ViewTargets`]:
+//! both for one view (the 3D view and the 2D view each keep their own, so both can be shown side by side).
 
+use super::progress::Progress;
 use eframe::egui_glow::glow;
 use glow::HasContext;
 
@@ -215,5 +217,46 @@ impl Accumulation {
 
     pub unsafe fn free(&self, gl: &glow::Context) {
         unsafe { self.target.free(gl) }
+    }
+}
+
+/// The targets of one view and how far its accumulation got.
+#[derive(Default)]
+pub(super) struct ViewTargets {
+    pub target: Option<HdrTarget>,
+    pub accum: Option<Accumulation>,
+    pub progress: Progress,
+    /// Samples averaged in the accumulation target so far.
+    pub averaged: u32,
+    /// The plain frame of the current accumulation has everything (it lacks its shadows when they were skipped
+    /// while moving): only then does it start the average.
+    pub plain_complete: bool,
+}
+
+impl ViewTargets {
+    /// (Re)creates the targets for a view of `w` × `h` pixels with `samples` samples per pixel; true if they were
+    /// made anew.
+    pub unsafe fn ensure(&mut self, gl: &glow::Context, w: i32, h: i32, samples: i32) -> Result<bool, String> {
+        unsafe {
+            if self.target.as_ref().is_some_and(|t| t.fits(w, h, samples)) {
+                return Ok(false);
+            }
+            self.free(gl);
+            self.progress.invalidate();
+            self.target = Some(HdrTarget::new(gl, w, h, samples)?);
+            self.accum = Some(Accumulation::new(gl, w, h)?);
+            Ok(true)
+        }
+    }
+
+    pub unsafe fn free(&mut self, gl: &glow::Context) {
+        unsafe {
+            if let Some(t) = self.target.take() {
+                t.free(gl);
+            }
+            if let Some(a) = self.accum.take() {
+                a.free(gl);
+            }
+        }
     }
 }

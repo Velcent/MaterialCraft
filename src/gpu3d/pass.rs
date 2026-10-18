@@ -11,6 +11,9 @@ use glow::HasContext;
 /// The texture unit of the scene depth the wireframe tests against (after the five map units).
 const WIRE_DEPTH_UNIT: u32 = 5;
 
+/// The key and fill light of the 2D view, from the viewer's side above the flat layout: (key, fill), unit length.
+const UV_LIGHTS: ([f32; 3], [f32; 3]) = ([-0.3487, 0.4650, 0.8137], [0.5145, -0.3087, 0.8000]);
+
 /// One mesh to draw with its own maps.
 pub(super) struct Drawable<'a> {
     pub mesh: &'a GpuMesh,
@@ -31,6 +34,9 @@ pub(super) struct Shade {
     pub unlit: bool,
     /// Mip-map bias (0 … −3: sharper texture sampling).
     pub mip_bias: f32,
+    /// Draw the meshes flat in UV space (the 2D view): no displacement, relief or contact shadows, and a fixed
+    /// light from the viewer's side, since the scene's lights are placed around the 3D model.
+    pub uv_space: bool,
 }
 
 /// What the wireframe overlay tests its lines against: the scene's resolved depth.
@@ -46,6 +52,8 @@ pub(super) struct MaterialPass<'a> {
     view: &'a View,
     /// Bound as height map for meshes without one.
     flat_height: glow::Texture,
+    /// The meshes are drawn flat in UV space (never displaced).
+    uv_space: bool,
 }
 
 // SAFETY: GL calls on the current context (module invariant); the program, meshes and textures it binds are owned
@@ -54,8 +62,10 @@ impl<'a> MaterialPass<'a> {
     /// Bind the program and set everything that is the same for all meshes of the frame.
     pub unsafe fn begin(gl: &'a glow::Context, prog: &'a Program, view: &'a View, cam: &CamOut, shade: &Shade, flat_height: glow::Texture) -> Self {
         unsafe {
-            let (ldir, fill) = crate::render3d::light_dirs(view);
-            let mode = if view.relief == RELIEF_BUMP {
+            let (ldir, fill) = if shade.uv_space { UV_LIGHTS } else { crate::render3d::light_dirs(view) };
+            let mode = if shade.uv_space {
+                0
+            } else if view.relief == RELIEF_BUMP {
                 1
             } else if view.relief == RELIEF_PARALLAX {
                 2
@@ -78,13 +88,26 @@ impl<'a> MaterialPass<'a> {
             gl.uniform_1_f32(loc("uDepth"), view.height_scale);
             gl.uniform_1_f32(loc("uLevel"), view.height_level);
             gl.uniform_1_i32(loc("uMode"), mode);
-            gl.uniform_1_i32(loc("uShadow"), shade.self_shadow as i32);
+            gl.uniform_1_i32(loc("uShadow"), (shade.self_shadow && !shade.uv_space) as i32);
+            gl.uniform_1_i32(loc("uUvSpace"), shade.uv_space as i32);
             gl.uniform_1_i32(loc("uUnlit"), shade.unlit as i32);
             gl.uniform_1_f32(loc("uMipBias"), shade.mip_bias);
             gl.uniform_1_i32(loc("uWire"), 0);
             let d = cam.depth_lin;
             gl.uniform_4_f32(loc("uDepthLin"), d[0], d[1], d[2], d[3]);
-            MaterialPass { gl, prog, view, flat_height }
+            MaterialPass { gl, prog, view, flat_height, uv_space: shade.uv_space }
+        }
+    }
+
+    /// In the 2D view, sets its own key and fill light again (after the scene's lighting was applied).
+    pub unsafe fn keep_uv_lights(&self) {
+        if !self.uv_space {
+            return;
+        }
+        unsafe {
+            let ((k, f), loc) = (UV_LIGHTS, |n: &str| self.prog.loc(n));
+            self.gl.uniform_3_f32(loc("uL"), k[0], k[1], k[2]);
+            self.gl.uniform_3_f32(loc("uFill"), f[0], f[1], f[2]);
         }
     }
 
@@ -130,6 +153,7 @@ impl<'a> MaterialPass<'a> {
             let has_h = m.height.is_some();
             // the instance's displacement, else the view's height display
             let (disp, level) = match d.shading.displacement {
+                _ if self.uv_space => (0.0, view.height_level),
                 Some(x) => (if has_h { x.distance } else { 0.0 }, x.level),
                 None => (if has_h && view.relief == RELIEF_DISPLACE { view.height_scale } else { 0.0 }, view.height_level),
             };

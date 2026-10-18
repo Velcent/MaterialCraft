@@ -15,11 +15,18 @@ pub(super) struct FrameKey {
     /// Bumped by every change of the uploaded maps or parts.
     pub content: u64,
     pub size: (i32, i32),
+    /// The 2D view's camera (`None` for the 3D view).
+    pub uv: Option<crate::camera::Camera>,
 }
 
 impl FrameKey {
     pub fn new(view: &View, display: &Display, opts: (bool, f32), content: u64, size: (i32, i32)) -> FrameKey {
-        FrameKey { view: view.clone(), display: display.scene_part(), opts: (opts.0, opts.1.to_bits()), content, size }
+        FrameKey { view: view.clone(), display: display.scene_part(), opts: (opts.0, opts.1.to_bits()), content, size, uv: None }
+    }
+
+    /// The key of the 2D view drawn with `camera`.
+    pub fn in_uv(self, camera: crate::camera::Camera) -> FrameKey {
+        FrameKey { uv: Some(camera), ..self }
     }
 }
 
