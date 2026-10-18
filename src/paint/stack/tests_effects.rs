@@ -1,7 +1,7 @@
 //! Content effect stacks, mask stacks and registered generators/filters.
 
 use super::*;
-use crate::paint::effect::{EvalRequest, FilterInput, FilterKernel, GeneratorSource, Procedural};
+use crate::paint::effect::{EvalRequest, FilterInput, FilterKernel, GeneratorSource, Procedural, Reach};
 use crate::paint::{ContentEffect, EffectKind, Fill, GeometryMask, GreyBlend, Mask, MaskEffect, PaintContent, PixelFormat};
 
 const R: Channel = Channel::Roughness;
@@ -34,6 +34,9 @@ fn close(a: f32, b: f32) -> bool {
 /// Writes the x coordinate of each texel.
 struct Ramp;
 impl GeneratorSource for Ramp {
+    fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
+        None
+    }
     fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
         let r = request.rect;
         for (i, p) in out.iter_mut().enumerate() {
@@ -49,6 +52,9 @@ struct ShiftRight;
 impl FilterKernel for ShiftRight {
     fn radius(&self, _: &EvalRequest) -> u32 {
         1
+    }
+    fn reach(&self, _: &EvalRequest) -> Reach {
+        Reach::Radius(1)
     }
     fn apply(&self, request: &EvalRequest, input: &FilterInput, out: &mut [[f32; 4]]) -> Result<(), String> {
         let (r, i) = (request.rect, input.rect);
@@ -185,6 +191,9 @@ fn group_effects_and_data_only_parts_are_reported() {
 /// Mask value 1 where the layer's own height is above the height below it, else 0.
 struct Higher;
 impl GeneratorSource for Higher {
+    fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
+        Some(Reach::Texel)
+    }
     fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
         let stack = request.stack.ok_or("no stack")?;
         let (own, below) = (stack.layer_height(request.rect), stack.height_below(request.rect));

@@ -29,6 +29,9 @@ fn kinds_ids_and_builtins() {
 fn registry_finds_and_replaces() {
     struct Flat(f32);
     impl GeneratorSource for Flat {
+        fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
+            None
+        }
         fn generate(&self, _: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
             out.fill([self.0, self.0, self.0, 1.0]);
             Ok(())

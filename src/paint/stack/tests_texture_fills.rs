@@ -1,7 +1,7 @@
 //! Texture fills: procedural textures of the effect registry laid on by the fill's projection, per channel.
 
 use super::*;
-use crate::paint::effect::{EvalRequest, GeneratorSource, Params, Procedural};
+use crate::paint::effect::{EvalRequest, GeneratorSource, Params, Procedural, Reach};
 use crate::paint::{ContentEffect, EffectKind, Fill, FillSource, TextureFill};
 use crate::projection::{Filter, ImagePlacement, Projection, Tap};
 
@@ -11,6 +11,9 @@ const R: Channel = Channel::Roughness;
 struct URamp;
 
 impl GeneratorSource for URamp {
+    fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
+        None
+    }
     fn generate(&self, _request: &EvalRequest, _out: &mut [[f32; 4]]) -> Result<(), String> {
         Err("points only".into())
     }
@@ -33,6 +36,9 @@ impl GeneratorSource for URamp {
 struct RectOnly;
 
 impl GeneratorSource for RectOnly {
+    fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
+        None
+    }
     fn generate(&self, _request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
         out.fill([1.0; 4]);
         Ok(())

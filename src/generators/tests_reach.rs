@@ -78,3 +78,17 @@ fn height_combination_reads_the_heights_at_its_texel() {
         assert_eq!(one[0], before[c as usize]);
     }
 }
+
+#[test]
+fn every_registered_effect_is_in_the_reach_ledger() {
+    use super::reach_ledger::{Kind, LEDGER};
+    let registry = super::builtin();
+    let registered: Vec<(&str, Kind)> =
+        registry.generator_ids().map(|id| (id, Kind::Generator)).chain(registry.filter_ids().map(|id| (id, Kind::Filter))).collect();
+    let missing: Vec<_> = registered.iter().filter(|(id, k)| !LEDGER.iter().any(|e| e.id == *id && e.kind == *k)).collect();
+    let stale: Vec<_> = LEDGER.iter().filter(|e| !registered.iter().any(|(id, k)| *id == e.id && *k == e.kind)).map(|e| e.id).collect();
+    assert!(missing.is_empty(), "registered without a verified reach (declare it, prove it with a test, add it to the ledger): {missing:?}");
+    assert!(stale.is_empty(), "in the ledger but no longer registered: {stale:?}");
+    let mut seen = std::collections::BTreeSet::new();
+    assert!(LEDGER.iter().all(|e| seen.insert((e.id, e.kind == Kind::Filter))), "an id is in the ledger twice");
+}

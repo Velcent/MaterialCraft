@@ -69,11 +69,9 @@ pub trait GeneratorSource: Send + Sync {
 
     /// How far around a texel the generator reads the layer stack through [`EvalRequest::stack`] (the heights of
     /// [`StackContext`]); `None` if it never does. Baked maps, the surface map and the parameters don't count:
-    /// they are not the stack. The default is the safe answer for a generator that doesn't say:
-    /// it may read the stack anywhere.
-    fn stack_reach(&self, _request: &EvalRequest) -> Option<Reach> {
-        Some(Reach::Whole)
-    }
+    /// they are not the stack. Required, with no default: every generator states its reach when it is written,
+    /// proves it with a test and is entered in the reach ledger ([`crate::generators::reach_ledger::LEDGER`]).
+    fn stack_reach(&self, request: &EvalRequest) -> Option<Reach>;
 }
 
 /// The input of a filter: what is below the filter in its stack, over `rect` (the output rectangle grown by
@@ -93,12 +91,10 @@ pub trait FilterKernel: Send + Sync {
     }
 
     /// Which texels of its input (what is below it in its stack) one output texel depends on, at most: texels
-    /// beyond it never change that output, however the compositor cuts the texture into rectangles. The default
-    /// takes [`Self::radius`] at its word, which holds for a kernel whose output texel reads only its input
-    /// within the radius; kernels that read more (padding, tiling effects) override it.
-    fn reach(&self, request: &EvalRequest) -> Reach {
-        Reach::radius(self.radius(request))
-    }
+    /// beyond it never change that output, however the compositor cuts the texture into rectangles. Required,
+    /// with no default: every filter states its reach when it is written, proves it with a test and is entered in
+    /// the reach ledger ([`crate::generators::reach_ledger::LEDGER`]).
+    fn reach(&self, request: &EvalRequest) -> Reach;
 
     /// Writes `request.rect.area()` pixels, row by row. An error leaves the effect out.
     fn apply(&self, request: &EvalRequest, input: &FilterInput, out: &mut [[f32; 4]]) -> Result<(), String>;
@@ -140,6 +136,16 @@ impl EffectRegistry {
 
     pub fn filter(&self, id: &str) -> Option<&dyn FilterKernel> {
         self.filters.iter().find(|(k, _)| k == id).map(|(_, f)| f.as_ref())
+    }
+
+    /// The ids of every registered generator, in registration order.
+    pub fn generator_ids(&self) -> impl Iterator<Item = &str> {
+        self.generators.iter().map(|(k, _)| k.as_str())
+    }
+
+    /// The ids of every registered filter, in registration order.
+    pub fn filter_ids(&self) -> impl Iterator<Item = &str> {
+        self.filters.iter().map(|(k, _)| k.as_str())
     }
 }
 

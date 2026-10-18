@@ -73,4 +73,12 @@ Toolchain: Rust 1.95 or newer, edition 2024. Formatting follows `rustfmt.toml` (
 7. **Licence and attribution.** MaterialCraft is `MIT OR Apache-2.0` (`LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`).
    Code copied from another Craft app (PhotoCraft is MIT OR Apache-2.0) keeps its licence notice in the file and gets
    a row in `ATTRIBUTION.md` in the same commit; third-party crates are listed in `THIRD_PARTY_LICENSES.md`.
-8. **Commits** explain why, build on their own, and keep mechanical changes (formatting, renames) apart from logic.
+8. **Reach first (effects and tools).** Every filter, generator and procedural texture declares how far it reads
+   around a texel before it is used: `FilterKernel::reach` and `GeneratorSource::stack_reach` have no default, so
+   new code won't compile without one. Prove the declared reach with a test (see `src/filters/tests_reach.rs` and
+   `src/generators/tests_reach.rs`) and add the effect to the reach ledger (`src/generators/reach_ledger.rs`); a
+   test fails while a registered effect is missing there. A new native effect kind gets an arm in
+   `EffectKind::reach` (the match has no wildcard). A new tool that changes pixels states which tiles and channels
+   it touches, so only that part of the stack is recomposited. When an effect changes, verify its reach again and
+   update its ledger date.
+9. **Commits** explain why, build on their own, and keep mechanical changes (formatting, renames) apart from logic.

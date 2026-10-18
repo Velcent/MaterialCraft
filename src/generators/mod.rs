@@ -27,6 +27,7 @@ mod mask_editor;
 use crate::paint::effect::params;
 mod parts;
 mod pyramid;
+pub mod reach_ledger;
 mod texel;
 mod tone;
 mod uv_border;
