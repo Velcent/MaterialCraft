@@ -1,18 +1,23 @@
 //! Brush presets (AS-06): a handful of brushes built on the starter alphas, as `.mcbrush` files with a thumbnail of
 //! a sample stroke. Brushes on PhotoCraft's tips take the procedural tip itself (it needs no image); the airbrush
-//! takes the soft round alpha image by its library path, so the tray has an alpha-image brush too.
+//! takes the soft round alpha image by its library path, so the tray has an alpha-image brush too. After them come
+//! the presets translated from PhotoCraft's ([`crate::translated`]), which record PhotoCraft in their provenance.
 
 use crate::alphas::{ALPHA_PX, ROUND_SOFT, Round, alpha_path};
 use crate::build::Options;
 use crate::image::{THUMB_PX, grey_thumb};
 use crate::recipe::sidecar;
+use crate::translated::{self, PHOTOCRAFT_REVISION, Translated};
 use crate::{Made, Recipe, StarterError};
 use materialcraft::assets::{Provenance, Usage};
+use materialcraft::json::Value;
 use materialcraft::paint::brush::{BrushPreset, Jitter, PressureUse, Tip, file};
 use materialcraft_brush::{TipAlpha, stroke_preview};
 
 pub fn recipes() -> Vec<Box<dyn Recipe>> {
-    presets().into_iter().map(|(id, tags, preset)| Box::new(Preset { id, tags, preset }) as Box<dyn Recipe>).collect()
+    let ours = presets().into_iter().map(|(id, tags, preset)| Preset { id, tags, preset, origin: None });
+    let photocraft = translated::presets().into_iter().map(|t| Preset { id: t.id, tags: t.tags, preset: t.preset.clone(), origin: Some(t) });
+    ours.chain(photocraft).map(|p| Box::new(p) as Box<dyn Recipe>).collect()
 }
 
 /// Every starter brush: its file id, its tags and the preset.
@@ -72,9 +77,29 @@ struct Preset {
     id: &'static str,
     tags: &'static [&'static str],
     preset: BrushPreset,
+    /// The PhotoCraft preset it was translated from; `None` for our own.
+    origin: Option<Translated>,
 }
 
 impl Preset {
+    /// Its description and provenance.
+    fn origin(&self, tip: &str) -> (String, Provenance) {
+        let name = &self.preset.name;
+        match &self.origin {
+            None => {
+                let provenance = Provenance::Generator { generator: "mcstarter.brush_preset".into(), preset: Some(self.preset.to_json()) };
+                (format!("{name} brush preset with {tip}."), provenance)
+            }
+            Some(t) => {
+                let dropped = if t.dropped.is_empty() { String::new() } else { format!(" Not carried over: {}.", t.dropped) };
+                let description = format!("{name} brush preset with {tip}, translated from one of PhotoCraft's built-in presets.{dropped}");
+                let source = Value::object().with("preset", t.source).with("revision", PHOTOCRAFT_REVISION);
+                let preset = self.preset.to_json().with("photocraft", source);
+                (description, Provenance::Generator { generator: "photocraft-paint.presets".into(), preset: Some(preset) })
+            }
+        }
+    }
+
     /// The alpha image an alpha-tip preset paints with (the starter's own, made the same way).
     fn alpha(&self) -> Result<Option<TipAlpha>, StarterError> {
         match &self.preset.tip {
@@ -101,8 +126,7 @@ impl Recipe for Preset {
             Tip::Procedural(id) => format!("PhotoCraft's procedural {id} tip"),
             Tip::Alpha(r) => format!("the alpha {r}"),
         };
-        let description = format!("{} brush preset with {tip}.", self.preset.name);
-        let provenance = Provenance::Generator { generator: "mcstarter.brush_preset".into(), preset: Some(self.preset.to_json()) };
+        let (description, provenance) = self.origin(&tip);
         Ok(Made {
             bytes: self.preset.to_file_text().into_bytes(),
             sidecar: sidecar(&self.preset.name, Usage::Brush, self.tags, &description, provenance),
@@ -118,7 +142,12 @@ mod tests {
     #[test]
     fn every_preset_reads_back_and_names_a_known_tip() {
         let alphas: Vec<String> = crate::alphas::recipes().iter().map(|r| r.path()).collect();
-        for (id, _, preset) in presets() {
+        let paths: Vec<String> = recipes().iter().map(|r| r.path()).collect();
+        for p in &paths {
+            assert_eq!(paths.iter().filter(|o| *o == p).count(), 1, "{p} twice");
+        }
+        assert!(translated::presets().len() >= 15);
+        for (id, _, preset) in presets().into_iter().chain(translated::presets().into_iter().map(|t| (t.id, t.tags, t.preset))) {
             assert_eq!(BrushPreset::from_file_text(&preset.to_file_text()).unwrap(), preset, "{id}");
             match &preset.tip {
                 Tip::Procedural(t) => assert!(materialcraft_brush::procedural_tip_alpha(t).is_some(), "{id}"),

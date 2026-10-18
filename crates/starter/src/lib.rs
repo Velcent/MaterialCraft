@@ -34,6 +34,7 @@ mod preview;
 mod recipe;
 mod textures;
 mod texturizer;
+mod translated;
 
 pub use build::{Built, Options, build, recipes};
 pub use error::StarterError;
