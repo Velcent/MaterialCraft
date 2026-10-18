@@ -4,7 +4,8 @@
 
 use crate::project::SppProject;
 use crate::translate::cancel::Cancel;
-use crate::translate::resources::{read_image, split_resource_url};
+use crate::translate::error::PartError;
+use crate::translate::resources::{read_image, shelf_version, split_resource_url};
 use materialcraft::paint::working_space::linear_to_srgb;
 use materialcraft::paint::{ChannelSpec, ColorSpace, TiledImage};
 use materialcraft::projection::{ImageLevels, LevelChain, Prepared, Projection, Projector, SurfacePoint};
@@ -47,10 +48,18 @@ impl ImageSource for ProjectImages<'_> {
         if self.cancel.requested() {
             return Err("import cancelled".into());
         }
-        let Some((_, id)) = split_resource_url(url) else {
-            return Err(format!("bitmap {url:?} is a shelf resource, not stored in the project"));
+        // A shelf resource is read when Painter embedded it under its version id.
+        let (id, shelf) = match split_resource_url(url) {
+            Some((_, id)) => (id, false),
+            None => match shelf_version(url) {
+                Some(id) => (id, true),
+                None => return Err(format!("bitmap {url:?} is a shelf resource, not stored in the project")),
+            },
         };
-        let read = read_image(self.project, id).map_err(|e| format!("bitmap {url:?}: {e}"))?;
+        let read = read_image(self.project, id).map_err(|e| match e {
+            PartError::Missing(_) if shelf => format!("bitmap {url:?} is a shelf resource, not stored in the project"),
+            e => format!("bitmap {url:?}: {e}"),
+        })?;
         if read.missing_bytes > 0 {
             return Err(format!(
                 "bitmap {url:?}: stored data {} bytes short",
