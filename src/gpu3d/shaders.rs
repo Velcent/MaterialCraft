@@ -4,8 +4,8 @@ use eframe::egui_glow::glow;
 use glow::HasContext;
 use std::collections::HashMap;
 
-const VS: &str = include_str!("glsl/material.vert");
-const FS: &str = include_str!("glsl/material.frag");
+const VS: &str = include_str!("../shading/builtin/pbr.vert");
+const FS: &str = include_str!("../shading/builtin/pbr.frag");
 const BG_VS: &str = include_str!("glsl/background.vert");
 const BG_FS: &str = include_str!("glsl/background.frag");
 const FULL_VS: &str = include_str!("glsl/fullscreen.vert");
