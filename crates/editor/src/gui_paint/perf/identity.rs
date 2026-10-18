@@ -58,7 +58,7 @@ fn tiles_after_paint(set: &TextureSet) -> String {
     let o = OutputOptions::default();
     let reg = generators::builtin();
     let mut s = set.clone();
-    let id = s.walk_layers().find(|(_, l)| matches!(l.kind, LayerKind::Paint(_))).map(|(_, l)| l.id.clone());
+    let id = s.walk_layers().find(|(_, l)| matches!(&l.kind, LayerKind::Paint(p) if !p.images.is_empty())).map(|(_, l)| l.id.clone());
     let Some(id) = id else { return "no paint layer".into() };
     let Some(LayerKind::Paint(p)) = s.layer_mut(&id).map(|l| &mut l.kind) else { return "no paint layer".into() };
     let Some((_, img)) = p.images.first_mut() else { return "no paint image".into() };
