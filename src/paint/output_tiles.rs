@@ -9,7 +9,7 @@
 //! resampled whole, as the whole build does, once (the stack cache keeps them).
 
 use super::channel::Channel;
-use super::effect::EffectRegistry;
+use super::effect::{EffectRegistry, Reach};
 use super::height_normal::Slope;
 use super::image::{Rect, TILE_SIZE};
 use super::normal;
@@ -69,7 +69,8 @@ impl MaterialMaps {
         let reach = Compositor::with_effects(set, effects).with_fills(fills).reach(layers).ok_or(WholeReason::ReadsEverything)?;
         let grid = grid(set);
         let (w, h) = set.resolution;
-        let area: Vec<Rect> = changed.iter().filter(|t| inside(**t, grid)).filter_map(|t| tile_rect(set, *t)).map(|r| grow(r, reach, (w, h))).collect();
+        let area: Vec<Rect> =
+            changed.iter().filter(|t| inside(**t, grid)).filter_map(|t| tile_rect(set, *t)).map(|r| Reach::radius(reach).grow(r, (w, h))).collect();
         let mut tiles: Vec<(u32, u32)> = area
             .iter()
             .flat_map(|r| {
@@ -144,13 +145,6 @@ pub enum WholeReason {
     ReadsEverything,
     /// The change reaches most of the set.
     TooFar,
-}
-
-/// `r` grown by `by` on every side, clipped to `size`.
-fn grow(r: Rect, by: u32, size: (u32, u32)) -> Rect {
-    let (x, y) = (r.x.saturating_sub(by), r.y.saturating_sub(by));
-    let (x1, y1) = ((r.x + r.w).saturating_add(by).min(size.0), (r.y + r.h).saturating_add(by).min(size.1));
-    Rect { x, y, w: x1.saturating_sub(x), h: y1.saturating_sub(y) }
 }
 
 /// What every tile of one [`MaterialMaps::build_tiles`] reads.
