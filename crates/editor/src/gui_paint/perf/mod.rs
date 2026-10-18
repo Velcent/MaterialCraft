@@ -1,35 +1,27 @@
-//! Headless performance benchmarks of the Paint screen's real paths (roadmap step 51): a brush stroke on a new
-//! project ([`stroke`]) and single layer edits on big imported projects ([`edits`]). They drive the same components
-//! the screen drives (the document and its history, the brush tools, [`SceneSync`] with its maps worker, the GPU
-//! scene's upload queue) without a window, and wait for every recomposite to arrive so the numbers are repeatable.
+//! The headless runner behind `mcperf` (roadmap steps 51 and 52): plays a benchmark scenario
+//! (`materialcraft_perf::Scenario`) through the Paint screen's real paths: the document and its history, the brush
+//! tools, [`SceneSync`] with its maps worker, the GPU scene's upload queue, without a window, waiting for every
+//! recomposite so the numbers are repeatable. [`runner`] plays a scenario ([`source`] opens, [`stroke_play`] and
+//! [`edit_play`] act, [`measure`] records); `mcperf` starts it through the editor binary's hidden `--perf-run`
+//! option and keeps the history (see `MaterialCraft-docs/perf/README.md`).
 //!
-//! Ignored by default; they read projects from the corpus. Run one at a time, at low priority:
+//! Two ignored local tools live here too: `perf_identity` (incremental results against full recomputes on real
+//! documents, bit for bit) and `perf_coverage` (which sets of a corpus list take the tile path). They read corpus
+//! files; run them one at a time, under the heavy lock, at low priority:
 //!
 //! ```text
-//! flock ../Corpus/.heavy.lock nice -n 10 \
-//!     cargo test --release -p materialcraft-editor perf_ -- --ignored --nocapture --test-threads 1
+//! MC_PERF_DOCS=<a.mcpaint:b.mcpaint> flock ../Corpus/.heavy.lock nice -n 10 \
+//!     cargo test --release -p materialcraft-editor perf_identity -- --ignored --nocapture --test-threads 1
 //! ```
-//!
-//! `MC_PERF_MESH` names the stroke benchmark's mesh (default: the corpus's Capricon `LP.obj`), `MC_PERF_DOCS` the edit
-//! benchmark's documents (`.mcpaint`, separated by `:`).
-//!
-//! Step 52 made them general: a benchmark is a scenario described as data (`materialcraft_perf::Scenario`), played
-//! by the one [`runner`] ([`source`] opens, [`stroke_play`] and [`edit_play`] act, [`measure`] records). The two
-//! tests above are thin wrappers around the built-in scenarios `stroke-2k` and `edits-big`; `mcperf` runs any
-//! scenario through the editor binary's `--perf-run` and keeps the history.
 
 #[cfg(test)]
 mod coverage;
 mod edit_play;
 #[cfg(test)]
-mod edits;
-#[cfg(test)]
 mod identity;
 mod measure;
 pub mod runner;
 mod source;
-#[cfg(test)]
-mod stroke;
 mod stroke_play;
 
 use super::channel_view::ChannelView;
@@ -99,17 +91,5 @@ pub fn delta(a: SceneStats, b: SceneStats) -> SceneStats {
         prepare: b.prepare - a.prepare,
         upload_bytes: b.upload_bytes - a.upload_bytes,
         handoff: b.handoff - a.handoff,
-    }
-}
-
-/// A corpus file from an environment variable or its default place; `None` (the benchmark is skipped) if missing.
-#[cfg(test)]
-pub fn corpus_file(var: &str, default: &str) -> Option<PathBuf> {
-    let path = std::env::var_os(var).map(PathBuf::from).unwrap_or_else(|| PathBuf::from(default));
-    if path.exists() {
-        Some(path)
-    } else {
-        eprintln!("skipped: {} not found (set {var})", path.display());
-        None
     }
 }
