@@ -14,9 +14,9 @@
 //! - [`clone_source`]: [`CloneSource`], the clone tool's source and its aligned or fixed offset (PT-27, PT-28).
 //! - [`document`]: [`DocumentStroke`], a stroke into a document with the inverses for one undo step.
 //! - [`quick_mask`]: [`QuickMask`], the session mask every stroke honours, and [`QuickMaskStroke`] to paint it.
-//! - [`replay`]: painting a recorded stroke again, bit for bit.
 //! - [`see_through`]: see-through layers (PT-25): their strokes painted again on the composite below whenever it
 //!   changes ([`SeeThroughCache`]).
+//! - [`replay`]: painting a recorded stroke again, bit for bit; imported strokes with a mapped [`ReplayBrush`].
 //! - [`stroke`]: input transforms in front of a session: [`LazyMouse`], straight lines ([`LineAnchor`]).
 //! - [`symmetry`]: symmetric copies in a stroke record's form, built the same way live and on replay.
 //!
@@ -37,9 +37,9 @@ pub mod target;
 
 pub use clone_source::{CloneSource, SourceMode, texel_under};
 pub use document::{Base, DocumentStroke, Ended, Prepared};
-pub use engine::{DabEngine, InputPoint, PROCEDURAL_TIPS, ResponseCurve, SmudgeKernel, TipInfo, procedural_tip};
+pub use engine::{DabEngine, EngineExtras, InputPoint, PROCEDURAL_TIPS, ResponseCurve, SmudgeKernel, TipAlpha, TipInfo, procedural_tip};
 pub use quick_mask::{QuickMask, QuickMaskState, QuickMaskStroke};
-pub use replay::{ReplayScene, recorded_brush, recorded_values, replay};
+pub use replay::{ReplayBrush, ReplayScene, recorded_brush, recorded_values, replay, replay_imported};
 pub use see_through::{BelowSource, Refreshed, SeeThroughCache, repaint};
 pub use session::{Finished, SessionScene, StrokeSession, StrokeSetup};
 pub use stroke::{LazyMouse, LineAnchor};

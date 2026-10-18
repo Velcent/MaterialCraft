@@ -39,6 +39,34 @@ impl InputPoint {
     }
 }
 
+/// A sampled tip: `width × height` coverage values 0 … 1, row by row, top row first. The dab scales it so its
+/// longer side is the dab's diameter.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TipAlpha {
+    pub width: u32,
+    pub height: u32,
+    pub values: Vec<f32>,
+}
+
+impl TipAlpha {
+    /// A tip from `values`; `None` if the count does not match or a side is 0.
+    pub fn new(width: u32, height: u32, values: Vec<f32>) -> Option<TipAlpha> {
+        let n = (width as usize).checked_mul(height as usize)?;
+        (n > 0 && n == values.len()).then_some(TipAlpha { width, height, values })
+    }
+}
+
+/// What an engine takes beyond a [`BrushPreset`] (imported brushes, roadmap step 32): a sampled tip in place of
+/// the preset's round one, and the share of the size and flow left at zero pen pressure.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct EngineExtras {
+    pub tip: Option<TipAlpha>,
+    /// Size at zero pressure as a fraction of the full size (with pressure driving size).
+    pub size_minimum: f32,
+    /// Flow at zero pressure as a fraction of the full flow (with pressure driving flow).
+    pub flow_minimum: f32,
+}
+
 /// The lazy mouse's smoother (PhotoCraft's pulled string), for [`crate::stroke::LazyMouse`].
 pub(crate) use photocraft::{MAX_STRING, PulledString};
 
@@ -52,7 +80,12 @@ impl DabEngine {
     /// An engine for `preset` with dabs `diameter` frame units across (at scale 1), its random variation seeded
     /// with `seed`.
     pub fn new(preset: &BrushPreset, diameter: f32, seed: u64) -> DabEngine {
-        DabEngine { inner: photocraft::Engine::new(preset, diameter, seed) }
+        DabEngine::with_extras(preset, &EngineExtras::default(), diameter, seed)
+    }
+
+    /// [`DabEngine::new`] with what the preset can't say ([`EngineExtras`]).
+    pub fn with_extras(preset: &BrushPreset, extras: &EngineExtras, diameter: f32, seed: u64) -> DabEngine {
+        DabEngine { inner: photocraft::Engine::new(preset, extras, diameter, seed) }
     }
 
     /// Feeds points; appends the dabs they complete to `out`.

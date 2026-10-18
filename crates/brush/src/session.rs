@@ -6,7 +6,7 @@
 //! the document changes hands in between.
 
 use crate::BrushError;
-use crate::engine::{DabEngine, InputPoint, SmudgeKernel};
+use crate::engine::{DabEngine, EngineExtras, InputPoint, SmudgeKernel};
 use crate::symmetry::copies;
 use crate::target::PaintValues;
 use materialcraft::camera::Camera;
@@ -72,6 +72,8 @@ pub struct Finished {
 pub struct StrokeSession {
     setup: StrokeSetup,
     preset: BrushPreset,
+    /// What the engine takes beyond the preset (imported brushes).
+    extras: EngineExtras,
     engine: Option<DabEngine>,
     stamp: StampStroke,
     depth: Option<DepthMap>,
@@ -112,6 +114,7 @@ impl StrokeSession {
         Ok(StrokeSession {
             setup,
             preset,
+            extras: EngineExtras::default(),
             engine: None,
             stamp,
             depth,
@@ -140,6 +143,12 @@ impl StrokeSession {
         self.local.iter().map(|&l| if l { kernel() } else { None }).collect()
     }
 
+    /// Builder, before the first [`StrokeSession::add`]: paint with `extras` (a sampled tip, pressure minimums).
+    pub fn with_extras(mut self, extras: EngineExtras) -> StrokeSession {
+        self.extras = extras;
+        self
+    }
+
     /// The stroke's camera (3D-view strokes).
     pub fn camera(&self) -> Option<Camera> {
         self.camera
@@ -158,7 +167,7 @@ impl StrokeSession {
             let scale = self.scale_at(scene, p.pos);
             if self.engine.is_none() {
                 let diameter = self.diameter(scene);
-                self.engine = Some(DabEngine::new(&self.preset, diameter, u64::from(self.setup.seed)));
+                self.engine = Some(DabEngine::with_extras(&self.preset, &self.extras, diameter, u64::from(self.setup.seed)));
                 if self.local.iter().any(|l| *l) {
                     let kernels = self.kernels(diameter);
                     self.stamp.set_kernels(kernels);
