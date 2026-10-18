@@ -17,33 +17,42 @@
 //! Retouch tools ([`retouch`], PT-23…PT-30): smudge and blur run local kernels, clone copies from the source marked
 //! with its key (aligned or fixed). Strokes on a see-through layer start from the composite below it; the layer is
 //! painted again from its record whenever the layers below it change.
+//!
+//! Stencil and projection (PT-15, PJ-26, [`screen_image`]): a stencil laid over the view masks every document
+//! stroke; the projection tool paints the projection image's channels through the paint tool's brush. Strokes
+//! through either have no symmetry (ADR 0008 mc2-q-pt-04c). The material picker ([`material_picker`]) is handled
+//! by the screen, which owns the composite's fill context.
 
 mod active;
 pub mod brush_state;
 mod events;
 pub mod helpers;
 mod mask_stroke;
+pub mod material_picker;
 mod overlay;
 pub mod polygon_fill;
 mod retouch;
+pub mod screen_image;
 mod surfaces;
 
 use super::document_state::OpenDocument;
 use super::input::{PointerSample, StrokeInput};
 use super::shell::tools::Tool;
 use super::view_pick::ViewPicking;
-use active::{ActiveStroke, StrokeStart};
+use active::{ActiveStroke, StrokeStart, Through};
 pub use brush_state::BrushTools;
 pub use events::ToolEvent;
 use mask_stroke::{ActiveMaskStroke, MaskStrokeStart};
 use materialcraft::camera::Camera;
 use materialcraft::paint::stroke::StrokeTool;
 use materialcraft::projection::ViewProjector;
-use materialcraft::stamp::TexelFactor;
+use materialcraft::stamp::{Stencil, TexelFactor};
+use materialcraft::symmetry::SymmetrySpec;
 use materialcraft_brush::stroke::line::SNAP_DEGREES;
 use materialcraft_brush::stroke::{line_points, snap_angle};
 use materialcraft_brush::symmetry::to_record;
 use materialcraft_brush::{LineAnchor, PaintTarget, QuickMask};
+use screen_image::ScreenImages;
 use std::time::{Duration, Instant};
 use surfaces::SurfaceCache;
 
@@ -94,6 +103,8 @@ pub struct Painting {
     topologies: polygon_fill::TopologyCache,
     /// The clone source and the see-through layers' cache.
     retouch: retouch::RetouchState,
+    /// The stencil and the projection tool's image over the view.
+    pub images: ScreenImages,
 }
 
 impl Painting {
@@ -111,6 +122,9 @@ impl Painting {
         {
             self.keep_see_through(f.doc, f.picking, *set, &mut report);
         }
+        if let Some(camera) = f.camera {
+            self.images.place(camera.viewport);
+        }
         if f.tool == Tool::PolygonFill {
             let mut polygon = self.polygon_frame(input, f);
             polygon.message = polygon.message.or(report.message);
@@ -120,7 +134,7 @@ impl Painting {
         if let (true, Some(tool)) = (self.quick_mask.is_editing(), tool) {
             if !matches!(tool, StrokeTool::Paint | StrokeTool::Eraser) {
                 if input.iter().any(|ev| matches!(ev, StrokeInput::Down(_))) {
-                    report.message = Some("Smudge and clone work on layers; paint or erase the quick mask while it is edited.".into());
+                    report.message = Some("Only the paint and eraser tools work on the quick mask while it is edited.".into());
                 }
                 return report;
             }
@@ -153,8 +167,9 @@ impl Painting {
                             .skip(1)
                             .map(|p| PointerSample { pos: p.pos, pressure: p.pressure, time: to.time + p.time, ..to })
                             .collect();
-                        let factor = factor_for(&self.quick_mask, f.doc, a.set());
-                        if let Err(e) = a.add(f.doc, f.picking, &samples, &factors(&factor)) {
+                        let (factor, stencil) = (factor_for(&self.quick_mask, f.doc, a.set()), self.images.stencil_factor());
+                        let fs = factors(&factor, &stencil);
+                        if let Err(e) = a.add(f.doc, f.picking, &samples, through(&fs, &self.images, f.tool)) {
                             report.message = Some(format!("The line stopped: {e}."));
                         }
                     }
@@ -162,8 +177,9 @@ impl Painting {
                 }
                 StrokeInput::Move(at) => {
                     let Some(a) = &mut self.active else { continue };
-                    let factor = factor_for(&self.quick_mask, f.doc, a.set());
-                    match a.add(f.doc, f.picking, &[at], &factors(&factor)) {
+                    let (factor, stencil) = (factor_for(&self.quick_mask, f.doc, a.set()), self.images.stencil_factor());
+                    let fs = factors(&factor, &stencil);
+                    match a.add(f.doc, f.picking, &[at], through(&fs, &self.images, f.tool)) {
                         Ok(true) => painted = Some(a.set()),
                         Ok(false) => {}
                         Err(e) => {
@@ -206,9 +222,24 @@ impl Painting {
         let base = self.see_through_base(doc, picking, &surface, &target, set);
         let set_ref = doc.doc().texture_sets.get(set)?;
         let preset = self.brush.preset(f.tool).cloned().unwrap_or_default();
-        let values = self.brush.values_for(set_ref);
+        let mut values = self.brush.values_for(set_ref);
+        let placement = match (tool, &mut self.images.projection) {
+            (StrokeTool::Projection, Some(image)) => {
+                // only the channels the projection provides are painted
+                let provided = image.channels();
+                values.channels.iter_mut().for_each(|(c, _, on)| *on &= provided.contains(c));
+                Some(image.placement(camera.viewport))
+            }
+            (StrokeTool::Projection, None) => {
+                report.message = Some("Load a projection image or drop an image or material from the assets onto the view first.".into());
+                return None;
+            }
+            _ => None,
+        };
         self.strokes = self.strokes.wrapping_add(1);
         let helpers = &self.brush.helpers;
+        // projection painting and stencils have no symmetry (ADR 0008 mc2-q-pt-04c)
+        let symmetry = if placement.is_some() || self.images.stencil.is_some() { SymmetrySpec::None } else { helpers.symmetry.spec() };
         let start = StrokeStart {
             target,
             set,
@@ -219,13 +250,15 @@ impl Painting {
             seed: self.strokes,
             camera,
             surface,
-            symmetry: to_record(helpers.symmetry.spec()),
+            symmetry: to_record(symmetry),
             lazy: if lazy { helpers.lazy.start() } else { None },
             retouch,
             base,
+            placement,
         };
-        let factor = factor_for(&self.quick_mask, doc, set);
-        match ActiveStroke::begin(doc, picking, start, at, &factors(&factor)) {
+        let (factor, stencil) = (factor_for(&self.quick_mask, doc, set), self.images.stencil_factor());
+        let fs = factors(&factor, &stencil);
+        match ActiveStroke::begin(doc, picking, start, at, through(&fs, &self.images, f.tool)) {
             Ok(a) => {
                 self.active = Some(a);
             }
@@ -292,8 +325,10 @@ impl Painting {
         self.end_mask(doc, picking, report);
         let Some(a) = self.active.take() else { return };
         let set = a.set();
-        let factor = factor_for(&self.quick_mask, doc, set);
-        let end = a.end(doc, picking, &factors(&factor));
+        let (factor, stencil) = (factor_for(&self.quick_mask, doc, set), self.images.stencil_factor());
+        let fs = factors(&factor, &stencil);
+        let projection = a.projects().then_some(self.images.projection.as_ref()).flatten();
+        let end = a.end(doc, picking, Through { factors: &fs, projection });
         if let Some(problem) = end.problem {
             report.message = Some(format!("The stroke had a problem: {problem}."));
         }
@@ -311,8 +346,15 @@ fn factor_for<'a>(mask: &'a QuickMask, doc: &OpenDocument, set: usize) -> Option
     mask.factor(&s.id, s.resolution)
 }
 
-fn factors<'a>(factor: &'a Option<materialcraft::stamp::QuickMask<'a>>) -> Vec<&'a dyn TexelFactor> {
-    factor.iter().map(|f| f as &dyn TexelFactor).collect()
+/// The factors of a document stroke: the quick mask while applied, the stencil while there is one.
+fn factors<'a>(factor: &'a Option<materialcraft::stamp::QuickMask<'a>>, stencil: &'a Option<Stencil<'a>>) -> Vec<&'a dyn TexelFactor> {
+    let mask = factor.iter().map(|f| f as &dyn TexelFactor);
+    mask.chain(stencil.iter().map(|s| s as &dyn TexelFactor)).collect()
+}
+
+/// What a stroke of `tool` paints through.
+fn through<'a>(factors: &'a [&'a dyn TexelFactor], images: &'a ScreenImages, tool: Tool) -> Through<'a> {
+    Through { factors, projection: if tool == Tool::Projection { images.projection.as_ref() } else { None } }
 }
 
 impl Painting {

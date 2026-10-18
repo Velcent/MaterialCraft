@@ -8,6 +8,7 @@ use super::input::stylus::StylusFeed;
 use super::input::{PointerLog, StrokeInput};
 use super::navigation;
 use super::shell::actions;
+use super::tools::screen_image::gizmo::GizmoAction;
 use crate::gui_settings::PenSettings;
 use crate::gui_workspace::shortcuts::ShortcutTable;
 use eframe::egui::{self, Align2, Color32, FontId, PointerButton, Sense};
@@ -36,6 +37,21 @@ pub struct Viewport {
     hover: Option<Hover>,
     /// The layer the view is drawn on, so overlays drawn later in the frame land on top of it.
     layer: Option<egui::LayerId>,
+    /// The stencil key is held this frame: drags edit the stencil or projection image instead of painting.
+    image_key: bool,
+    /// This frame's drag of the image gizmo.
+    image_drag: Option<ImageDrag>,
+}
+
+/// A drag of the stencil's or projection image's gizmo (the stencil key held).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ImageDrag {
+    pub action: GizmoAction,
+    /// The pointer (view coordinates); where the drag started when `started`.
+    pub at: [f32; 2],
+    pub started: bool,
+    /// Turn in 90° steps (Shift held with the stencil key).
+    pub snap: bool,
 }
 
 /// The pointer over the view.
@@ -59,6 +75,8 @@ impl Viewport {
             pointer: PointerLog::default(),
             hover: None,
             layer: None,
+            image_key: false,
+            image_drag: None,
         }
     }
 
@@ -91,6 +109,16 @@ impl Viewport {
     /// The stroke gesture's input since the last call (positions relative to the view's top-left corner).
     pub fn take_stroke_input(&mut self) -> Vec<StrokeInput> {
         self.pointer.take()
+    }
+
+    /// This frame's gizmo drag of the stencil or projection image, if any.
+    pub fn image_drag(&self) -> Option<ImageDrag> {
+        self.image_drag
+    }
+
+    /// True while the stencil key is held (the gizmo is shown).
+    pub fn image_key(&self) -> bool {
+        self.image_key
     }
 
     /// The pointer over the view this frame.
@@ -131,7 +159,12 @@ impl Viewport {
         self.rect = (rect.width() > 0.0 && rect.height() > 0.0).then_some(rect);
         self.layer = Some(ui.layer_id());
         ui.painter().rect_filled(rect, 0.0, BACKGROUND);
-        self.camera_input(ui, &resp, keys);
+        let image_key = ui.input(|i| keys.held_shifted(i, actions::STENCIL));
+        self.image_key = image_key.is_some();
+        self.image_drag = image_key.and_then(|snap| image_drag(ui, &resp, rect, snap));
+        if !self.image_key {
+            self.camera_input(ui, &resp, keys);
+        }
         self.stroke_input(ui, &resp, rect, keys);
         let error = self.gpu.lock().ok().and_then(|g| g.error.clone());
         match error {
@@ -161,7 +194,8 @@ impl Viewport {
         };
         let hover = resp.hover_pos().filter(|p| rect.contains(*p));
         self.hover = hover.map(|p| Hover { pos: [p.x - rect.min.x, p.y - rect.min.y], line });
-        let is_stroke = gesture == Some(actions::STROKE) || line.is_some();
+        // with the stencil key held, drags edit the stencil or projection image
+        let is_stroke = (gesture == Some(actions::STROKE) || line.is_some()) && !self.image_key;
         let held = is_stroke && resp.dragged_by(PointerButton::Primary);
         let clicked = is_stroke && resp.clicked_by(PointerButton::Primary);
         let started = (is_stroke && resp.drag_started_by(PointerButton::Primary)) || clicked;
@@ -202,6 +236,17 @@ impl Viewport {
             }
         }
     }
+}
+
+/// The gizmo drag under way with the stencil key held: left turns, right scales, middle moves.
+fn image_drag(ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect, snap: bool) -> Option<ImageDrag> {
+    let (button, action) =
+        [(PointerButton::Primary, GizmoAction::Turn), (PointerButton::Secondary, GizmoAction::Scale), (PointerButton::Middle, GizmoAction::Move)]
+            .into_iter()
+            .find(|(b, _)| resp.dragged_by(*b))?;
+    let started = resp.drag_started_by(button);
+    let pos = ui.input(|i| if started { i.pointer.press_origin() } else { None }.or(i.pointer.interact_pos()))?;
+    Some(ImageDrag { action, at: [pos.x - rect.min.x, pos.y - rect.min.y], started, snap })
 }
 
 /// The navigation hint in the view's corner, from the current bindings.

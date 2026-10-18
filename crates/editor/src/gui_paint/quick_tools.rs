@@ -34,6 +34,7 @@ impl PaintMode {
             ToolEvent::SwapFill => self.painting.brush.polygon.white = !self.painting.brush.polygon.white,
             ToolEvent::PickMode(m) => self.painting.brush.polygon.mode = m,
             ToolEvent::MarkCloneSource => self.mark_clone_source(),
+            ToolEvent::Image(slot, edit) => self.screen_image_event(slot, edit),
         }
     }
 

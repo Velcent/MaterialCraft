@@ -38,6 +38,7 @@ mod reveal;
 mod save_point;
 mod saving;
 mod scene_sync;
+mod screen_images;
 mod shared_mesh;
 pub mod shell;
 mod shot;
@@ -295,6 +296,7 @@ impl PaintMode {
             bakers: &mut self.bakers,
             shell: &mut self.shell,
             brush: &mut self.painting.brush,
+            images: &self.painting.images,
             quick_mask: self.painting.quick_mask.state(),
         };
         panels::layout::show(ui, screen)

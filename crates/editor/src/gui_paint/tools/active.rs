@@ -1,9 +1,11 @@
 //! [`ActiveStroke`]: the stroke under the pointer, from pen down to pen up: the brush crate's
 //! [`DocumentStroke`] plus what it paints through (the set's surface, the camera at pen down), the lazy mouse in
-//! front of it, and where it ended (the next straight line's start).
+//! front of it, and where it ended (the next straight line's start). Projection strokes (PJ-26) also keep where
+//! the projected image lay at pen down and paint its values ([`Through::projection`]).
 
 use super::super::document_state::OpenDocument;
 use super::super::view_pick::ViewPicking;
+use super::screen_image::ScreenImage;
 use super::surfaces::Surface;
 use crate::gui_paint::input::PointerSample;
 use materialcraft::camera::Camera;
@@ -11,8 +13,8 @@ use materialcraft::mesh::Sphere;
 use materialcraft::paint::Document;
 use materialcraft::paint::brush::{BrushPreset, Retouch};
 use materialcraft::paint::stroke::{StrokeTool, Symmetry, ViewKind};
-use materialcraft::projection::ViewProjector;
-use materialcraft::stamp::TexelFactor;
+use materialcraft::projection::{ScreenImageTransform, ViewProjector};
+use materialcraft::stamp::{ProjectedPaint, TexelFactor};
 use materialcraft_brush::{Base, BrushError, DocumentStroke, Ended, InputPoint, LazyMouse, LineAnchor, PaintTarget, PaintValues, SessionScene, StrokeSetup};
 use std::sync::Arc;
 
@@ -35,6 +37,16 @@ pub struct StrokeStart {
     pub retouch: Retouch,
     /// On a see-through layer, the composite below it (the stroke starts from it where the layer has no pixels).
     pub base: Option<Base>,
+    /// Where the projected image lies (projection strokes; it does not move during a stroke).
+    pub placement: Option<ScreenImageTransform>,
+}
+
+/// What a stroke paints through besides the surface, lent per call: the factors (quick mask, stencil) and, for
+/// projection strokes, the projected image.
+#[derive(Clone, Copy)]
+pub struct Through<'a> {
+    pub factors: &'a [&'a dyn TexelFactor],
+    pub projection: Option<&'a ScreenImage>,
 }
 
 pub struct ActiveStroke {
@@ -48,6 +60,7 @@ pub struct ActiveStroke {
     lazy: Option<LazyMouse>,
     /// The last point painted (view coordinates).
     last: Option<[f32; 2]>,
+    placement: Option<ScreenImageTransform>,
 }
 
 /// How a stroke ended.
@@ -68,19 +81,14 @@ fn split(doc: &mut Document, set: usize) -> Result<(&materialcraft::mesh::Mesh, 
 impl ActiveStroke {
     /// Pen down at `at`: prepares the target, starts the stroke and paints its first sample. On failure after
     /// the target was prepared, what was done is recorded so the history stays whole.
-    pub fn begin(
-        doc: &mut OpenDocument,
-        picking: &ViewPicking,
-        start: StrokeStart,
-        at: PointerSample,
-        factors: &[&dyn TexelFactor],
-    ) -> Result<ActiveStroke, BrushError> {
+    pub fn begin(doc: &mut OpenDocument, picking: &ViewPicking, start: StrokeStart, at: PointerSample, through: Through) -> Result<ActiveStroke, BrushError> {
         let label = match start.tool {
             StrokeTool::Eraser => "Erase",
             StrokeTool::Smudge => "Smudge",
             StrokeTool::Blur => "Blur",
             StrokeTool::Clone => "Clone",
-            StrokeTool::Paint | StrokeTool::Projection => "Paint",
+            StrokeTool::Projection => "Projection paint",
+            StrokeTool::Paint => "Paint",
         };
         let model = doc.doc().mesh.bounding_sphere().unwrap_or(Sphere { centre: [0.0; 3], radius: 1.0 });
         let setup = StrokeSetup {
@@ -101,12 +109,13 @@ impl ActiveStroke {
                 prepared.see_through(set, base);
             }
             let projector = picking.projector_on(mesh, start.camera).ok_or(BrushError::NoView)?;
+            let projected = projected(through, start.placement, &start.surface, &projector);
             let scene = SessionScene {
                 surface: &start.surface.map,
                 index: &start.surface.index,
                 projector: Some(&projector as &dyn ViewProjector),
-                factors,
-                projected: None,
+                factors: through.factors,
+                projected: projected.as_ref(),
             };
             prepared.start(setup, &scene, mesh, &|part| picking.is_shown(part), set)
         };
@@ -118,10 +127,24 @@ impl ActiveStroke {
                 return Err(e);
             }
         };
-        let mut active =
-            ActiveStroke { stroke, set: start.set, camera: start.camera, surface: start.surface, t0: at.time, label, lazy: start.lazy, last: None };
-        active.add(doc, picking, &[at], factors)?;
+        let mut active = ActiveStroke {
+            stroke,
+            set: start.set,
+            camera: start.camera,
+            surface: start.surface,
+            t0: at.time,
+            label,
+            lazy: start.lazy,
+            last: None,
+            placement: start.placement,
+        };
+        active.add(doc, picking, &[at], through)?;
         Ok(active)
+    }
+
+    /// True for a projection stroke (it paints through the projection image).
+    pub fn projects(&self) -> bool {
+        self.placement.is_some()
     }
 
     /// The texture set being painted.
@@ -130,7 +153,7 @@ impl ActiveStroke {
     }
 
     /// Paints more samples; returns whether any pixel changed.
-    pub fn add(&mut self, doc: &mut OpenDocument, picking: &ViewPicking, samples: &[PointerSample], factors: &[&dyn TexelFactor]) -> Result<bool, BrushError> {
+    pub fn add(&mut self, doc: &mut OpenDocument, picking: &ViewPicking, samples: &[PointerSample], through: Through) -> Result<bool, BrushError> {
         if samples.is_empty() {
             return Ok(false);
         }
@@ -145,12 +168,13 @@ impl ActiveStroke {
         self.last = Some(last.pos);
         let (mesh, set) = split(doc.doc_for_strokes(), self.set)?;
         let projector = picking.projector_on(mesh, self.camera).ok_or(BrushError::NoView)?;
+        let projected = projected(through, self.placement, &self.surface, &projector);
         let scene = SessionScene {
             surface: &self.surface.map,
             index: &self.surface.index,
             projector: Some(&projector as &dyn ViewProjector),
-            factors,
-            projected: None,
+            factors: through.factors,
+            projected: projected.as_ref(),
         };
         Ok(!self.stroke.add(&scene, &points, set)?.is_empty())
     }
@@ -161,19 +185,20 @@ impl ActiveStroke {
     }
 
     /// Pen up: paints the last stamps and records the stroke as one history step.
-    pub fn end(self, doc: &mut OpenDocument, picking: &ViewPicking, factors: &[&dyn TexelFactor]) -> StrokeEnd {
-        let ActiveStroke { stroke, set, camera, surface, label, last, .. } = self;
+    pub fn end(self, doc: &mut OpenDocument, picking: &ViewPicking, through: Through) -> StrokeEnd {
+        let ActiveStroke { stroke, set, camera, surface, label, last, placement, .. } = self;
         let mut anchor = None;
         let (ended, mut problem) = match split(doc.doc_for_strokes(), set) {
             Ok((mesh, set_ref)) => match picking.projector_on(mesh, camera) {
                 Some(projector) => {
                     anchor = last.map(|end| LineAnchor::at(end, Some(&projector as &dyn ViewProjector)));
+                    let projected = projected(through, placement, &surface, &projector);
                     let scene = SessionScene {
                         surface: &surface.map,
                         index: &surface.index,
                         projector: Some(&projector as &dyn ViewProjector),
-                        factors,
-                        projected: None,
+                        factors: through.factors,
+                        projected: projected.as_ref(),
                     };
                     let (ended, result) = stroke.finish(&scene, set_ref);
                     (ended, result.err().map(|e| e.to_string()))
@@ -188,6 +213,16 @@ impl ActiveStroke {
         }
         StrokeEnd { problem, anchor }
     }
+}
+
+/// The projection a projection stroke paints through `view` (none for other strokes).
+fn projected<'a>(
+    through: Through<'a>,
+    placement: Option<ScreenImageTransform>,
+    surface: &'a Surface,
+    view: &'a dyn ViewProjector,
+) -> Option<ProjectedPaint<'a>> {
+    through.projection.zip(placement).map(|(image, p)| image.projected(&surface.map, view, p))
 }
 
 /// Records an ended stroke's inverses as one history step; returns a problem to report.

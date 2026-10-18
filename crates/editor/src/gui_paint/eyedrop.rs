@@ -57,19 +57,34 @@ impl PaintMode {
 
     /// `channel`'s stored value at the texel under `local` (view coordinates), composited as the view's maps are.
     fn sample_stored(&self, local: [f32; 2], channel: Channel) -> Result<Sample, String> {
+        self.with_stored_probe(local, "the eyedropper", |probe, view| {
+            let hit = view.pick(local).ok_or("There is no surface under the eyedropper.")?;
+            let at = probe.locate(&hit).ok_or("No texture set paints the surface under the eyedropper.")?;
+            let value = probe.stored(at, channel).ok_or_else(|| format!("This texture set has no {} channel.", channel.id()))?;
+            let [r, g, b, _] = value.value;
+            Ok(Sample { rgb: [r, g, b], space: value.color_space })
+        })
+    }
+
+    /// The stored-value lookup the eyedropper (CP-06) and the material picker (PT-18) share (ADR 0008
+    /// mc2-q-pt-08c): `f` gets a [`TexelProbe`] on the composite the view shows (with the fills of the texture set
+    /// under `local`, view coordinates) and the view's projector. `who` names the tool in messages.
+    pub(super) fn with_stored_probe<R>(
+        &self,
+        local: [f32; 2],
+        who: &str,
+        f: impl FnOnce(&TexelProbe, &dyn ViewProjector) -> Result<R, String>,
+    ) -> Result<R, String> {
         let doc = self.document.as_ref().ok_or("Open a document to pick from.")?;
         let view = self.view_projector().ok_or("The view is still being prepared; try again in a moment.")?;
-        let hit = view.pick(local).ok_or("There is no surface under the eyedropper.")?;
+        let hit = view.pick(local).ok_or_else(|| format!("There is no surface under {who}."))?;
         let materials = self.scene.material_fills(doc);
-        let at = TexelProbe::new(doc.doc()).locate(&hit).ok_or("No texture set paints the surface under the eyedropper.")?;
+        let at = TexelProbe::new(doc.doc()).locate(&hit).ok_or_else(|| format!("No texture set paints the surface under {who}."))?;
         // the set's surface map as the view's maps worker built it (fills that need one are left out until it is)
         let set = doc.doc().texture_sets.get(at.set).filter(|s| s.needs_surface());
         let surface = set.and_then(|s| self.scene.fill_surfaces()?.cached(s, s.resolution));
         let fills = surface.as_ref().map_or_else(|| FillContext::with_sources(&materials), |s| s.context(&materials));
-        let probe = TexelProbe::new(doc.doc()).with_fills(&fills);
-        let value = probe.stored(at, channel).ok_or_else(|| format!("This texture set has no {} channel.", channel.id()))?;
-        let [r, g, b, _] = value.value;
-        Ok(Sample { rgb: [r, g, b], space: value.color_space })
+        f(&TexelProbe::new(doc.doc()).with_fills(&fills), &view)
     }
 
     fn sample_failed(&mut self, why: &str) {

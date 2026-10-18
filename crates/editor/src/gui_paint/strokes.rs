@@ -12,6 +12,8 @@ impl PaintMode {
     /// Runs this frame's strokes. Call after the panels were drawn (the viewport recorded the gesture).
     pub(super) fn paint_strokes(&mut self, ctx: &egui::Context) {
         let input = self.viewport.take_stroke_input();
+        let input = self.material_pick(input);
+        self.screen_image_input(ctx);
         let Some(doc) = self.document.as_mut() else {
             self.painting.forget_document();
             return;
@@ -20,6 +22,7 @@ impl PaintMode {
         let frame = PaintFrame { doc, picking: &self.picking, camera: self.viewport.camera(), tool: self.shell.tools.current, target };
         let report = self.painting.frame(input, frame);
         self.after_painting(report);
+        self.draw_screen_images(ctx);
         if let (Some(doc), Some(painter), Some(rect)) = (self.document.as_ref(), self.viewport.overlay_painter(ctx), self.viewport.rect()) {
             let overlay = self.painting.overlay(doc, &self.picking, self.viewport.camera(), self.viewport.hover(), self.shell.tools.current);
             overlay.draw(&painter, rect.min);

@@ -53,6 +53,9 @@ const WIDE_FROM: f32 = 330.0;
 pub enum TrayEvent {
     /// An asset was let go at screen position `pos` while dragged; `replace` is Ctrl (ADR 0008 q-effect-drop).
     Dropped { item: Box<Item>, payload: DropPayload, pos: Pos2, replace: bool },
+    /// A picture (alpha or texture) was let go at screen position `pos`: it has no place on the layer stack, but can
+    /// become the stencil or the projection image when let go over the 3D view (PT-15, PJ-26).
+    DroppedImage { item: Box<Item>, pos: Pos2 },
     /// The further library folders changed (AS-18).
     SetRoots(Vec<PathBuf>),
     /// The saved searches changed (AS-16, AS-17).
@@ -202,8 +205,13 @@ impl AssetTray {
         }
         if released || !down {
             let drag = self.drag.take()?;
-            let (pos, payload) = (pos?, drag.payload.ok()?);
-            return Some(TrayEvent::Dropped { item: Box::new(drag.item), payload, pos, replace: ctrl });
+            let pos = pos?;
+            let image = drag.is_view_image();
+            return match drag.payload {
+                Ok(payload) => Some(TrayEvent::Dropped { item: Box::new(drag.item), payload, pos, replace: ctrl }),
+                Err(_) if image => Some(TrayEvent::DroppedImage { item: Box::new(drag.item), pos }),
+                Err(_) => None,
+            };
         }
         drag.paint_ghost(ctx, pos);
         ctx.request_repaint();

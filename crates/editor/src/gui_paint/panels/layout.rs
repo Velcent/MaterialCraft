@@ -5,6 +5,7 @@ use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
 use super::super::shell::Shell;
 use super::super::tools::BrushTools;
+use super::super::tools::screen_image::ScreenImages;
 use super::super::viewport::Viewport;
 use super::bakers::BakersPanel;
 use super::dock_content::Bodies;
@@ -38,6 +39,7 @@ pub struct Screen<'a> {
     pub bakers: &'a mut BakersPanel,
     pub shell: &'a mut Shell,
     pub brush: &'a mut BrushTools,
+    pub images: &'a ScreenImages,
     /// The quick mask's state, for its controls.
     pub quick_mask: materialcraft_brush::QuickMaskState,
 }
@@ -78,6 +80,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
             page: &mut shell.page,
             tools: &shell.tools,
             brush: s.brush,
+            images: s.images,
             quick_mask: s.quick_mask,
             scale_draft: &mut shell.scale_draft,
             pen: &shell.settings.get().pen,

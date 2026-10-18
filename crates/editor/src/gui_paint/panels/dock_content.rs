@@ -6,9 +6,11 @@ use eframe::egui::{self, Ui};
 
 use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
+use super::super::shell::actions;
 use super::super::shell::panels::PaintPanel;
 use super::super::shell::tools::ToolState;
 use super::super::tools::BrushTools;
+use super::super::tools::screen_image::ScreenImages;
 use super::super::viewport::Viewport;
 use super::bakers::{BakeStatus, BakersPanel};
 use super::import_report::ReportPanel;
@@ -32,6 +34,8 @@ pub struct Bodies<'a> {
     pub tools: &'a ToolState,
     /// The brush tools' settings (brush panel, quick-access bar).
     pub brush: &'a mut BrushTools,
+    /// The stencil and projection image, for the brush panel.
+    pub images: &'a ScreenImages,
     pub quick_mask: materialcraft_brush::QuickMaskState,
     pub scale_draft: &'a mut f32,
     /// The pen settings, shown under the interface settings.
@@ -110,7 +114,8 @@ impl DockContent<PaintPanel> for Bodies<'_> {
             }
             PaintPanel::Brush => {
                 let set = self.document.and_then(|d| self.layers.current_set(d.doc()));
-                margin.show(ui, |ui| brush_panel::show(ui, self.brush, self.tools.current, set));
+                let images = brush_panel::ImagesUi { images: self.images, key: self.shortcuts.label(actions::STENCIL), events: self.events };
+                margin.show(ui, |ui| brush_panel::show(ui, self.brush, self.tools.current, set, images));
             }
         }
     }

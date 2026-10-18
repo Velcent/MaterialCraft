@@ -1,19 +1,32 @@
 //! The brush panel (PT-04 … PT-11, PT-02, PT-23 … PT-28): the active brush tool's settings, the smudge and clone
-//! tools' own settings, and the values painted per channel (the channels switched on there are the ones smudge
-//! and clone work on).
-//! Settings take effect from the next stroke.
+//! tools' own settings, the values painted per channel (the channels switched on there are the ones smudge and
+//! clone work on), the stencil (PT-15) and, for the projection tool, the projection image (PJ-26). Settings take
+//! effect from the next stroke; image requests go out as [`ToolEvent::Image`].
 
+use super::super::screen_images::ImageEdit;
 use super::super::shell::tools::Tool;
-use super::super::tools::BrushTools;
 use super::super::tools::brush_state::{RetouchSettings, SmudgeMode};
+use super::super::tools::screen_image::{ImageSlot, ScreenImages};
+use super::super::tools::{BrushTools, ToolEvent};
+use super::PanelEvent;
 use crate::gui_theme;
 use crate::gui_widgets::SliderRow;
 use eframe::egui::{self, RichText, Ui};
 use materialcraft::paint::TextureSet;
 use materialcraft::paint::brush::{BrushPreset, Placement, SizeSpace};
+use materialcraft::projection::Repeat;
 use materialcraft_brush::SourceMode;
 
-pub fn show(ui: &mut Ui, brush: &mut BrushTools, tool: Tool, set: Option<&TextureSet>) {
+/// The images over the view as the panel shows them, and how to edit them.
+pub struct ImagesUi<'a> {
+    pub images: &'a ScreenImages,
+    /// The stencil key's label (it is rebindable).
+    pub key: String,
+    pub events: &'a mut Vec<PanelEvent>,
+}
+
+pub fn show(ui: &mut Ui, brush: &mut BrushTools, tool: Tool, set: Option<&TextureSet>, mut images: ImagesUi) {
+    let projection = tool == Tool::Projection;
     if brush.preset(tool).is_none() {
         ui.weak("The brush settings belong to the paint, eraser, smudge and clone tools.");
         return;
@@ -33,9 +46,16 @@ pub fn show(ui: &mut Ui, brush: &mut BrushTools, tool: Tool, set: Option<&Textur
             placement(ui, preset, &mut occlusion);
         }
         brush.occlusion = occlusion;
+        if projection {
+            screen_image(ui, ImageSlot::Projection, &mut images);
+        }
+        screen_image(ui, ImageSlot::Stencil, &mut images);
         if tool != Tool::Eraser {
             // smudge and clone work on the channels switched on here (PT-23)
-            heading(ui, if tool == Tool::Paint { "Painted values" } else { "Channels" });
+            heading(ui, if matches!(tool, Tool::Paint | Tool::Projection) { "Painted values" } else { "Channels" });
+            if projection {
+                ui.weak("The projection tool paints the image's channels; channels switched off here stay unpainted.");
+            }
             values(ui, brush, set);
         }
     });
@@ -56,6 +76,53 @@ fn retouch(ui: &mut Ui, r: &mut RetouchSettings, tool: Tool) {
         ui.selectable_value(&mut r.clone_mode, SourceMode::Fixed, "Fixed").on_hover_text("Every stroke starts again at the source");
     });
     ui.weak("Hover the model and press V to mark the source.");
+}
+
+/// The stencil's or the projection image's controls.
+fn screen_image(ui: &mut Ui, slot: ImageSlot, images: &mut ImagesUi) {
+    heading(ui, if slot == ImageSlot::Stencil { "Stencil" } else { "Projection image" });
+    let mut send = |edit| images.events.push(PanelEvent::Tool(ToolEvent::Image(slot, edit)));
+    match images.images.get(slot) {
+        None => {
+            let what = if slot == ImageSlot::Stencil { "an alpha or texture" } else { "a texture or a material" };
+            ui.weak(format!("None. Load a PNG, or drop {what} from the assets onto the view."));
+        }
+        Some(image) => {
+            ui.label(&image.name);
+            let mut repeat = image.repeat;
+            egui::ComboBox::from_id_salt(("screen_image_repeat", slot == ImageSlot::Stencil)).selected_text(repeat_label(repeat)).show_ui(ui, |ui| {
+                for r in [Repeat::None, Repeat::U, Repeat::V, Repeat::Both] {
+                    ui.selectable_value(&mut repeat, r, repeat_label(r));
+                }
+            });
+            if repeat != image.repeat {
+                send(ImageEdit::Repeat(repeat));
+            }
+        }
+    }
+    ui.horizontal(|ui| {
+        if ui.button("Load…").clicked() {
+            send(ImageEdit::Load);
+        }
+        let has = images.images.get(slot).is_some();
+        if ui.add_enabled(has, egui::Button::new("Reset")).on_hover_text("Fit it to the view again, unturned").clicked() {
+            send(ImageEdit::Reset);
+        }
+        if ui.add_enabled(has, egui::Button::new("Remove")).clicked() {
+            send(ImageEdit::Clear);
+        }
+    });
+    let key = if images.key.is_empty() { "the stencil key".to_string() } else { images.key.clone() };
+    ui.weak(format!("Hold {key} and drag: left turns (with Shift in 90° steps), right scales, middle moves."));
+}
+
+fn repeat_label(r: Repeat) -> &'static str {
+    match r {
+        Repeat::None => "Not repeated",
+        Repeat::U => "Repeated across",
+        Repeat::V => "Repeated down",
+        Repeat::Both => "Repeated both ways",
+    }
 }
 
 fn heading(ui: &mut Ui, text: &str) {

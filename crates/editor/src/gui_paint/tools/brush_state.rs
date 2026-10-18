@@ -83,10 +83,11 @@ impl Default for BrushTools {
 }
 
 impl BrushTools {
-    /// The preset of `tool`, if it is a brush tool (paint, eraser, smudge, clone).
+    /// The preset of `tool`, if it is a brush tool (paint, eraser, smudge, clone; the projection tool paints with
+    /// the paint tool's brush).
     pub fn preset(&self, tool: Tool) -> Option<&BrushPreset> {
         match tool {
-            Tool::Paint => Some(&self.paint),
+            Tool::Paint | Tool::Projection => Some(&self.paint),
             Tool::Eraser => Some(&self.eraser),
             Tool::Smudge => Some(&self.smudge),
             Tool::Clone => Some(&self.clone),
@@ -96,7 +97,7 @@ impl BrushTools {
 
     pub fn preset_mut(&mut self, tool: Tool) -> Option<&mut BrushPreset> {
         match tool {
-            Tool::Paint => Some(&mut self.paint),
+            Tool::Paint | Tool::Projection => Some(&mut self.paint),
             Tool::Eraser => Some(&mut self.eraser),
             Tool::Smudge => Some(&mut self.smudge),
             Tool::Clone => Some(&mut self.clone),
@@ -108,7 +109,7 @@ impl BrushTools {
     pub fn quick_mut(&mut self, tool: Tool) -> Option<(&mut BrushPreset, &mut StrokeHelpers)> {
         let BrushTools { paint, eraser, smudge, clone, helpers, .. } = self;
         let preset = match tool {
-            Tool::Paint => paint,
+            Tool::Paint | Tool::Projection => paint,
             Tool::Eraser => eraser,
             Tool::Smudge => smudge,
             Tool::Clone => clone,
@@ -121,6 +122,7 @@ impl BrushTools {
     pub fn stroke_tool(&self, tool: Tool) -> Option<StrokeTool> {
         match tool {
             Tool::Paint => Some(StrokeTool::Paint),
+            Tool::Projection => Some(StrokeTool::Projection),
             Tool::Eraser => Some(StrokeTool::Eraser),
             Tool::Smudge => Some(match self.retouch.smudge_mode {
                 SmudgeMode::Smudge => StrokeTool::Smudge,
@@ -175,7 +177,9 @@ mod tests {
         assert_eq!(v.value(Channel::Roughness), Some([0.2; 4]));
         assert_eq!(v.value(Channel::BaseColor), None, "switched off");
         assert_eq!(v.value(Channel::Height), None, "the set has no height");
-        assert!(b.preset(Tool::Projection).is_none() && b.preset(Tool::Smudge).is_some() && b.preset(Tool::Clone).is_some());
+        assert!(b.preset(Tool::MaterialPicker).is_none() && b.preset(Tool::Smudge).is_some() && b.preset(Tool::Clone).is_some());
+        assert_eq!(b.preset(Tool::Projection), Some(&b.paint), "the projection tool paints with the paint brush");
+        assert_eq!(b.stroke_tool(Tool::Projection), Some(StrokeTool::Projection));
     }
 
     #[test]

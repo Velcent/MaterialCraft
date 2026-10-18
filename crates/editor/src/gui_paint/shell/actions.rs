@@ -35,6 +35,11 @@ pub const STROKE: &str = "paint.stroke";
 pub const STROKE_LINE: &str = "paint.stroke.line";
 /// The same in 5° steps (PT-32).
 pub const STROKE_LINE_SNAP: &str = "paint.stroke.line_snap";
+/// Held: drags move (middle), turn (left; with Shift in 90° steps) or scale (right) the stencil or the projection
+/// image (PT-15, PJ-26).
+pub const STENCIL: &str = "paint.tool.stencil";
+/// Held: the stencil is hidden from the view.
+pub const STENCIL_HIDE: &str = "paint.tool.stencil_hide";
 
 const FILE: &str = "File";
 const EDIT: &str = "Edit";
@@ -97,8 +102,8 @@ pub const ACTIONS: &[ActionSpec] = &[
     gesture(STROKE, "Paint a stroke", TOOL_KEYS, &["LeftDrag"]),
     gesture(STROKE_LINE, "Straight line from the last stroke", TOOL_KEYS, &["Shift+LeftDrag"]),
     gesture(STROKE_LINE_SNAP, "Straight line in 5° steps", TOOL_KEYS, &["Mod+Shift+LeftDrag"]),
-    hold("paint.tool.stencil", "Move, turn or scale the stencil or projection", TOOL_KEYS, &["S"]),
-    hold("paint.tool.stencil_hide", "Hide the stencil while held", TOOL_KEYS, &["N"]),
+    hold(STENCIL, "Move, turn or scale the stencil or projection", TOOL_KEYS, &["S"]),
+    hold(STENCIL_HIDE, "Hide the stencil while held", TOOL_KEYS, &["N"]),
     press("paint.tool.clone_source", "Set the clone source", TOOL_KEYS, &["V"]),
     press("paint.tool.swap_fill", "Swap white and black (polygon fill)", TOOL_KEYS, &["X"]),
     press("paint.quickmask.toggle", "Quick mask on or off", TOOL_KEYS, &["Y"]),
@@ -111,8 +116,7 @@ pub const ACTIONS: &[ActionSpec] = &[
     press("paint.polyfill.uv_island", "Polygon fill picks UV islands", TOOL_KEYS, &[]),
 ];
 
-/// What a key press of action `id` does; `None` for gestures and for actions that tools not
-/// built yet will act on (stencil).
+/// What a key press of action `id` does; `None` for gestures and for keys that act while held (stencil).
 pub fn event_for(id: &str) -> Option<PanelEvent> {
     if let Some(tool) = Tool::ALL.iter().find(|t| t.action() == id) {
         return Some(PanelEvent::SelectTool(*tool));
@@ -189,7 +193,8 @@ mod tests {
     use crate::gui_workspace::shortcuts::page::rows;
     use std::collections::BTreeMap;
 
-    /// Actions that are listed and rebindable now, and are acted on by tools not built yet.
+    /// Actions that are listed and rebindable and act through something else than a key press: gestures and keys
+    /// held (the stencil's, read by the viewport).
     const RESERVED: &[&str] = &["paint.stroke", "paint.tool.stencil", "paint.tool.stencil_hide"];
 
     #[test]

@@ -6,6 +6,7 @@ use super::PaintMode;
 use super::panels::layers::{LayerEvent, StackDropTarget};
 use crate::gui_assets::TrayEvent;
 use eframe::egui::Pos2;
+use materialcraft::diag::{Area, SinkExt};
 use materialcraft::paint::Document;
 use materialcraft::paint::edit::ops::DropPayload;
 
@@ -23,6 +24,9 @@ impl PaintMode {
         match ev {
             TrayEvent::Dropped { item, payload, pos, replace } => {
                 self.layers.hover(None);
+                if self.drop_on_view(&item, Some(&payload), pos) {
+                    return;
+                }
                 let Some(doc) = &self.document else { return };
                 if let Some(ev) = drop_event(&self.layers, doc.doc(), pos, payload, replace) {
                     let set = match &ev {
@@ -34,6 +38,12 @@ impl PaintMode {
                     if let Some(set) = set {
                         self.bake_missing_maps(&set, &item.name, &item.needs);
                     }
+                }
+            }
+            TrayEvent::DroppedImage { item, pos } => {
+                self.layers.hover(None);
+                if !self.drop_on_view(&item, None, pos) {
+                    self.diag.info(Area::Assets, format!("Drop {} on the 3D view to use it as the stencil or projection image.", item.name));
                 }
             }
             TrayEvent::SetRoots(roots) => {

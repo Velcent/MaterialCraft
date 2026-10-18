@@ -150,10 +150,24 @@ impl ShortcutTable {
     }
 
     /// Whether a [`Kind::Hold`] action's key is down with exactly its modifiers.
-    #[allow(dead_code)] // for the stencil and hide keys, which arrive with the paint tools
     pub fn held(&self, input: &InputState, id: &str) -> bool {
+        self.held_shifted(input, id) == Some(false)
+    }
+
+    /// Whether a [`Kind::Hold`] action's key is down with its modifiers (`Some(false)`) or with Shift added to them
+    /// (`Some(true)`, a variant of the held action such as snapping); `None` otherwise.
+    pub fn held_shifted(&self, input: &InputState, id: &str) -> Option<bool> {
         let mods = Mods::from(input.modifiers);
-        self.bindings(id).iter().any(|c| c.mods == mods && matches!(c.input, Input::Key(k) if input.key_down(k)))
+        let unshifted = Mods { shift: false, ..mods };
+        let down = |c: &&Chord| matches!(c.input, Input::Key(k) if input.key_down(k));
+        let bindings = self.bindings(id);
+        if bindings.iter().filter(down).any(|c| c.mods == mods) {
+            Some(false)
+        } else if mods.shift && bindings.iter().filter(down).any(|c| c.mods == unshifted && !c.mods.shift) {
+            Some(true)
+        } else {
+            None
+        }
     }
 
     /// The gesture action for a drag with `button` and `modifiers` held, if one is bound.
@@ -283,5 +297,9 @@ mod tests {
         run(&ctx, RawInput { events: vec![key_event(Key::S, Modifiers::NONE)], ..Default::default() }, |_| {});
         run(&ctx, RawInput::default(), |ui| held = ui.input(|i| t.held(i, "stencil")));
         assert!(held);
+        let mut shifted = None;
+        let shift = RawInput { events: vec![Event::ModifiersChanged(Modifiers::SHIFT)], ..Default::default() };
+        run(&ctx, shift, |ui| shifted = ui.input(|i| (t.held(i, "stencil"), t.held_shifted(i, "stencil"))).into());
+        assert_eq!(shifted, Some((false, Some(true))), "with Shift added the action is held shifted");
     }
 }
