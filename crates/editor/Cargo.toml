@@ -20,6 +20,14 @@ craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "04e83
 craft-ui = { git = "https://github.com/storytold/craft-libs", rev = "04e83f095ab080c5672243514f9a44ca6364b0e2", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+# Pen tablet pressure, tilt and rotation (X11 XInput2, macOS AppKit) from PhotoCraft, pinned at the brush crate's
+# revision (ADR 0007). An external crate with its own isolated `unsafe` (its macOS monitor); only
+# `gui_paint::input::tablet` names it.
+photocraft-tablet = { git = "https://github.com/storytold/photocraft", rev = "5f65579ecb44047c2a619036c18ff273202e1389" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Which display server eframe's window ended up on (the tablet reader needs X11); eframe's own version.
+raw-window-handle = "0.6"
 
 [dev-dependencies]
 # The bake queue's corpus gate compares its maps with mcparity's bake of the same project (tests only).

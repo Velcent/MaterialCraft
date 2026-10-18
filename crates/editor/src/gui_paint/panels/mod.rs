@@ -14,6 +14,7 @@ pub mod layout;
 pub mod log;
 pub mod menu_bar;
 mod panel_strip;
+mod pen_settings;
 mod polygon_bar;
 mod quick_bar;
 mod quick_mask_bar;
@@ -75,6 +76,8 @@ pub enum PanelEvent {
     PreviousTool,
     Shortcut(PageEdit),
     SetUiScale(f32),
+    /// New pen settings (use pressure, pressure curve).
+    SetPen(crate::gui_settings::PenSettings),
     /// The workspace refused a docking change (shown in the status bar).
     DockRefused(String),
     /// Go to what a log entry concerns (LG-10).

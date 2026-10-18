@@ -14,8 +14,9 @@ use super::bakers::{BakeStatus, BakersPanel};
 use super::import_report::ReportPanel;
 use super::layers::LayerPanel;
 use super::log::LogPanel;
-use super::{PanelEvent, brush_panel, interface_settings, texture_sets, timeline, view_settings, viewport_toolbar};
+use super::{PanelEvent, brush_panel, interface_settings, pen_settings, texture_sets, timeline, view_settings, viewport_toolbar};
 use crate::gui_assets::AssetTray;
+use crate::gui_settings::PenSettings;
 use crate::gui_workspace::shortcuts::{ShortcutTable, ShortcutsPage};
 use materialcraft::diag::RingBuffer;
 
@@ -33,6 +34,8 @@ pub struct Bodies<'a> {
     pub brush: &'a mut BrushTools,
     pub quick_mask: materialcraft_brush::QuickMaskState,
     pub scale_draft: &'a mut f32,
+    /// The pen settings, shown under the interface settings.
+    pub pen: &'a PenSettings,
     pub log: &'a mut LogPanel,
     pub tray: &'a mut AssetTray,
     /// The session's diagnostics, for the log panel.
@@ -84,7 +87,10 @@ impl DockContent<PaintPanel> for Bodies<'_> {
                 });
             }
             PaintPanel::Interface => {
-                margin.show(ui, |ui| interface_settings::show(ui, self.scale_draft, self.events));
+                margin.show(ui, |ui| {
+                    interface_settings::show(ui, self.scale_draft, self.events);
+                    pen_settings::show(ui, self.pen, self.events);
+                });
             }
             PaintPanel::Bakers => {
                 margin.show(ui, |ui| match self.document {

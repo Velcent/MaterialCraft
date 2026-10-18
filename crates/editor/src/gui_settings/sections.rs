@@ -78,6 +78,23 @@ impl Default for InterfaceSettings {
     }
 }
 
+/// Pen input (PT-07, PT-56): whether pen pressure is used, and the curve it goes through before any brush.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PenSettings {
+    /// Off: a pen paints like a mouse (full pressure, no tilt or rotation).
+    pub use_pressure: bool,
+    /// `[pen pressure, brush pressure]` points (0 … 1) of a monotone curve; hand-editable. Fewer than two
+    /// usable points is linear.
+    pub pressure_curve: Vec<[f32; 2]>,
+}
+
+impl Default for PenSettings {
+    fn default() -> PenSettings {
+        PenSettings { use_pressure: true, pressure_curve: vec![[0.0, 0.0], [1.0, 1.0]] }
+    }
+}
+
 /// A named search of the asset library (AS-16): type filter, folder and query text, hand-editable.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

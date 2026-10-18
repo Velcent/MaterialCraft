@@ -114,8 +114,10 @@ impl ActiveStroke {
         if samples.is_empty() {
             return Ok(false);
         }
-        let mut points: Vec<InputPoint> =
-            samples.iter().map(|s| InputPoint { pressure: s.pressure, ..InputPoint::at(s.pos, (s.time - self.t0).max(0.0)) }).collect();
+        let mut points: Vec<InputPoint> = samples
+            .iter()
+            .map(|s| InputPoint { pressure: s.pressure, tilt: s.tilt, rotation: s.rotation, ..InputPoint::at(s.pos, (s.time - self.t0).max(0.0)) })
+            .collect();
         if let Some(lazy) = &mut self.lazy {
             points = lazy.push(&points);
         }

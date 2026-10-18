@@ -4,9 +4,11 @@
 //! through the shared GPU renderer in an egui paint callback.
 
 use super::channel_view::ChannelView;
+use super::input::stylus::StylusFeed;
 use super::input::{PointerLog, StrokeInput};
 use super::navigation;
 use super::shell::actions;
+use crate::gui_settings::PenSettings;
 use crate::gui_workspace::shortcuts::ShortcutTable;
 use eframe::egui::{self, Align2, Color32, FontId, PointerButton, Sense};
 use materialcraft::camera::Camera;
@@ -99,6 +101,16 @@ impl Viewport {
     /// A painter over the view, for overlays drawn after it this frame.
     pub fn overlay_painter(&self, ctx: &egui::Context) -> Option<egui::Painter> {
         Some(ctx.layer_painter(self.layer?).with_clip_rect(self.rect?))
+    }
+
+    /// Applies the user's pen settings to the stroke input (call each frame; cheap when unchanged).
+    pub fn set_pen(&mut self, pen: &PenSettings) {
+        self.pointer.configure(pen);
+    }
+
+    /// Where the platform's pen reader writes its samples.
+    pub fn pen_feed(&self) -> StylusFeed {
+        self.pointer.feed()
     }
 
     /// True while the stroke gesture is held.

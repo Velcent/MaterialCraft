@@ -133,6 +133,9 @@ impl Shell {
                 self.settings.update(|s| s.interface.ui_scale = scale);
                 self.scale_draft = self.ui_scale();
             }
+            PanelEvent::SetPen(pen) => {
+                self.settings.update(|s| s.pen = pen);
+            }
             other => return Some(other),
         }
         None

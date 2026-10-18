@@ -60,13 +60,13 @@ impl PaintMode {
         let [w, h] = camera.viewport;
         let sample = |i: usize| {
             let t = i as f32 / 40.0;
-            PointerSample { pos: [w * (0.3 + 0.4 * t), h * (0.5 + 0.08 * (t * 9.0).sin())], pressure: 1.0, time: f64::from(t) * 0.7 }
+            PointerSample::mouse([w * (0.3 + 0.4 * t), h * (0.5 + 0.08 * (t * 9.0).sin())], f64::from(t) * 0.7)
         };
         let mut input = vec![StrokeInput::Down(sample(0))];
         input.extend((1..=40).map(|i| StrokeInput::Move(sample(i))));
         input.push(StrokeInput::Up);
         if self.painting.brush.helpers.symmetry.on {
-            let to = PointerSample { pos: [w * 0.42, h * 0.78], pressure: 1.0, time: 1.0 };
+            let to = PointerSample::mouse([w * 0.42, h * 0.78], 1.0);
             input.extend([StrokeInput::Line { to, snap: true }, StrokeInput::Up]);
         }
         let frame = PaintFrame { doc, picking: &self.picking, camera: Some(camera), tool: Tool::Paint, target: Some((target, set)) };

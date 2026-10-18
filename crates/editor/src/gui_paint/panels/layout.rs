@@ -80,6 +80,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
             brush: s.brush,
             quick_mask: s.quick_mask,
             scale_draft: &mut shell.scale_draft,
+            pen: &shell.settings.get().pen,
             log: s.log,
             tray: s.tray,
             history: s.history,

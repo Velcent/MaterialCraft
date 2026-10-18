@@ -141,6 +141,8 @@ pub struct PaintMode {
     saving: unsaved::Saving,
     /// Naming a new smart material or mask; asking whether to bake the maps a dropped one needs.
     smart: smart_assets::SmartAssets,
+    /// The platform's pen reader (step 35), kept alive while the screen exists.
+    tablet: input::tablet::TabletInput,
 }
 
 impl PaintMode {
@@ -178,6 +180,7 @@ impl PaintMode {
             stroke_test: launch.stroke_test.then_some(stroke_test::StrokeTest::Waiting),
             saving: unsaved::Saving::default(),
             smart: smart_assets::SmartAssets::default(),
+            tablet: input::tablet::TabletInput::none(),
         };
         if launch.stroke_test && launch.stroke_helpers {
             pm.painting.brush.helpers = stroke_test::helpers();
@@ -190,6 +193,12 @@ impl PaintMode {
         pm
     }
 
+    /// Starts the platform's pen reader for the window eframe created (once, from the app's creation).
+    pub fn connect_tablet(&mut self, cc: &eframe::CreationContext<'_>) {
+        self.tablet = input::tablet::TabletInput::start(cc, &self.viewport.pen_feed());
+        self.diag.info(Area::General, self.tablet.note.clone());
+    }
+
     /// True if a document was given on the command line (the editor then starts on this screen).
     pub fn wants_screen(&self) -> bool {
         self.document.is_some() || self.loader.is_some()
@@ -200,6 +209,7 @@ impl PaintMode {
     pub fn ui(&mut self, ui: &mut egui::Ui, history: &RingBuffer) -> PaintAction {
         let ctx = &ui.ctx().clone();
         self.shell.frame(ctx);
+        self.viewport.set_pen(&self.shell.settings.get().pen);
         if let Some(p) = window::dropped_document(ctx) {
             self.guard(unsaved::Then::OpenPath(p));
         }

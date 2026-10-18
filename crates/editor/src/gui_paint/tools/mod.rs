@@ -134,7 +134,7 @@ impl Painting {
                         let samples: Vec<PointerSample> = line_points(from, end, to.pressure)
                             .iter()
                             .skip(1)
-                            .map(|p| PointerSample { pos: p.pos, pressure: p.pressure, time: to.time + p.time })
+                            .map(|p| PointerSample { pos: p.pos, pressure: p.pressure, time: to.time + p.time, ..to })
                             .collect();
                         let factor = factor_for(&self.quick_mask, f.doc, a.set());
                         if let Err(e) = a.add(f.doc, f.picking, &samples, &factors(&factor)) {

@@ -69,8 +69,10 @@ impl ActiveMaskStroke {
 
     /// Paints more samples; returns whether any pixel changed.
     pub fn add(&mut self, mask: &mut QuickMask, doc: &OpenDocument, picking: &ViewPicking, samples: &[PointerSample]) -> Result<bool, BrushError> {
-        let points: Vec<InputPoint> =
-            samples.iter().map(|s| InputPoint { pressure: s.pressure, ..InputPoint::at(s.pos, (s.time - self.t0).max(0.0)) }).collect();
+        let points: Vec<InputPoint> = samples
+            .iter()
+            .map(|s| InputPoint { pressure: s.pressure, tilt: s.tilt, rotation: s.rotation, ..InputPoint::at(s.pos, (s.time - self.t0).max(0.0)) })
+            .collect();
         if points.is_empty() {
             return Ok(false);
         }

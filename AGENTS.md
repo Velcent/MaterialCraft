@@ -67,7 +67,9 @@ Toolchain: Rust 1.95 or newer, edition 2024. Formatting follows `rustfmt.toml` (
    - `src/gpu` (from main, feature `gpu`): byte views of plain f32/u64 buffers for wgpu uploads and read-back
      (allowed in `src/lib.rs`).
 
-   Don't add `unsafe` anywhere else.
+   Don't add `unsafe` anywhere else. External dependencies may carry their own isolated `unsafe`: the editor
+   depends on PhotoCraft's `photocraft-tablet` (pinned, ADR 0007) for pen tablet input, whose macOS AppKit monitor
+   is its one `unsafe` module; MaterialCraft itself adds none for tablets (`gui_paint::input::tablet` is safe code).
 7. **Licence and attribution.** MaterialCraft is `MIT OR Apache-2.0` (`LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`).
    Code copied from another Craft app (PhotoCraft is MIT OR Apache-2.0) keeps its licence notice in the file and gets
    a row in `ATTRIBUTION.md` in the same commit; third-party crates are listed in `THIRD_PARTY_LICENSES.md`.

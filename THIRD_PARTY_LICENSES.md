@@ -209,7 +209,7 @@ Bundled fonts (via `epaint_default_fonts`): Hack (MIT), Ubuntu-Light (Ubuntu Fon
 | objc | 0.2.7 | MIT |
 | objc-sys | 0.3.5 | MIT |
 | objc2 | 0.5.3 | MIT |
-| objc2 | 0.6.5 | MIT |
+| objc2 | 0.6.4 | MIT |
 | objc2-app-kit | 0.2.2 | MIT |
 | objc2-app-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT |
 | objc2-cloud-kit | 0.2.2 | MIT |

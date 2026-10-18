@@ -448,7 +448,8 @@ impl App {
         let skip_home = prefs.get().general.skip_home;
         let favorites: BTreeSet<String> = prefs.get().library.favorites.iter().cloned().collect();
         let recent: Vec<PathBuf> = prefs.get().recent.files.iter().map(PathBuf::from).collect();
-        let paint = gui_paint::PaintMode::from_args(diag.sink(), user_settings);
+        let mut paint = gui_paint::PaintMode::from_args(diag.sink(), user_settings);
+        paint.connect_tablet(cc);
         cc.egui_ctx.set_zoom_factor(paint.ui_scale());
         App {
             was_focused: true,
