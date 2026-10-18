@@ -6,7 +6,7 @@
 //! the step just before it and, once one is recorded from there, the step just after it. Either neighbour still in
 //! the history identifies the state, so dropping old steps for the memory budget does not make a document dirty.
 
-use materialcraft::history::PaintHistory;
+use materialcraft::history::{Command, History};
 
 /// A state of the history, named by its neighbouring steps' serials.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -19,7 +19,7 @@ pub struct SavePoint {
 
 impl SavePoint {
     /// The current state of `history`.
-    pub fn of(history: &PaintHistory) -> SavePoint {
+    pub fn of<C: Command>(history: &History<C>) -> SavePoint {
         let mut point = SavePoint::default();
         for s in history.steps() {
             if s.done {
@@ -33,7 +33,7 @@ impl SavePoint {
     }
 
     /// True if `history` is at this state.
-    pub fn is_current(&self, history: &PaintHistory) -> bool {
+    pub fn is_current<C: Command>(&self, history: &History<C>) -> bool {
         let now = SavePoint::of(history);
         match (now.before, now.after) {
             (Some(b), _) if Some(b) == self.before => true,
@@ -46,7 +46,7 @@ impl SavePoint {
 
     /// Call after a step was recorded: if the history was at this state just before (`was_current`), the new step
     /// leads away from it and names it from now on.
-    pub fn note_recorded(&mut self, was_current: bool, history: &PaintHistory) {
+    pub fn note_recorded<C: Command>(&mut self, was_current: bool, history: &History<C>) {
         let now = SavePoint::of(history);
         if was_current && now.before != self.before {
             self.after = now.before;
@@ -57,6 +57,7 @@ impl SavePoint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use materialcraft::history::PaintHistory;
     use materialcraft::paint::Document;
     use materialcraft::paint::edit::{Edit, Transaction};
     use materialcraft::paint::height_normal::HeightFilter;

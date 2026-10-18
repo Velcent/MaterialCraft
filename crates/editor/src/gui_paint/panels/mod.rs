@@ -20,6 +20,7 @@ mod polygon_bar;
 pub mod projection;
 mod quick_bar;
 mod quick_mask_bar;
+pub mod shader_settings;
 pub mod status_bar;
 mod symmetry_menu;
 pub mod texture_sets;
@@ -101,6 +102,8 @@ pub enum PanelEvent {
     Bakers(bakers::BakerEvent),
     /// A request from the projection panel.
     Projection(projection::ProjectionEvent),
+    /// A request from the shader settings panel.
+    Shader(shader_settings::ShaderEvent),
     /// A tool key or quick-access control: quick mask, polygon fill settings.
     Tool(crate::gui_paint::tools::ToolEvent),
 }

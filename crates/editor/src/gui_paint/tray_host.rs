@@ -17,6 +17,7 @@ impl PaintMode {
         self.layers.hover(self.tray.dragged_payload().cloned());
         let folders = self.tray.material_folders();
         self.scene.set_library_folders(folders);
+        self.sync_shader_library();
     }
 
     /// Applies a tray request.

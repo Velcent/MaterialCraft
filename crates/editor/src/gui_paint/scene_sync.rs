@@ -12,10 +12,12 @@ use super::geometry::{self, PartGeometry};
 use super::job::Job;
 use super::maps_worker::{MapsWorker, SetMaps};
 use super::quick_mask_tint::QuickMaskTint;
+use super::scene_shading::{self, ModelScale, Subdivision};
 use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs, ScenePart, Shared};
 use materialcraft::material_fill::{ChainResolver, FolderResolver, MaterialCache, MaterialFills, MaterialResolver, MemoryResolver};
 use materialcraft::paint::edit::LayerRef;
+use materialcraft::shading::ShaderLibrary;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -46,6 +48,12 @@ pub struct SceneSync {
     tint: Option<Arc<QuickMaskTint>>,
     /// Surface maps of the sets whose fills need them, kept across maps runs (dropped with the document).
     surfaces: Option<Arc<FillSurfaces>>,
+    /// The shader files instances are drawn with.
+    shaders: ShaderLibrary,
+    /// The model's size, measured at the last geometry build.
+    model: ModelScale,
+    /// Each texture set's subdivision in the last geometry build.
+    subdivisions: Vec<Subdivision>,
     pub error: Option<String>,
 }
 
@@ -53,12 +61,52 @@ impl SceneSync {
     /// Rebuilds geometry and maps (new document or changed visibility).
     pub fn rebuild(&mut self, doc: &mut OpenDocument, view: ChannelView) {
         let (shared, visible) = (doc.mesh_view(), doc.visibility());
+        self.model = ModelScale::of(&shared.mesh);
+        self.subdivisions = scene_shading::subdivisions(doc.doc(), &self.model);
+        let subdivisions = self.subdivisions.clone();
         self.geometry = Some(Job::spawn(move |_, tx| {
-            let _ = tx.send(geometry::build(&shared, &visible));
+            let _ = tx.send(geometry::build(&shared, &visible, &subdivisions));
         }));
         self.part_sets = None;
         self.error = None;
         self.remap(doc, view);
+    }
+
+    /// The shader settings changed: rebuilds the geometry if a set's subdivision changed, else sends the parts'
+    /// new shading.
+    pub fn shading_changed(&mut self, doc: &mut OpenDocument, view: ChannelView, gpu: &Shared) {
+        if self.geometry.is_none() && self.part_sets.is_none() {
+            // no scene yet: the next build takes the settings as they are
+            return;
+        }
+        if scene_shading::subdivisions(doc.doc(), &self.model) != self.subdivisions {
+            self.rebuild(doc, view);
+        } else {
+            self.send_shading(doc, gpu);
+        }
+    }
+
+    /// Sets the shader files instances are drawn with; call [`Self::shading_changed`] after.
+    pub fn set_shader_library(&mut self, library: ShaderLibrary) {
+        self.shaders = library;
+    }
+
+    pub fn shader_library(&self) -> &ShaderLibrary {
+        &self.shaders
+    }
+
+    /// The model's size as measured at the last geometry build.
+    pub fn model_scale(&self) -> &ModelScale {
+        &self.model
+    }
+
+    /// Gives every scene part its texture set's shading.
+    fn send_shading(&self, doc: &OpenDocument, gpu: &Shared) {
+        let Some(part_sets) = &self.part_sets else { return };
+        let shading = scene_shading::part_shading(doc.doc(), &self.shaders, &self.model, part_sets);
+        if let Ok(mut g) = gpu.lock() {
+            g.set_part_shading(shading);
+        }
     }
 
     /// Recomputes the maps only (changed display mode).
@@ -131,7 +179,12 @@ impl SceneSync {
 
     /// Drops all work and the GPU scene (rendered materials are kept).
     pub fn clear(&mut self, gpu: &Shared) {
-        *self = SceneSync { materials: self.materials.clone(), library_folders: std::mem::take(&mut self.library_folders), ..SceneSync::default() };
+        *self = SceneSync {
+            materials: self.materials.clone(),
+            library_folders: std::mem::take(&mut self.library_folders),
+            shaders: std::mem::take(&mut self.shaders),
+            ..SceneSync::default()
+        };
         if let Ok(mut g) = gpu.lock() {
             g.clear_scene();
         }
@@ -149,7 +202,10 @@ impl SceneSync {
         }
         for result in built {
             match result {
-                Ok(parts) => self.set_scene(parts, gpu),
+                Ok(parts) => {
+                    self.set_scene(parts, gpu);
+                    self.send_shading(doc, gpu);
+                }
                 Err(e) => self.error = Some(e),
             }
         }

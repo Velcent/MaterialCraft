@@ -26,6 +26,8 @@ pub enum Icon {
     Assets,
     /// The bakers panel: rays falling onto a surface.
     Bake,
+    /// Shader settings: a lit sphere.
+    Shader,
     Viewport,
     More,
 }
@@ -89,6 +91,11 @@ impl Icon {
                 for dy in [-0.3, 0.0, 0.3] {
                     poly(&[p(-0.25, dy), p(0.25, dy)]);
                 }
+            }
+            Icon::Shader => {
+                painter.circle_stroke(c, s * 0.62, line);
+                painter.circle_filled(p(-0.22, -0.22), s * 0.16, color);
+                poly(&[p(0.05, 0.55), p(0.35, 0.42), p(0.52, 0.2), p(0.6, -0.05)]);
             }
             Icon::Display => {
                 painter.circle_stroke(c, s * 0.3, line);

@@ -30,6 +30,8 @@ pub enum PaintPanel {
     Brush,
     /// The selected fill's projection (PJ-01 … PJ-25).
     Projection,
+    /// The focused texture set's shader instance (VS-02 … VS-12).
+    Shader,
 }
 
 impl PanelKind for PaintPanel {
@@ -46,6 +48,7 @@ impl PanelKind for PaintPanel {
         PaintPanel::Bakers,
         PaintPanel::Brush,
         PaintPanel::Projection,
+        PaintPanel::Shader,
     ];
 
     fn id(self) -> &'static str {
@@ -62,6 +65,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Bakers => "bakers",
             PaintPanel::Brush => "brush",
             PaintPanel::Projection => "projection",
+            PaintPanel::Shader => "shader_settings",
         }
     }
 
@@ -79,6 +83,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Bakers => "Bakers",
             PaintPanel::Brush => "Brush",
             PaintPanel::Projection => "Projection",
+            PaintPanel::Shader => "Shader settings",
         }
     }
 
@@ -96,6 +101,7 @@ impl PanelKind for PaintPanel {
             PaintPanel::Bakers => Icon::Bake,
             PaintPanel::Brush => Icon::Brush,
             PaintPanel::Projection => Icon::Projection,
+            PaintPanel::Shader => Icon::Shader,
         }
     }
 
@@ -119,7 +125,7 @@ fn split(axis: SplitAxis, size: SplitSize, first: Node<PaintPanel>, second: Node
 }
 
 /// Texture sets above the asset tray (with the import report and the log) on the left (AS-08), the viewport,
-/// layers above the brush and display settings on the right.
+/// layers above the brush, projection, display and shader settings on the right.
 fn painting() -> Layout<PaintPanel> {
     let left = split(
         SplitAxis::Vertical,
@@ -127,8 +133,12 @@ fn painting() -> Layout<PaintPanel> {
         tabs(&[PaintPanel::TextureSets]),
         tabs(&[PaintPanel::Assets, PaintPanel::ImportReport, PaintPanel::Log]),
     );
-    let right =
-        split(SplitAxis::Vertical, SplitSize::Ratio(0.6), tabs(&[PaintPanel::Layers]), tabs(&[PaintPanel::Brush, PaintPanel::Projection, PaintPanel::Display]));
+    let right = split(
+        SplitAxis::Vertical,
+        SplitSize::Ratio(0.6),
+        tabs(&[PaintPanel::Layers]),
+        tabs(&[PaintPanel::Brush, PaintPanel::Projection, PaintPanel::Display, PaintPanel::Shader]),
+    );
     let centre = split(SplitAxis::Horizontal, SplitSize::FixedSecond(320.0), tabs(&[PaintPanel::Viewport]), right);
     Layout { root: Some(split(SplitAxis::Horizontal, SplitSize::FixedFirst(280.0), left, centre)), floating: Vec::new() }
 }

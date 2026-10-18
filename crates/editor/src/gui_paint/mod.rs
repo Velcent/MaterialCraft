@@ -42,8 +42,10 @@ mod quick_tools;
 mod reveal;
 mod save_point;
 mod saving;
+mod scene_shading;
 mod scene_sync;
 mod screen_images;
+mod shading_screen;
 mod shared_mesh;
 pub mod shell;
 mod shot;
@@ -149,6 +151,8 @@ pub struct PaintMode {
     smart: smart_assets::SmartAssets,
     /// Editing the selected fill's projection: the view gizmo and the panel's gestures (step 38).
     projection: projection_edit::ProjectionEditing,
+    /// The shader settings panel's gesture and where its shader files come from (step 41).
+    shader_panel: shading_screen::ShaderPanelState,
     /// The platform's pen reader (step 35), kept alive while the screen exists.
     tablet: input::tablet::TabletInput,
 }
@@ -192,6 +196,7 @@ impl PaintMode {
             smart: smart_assets::SmartAssets::default(),
             tablet: input::tablet::TabletInput::none(),
             projection: projection_edit::ProjectionEditing::default(),
+            shader_panel: shading_screen::ShaderPanelState::default(),
         };
         if launch.stroke_test && launch.stroke_helpers {
             pm.painting.brush.helpers = stroke_test::helpers();
@@ -312,6 +317,8 @@ impl PaintMode {
             images: &self.painting.images,
             quick_mask: self.painting.quick_mask.state(),
             projection: &self.projection.settings,
+            shaders: self.scene.shader_library(),
+            model: self.scene.model_scale(),
         };
         panels::layout::show(ui, screen)
     }
@@ -376,6 +383,7 @@ impl PaintMode {
             PanelEvent::Assets(ev) => self.apply_tray(ev),
             PanelEvent::Bakers(ev) => self.bakers_event(ev),
             PanelEvent::Projection(ev) => self.projection_event(ev),
+            PanelEvent::Shader(ev) => self.shader_event(ev),
             // Workspace events were handled by the shell.
             _ => {}
         }

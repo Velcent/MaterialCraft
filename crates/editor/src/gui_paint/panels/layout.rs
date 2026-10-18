@@ -45,6 +45,9 @@ pub struct Screen<'a> {
     pub quick_mask: materialcraft_brush::QuickMaskState,
     /// The projection gizmo's settings, for the projection panel.
     pub projection: &'a GizmoSettings,
+    /// The shader files and the model's size, for the shader settings panel.
+    pub shaders: &'a materialcraft::shading::ShaderLibrary,
+    pub model: &'a crate::gui_paint::scene_shading::ModelScale,
 }
 
 /// Draws the screen and returns what the user asked for.
@@ -86,6 +89,8 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
             images: s.images,
             quick_mask: s.quick_mask,
             projection: s.projection,
+            shaders: s.shaders,
+            model: s.model,
             scale_draft: &mut shell.scale_draft,
             pen: &shell.settings.get().pen,
             log: s.log,

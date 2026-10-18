@@ -39,6 +39,8 @@ pub struct OpenDocument {
     pub sets: Vec<SetState>,
     /// The mesh copy workers share (see [`Self::shared_mesh`]).
     mesh_share: MeshShare,
+    /// The shader settings' own history ([`shading`]).
+    shading: shading::ShadingHistory,
 }
 
 impl OpenDocument {
@@ -47,7 +49,7 @@ impl OpenDocument {
         let history = PaintHistory::default();
         let file = source.extension().is_some_and(|e| e.eq_ignore_ascii_case("mcpaint")).then(|| source.clone());
         let saved = SavePoint::of(&history);
-        OpenDocument { doc, history, source, file, saved, saving: None, summary, sets, mesh_share: MeshShare::default() }
+        OpenDocument { doc, history, source, file, saved, saving: None, summary, sets, mesh_share: MeshShare::default(), shading: Default::default() }
     }
 
     pub fn doc(&self) -> &Document {
@@ -142,7 +144,7 @@ impl OpenDocument {
 
     /// True if the document has changes that are not in its file (the history is not at the saved state).
     pub fn is_dirty(&self) -> bool {
-        !self.saved.is_current(&self.history)
+        !self.saved.is_current(&self.history) || self.shading.is_dirty()
     }
 
     /// The `.mcpaint` file Save writes to; `None` if the document has none yet (an import): use Save As.
@@ -162,6 +164,7 @@ impl OpenDocument {
     pub fn begin_save(&mut self) -> Document {
         self.history.close();
         self.saving = Some(SavePoint::of(&self.history));
+        self.shading.begin_save();
         self.doc.clone()
     }
 
@@ -170,6 +173,7 @@ impl OpenDocument {
         if let Some(p) = self.saving.take() {
             self.saved = p;
         }
+        self.shading.saved();
         self.source = path.clone();
         self.file = Some(path);
     }
@@ -177,6 +181,7 @@ impl OpenDocument {
     /// The save started by [`Self::begin_save`] failed: nothing changes.
     pub fn save_failed(&mut self) {
         self.saving = None;
+        self.shading.save_failed();
     }
 
     /// Ends the open step (the end of a slider drag).
@@ -276,6 +281,9 @@ fn placement(set: &TextureSet) -> TextureSet {
     out.channels = set.channels.clone();
     out
 }
+
+#[path = "document_shading.rs"]
+mod shading;
 
 #[cfg(test)]
 #[path = "document_state_tests.rs"]
