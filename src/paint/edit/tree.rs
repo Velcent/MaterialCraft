@@ -14,6 +14,25 @@ pub(super) fn layer_mut<'a>(doc: &'a mut Document, r: &LayerRef) -> Result<&'a m
     set_mut(doc, &r.set)?.layer_mut(&r.layer).ok_or_else(|| no_layer(r))
 }
 
+/// [`layer_mut`] for changing the layer's parameters: refused on an instance, whose parameters are its source's (IN-02).
+pub(super) fn own_layer_mut<'a>(doc: &'a mut Document, r: &LayerRef) -> Result<&'a mut Layer, EditError> {
+    let l = layer_mut(doc, r)?;
+    if matches!(l.kind, LayerKind::Instance(_)) {
+        return Err(EditError::InstanceReadOnly { set: r.set.clone(), layer: r.layer.clone() });
+    }
+    Ok(l)
+}
+
+/// The first instance in the subtree of layer `r` that depends on itself.
+fn cycle_in(doc: &Document, r: &LayerRef) -> Option<String> {
+    let set = doc.texture_set(&r.set)?;
+    let top = set.layer(&r.layer)?;
+    LayerWalk::new(std::slice::from_ref(top))
+        .filter(|(_, l)| matches!(l.kind, LayerKind::Instance(_)))
+        .find(|(_, l)| doc.instance_on_cycle(&r.set, &l.id))
+        .map(|(_, l)| l.id.clone())
+}
+
 fn no_layer(r: &LayerRef) -> EditError {
     EditError::NoLayer { set: r.set.clone(), layer: r.layer.clone() }
 }
@@ -61,7 +80,12 @@ pub(super) fn insert(doc: &mut Document, set_id: &str, at: LayerSlot, layer: Lay
     check_insert_index(at.index, children.len())?;
     let id = layer.id.clone();
     children.insert(at.index, layer);
-    Ok(Edit::RemoveLayer(LayerRef::new(set_id, id)))
+    let r = LayerRef::new(set_id, id);
+    if let Some(looping) = cycle_in(doc, &r) {
+        remove(doc, r)?;
+        return Err(EditError::InstanceCycle { set: set_id.to_string(), layer: looping });
+    }
+    Ok(Edit::RemoveLayer(r))
 }
 
 /// Takes the layer out of its tree; returns it with the slot it had.
@@ -92,11 +116,23 @@ pub(super) fn move_to(doc: &mut Document, r: LayerRef, to: LayerSlot) -> Result<
     check_insert_index(to.index, len)?;
     let (layer, from) = take(set, &r)?;
     children_mut(set, to.parent.as_deref())?.insert(to.index, layer);
+    if let Some(looping) = cycle_in(doc, &r) {
+        // Put it back where it was (no checks: that is the state before the edit).
+        let set = set_mut(doc, &r.set)?;
+        let (layer, _) = take(set, &r)?;
+        let children = children_mut(set, from.parent.as_deref())?;
+        check_insert_index(from.index, children.len())?;
+        children.insert(from.index, layer);
+        return Err(EditError::InstanceCycle { set: r.set, layer: looping });
+    }
     Ok(Edit::MoveLayer { layer: r, to: from })
 }
 
 pub(super) fn set_property(doc: &mut Document, r: LayerRef, property: LayerProperty) -> Result<Edit, EditError> {
-    let l = layer_mut(doc, &r)?;
+    let l = match property {
+        LayerProperty::Name(_) | LayerProperty::Visible(_) => layer_mut(doc, &r)?,
+        _ => own_layer_mut(doc, &r)?,
+    };
     let old = match property {
         LayerProperty::Name(v) => LayerProperty::Name(replace(&mut l.name, v)),
         LayerProperty::Visible(v) => LayerProperty::Visible(replace(&mut l.visible, v)),

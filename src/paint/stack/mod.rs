@@ -19,6 +19,8 @@
 //!   one, and kinds that are not computable yet, are left out and reported by [`Compositor::warnings`];
 //! - levels, colour selection, polygon fill and references are native (see `native`); polygon fill needs the
 //!   [`FillContext`]'s surface map, colour selection the set's baked map, a reference its anchor;
+//! - instances ([`crate::paint::instance`]) are resolved before compositing, by
+//!   [`crate::paint::Document::resolved_set`]; an instance left in the stack (a broken one) composites nothing;
 //! - fills are laid on by their projection ([`crate::projection`]); sources other than uniform values and
 //!   images, and projections that need the mesh, are evaluated through the [`FillContext`].
 //!
@@ -215,6 +217,8 @@ impl<'a> Compositor<'a> {
                     }
                 }
             }
+            // Resolved before compositing (`Document::resolved_set`); one left here is broken.
+            LayerKind::Instance(_) => {}
         }
     }
 }

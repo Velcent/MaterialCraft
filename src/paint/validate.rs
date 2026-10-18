@@ -185,7 +185,7 @@ fn check_layer(set: &TextureSet, layer: &Layer, out: &mut Vec<DocError>) {
     match &layer.kind {
         LayerKind::Paint(p) => channels.push(p.images.iter().map(|(c, _)| *c).collect()),
         LayerKind::Fill(f) => channels.push(f.channels()),
-        LayerKind::Group(_) => {}
+        LayerKind::Group(_) | LayerKind::Instance(_) => {}
     }
     check_channel_lists(set, layer, &channels, out);
     for (image, img) in layer.images() {
@@ -212,6 +212,10 @@ fn check_channel_lists(set: &TextureSet, layer: &Layer, lists: &[Vec<Channel>], 
 
 #[path = "validate_effects.rs"]
 mod effects;
+
+#[path = "validate_instances.rs"]
+mod instances;
+pub use instances::{InstanceIssue, InstanceProblem, instance_issues, missing_channels};
 
 #[cfg(test)]
 #[path = "validate_tests.rs"]

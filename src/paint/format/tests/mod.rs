@@ -8,6 +8,7 @@ mod effect_fixtures;
 mod effects;
 mod fixtures;
 mod fragments;
+mod instances;
 mod manifest_errors;
 mod projections;
 mod round_trip;

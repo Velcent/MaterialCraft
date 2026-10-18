@@ -12,6 +12,7 @@ use super::effect::{ContentEffect, EffectKind, Procedural};
 use super::fill_image::ImageFill;
 use super::geometry_mask::GeometryMask;
 use super::image::TiledImage;
+use super::instance::InstanceLink;
 use super::mask::Mask;
 use super::stroke::StrokeData;
 use crate::projection::Projection;
@@ -130,6 +131,10 @@ pub enum LayerKind {
     /// Child layers, bottom to top. The group's blend mode `Passthrough` blends children straight into
     /// the stack; any other mode composites them in isolation first.
     Group(Vec<Layer>),
+    /// An instance of another layer, in this texture set or another (IN-01): composited as its source with this
+    /// layer's id, name and visibility, without the source's painted pixels, on this set's own baked maps (see
+    /// [`super::instance`]). The layer's own blend entries, mask and effects are not used.
+    Instance(InstanceLink),
 }
 
 /// One layer of a stack.
@@ -213,6 +218,14 @@ impl Layer {
     pub fn with_effect(mut self, effect: ContentEffect) -> Layer {
         self.effects.push(effect);
         self
+    }
+
+    /// The layer this one is an instance of.
+    pub fn instance_of(&self) -> Option<&InstanceLink> {
+        match &self.kind {
+            LayerKind::Instance(link) => Some(link),
+            _ => None,
+        }
     }
 
     pub fn children(&self) -> &[Layer] {

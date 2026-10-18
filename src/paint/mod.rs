@@ -7,6 +7,7 @@
 //! - [`blend`] and [`normal`]: blend modes and normal-vector maths.
 //! - [`layer`], [`effect`], [`mask`], [`geometry_mask`], [`texture_set`], [`doc`], [`report`]: the document
 //!   model; [`validate`] its invariants.
+//! - [`instance`]: layer instances, resolved into their texture set at composite time; which sets an edit reaches.
 //! - [`embedded`]: library assets a document embeds (AS-21); [`fragment`]: smart materials and smart masks.
 //! - [`edit`]: [`edit::Edit`], every document change with its inverse (for the GUI and the history).
 //! - [`bake_config`]: per texture set bake settings with link, copy and check commands.
@@ -35,6 +36,7 @@ pub mod fragment;
 pub mod geometry_mask;
 pub mod height_normal;
 pub mod image;
+pub mod instance;
 pub mod layer;
 pub mod layer_preview;
 pub mod mask;
@@ -63,6 +65,7 @@ pub use fill_image::{FillImage, FillImageRef, ImageFill};
 pub use fragment::{Fragment, FragmentContent, FragmentKind};
 pub use geometry_mask::{GeometryMask, Inclusion};
 pub use image::{ImageError, Rect, TILE_SIZE, Tile, TiledImage};
+pub use instance::InstanceLink;
 pub use layer::{ChannelBlend, Fill, FillSource, Layer, LayerImage, LayerKind, PaintContent};
 pub use mask::Mask;
 pub use output::{MaterialMaps, OutputOptions};

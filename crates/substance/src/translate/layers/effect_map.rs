@@ -235,7 +235,7 @@ impl ContentMapper<'_, '_> {
         let kind = match core_content(&computed, &PainterKind::Fill, ev.channels, ev.resolution) {
             LayerKind::Paint(p) => EffectKind::Paint(p),
             LayerKind::Fill(f) => EffectKind::Fill(f),
-            LayerKind::Group(_) => EffectKind::Fill(Fill::uniform(Vec::new())),
+            LayerKind::Group(_) | LayerKind::Instance(_) => EffectKind::Fill(Fill::uniform(Vec::new())),
         };
         if !computed.is_empty() || fill.sources.is_empty() {
             out.push(ContentEffect {

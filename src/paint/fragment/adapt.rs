@@ -42,6 +42,7 @@ fn fit_layer(l: &mut Layer, resolution: (u32, u32), declared: &dyn Fn(Channel) -
         }
         LayerKind::Fill(f) => retain_fill(f, declared),
         LayerKind::Group(children) => children.iter_mut().for_each(|c| fit_layer(c, resolution, declared)),
+        LayerKind::Instance(_) => {}
     }
     for e in &mut l.effects {
         e.blend.retain(|b| declared(b.channel));

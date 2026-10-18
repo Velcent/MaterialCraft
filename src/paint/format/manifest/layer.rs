@@ -2,6 +2,7 @@
 //! and `strokes` (paint), `fill` (fill) or `children` (group), and `effects` (the content effects, since 0.3).
 //! `asset` (since 0.6) names the asset a smart-material folder was made from. `see_through: true` (since 0.11, written
 //! only when set) marks see-through paint content, whose images are its strokes replayed on the composite below.
+//! Kind `instance` (since 0.15) carries `instance_of: {"set", "layer"}`, the layer it takes its parameters from.
 
 use super::extras::loc;
 use super::fields::{Obj, as_f32, num, num4};
@@ -11,7 +12,7 @@ use crate::paint::format::FormatError;
 use crate::paint::format::slot::ImageSlot;
 use crate::paint::format::strokes::StrokeSlot;
 use crate::paint::stroke::StrokeOwner;
-use crate::paint::{Channel, ChannelSpec, ColorSpace, Fill, FillImageRef, FillSource, ImageFill, Layer, LayerImage, LayerKind, PaintContent};
+use crate::paint::{Channel, ChannelSpec, ColorSpace, Fill, FillImageRef, FillSource, ImageFill, InstanceLink, Layer, LayerImage, LayerKind, PaintContent};
 use crate::projection::Projection;
 
 pub use blend::channel;
@@ -39,6 +40,7 @@ fn write(l: &Layer, set: &SetScope, ctx: &WriteCtx) -> Value {
         LayerKind::Paint(_) => "paint",
         LayerKind::Fill(_) => "fill",
         LayerKind::Group(_) => "group",
+        LayerKind::Instance(_) => "instance",
     };
     let mut v = Value::object()
         .with("id", l.id.as_str())
@@ -77,6 +79,9 @@ fn write(l: &Layer, set: &SetScope, ctx: &WriteCtx) -> Value {
         }
         LayerKind::Group(children) => {
             v.insert("children", write_all(children, set, ctx));
+        }
+        LayerKind::Instance(link) => {
+            v.insert("instance_of", Value::object().with("set", link.set.as_str()).with("layer", link.layer.as_str()));
         }
     }
     if !l.effects.is_empty() {
@@ -184,6 +189,10 @@ fn read(v: &Value, at: String, set: &SetScope, ctx: &mut ReadCtx) -> Result<Laye
         "group" => {
             let children = o.array("children")?;
             LayerKind::Group(read_all(children, &o.path("children"), set, ctx)?)
+        }
+        "instance" => {
+            let mut link = Obj::new(o.req("instance_of")?, o.path("instance_of"))?;
+            LayerKind::Instance(InstanceLink::new(link.str("set")?, link.str("layer")?))
         }
         other => return Err(o.error("kind", format!("unknown layer kind {other:?}"))),
     };

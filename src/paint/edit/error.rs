@@ -53,6 +53,17 @@ pub enum EditError {
     /// A region outside the image, or pixel data of the wrong length.
     BadRegion,
     Image(ImageError),
+    /// An instance's parameters come from its source and cannot be changed on it (IN-02); only its name and
+    /// visibility are its own.
+    InstanceReadOnly {
+        set: String,
+        layer: String,
+    },
+    /// The change would make an instance depend on itself (an instance inside the folder it instances, IN-11).
+    InstanceCycle {
+        set: String,
+        layer: String,
+    },
     /// A panel operation that does not apply to what it was aimed at (e.g. an effect dropped onto a mask
     /// that does not exist, an empty selection); the text says why.
     NotAccepted(&'static str),
@@ -73,6 +84,10 @@ impl fmt::Display for EditError {
             EditError::NoImage { set, layer, image } => write!(f, "layer {layer:?} in {set:?} has no image {image:?}"),
             EditError::BadRegion => write!(f, "pixel region outside the image or of the wrong size"),
             EditError::Image(e) => write!(f, "{e}"),
+            EditError::InstanceReadOnly { set, layer } => {
+                write!(f, "layer {layer:?} in {set:?} is an instance: change its source instead")
+            }
+            EditError::InstanceCycle { set, layer } => write!(f, "instance {layer:?} in {set:?} would depend on itself"),
             EditError::NotAccepted(why) => f.write_str(why),
         }
     }

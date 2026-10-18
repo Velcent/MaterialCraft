@@ -89,6 +89,8 @@ impl Compositor<'_> {
                     self.apply_layers(children, pass, c, depth + 1, &mut Scratch::default());
                 }
             }
+            // Resolved before compositing (`Document::resolved_set`); one left here is broken.
+            LayerKind::Instance(_) => {}
         }
     }
 

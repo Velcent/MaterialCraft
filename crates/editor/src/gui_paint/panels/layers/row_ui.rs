@@ -251,6 +251,7 @@ fn kind_name(l: &Layer) -> &'static str {
         LayerKind::Paint(_) => "Paint",
         LayerKind::Fill(_) => "Fill",
         LayerKind::Group(_) => "Folder",
+        LayerKind::Instance(_) => "Instance",
     }
 }
 
