@@ -1459,6 +1459,7 @@ dependencies = [
  "materialcraft",
  "materialcraft-brush",
  "materialcraft-parity",
+ "materialcraft-perf",
  "materialcraft-starter",
  "materialcraft-substance",
  "photocraft-tablet",
@@ -1473,6 +1474,14 @@ version = "0.1.0"
 dependencies = [
  "materialcraft",
  "materialcraft-substance",
+]
+
+[[package]]
+name = "materialcraft-perf"
+version = "0.1.0"
+dependencies = [
+ "materialcraft",
+ "materialcraft-parity",
 ]
 
 [[package]]

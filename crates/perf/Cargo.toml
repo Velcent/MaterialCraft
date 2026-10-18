@@ -1,0 +1,20 @@
+[package]
+name = "materialcraft-perf"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Paint mode performance scenarios, their results and history, and the mcperf command"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+materialcraft = { path = "../.." }
+# The commit, the docs folder and timestamps, as mcparity records them in its own history.
+materialcraft-parity = { path = "../parity" }
+
+[[bin]]
+name = "mcperf"
+path = "src/main.rs"
+
+[lints]
+workspace = true
