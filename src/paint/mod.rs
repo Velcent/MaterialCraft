@@ -21,6 +21,7 @@
 pub mod bake_config;
 pub mod blend;
 pub mod brush;
+pub mod camera_import;
 pub mod camera_list;
 pub mod channel;
 pub mod diag_entries;
