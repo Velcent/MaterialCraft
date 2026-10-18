@@ -70,16 +70,6 @@ impl Bench {
             std::thread::sleep(Duration::from_micros(200));
         }
     }
-
-    /// Recomposites `sets` as an edit does and waits for the result: the time to the updated maps and what the
-    /// scene did meanwhile.
-    pub fn refresh(&mut self, sets: Vec<usize>) -> (Duration, SceneStats) {
-        let before = self.scene.stats();
-        let started = Instant::now();
-        self.scene.refresh(&mut self.doc, self.view, sets);
-        self.settle();
-        (started.elapsed(), delta(before, self.scene.stats()))
-    }
 }
 
 /// What the scene did between two readings of its stats.

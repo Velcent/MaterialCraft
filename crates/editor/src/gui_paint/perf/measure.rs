@@ -19,15 +19,20 @@ pub struct Recomposite {
 impl Recomposite {
     /// Recomposites `sets` as an edit does (`SceneSync::refresh`) and waits for the result.
     pub fn refresh(b: &mut Bench, sets: Vec<usize>) -> Recomposite {
-        let (latency, did) = b.refresh(sets);
-        Recomposite { latency, did }
+        Recomposite::measure(b, |b| b.scene.refresh(&mut b.doc, b.view, sets))
     }
 
     /// Rebuilds the whole scene (`SceneSync::rebuild`, as opening or a change of the set list does) and waits.
     pub fn rebuild(b: &mut Bench) -> Recomposite {
+        Recomposite::measure(b, |b| b.scene.rebuild(&mut b.doc, b.view))
+    }
+
+    /// Asks for a recomposite with `ask` and waits for it: the time from asking to the maps on the GPU queue and
+    /// what the scene did meanwhile.
+    fn measure(b: &mut Bench, ask: impl FnOnce(&mut Bench)) -> Recomposite {
         let before = b.scene.stats();
         let started = Instant::now();
-        b.scene.rebuild(&mut b.doc, b.view);
+        ask(b);
         b.settle();
         Recomposite { latency: started.elapsed(), did: super::delta(before, b.scene.stats()) }
     }
