@@ -5,6 +5,8 @@
 //! - **onto a folder**: on top of its children;
 //! - **onto another layer**: directly above it, except a material dropped onto a fill layer, which becomes that
 //!   layer's fill (its projection is kept).
+//!
+//! A new fill layer is sized physically instead of tiled when the project says so ([`crate::paint::ProjectSettings`]).
 
 use super::super::ids::IdPool;
 use super::super::{Edit, EditError, LayerProperty, LayerSlot, Transaction};
@@ -14,6 +16,7 @@ use crate::paint::blend::BlendMode;
 use crate::paint::fragment::adapt;
 use crate::paint::layer::{Fill, FillSource, Layer, LayerKind};
 use crate::paint::texture_set::TextureSet;
+use crate::projection::SizeMode;
 
 /// A material as an asset: the reference a fill stores (resolved later through the material lookup folders:
 /// the document's folder and the asset library roots) and parameter overrides.
@@ -45,7 +48,13 @@ pub(super) fn material(tx: &mut Transaction, target: &DropTarget, asset: &Materi
     let at = slot_for(s, target)?;
     let id = IdPool::of(s).layer("fill");
     let name = if asset.name.is_empty() { "Material".to_string() } else { asset.name.clone() };
-    let layer = with_every_channel(s, Layer::new(id.clone(), name, LayerKind::Fill(Fill::new(asset.source()))));
+    let mut fill = Fill::new(asset.source());
+    if tx.doc().project.fill_physical_size {
+        // the project asked for physically sized fills (chosen when it was made)
+        fill.projection.image.size_mode = SizeMode::Physical;
+    }
+    let s = set(tx, target.set())?;
+    let layer = with_every_channel(s, Layer::new(id.clone(), name, LayerKind::Fill(fill)));
     tx.apply(Edit::InsertLayer { set: target.set().to_string(), at, layer: Box::new(layer) })?;
     Ok(DropOutcome::NewLayer(id))
 }

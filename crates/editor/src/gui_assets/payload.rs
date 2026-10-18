@@ -38,6 +38,7 @@ pub fn payload(item: &Item) -> Result<DropPayload, String> {
         }
         Usage::SmartMaterial | Usage::SmartMask => fragment_payload(item),
         Usage::Brush | Usage::Alpha | Usage::Texture | Usage::Environment => Err("This kind of asset is not dropped onto the layer stack.".into()),
+        Usage::Template => Err("Project templates are picked in File > New project.".into()),
     }
 }
 

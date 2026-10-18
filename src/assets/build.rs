@@ -23,8 +23,12 @@ pub(crate) struct AssetBuilder<'a> {
 impl AssetBuilder<'_> {
     /// The asset at root-relative `path` of `format`, which the listing contains.
     pub fn build(&self, path: &str, format: Format) -> Asset {
-        // a brush preset is a brush in whatever folder it sits (a sidecar still overrides it)
-        let usage = if format == Format::Brush { Usage::Brush } else { usage_from_folder(path).unwrap_or_else(|| default_usage(format)) };
+        // a brush preset is a brush and a template a template in whatever folder it sits (a sidecar still overrides it)
+        let usage = if matches!(format, Format::Brush | Format::Template) {
+            default_usage(format)
+        } else {
+            usage_from_folder(path).unwrap_or_else(|| default_usage(format))
+        };
         let mut asset = Asset::new(path, format, usage);
         if let Some(stamp) = self.listing.get(path) {
             asset.modified = stamp.modified;
@@ -131,6 +135,7 @@ pub(crate) fn default_usage(format: Format) -> Usage {
         Format::Hdr => Usage::Environment,
         Format::Fragment => Usage::SmartMaterial,
         Format::Brush => Usage::Brush,
+        Format::Template => Usage::Template,
     }
 }
 

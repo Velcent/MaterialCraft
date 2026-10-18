@@ -16,6 +16,7 @@ pub fn label(usage: Usage) -> &'static str {
         Usage::Alpha => "Alphas",
         Usage::Texture => "Textures",
         Usage::Environment => "Environments",
+        Usage::Template => "Project templates",
     }
 }
 
@@ -70,6 +71,13 @@ pub fn paint(painter: &Painter, rect: Rect, usage: Usage, color: Color32) {
             painter.circle_stroke(c, s * 0.65, line);
             poly(&[p(-0.65, 0.0), p(0.65, 0.0)]);
             painter.add(Shape::ellipse_stroke(c, vec2(s * 0.3, s * 0.65), line));
+        }
+        Usage::Template => {
+            // a page with a folded corner and two lines
+            poly(&[p(-0.5, -0.65), p(0.2, -0.65), p(0.5, -0.35), p(0.5, 0.65), p(-0.5, 0.65), p(-0.5, -0.65)]);
+            poly(&[p(0.2, -0.65), p(0.2, -0.35), p(0.5, -0.35)]);
+            poly(&[p(-0.25, 0.0), p(0.25, 0.0)]);
+            poly(&[p(-0.25, 0.3), p(0.25, 0.3)]);
         }
     }
 }

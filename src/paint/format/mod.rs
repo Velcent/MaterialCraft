@@ -11,6 +11,7 @@
 //! - [`strokes`]: stroke record entries (binary, one per recorded paint layer or effect).
 //! - [`writer`] and [`reader`]: assembling and taking apart the archive; [`embedded`]: embedded library assets.
 //! - [`fragment`]: smart materials and smart masks (`.mcfrag`), built from the same pieces.
+//! - [`template`]: project templates (`.mctemplate`), defaults for new projects, built from the same pieces.
 //!
 //! ```
 //! use materialcraft::paint::{format, Document};
@@ -30,6 +31,7 @@ pub mod paths;
 pub mod reader;
 pub mod slot;
 pub mod strokes;
+pub mod template;
 mod thumbnail;
 pub mod version;
 pub mod writer;

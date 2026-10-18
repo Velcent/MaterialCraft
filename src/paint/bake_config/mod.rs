@@ -24,5 +24,5 @@ mod tests;
 
 pub use config::{CommonBake, HighPlacement, HighPoly, MapEntries, MapEntry, MapFlags, MapSettings, SetBakeConfig};
 pub use key::SettingKey;
-pub use kinds::{baked_kind, map_kind, to_baked};
+pub use kinds::{baked_kind, map_kind, storage_format, to_baked};
 pub use links::{BakeLinks, BakePart};

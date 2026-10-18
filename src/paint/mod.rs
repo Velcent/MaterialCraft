@@ -18,6 +18,8 @@
 //! - [`diag_entries`]: import summaries and compositing warnings as session log entries.
 //! - [`working_space`]: the space layers blend in (linear light for sRGB channels).
 //! - [`output`]: [`MaterialMaps`], final PBR maps for the viewer and export.
+//! - [`new_project`]: a new document from a mesh file and a template (File > New); [`project_settings`]: the
+//!   choices it records (normal map format, tangent frame, fill sizing).
 
 pub mod bake_config;
 pub mod blend;
@@ -41,6 +43,7 @@ pub mod instance;
 pub mod layer;
 pub mod layer_preview;
 pub mod mask;
+pub mod new_project;
 pub mod normal;
 pub mod normal_combine;
 pub mod output;

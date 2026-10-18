@@ -24,11 +24,13 @@ pub enum Usage {
     Texture,
     /// An HDR environment map for viewport lighting.
     Environment,
+    /// Defaults for new projects (texture set, display, baking and shader settings).
+    Template,
 }
 
 impl Usage {
     /// Every usage, in the tray's display order.
-    pub const ALL: [Usage; 9] = [
+    pub const ALL: [Usage; 10] = [
         Usage::Material,
         Usage::SmartMaterial,
         Usage::SmartMask,
@@ -38,6 +40,7 @@ impl Usage {
         Usage::Alpha,
         Usage::Texture,
         Usage::Environment,
+        Usage::Template,
     ];
 
     /// Stable keyword, used in sidecars, saved searches and the `usage:` query field.
@@ -52,6 +55,7 @@ impl Usage {
             Usage::Alpha => "alpha",
             Usage::Texture => "texture",
             Usage::Environment => "environment",
+            Usage::Template => "template",
         }
     }
 
@@ -67,6 +71,7 @@ impl Usage {
             Usage::Alpha => "alphas",
             Usage::Texture => "textures",
             Usage::Environment => "environments",
+            Usage::Template => "templates",
         }
     }
 

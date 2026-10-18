@@ -106,7 +106,7 @@ fn ten_thousand_assets_scroll_and_search_within_a_frame() {
     }
     t.filter.toggle(Usage::Material);
     times.push(frame(&ctx, &mut t, screen()).0);
-    assert_eq!(t.results.items.len(), 10_000 / 9 + 1);
+    assert_eq!(t.results.items.len(), 10_000_usize.div_ceil(Usage::ALL.len()));
     slowest = slowest.max(worst("a new search", &mut times));
     if !cfg!(debug_assertions) {
         assert!(slowest < Duration::from_micros(16_667), "a frame took {slowest:?}");
