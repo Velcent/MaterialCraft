@@ -5,7 +5,7 @@
 use crate::camera::{CameraSettings, Orbit, SceneCamera};
 
 /// A camera's pose and settings: everything an edit changes and a restore puts back.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct CameraValues {
     /// The pose, as the orbit controller holds it (in the viewport's fit of the model).
     pub orbit: Orbit,
@@ -13,12 +13,6 @@ pub struct CameraValues {
     pub settings: CameraSettings,
     /// Width / height of the camera's frame; `None` = not set (the frame is the viewport).
     pub aspect: Option<f32>,
-}
-
-impl Default for CameraValues {
-    fn default() -> CameraValues {
-        CameraValues { orbit: Orbit::default(), settings: CameraSettings::default(), aspect: None }
-    }
 }
 
 impl CameraValues {
