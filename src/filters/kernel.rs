@@ -9,7 +9,7 @@
 
 use super::islands;
 use super::plane::Plane;
-use crate::paint::effect::{EvalRequest, EvalTarget, FilterInput, FilterKernel, Params};
+use crate::paint::effect::{EvalRequest, EvalTarget, FilterInput, FilterKernel, Params, Reach};
 use crate::paint::{Channel, ColorSpace};
 
 /// The largest neighbourhood radius a filter may ask for, in texels.
@@ -79,6 +79,11 @@ pub trait AreaFilter: Send + Sync {
     /// How far (texels) the result of a texel depends on its neighbours.
     fn radius(&self, s: &Self::Settings, ctx: &Ctx) -> u32;
 
+    /// How far (texels, in each direction) [`Self::run`] reads around an output texel to compute it, at most:
+    /// texels farther away never change it. Proved from the kernel itself, independently of [`Self::radius`]
+    /// (which is what the compositor provides); [`Area`] turns it into the filter's [`Reach`].
+    fn extent(&self, s: &Self::Settings, ctx: &Ctx) -> u32;
+
     /// The filtered plane: as many texels as `input`, same placement. Texels within the radius of the plane's
     /// edges may be wrong; only the inner ones are used.
     fn run(&self, s: &Self::Settings, ctx: &Ctx, input: &Plane) -> Vec<[f32; 4]>;
@@ -88,6 +93,11 @@ pub trait AreaFilter: Send + Sync {
 pub struct Point<F>(pub F);
 
 impl<F: PointFilter> FilterKernel for Point<F> {
+    /// A point filter reads only the texel itself (its UV comes from the position, not from the stack).
+    fn reach(&self, _: &EvalRequest) -> Reach {
+        Reach::Texel
+    }
+
     fn apply(&self, request: &EvalRequest, input: &FilterInput, out: &mut [[f32; 4]]) -> Result<(), String> {
         let ctx = Ctx::of(request);
         let s = self.0.settings(&Params::new(request.params), &ctx);
@@ -121,6 +131,17 @@ impl<F: AreaFilter> Area<F> {
 impl<F: AreaFilter> FilterKernel for Area<F> {
     fn radius(&self, request: &EvalRequest) -> u32 {
         self.radius_of(request).2
+    }
+
+    /// Twice the kernel's [`AreaFilter::extent`] `e`: the kernel reads padded texels within `e` of the output
+    /// texel, and padding gives each the value of the nearest texel of the output texel's class
+    /// (`islands`, `pad`), which is no farther from it than the output texel itself, so within
+    /// `2e`. A kernel that reads beyond the radius it is given (a size over [`MAX_RADIUS`]) reads the padding of
+    /// the tile it runs on, so its result depends on the tiling: [`Reach::Whole`].
+    fn reach(&self, request: &EvalRequest) -> Reach {
+        let (ctx, s, radius) = self.radius_of(request);
+        let extent = self.0.extent(&s, &ctx);
+        if extent > radius { Reach::Whole } else { Reach::radius(extent.saturating_mul(2)) }
     }
 
     fn apply(&self, request: &EvalRequest, input: &FilterInput, out: &mut [[f32; 4]]) -> Result<(), String> {

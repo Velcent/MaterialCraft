@@ -8,7 +8,7 @@
 //!   edge (default), 2 outside; `curve` (−1..1, 0 flat) thins (negative) or fills (positive) the band's profile;
 //!   `blur` (sigma in UV units) softens it.
 
-use super::gauss::{blur, reach};
+use super::gauss::{blur, extent, reach};
 use super::kernel::{AreaFilter, Ctx};
 use super::plane::Plane;
 use crate::ops::distance_field;
@@ -42,6 +42,15 @@ fn round_profile(t: f32, round: bool) -> f32 {
     if round { (1.0 - (1.0 - t) * (1.0 - t)).max(0.0).sqrt() } else { t }
 }
 
+/// How far (texels) a texel's grey value reads when it stays the same for every edge distance of `saturation`
+/// texels or more, blurred by `sigma`. The distances are chamfer path lengths ([`distance_field`]: a fixed
+/// sweep pattern, each step at least one texel), so a texel `k` steps away (Chebyshev) only enters a distance
+/// of `k` or more: one at `ceil(saturation)` or farther can't change a value below the saturation.
+fn edge_extent(saturation: f32, sigma: f32) -> u32 {
+    let s = if saturation.is_finite() { saturation.max(0.0).ceil().min(u32::MAX as f32) as u32 } else { u32::MAX };
+    s.saturating_add(extent(sigma))
+}
+
 /// Grey values with the input's coverage, blurred by `sigma` texels.
 fn finish(input: &Plane, grey: Vec<f32>, sigma: f32) -> Vec<[f32; 4]> {
     let px = input.with_px(grey.iter().zip(&input.px).map(|(g, v)| [*g, *g, *g, v[3]]).collect());
@@ -70,6 +79,11 @@ impl AreaFilter for Bevel {
 
     fn radius(&self, s: &BevelSettings, _: &Ctx) -> u32 {
         s.distance.abs().ceil() as u32 + reach(s.sigma) + 2
+    }
+
+    /// The ramp is flat once the edge is `max(|distance|, 1) + 0.5` texels away (see [`Self::run`]).
+    fn extent(&self, s: &BevelSettings, _: &Ctx) -> u32 {
+        edge_extent(s.distance.abs().max(1.0) + 0.5, s.sigma)
     }
 
     fn run(&self, s: &BevelSettings, _: &Ctx, input: &Plane) -> Vec<[f32; 4]> {
@@ -113,6 +127,11 @@ impl AreaFilter for MaskOutline {
 
     fn radius(&self, s: &OutlineSettings, _: &Ctx) -> u32 {
         s.from.abs().max(s.to.abs()).ceil() as u32 + reach(s.sigma) + 2
+    }
+
+    /// The band is empty once the edge is one texel beyond its far side: `max(to, −from) + 1` texels.
+    fn extent(&self, s: &OutlineSettings, _: &Ctx) -> u32 {
+        edge_extent(s.to.max(-s.from) + 1.0, s.sigma)
     }
 
     fn run(&self, s: &OutlineSettings, _: &Ctx, input: &Plane) -> Vec<[f32; 4]> {

@@ -5,6 +5,7 @@
 //! Values are in the channel's working space (linear light for sRGB channels, see
 //! [`crate::paint::working_space`]), straight RGBA with alpha = coverage. For a mask the grey value is red.
 
+use super::reach::Reach;
 use crate::mesh::SurfaceMap;
 use crate::paint::channel::Channel;
 use crate::paint::image::Rect;
@@ -65,6 +66,14 @@ pub trait GeneratorSource: Send + Sync {
     fn sample_points(&self, _params: &[(String, String)], _taps: &[Tap], _out: &mut [[f32; 4]]) -> Result<(), String> {
         Err("this generator does not evaluate at points".into())
     }
+
+    /// How far around a texel the generator reads the layer stack through [`EvalRequest::stack`] (the heights of
+    /// [`StackContext`]); `None` if it never does. Baked maps, the surface map and the parameters don't count:
+    /// they are not the stack. The default is the safe answer for a generator that doesn't say:
+    /// it may read the stack anywhere.
+    fn stack_reach(&self, _request: &EvalRequest) -> Option<Reach> {
+        Some(Reach::Whole)
+    }
 }
 
 /// The input of a filter: what is below the filter in its stack, over `rect` (the output rectangle grown by
@@ -81,6 +90,14 @@ pub trait FilterKernel: Send + Sync {
     /// gives the parameters and the texture set (its resolution: kernels sized in UV units need it).
     fn radius(&self, _request: &EvalRequest) -> u32 {
         0
+    }
+
+    /// Which texels of its input (what is below it in its stack) one output texel depends on, at most: texels
+    /// beyond it never change that output, however the compositor cuts the texture into rectangles. The default
+    /// takes [`Self::radius`] at its word, which holds for a kernel whose output texel reads only its input
+    /// within the radius; kernels that read more (padding, tiling effects) override it.
+    fn reach(&self, request: &EvalRequest) -> Reach {
+        Reach::radius(self.radius(request))
     }
 
     /// Writes `request.rect.area()` pixels, row by row. An error leaves the effect out.

@@ -4,7 +4,7 @@
 //! - Sharpen: unsharp masking, value + (value − blurred) × `amount` (default 1), the blur of `radius` (sigma in
 //!   UV units, default 1/2048, at least half a texel).
 
-use super::gauss::{blur, reach};
+use super::gauss::{blur, extent, reach};
 use super::kernel::{AreaFilter, Ctx};
 use super::plane::Plane;
 use crate::paint::effect::Params;
@@ -21,6 +21,10 @@ impl AreaFilter for Blur {
 
     fn radius(&self, sigma: &f32, _: &Ctx) -> u32 {
         reach(*sigma)
+    }
+
+    fn extent(&self, sigma: &f32, _: &Ctx) -> u32 {
+        extent(*sigma)
     }
 
     fn run(&self, sigma: &f32, _: &Ctx, input: &Plane) -> Vec<[f32; 4]> {
@@ -45,6 +49,11 @@ impl AreaFilter for Sharpen {
 
     fn radius(&self, s: &SharpenSettings, _: &Ctx) -> u32 {
         reach(s.sigma)
+    }
+
+    /// The blur's; the unsharp step is per texel.
+    fn extent(&self, s: &SharpenSettings, _: &Ctx) -> u32 {
+        extent(s.sigma)
     }
 
     fn run(&self, s: &SharpenSettings, ctx: &Ctx, input: &Plane) -> Vec<[f32; 4]> {

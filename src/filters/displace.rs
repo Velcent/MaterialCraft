@@ -62,6 +62,12 @@ impl AreaFilter for Warp {
         ctx.texels(s.intensity).ceil() as u32 + 2
     }
 
+    /// The displacement is at most `intensity` per axis (the noise lies in 0..1), the bilinear read takes the
+    /// texel beyond, and one more covers rounding: the radius.
+    fn extent(&self, s: &WarpSettings, ctx: &Ctx) -> u32 {
+        self.radius(s, ctx)
+    }
+
     fn run(&self, s: &WarpSettings, ctx: &Ctx, input: &Plane) -> Vec<[f32; 4]> {
         let (w, h) = (ctx.size.0 as f32, ctx.size.1 as f32);
         let margin = self.radius(s, ctx) as usize;
@@ -100,6 +106,12 @@ impl AreaFilter for SlopeBlur {
 
     fn radius(&self, s: &SlopeSettings, ctx: &Ctx) -> u32 {
         ctx.texels(s.intensity).ceil() as u32 + 2
+    }
+
+    /// The path is `intensity` long along a unit direction, the bilinear read takes the texel beyond, and one
+    /// more covers rounding: the radius.
+    fn extent(&self, s: &SlopeSettings, ctx: &Ctx) -> u32 {
+        self.radius(s, ctx)
     }
 
     fn run(&self, s: &SlopeSettings, ctx: &Ctx, input: &Plane) -> Vec<[f32; 4]> {

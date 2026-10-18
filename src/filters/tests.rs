@@ -7,7 +7,7 @@ use crate::paint::effect::{EvalRequest, EvalTarget, FilterInput};
 use crate::paint::image::Rect;
 use crate::paint::{Channel, TextureSet};
 
-const N: u32 = 64;
+pub(super) const N: u32 = 64;
 
 /// A quad of the mesh at `x` (object units) with UVs `u0..u1` across, 0..1 down.
 fn quad(name: &str, x: f32, u0: f32, u1: f32) -> MeshPart {
@@ -24,12 +24,12 @@ fn quad(name: &str, x: f32, u0: f32, u1: f32) -> MeshPart {
 }
 
 /// Two islands far apart on the mesh whose UVs touch along u = 0.5.
-fn touching() -> SurfaceMap {
+pub(super) fn touching() -> SurfaceMap {
     let mesh = Mesh { materials: vec!["m".into()], parts: vec![quad("a", 0.0, 0.0, 0.5), quad("b", 5.0, 0.5, 1.0)] };
     SurfaceMap::build(&mesh, SurfaceKey::square(&mesh, 0, N)).unwrap()
 }
 
-fn params(v: &[(&str, &str)]) -> Vec<(String, String)> {
+pub(super) fn params(v: &[(&str, &str)]) -> Vec<(String, String)> {
     v.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
 }
 
@@ -39,7 +39,7 @@ fn halves() -> Vec<[f32; 4]> {
 }
 
 /// Runs filter `id` over `rect` of an N x N set, reading `pixels` (the whole texture).
-fn apply(id: &str, p: &[(String, String)], target: EvalTarget, surface: Option<&SurfaceMap>, pixels: &[[f32; 4]], rect: Rect) -> Vec<[f32; 4]> {
+pub(super) fn apply(id: &str, p: &[(String, String)], target: EvalTarget, surface: Option<&SurfaceMap>, pixels: &[[f32; 4]], rect: Rect) -> Vec<[f32; 4]> {
     let set = TextureSet::new("s", "S", (N, N)).with_channel(Channel::Roughness);
     let kernel = filter(id).unwrap();
     let request = EvalRequest { set: &set, target, rect, params: p, stack: None, surface, frame: None };

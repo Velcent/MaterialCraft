@@ -12,7 +12,7 @@ use super::texel::copy;
 use super::tone::{brightness_contrast, invert_if, scan, unit};
 use crate::mesh::{SurfaceMap, TexelKind};
 use crate::ops::distance_field;
-use crate::paint::effect::{EvalRequest, GeneratorSource};
+use crate::paint::effect::{EvalRequest, GeneratorSource, Reach};
 use crate::paint::{BakedKind, TextureSet};
 
 /// `distance` 1 = a quarter of the texture width.
@@ -21,6 +21,11 @@ const UNIT: f32 = 0.25;
 pub struct UvBorder;
 
 impl GeneratorSource for UvBorder {
+    /// Reads baked maps, the surface map and its parameters, never the layer stack.
+    fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
+        None
+    }
+
     fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
         let (w, h) = (request.set.resolution.0 as usize, request.set.resolution.1 as usize);
         let mut key = cache::field_key(cache::fingerprint(request.set), "uv_border_distance", request.params);

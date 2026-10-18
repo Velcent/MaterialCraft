@@ -9,6 +9,19 @@ pub fn reach(sigma: f32) -> u32 {
     if sigma.is_finite() && sigma > 0.0 { (sigma * 3.0).ceil().min(super::kernel::MAX_RADIUS as f32) as u32 + 1 } else { 0 }
 }
 
+/// How far (texels) [`blur`] actually reads for one output texel: the exact kernel's half width, or the three
+/// box passes' radii added up. Never more than [`reach`] below [`super::kernel::MAX_RADIUS`]; above it (sigmas
+/// over about 170 texels) the box passes read further than [`reach`] promises.
+pub fn extent(sigma: f32) -> u32 {
+    if !(sigma.is_finite() && sigma > 0.05) {
+        0
+    } else if sigma < 3.0 {
+        (kernel(sigma).len() / 2) as u32
+    } else {
+        box_radii(sigma).iter().sum::<usize>().min(u32::MAX as usize) as u32
+    }
+}
+
 /// The plane blurred with a gaussian of `sigma` texels. Colour is weighted by coverage (alpha), so texels
 /// without coverage add nothing to their neighbours' colour.
 pub fn blur(p: &Plane, sigma: f32) -> Vec<[f32; 4]> {

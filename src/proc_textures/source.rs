@@ -8,7 +8,7 @@
 //! [`GeneratorSource::sample_points`] evaluates the texture at the taps the compositor projected.
 
 use super::{placement, texture};
-use crate::paint::effect::{EvalRequest, GeneratorSource};
+use crate::paint::effect::{EvalRequest, GeneratorSource, Reach};
 use crate::projection::{Projection, Projector, SurfacePoint, Tap, Taps};
 
 /// The texture registered under `id`.
@@ -29,6 +29,11 @@ impl TextureSource {
 }
 
 impl GeneratorSource for TextureSource {
+    /// Reads baked maps, the surface map and its parameters, never the layer stack.
+    fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
+        None
+    }
+
     fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
         let r = request.rect;
         if r.area() != out.len() {

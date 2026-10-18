@@ -11,11 +11,16 @@
 use super::params::Params;
 use super::tone::invert_if;
 use crate::ops::height_blend_factor;
-use crate::paint::effect::{EvalRequest, GeneratorSource};
+use crate::paint::effect::{EvalRequest, GeneratorSource, Reach};
 
 pub struct HeightCombination;
 
 impl GeneratorSource for HeightCombination {
+    /// The layer's own height and the height below it, at the texel itself.
+    fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
+        Some(Reach::Texel)
+    }
+
     fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
         let stack = request.stack.ok_or("a height combination needs the layer stack")?;
         let p = Params::new(request.params);

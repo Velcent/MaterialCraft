@@ -5,7 +5,7 @@
 use super::cache::{self, Field};
 use super::maps::SetMaps;
 use super::params::Params;
-use crate::paint::effect::{EvalRequest, GeneratorSource};
+use crate::paint::effect::{EvalRequest, GeneratorSource, Reach};
 
 /// One texel of the set: its index and its UV centre.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -40,6 +40,11 @@ pub struct Cached<R: Recipe> {
 }
 
 impl<R: Recipe> GeneratorSource for Cached<R> {
+    /// Reads baked maps, the surface map and its parameters, never the layer stack.
+    fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
+        None
+    }
+
     fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
         let (w, h) = (request.set.resolution.0 as usize, request.set.resolution.1 as usize);
         let set_key = cache::fingerprint(request.set);

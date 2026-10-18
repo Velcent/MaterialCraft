@@ -29,6 +29,8 @@ pub mod plane;
 mod shape;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_reach;
 mod tonal;
 
 use crate::paint::effect::{EffectRegistry, FilterKernel};

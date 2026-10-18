@@ -16,11 +16,13 @@
 pub mod kinds;
 pub mod native;
 pub mod params;
+pub mod reach;
 pub mod registry;
 
 pub use kinds::{Anchor, ColorSelection, Levels, Pick, PickMode, PolygonFill, Procedural, Reference, Selection, UnknownEffect};
 pub use native::PickLookup;
 pub use params::Params;
+pub use reach::{AnchorRead, EffectReach, Reach};
 pub use registry::{EffectRegistry, EvalRequest, EvalTarget, FilterInput, FilterKernel, GeneratorSource, StackContext};
 
 use super::blend::BlendMode;
