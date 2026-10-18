@@ -342,7 +342,7 @@ fn two_unknown_masks_are_solved_together_across_channels() {
     // the masks barely move the linear values)
     assert_eq!((m.stats.island, m.stats.clean), (16, 16));
     assert!(m.stats.solved >= 12, "{:?} {:?}", m.stats, m.notes);
-    assert_eq!(m.stats.composites, 9 + 2);
+    assert_eq!(m.stats.composites, 25 + 2);
     for i in (0..16).filter(|i| m.mask[*i]) {
         assert!(
             (m.theirs.px[i][0] - truth(i).0).abs() < 2e-3,

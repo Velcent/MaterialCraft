@@ -1,11 +1,11 @@
 //! [`JointCensus`]: how many candidate masks the joint read-back can measure, per effect id (`mcsub isolate
-//! --joint`), with one line per candidate; with `measure` the feasible ones are composited (Painter's side
-//! only) and their solved texels counted.
+//! --joint`), with one line per candidate; with `measure` the feasible ones are composited and their solved
+//! texels counted, with the MAE of our replacement on them where we have one.
 
 use super::census::MIN_SOLVED;
 use super::joint_cases::{JointOptions, joint_cases, joint_project_plans};
 use super::joint_plan::{JointPlan, JointStatus};
-use super::measure::TexelStats;
+use super::measure::{Measurement, TexelStats};
 use super::slots::Family;
 use crate::tools::parallel::CorpusPool;
 use std::collections::BTreeMap;
@@ -31,7 +31,7 @@ pub struct JointCensus {
     pub failures: Vec<(String, String)>,
 }
 
-pub const JOINT_CASE_HEADER: &str = "project\tset\tfamily\tid\tlayer\tchannels\tstatus\tunknowns\tother-states\tsingle-measurable\tisland\tclean\tsolved\toutside\tfolded\tcomposites";
+pub const JOINT_CASE_HEADER: &str = "project\tset\tfamily\tid\tlayer\tchannels\tstatus\tunknowns\tother-states\tsingle-measurable\tisland\tclean\tsolved\toutside\tfolded\tcomposites\tmae-ours";
 
 impl JointCensus {
     fn add(&mut self, plan: &JointPlan, stats: Option<&TexelStats>) {
@@ -97,31 +97,42 @@ fn project(path: &Path, measure: bool, options: &JointOptions) -> Result<JointCe
     let name = path
         .file_name()
         .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
-    let mut measured: Vec<(String, JointPlan, TexelStats)> = Vec::new();
+    let mut measured: Vec<(String, JointPlan, TexelStats, Option<f32>)> = Vec::new();
     if measure {
-        let options = JointOptions {
-            with_ours: false,
-            ..options.clone()
-        };
-        joint_cases(path, &|_| true, &options, &mut |case| {
-            measured.push((case.set, case.plan, case.measurement.stats));
+        joint_cases(path, &|_| true, options, &mut |case| {
+            let mae = mae_ours(&case.measurement);
+            measured.push((case.set, case.plan, case.measurement.stats, mae));
         })?;
     }
     let mut out = JointCensus::default();
     for set in joint_project_plans(path)? {
         for plan in &set.plans {
-            let stats = measured
+            let found = measured
                 .iter()
-                .find(|(s, p, _)| *s == set.set && p.candidate == plan.candidate)
-                .map(|(_, _, st)| *st);
+                .find(|(s, p, _, _)| *s == set.set && p.candidate == plan.candidate);
+            let stats = found.map(|(_, _, st, _)| *st);
             out.add(plan, stats.as_ref());
-            out.cases.push(case_line(&name, &set.set, plan, stats.as_ref()));
+            let mae = found.and_then(|(_, _, _, m)| *m);
+            out.cases.push(case_line(&name, &set.set, plan, stats.as_ref(), mae));
         }
     }
     Ok(out)
 }
 
-fn case_line(project: &str, set: &str, plan: &JointPlan, stats: Option<&TexelStats>) -> String {
+/// Mean difference of Painter's and our read-back on the compared texels, in 8-bit steps.
+fn mae_ours(m: &Measurement) -> Option<f32> {
+    let ours = m.ours.as_ref()?;
+    let (mut sum, mut n) = (0.0f64, 0usize);
+    for ((t, o), keep) in m.theirs.px.iter().zip(&ours.px).zip(&m.mask) {
+        if *keep {
+            sum += f64::from((t[0] - o[0]).abs());
+            n += 1;
+        }
+    }
+    (n > 0).then(|| (sum / n as f64 * 255.0) as f32)
+}
+
+fn case_line(project: &str, set: &str, plan: &JointPlan, stats: Option<&TexelStats>, mae: Option<f32>) -> String {
     let c = &plan.candidate;
     let channels: Vec<String> = plan.channels.iter().map(|c| c.id()).collect();
     let numbers = stats.map_or_else(
@@ -134,7 +145,7 @@ fn case_line(project: &str, set: &str, plan: &JointPlan, stats: Option<&TexelSta
         },
     );
     format!(
-        "{project}\t{set}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{numbers}",
+        "{project}\t{set}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{numbers}\t{}",
         c.family.id(),
         c.id(),
         c.path,
@@ -143,6 +154,7 @@ fn case_line(project: &str, set: &str, plan: &JointPlan, stats: Option<&TexelSta
         plan.unknowns(),
         plan.states(),
         plan.single_measurable,
+        mae.map_or_else(String::new, |m| format!("{m:.2}")),
     )
 }
 

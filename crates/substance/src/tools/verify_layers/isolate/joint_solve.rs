@@ -3,11 +3,13 @@
 //! components that respond differently, all k are determined where the one-unknown read-back
 //! ([`super::inverse`]) has to give up.
 //!
-//! The unknowns `x ∈ [0, 1]^k` are probed on the grid {0, ½, 1}^k; per texel and component the response is the
+//! The unknowns `x ∈ [0, 1]^k` are probed on a regular grid ([`nodes_per_axis`]: {0, ¼, ½, ¾, 1} per unknown
+//! for up to two unknowns, as the one-unknown read-back does, {0, ½, 1} beyond); per texel and component the
+//! response is the
 //! tensor-product piecewise-linear interpolation of those composites (exact for normal, multiply, add …
 //! blending, which are multilinear in the masks; [`super::joint_measure`] decodes sRGB channels to the linear
 //! values they are blended in, so all units here are those values). Two more composites on the diagonal
-//! (¼ and ¾) check the model per texel. A texel is solvable when, from the probes alone (never from Painter's
+//! (⅜ and ⅝, inside cells) check the model per texel. A texel is solvable when, from the probes alone (never from Painter's
 //! value):
 //!
 //! - the model reproduces both check composites within [`JointSettings::model_tolerance`];
@@ -22,14 +24,35 @@
 
 use super::inverse::STEP;
 
-/// The probe values per unknown.
-pub const NODES: [f32; 3] = [0.0, 0.5, 1.0];
 /// The check points on the diagonal.
-pub const CHECKS: [f32; 2] = [0.25, 0.75];
-/// At most this many unknowns (3^k composites per channel).
+pub const CHECKS: [f32; 2] = [0.375, 0.625];
+/// At most this many unknowns (3^4 composites).
 pub const MAX_UNKNOWNS: usize = 4;
 /// Segments along a grid line whose dot product is more negative than this (squared units) fold back.
 const FOLD_TOLERANCE: f32 = 1e-4;
+
+/// Probe values per unknown: 5 for up to two unknowns (curved responses such as a levels gamma after the mask
+/// are followed closely), 3 beyond (3^k composites).
+pub fn nodes_per_axis(k: usize) -> usize {
+    if k <= 2 { 5 } else { 3 }
+}
+
+/// The value of node `d` of `n` on one axis.
+fn node_value(d: usize, n: usize) -> f32 {
+    d as f32 / (n - 1).max(1) as f32
+}
+
+/// The values of grid node `index` (mixed radix `n`, unknown 0 the fastest).
+fn node_point(index: usize, k: usize, n: usize) -> Vec<f32> {
+    let mut rest = index;
+    (0..k)
+        .map(|_| {
+            let d = rest % n;
+            rest /= n;
+            node_value(d, n)
+        })
+        .collect()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct JointSettings {
@@ -86,9 +109,11 @@ impl JointSolution {
 #[derive(Debug, Clone)]
 pub struct JointResponse {
     k: usize,
+    /// Nodes per axis.
+    n: usize,
     components: usize,
     texels: usize,
-    /// `nodes[n][texel * components + j]`, `n` in mixed radix 3 (unknown 0 the fastest).
+    /// `nodes[i][texel * components + j]`, `i` in mixed radix `n` (unknown 0 the fastest).
     nodes: Vec<Vec<f32>>,
     checks: Vec<Vec<f32>>,
 }
@@ -97,11 +122,13 @@ impl JointResponse {
     /// An empty response for `k` unknowns, `components` observed values per texel, `texels` texels.
     pub fn new(k: usize, components: usize, texels: usize) -> JointResponse {
         let k = k.clamp(1, MAX_UNKNOWNS);
+        let n = nodes_per_axis(k);
         JointResponse {
             k,
+            n,
             components,
             texels,
-            nodes: vec![Vec::new(); 3usize.pow(k as u32)],
+            nodes: vec![Vec::new(); n.pow(k as u32)],
             checks: vec![Vec::new(); CHECKS.len()],
         }
     }
@@ -112,23 +139,12 @@ impl JointResponse {
 
     /// The grid nodes as values of the unknowns, in node order.
     pub fn node_points(&self) -> Vec<Vec<f32>> {
-        (0..self.nodes.len()).map(|n| self.point(n)).collect()
+        (0..self.nodes.len()).map(|i| node_point(i, self.k, self.n)).collect()
     }
 
     /// The check points.
     pub fn check_points(&self) -> Vec<Vec<f32>> {
         CHECKS.iter().map(|c| vec![*c; self.k]).collect()
-    }
-
-    fn point(&self, n: usize) -> Vec<f32> {
-        let mut rest = n;
-        (0..self.k)
-            .map(|_| {
-                let d = rest % 3;
-                rest /= 3;
-                NODES[d]
-            })
-            .collect()
     }
 
     /// Sets the composite of node `n` (`texels * components` values).
@@ -159,7 +175,7 @@ impl JointResponse {
         if !self.complete() || observed.len() != self.texels * self.components {
             return out;
         }
-        let mut texel = TexelModel::new(self.k, self.components);
+        let mut texel = TexelModel::new(self.k, self.n, self.components);
         for i in 0..self.texels {
             texel.load(self, i);
             let state = texel.state(self, i, settings);
@@ -183,17 +199,20 @@ impl JointResponse {
 /// One texel's grid values, reused across texels.
 struct TexelModel {
     k: usize,
+    /// Nodes per axis.
+    n: usize,
     m: usize,
     /// `values[n * m + j]`.
     values: Vec<f32>,
 }
 
 impl TexelModel {
-    fn new(k: usize, m: usize) -> TexelModel {
+    fn new(k: usize, n: usize, m: usize) -> TexelModel {
         TexelModel {
             k,
+            n,
             m,
-            values: vec![0.0; 3usize.pow(k as u32) * m],
+            values: vec![0.0; n.pow(k as u32) * m],
         }
     }
 
@@ -203,12 +222,14 @@ impl TexelModel {
         }
     }
 
-    /// The cell of `x` per axis (0 or 1) and the local coordinate in it.
+    /// The cell of `x` per axis (0 .. n − 2) and the local coordinate in it.
     fn cell(&self, x: &[f32]) -> (Vec<usize>, Vec<f32>) {
+        let cells = (self.n - 1).max(1);
         x.iter()
             .map(|v| {
-                let v = v.clamp(0.0, 1.0);
-                if v < 0.5 { (0, v * 2.0) } else { (1, v * 2.0 - 1.0) }
+                let at = v.clamp(0.0, 1.0) * cells as f32;
+                let c = (at.floor() as usize).min(cells - 1);
+                (c, at - c as f32)
             })
             .unzip()
     }
@@ -216,6 +237,7 @@ impl TexelModel {
     /// The model and its Jacobian (`jac[a * m + j]`) at `x`.
     fn eval(&self, x: &[f32], f: &mut [f32], jac: &mut [f32]) {
         let (cell, t) = self.cell(x);
+        let scale = (self.n - 1).max(1) as f32;
         f.iter_mut().for_each(|v| *v = 0.0);
         jac.iter_mut().for_each(|v| *v = 0.0);
         for corner in 0..(1usize << self.k) {
@@ -226,9 +248,9 @@ impl TexelModel {
             for a in 0..self.k {
                 let bit = (corner >> a) & 1;
                 node += (cell[a] + bit) * stride;
-                stride *= 3;
+                stride *= self.n;
                 let w = if bit == 1 { t[a] } else { 1.0 - t[a] };
-                let dw = if bit == 1 { 2.0 } else { -2.0 };
+                let dw = if bit == 1 { scale } else { -scale };
                 weight *= w;
                 for (b, p) in partial.iter_mut().enumerate() {
                     *p *= if a == b { dw } else { w };
@@ -258,16 +280,21 @@ impl TexelModel {
                 return JointState::Model;
             }
         }
-        // along every grid line of every unknown the two segments must not point against each other
-        let nodes = 3usize.pow(self.k as u32);
+        // along every grid line of every unknown no two segments may point against each other
+        let nodes = self.n.pow(self.k as u32);
+        let v = |node: usize| &self.values[node * self.m..(node + 1) * self.m];
         for a in 0..self.k {
-            let stride = 3usize.pow(a as u32);
-            for n in (0..nodes).filter(|n| (n / stride).is_multiple_of(3)) {
-                let v = |node: usize| &self.values[node * self.m..(node + 1) * self.m];
-                let (p0, p1, p2) = (v(n), v(n + stride), v(n + 2 * stride));
-                let dot: f32 = (0..self.m).map(|j| (p1[j] - p0[j]) * (p2[j] - p1[j])).sum();
-                if dot < -FOLD_TOLERANCE {
-                    return JointState::Folded;
+            let stride = self.n.pow(a as u32);
+            for start in (0..nodes).filter(|i| (i / stride).is_multiple_of(self.n)) {
+                for d in 0..self.n - 1 {
+                    let (p0, p1) = (v(start + d * stride), v(start + (d + 1) * stride));
+                    for e in d + 1..self.n - 1 {
+                        let (q0, q1) = (v(start + e * stride), v(start + (e + 1) * stride));
+                        let dot: f32 = (0..self.m).map(|j| (p1[j] - p0[j]) * (q1[j] - q0[j])).sum();
+                        if dot < -FOLD_TOLERANCE {
+                            return JointState::Folded;
+                        }
+                    }
                 }
             }
         }
@@ -284,19 +311,10 @@ impl TexelModel {
 
     /// Damped Gauss–Newton from the best grid node; the solution and its residual (RMS).
     fn solve(&self, y: &[f32]) -> (Vec<f32>, f32) {
-        let nodes = 3usize.pow(self.k as u32);
+        let nodes = self.n.pow(self.k as u32);
         let sq = |n: usize| -> f32 { (0..self.m).map(|j| (self.values[n * self.m + j] - y[j]).powi(2)).sum() };
         let best = (0..nodes).min_by(|a, b| sq(*a).total_cmp(&sq(*b))).unwrap_or(0);
-        let mut x: Vec<f32> = {
-            let mut rest = best;
-            (0..self.k)
-                .map(|_| {
-                    let d = rest % 3;
-                    rest /= 3;
-                    NODES[d]
-                })
-                .collect()
-        };
+        let mut x = node_point(best, self.k, self.n);
         let mut f = vec![0.0; self.m];
         let mut jac = vec![0.0; self.k * self.m];
         let cost = |f: &[f32]| -> f32 { f.iter().zip(y).map(|(a, b)| (a - b).powi(2)).sum() };
