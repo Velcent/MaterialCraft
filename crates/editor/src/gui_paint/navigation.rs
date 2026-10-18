@@ -1,42 +1,44 @@
-//! Camera and light moves of the Paint viewport, as plain functions on the view (ADR 0008
-//! mc2-vq12: orbit, orbit snapping to axis views, pan, zoom, turning the light). Which gesture
+//! Camera and light moves of the Paint viewport (ADR 0008 mc2-vq12: orbit, orbit snapping to axis views, pan,
+//! zoom, turning the light): pointer deltas turned into moves of the orbit controller ([`Orbit`]). Which gesture
 //! triggers which move comes from the shortcut table.
 
+use materialcraft::camera::Orbit;
 use materialcraft::render3d::View;
-use std::f32::consts::FRAC_PI_4;
 
-/// Pitch limit, as before (just short of straight down or up).
-const PITCH: f32 = 1.4;
+/// Radians per point of pointer movement.
 const TURN: f32 = 0.01;
 
+/// Applies `f` to the view's orbit pose.
+fn with_orbit(v: &mut View, f: impl FnOnce(&mut Orbit)) {
+    let mut o = v.orbit();
+    f(&mut o);
+    v.set_orbit(&o);
+}
+
 pub fn orbit(v: &mut View, dx: f32, dy: f32) {
-    v.yaw -= dx * TURN;
-    v.pitch = (v.pitch + dy * TURN).clamp(-PITCH, PITCH);
+    with_orbit(v, |o| o.rotate(-dx * TURN, dy * TURN));
 }
 
 /// Orbits from the unsnapped angles in `raw` (kept for the whole drag) and shows the nearest
 /// axis view: yaw in 90° steps, pitch in 45° steps (within the pitch limit).
 pub fn orbit_snapped(v: &mut View, raw: &mut (f32, f32), dx: f32, dy: f32) {
-    raw.0 -= dx * TURN;
-    raw.1 = (raw.1 + dy * TURN).clamp(-PITCH, PITCH);
-    v.yaw = (raw.0 / (2.0 * FRAC_PI_4)).round() * 2.0 * FRAC_PI_4;
-    v.pitch = ((raw.1 / FRAC_PI_4).round() * FRAC_PI_4).clamp(-PITCH, PITCH);
+    with_orbit(v, |o| o.rotate_snapped(raw, -dx * TURN, dy * TURN));
 }
 
+/// Pans by a pointer delta; the speed follows the distance, so the model keeps up with the pointer.
 pub fn pan(v: &mut View, dx: f32, dy: f32) {
     let k = 0.004 * v.dist / 3.4;
-    v.pan_x = (v.pan_x - dx * k).clamp(-3.0, 3.0);
-    v.pan_y = (v.pan_y + dy * k).clamp(-3.0, 3.0);
+    with_orbit(v, |o| o.pan_by(-dx * k, dy * k));
 }
 
 /// Zooms by a drag (down = closer) or by wheel points (`amount` positive = closer).
 pub fn zoom(v: &mut View, amount: f32) {
-    v.dist = (v.dist * (1.0 - amount * 0.001)).clamp(1.6, 9.0);
+    with_orbit(v, |o| o.zoom(1.0 - amount * 0.001));
 }
 
 pub fn light(v: &mut View, dx: f32, dy: f32) {
     v.light_yaw -= dx * TURN;
-    v.light_pitch = (v.light_pitch + dy * TURN).clamp(-PITCH, PITCH);
+    v.light_pitch = (v.light_pitch + dy * TURN).clamp(-Orbit::PITCH_LIMIT, Orbit::PITCH_LIMIT);
 }
 
 #[cfg(test)]
@@ -59,10 +61,10 @@ mod tests {
     fn moves_stay_in_their_limits() {
         let mut v = View::default();
         orbit(&mut v, 0.0, 1e6);
-        assert_eq!(v.pitch, PITCH);
+        assert_eq!(v.pitch, Orbit::PITCH_LIMIT);
         zoom(&mut v, 1e6);
-        assert_eq!(v.dist, 1.6);
+        assert_eq!(v.dist, Orbit::DISTANCE.0);
         pan(&mut v, 1e6, 0.0);
-        assert_eq!(v.pan_x, -3.0);
+        assert_eq!(v.pan_x, -Orbit::PAN_LIMIT);
     }
 }
