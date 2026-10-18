@@ -33,6 +33,15 @@ uniform float uMipBias;
 uniform sampler2D uSceneDepth;
 uniform vec2 uDepthOrigin;
 uniform vec4 uDepthLin; // projection elements 10, 11, 14, 15
+// declared parameters (pbr.json); their defaults reproduce the program as it was before shader files
+uniform vec3 uBaseTint;
+uniform float uSpecularLevel; // dielectric F0 = 0.08 * level (0.5: 4 %)
+uniform float uAoStrength;
+uniform float uEmissiveIntensity;
+uniform int uSss;
+uniform vec3 uSssColor;
+uniform float uSssRadius;
+uniform float uSssTranslucency;
 out vec4 oColor;
 
 const float PI = 3.14159265;
@@ -87,6 +96,18 @@ vec3 srgbEncode(vec3 c) {
 float viewDepth(float d) {
     float ndc = 2.0 * d - 1.0;
     return -(ndc * uDepthLin.w - uDepthLin.z) / (uDepthLin.x - ndc * uDepthLin.y);
+}
+
+// Subsurface scattering, approximated: light wraps past the terminator by the scatter radius (tinted by the
+// scatter colour, as light that travelled under the surface), and some passes through thin parts towards the viewer
+// when the light is behind the surface. Diffuse light only, added to the lit diffuse term.
+vec3 subsurface(vec3 diffuseColor, vec3 n, vec3 V) {
+    float w = uSssRadius;
+    float ndl = dot(n, uL);
+    float wrapped = max((ndl + w) / (1.0 + w), 0.0);
+    vec3 scatter = uSssColor * max(wrapped - max(ndl, 0.0), 0.0);
+    float back = pow(clamp(dot(V, -uL), 0.0, 1.0), 4.0) * uSssTranslucency;
+    return diffuseColor * (scatter + uSssColor * back) / PI;
 }
 
 float hAt(vec2 uv) {
@@ -182,10 +203,11 @@ void main() {
         oColor = vec4(srgbEncode(clamp(shown, 0.0, 1.0)), 1.0);
         return;
     }
+    albedo *= uBaseTint;
     vec3 rma = textureGrad(uRma, uv, gdx, gdy).rgb;
     float rough = clamp(rma.r, 0.04, 1.0);
     float metal = clamp(rma.g, 0.0, 1.0);
-    float ao = mix(1.0, clamp(rma.b, 0.0, 1.0), 0.85) * cav;
+    float ao = mix(1.0, clamp(rma.b, 0.0, 1.0), uAoStrength) * cav;
     vec3 nm = textureGrad(uNormal, uv, gdx, gdy).xyz;
     vec3 tn = vec3((nm.xy * 2.0 - 1.0) * uNormalAmt, max(nm.z * 2.0 - 1.0, 0.05));
     if (uMode == 1 && uHasHeight == 1 && uBump > 0.0) {
@@ -201,7 +223,7 @@ void main() {
     if (back) n = -n;
 
     float ndv = max(dot(n, V), 1e-3);
-    vec3 f0 = mix(vec3(0.04), albedo, metal);
+    vec3 f0 = mix(vec3(0.08 * uSpecularLevel), albedo, metal);
     float a = rough * rough;
     vec3 hv = normalize(uL + V);
     float ndl = max(dot(n, uL), 0.0);
@@ -219,6 +241,7 @@ void main() {
     vec3 f = f0 + (1.0 - f0) * fr;
     vec3 spec = dd * g * f / (4.0 * max(ndl, 1e-3) * ndv) * ndl;
     vec3 diff = albedo * (1.0 - metal) * (1.0 - f) / PI * ndl * uLightI * 1.15;
+    if (uSss == 1) diff += subsurface(albedo * (1.0 - metal), n, V) * uLightI * 1.15;
     float ndl2 = max(dot(n, uFill), 0.0);
     vec3 diffFill = albedo * (1.0 - metal) / PI * ndl2 * uLightI * 0.5;
     vec3 refl = reflect(-V, n);
@@ -229,7 +252,7 @@ void main() {
     float horizon = clamp(1.0 + 1.2 * dot(refl, back ? -N : N), 0.0, 1.0);
     vec3 ambS = envR * envBrdf(f0, rough, ndv) * uAmbient * specOcc * horizon * horizon;
     vec3 col = ((diff + spec * uLightI * 1.2) * sh + diffFill + (ambD * ao + ambS)) * uExposure;
-    if (uHasEmis == 1) col += textureGrad(uEmis, uv, gdx, gdy).rgb;
+    if (uHasEmis == 1) col += textureGrad(uEmis, uv, gdx, gdy).rgb * uEmissiveIntensity;
     // linear radiance: exposure in stops, the tone curve and the display transform follow in the post stage
     oColor = vec4(col, 1.0);
 }

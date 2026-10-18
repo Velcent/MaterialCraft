@@ -42,6 +42,7 @@ pub mod projection;
 pub mod render3d;
 pub mod safeio;
 pub mod scatter;
+pub mod shading;
 pub mod stamp;
 pub mod symmetry;
 pub mod tex;

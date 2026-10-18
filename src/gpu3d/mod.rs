@@ -9,7 +9,12 @@
 //! starts again from the plain frame, so moving costs nothing extra. Unlit shading shows the maps as they are and
 //! skips exposure and the curve. Textures are mip-mapped with anisotropic filtering and an optional sharpening bias.
 //!
+//! The material program comes from a shader file (`crate::shading`): the built-in default, or another file a
+//! part's shader instance names, compiled when first needed (one that fails is drawn with the built-in program).
+//! Each part carries its instance's parameter values and displacement ([`PartShading`]).
+//!
 //! Files: `maps` prepares texture data on the CPU, `textures` / `mesh` hold GL objects, `shaders` the programs,
+//! `shading` the parts' shader files and values,
 //! `camera` the matrices, `shape` the built-in preview shape, `scene` custom multi-part models, `pass` the material draw
 //! calls, `target` the HDR and accumulation framebuffers, `progress` which accumulation sample is next, `display` the
 //! display settings and `renderer` ties them into a frame. This file is the public API shared between the UI and the
@@ -32,6 +37,7 @@ mod progress;
 mod renderer;
 mod scene;
 mod shaders;
+mod shading;
 mod shape;
 mod target;
 mod textures;
@@ -40,6 +46,7 @@ pub use camera::view_camera;
 pub use display::{Antialiasing, Display, MIP_BIAS_STEPS, Shading, ToneCurve};
 pub use maps::{GpuMaps, MapInputs, prepare};
 pub use scene::ScenePart;
+pub use shading::{InstanceDisplacement, PartShading};
 
 use crate::diag::{Area, Sink, SinkExt};
 use crate::render3d::View;
@@ -151,6 +158,12 @@ impl Gpu {
     pub fn set_hidden_parts(&mut self, hidden: Vec<bool>) {
         self.scene.set_hidden(hidden);
     }
+    /// How each part is shaded (`shading[i]` for part `i`, as passed to `set_scene`; parts beyond the list use the
+    /// built-in default shader). Kept when the scene is replaced, so the caller sends it again for a new scene.
+    pub fn set_part_shading(&mut self, shading: Vec<PartShading>) {
+        self.scene.set_shading(shading);
+        self.content += 1;
+    }
     /// Go back to the built-in shape; the parts' GPU objects are freed on the next paint.
     pub fn clear_scene(&mut self) {
         self.scene.clear();
@@ -246,6 +259,9 @@ pub fn paint_with(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow
         restart: want_depth,
     };
     let result = unsafe { r.draw(gl, &frame, &g.scene) };
+    for e in r.take_shader_errors() {
+        sink.warn(Area::Gpu, e);
+    }
     g.refining = r.refining(display);
     if want_shot && result.is_ok() {
         g.shot = Some(read_back(gl, info));

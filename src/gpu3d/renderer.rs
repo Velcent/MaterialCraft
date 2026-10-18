@@ -8,6 +8,7 @@ use super::pass::{Drawable, MaterialPass, Shade, WireDepth};
 use super::progress::{FrameKey, Progress, Step};
 use super::scene::Scene;
 use super::shaders::Program;
+use super::shading::{PartShading, Programs};
 use super::shape::{self, ShapeMesh};
 use super::target::{Accumulation, HdrTarget};
 use super::textures::{MapTextures, Tx, aniso_level, max_aniso};
@@ -39,7 +40,9 @@ pub(super) struct Frame<'a> {
 }
 
 pub(super) struct Renderer {
-    prog: Program,
+    programs: Programs,
+    /// The built-in shape's shading: the built-in shader with its defaults.
+    shape_shading: PartShading,
     bg_prog: Program,
     post_prog: Program,
     accum_prog: Program,
@@ -61,7 +64,7 @@ pub(super) struct Renderer {
 impl Renderer {
     pub unsafe fn new(gl: &glow::Context, maps: &GpuMaps, aniso_req: f32) -> Result<Renderer, String> {
         unsafe {
-            let prog = Program::material(gl)?;
+            let programs = Programs::new(gl)?;
             let bg_prog = Program::background(gl)?;
             let post_prog = Program::post(gl)?;
             let accum_prog = Program::accumulate(gl)?;
@@ -72,7 +75,8 @@ impl Renderer {
             // the framebuffer bound for the paint callback is egui's: match its multisampling
             let samples = gl.get_parameter_i32(glow::SAMPLES).clamp(0, gl.get_parameter_i32(glow::MAX_SAMPLES).max(0));
             Ok(Renderer {
-                prog,
+                programs,
+                shape_shading: PartShading::default(),
                 bg_prog,
                 post_prog,
                 accum_prog,
@@ -112,6 +116,11 @@ impl Renderer {
         unsafe { self.maps.set_aniso(gl, aniso) }
     }
 
+    /// Shader file errors not reported yet.
+    pub fn take_shader_errors(&mut self) -> Vec<String> {
+        self.programs.take_errors()
+    }
+
     /// The resolved HDR target (depth read-backs).
     pub fn target(&self) -> Option<&HdrTarget> {
         self.target.as_ref()
@@ -131,7 +140,9 @@ impl Renderer {
             // egui's scissor box: restored for the passes into its framebuffer
             let mut scissor = [0i32; 4];
             gl.get_parameter_i32_slice(glow::SCISSOR_BOX, &mut scissor);
-            if !scene.is_active() {
+            if scene.is_active() {
+                self.programs.prepare(gl, scene.shader_files());
+            } else {
                 self.shape.update(gl, view)?;
             }
             let items = if scene.is_active() { scene.drawables() } else { self.shape_drawable(view) };
@@ -165,7 +176,7 @@ impl Renderer {
                 && let Some(depth) = self.target.as_ref().and_then(HdrTarget::depth)
             {
                 let shade = Shade { self_shadow: false, unlit: false, mip_bias: 0.0 };
-                let pass = MaterialPass::begin(gl, &self.prog, view, &CamOut::of(&camera), &shade, self.flat_height.id);
+                let pass = MaterialPass::begin(gl, self.programs.builtin(), view, &CamOut::of(&camera), &shade, self.flat_height.id);
                 pass.draw_wire(&items, &WireDepth { texture: depth, origin: [left as f32, bottom as f32] });
             }
             // leave the state the way egui expects it
@@ -186,7 +197,7 @@ impl Renderer {
     fn shape_drawable(&self, view: &View) -> Vec<Drawable<'_>> {
         let cull = crate::render3d::shape_culls(view.shape);
         let vtx_lod = shape::vtx_lod(view, self.maps.height_size().0);
-        self.shape.current().map(|mesh| Drawable { mesh, maps: &self.maps, vtx_lod, cull }).into_iter().collect()
+        self.shape.current().map(|mesh| Drawable { mesh, maps: &self.maps, vtx_lod, cull, shading: &self.shape_shading }).into_iter().collect()
     }
 
     /// (Re)creates the HDR and accumulation targets for a view of `w` × `h` pixels.
@@ -215,8 +226,18 @@ impl Renderer {
             gl.clear_depth_f32(1.0);
             gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
             let shade = Shade { self_shadow, unlit: display.shading == Shading::Unlit, mip_bias: display.mip_bias() };
-            let pass = MaterialPass::begin(gl, &self.prog, view, &CamOut::of(camera), &shade, self.flat_height.id);
-            pass.draw(items);
+            // one pass per program, in the order the parts first use them
+            let mut drawn: Vec<u64> = Vec::new();
+            for d in items {
+                let key = d.shading.shader.program_key;
+                if drawn.contains(&key) {
+                    continue;
+                }
+                drawn.push(key);
+                let prog = self.programs.get(&d.shading.shader);
+                let pass = MaterialPass::begin(gl, prog, view, &CamOut::of(camera), &shade, self.flat_height.id);
+                pass.draw(items.iter().filter(|x| x.shading.shader.program_key == key));
+            }
             gl.disable(glow::DEPTH_TEST);
             target.resolve(gl);
         }
@@ -282,7 +303,7 @@ impl Renderer {
     pub unsafe fn free(mut self, gl: &glow::Context) {
         unsafe {
             self.free_targets(gl);
-            self.prog.free(gl);
+            self.programs.free(gl);
             self.bg_prog.free(gl);
             self.post_prog.free(gl);
             self.accum_prog.free(gl);

@@ -1,0 +1,19 @@
+{
+  "format": "mcshader",
+  "format_version": 1,
+  "id": "materialcraft.pbr",
+  "name": "PBR (metal/roughness)",
+  "revision": 1,
+  "vertex": "pbr.vert",
+  "fragment": "pbr.frag",
+  "params": [
+    { "id": "base_tint", "label": "Base colour tint", "group": "Surface", "uniform": "uBaseTint", "type": "color", "default": [1, 1, 1] },
+    { "id": "specular_level", "label": "Specular level", "group": "Surface", "uniform": "uSpecularLevel", "type": "float", "min": 0, "max": 1, "default": 0.5 },
+    { "id": "ao_strength", "label": "Ambient occlusion", "group": "Surface", "uniform": "uAoStrength", "type": "float", "min": 0, "max": 1, "default": 0.85 },
+    { "id": "emissive_intensity", "label": "Emissive intensity", "group": "Surface", "uniform": "uEmissiveIntensity", "type": "float", "min": 0, "max": 20, "default": 1 },
+    { "id": "sss", "label": "Subsurface scattering", "group": "Subsurface", "uniform": "uSss", "type": "bool", "default": false },
+    { "id": "sss_color", "label": "Scatter colour", "group": "Subsurface", "uniform": "uSssColor", "type": "color", "default": [0.9, 0.3, 0.2] },
+    { "id": "sss_radius", "label": "Scatter radius", "group": "Subsurface", "uniform": "uSssRadius", "type": "float", "min": 0, "max": 1, "default": 0.4 },
+    { "id": "sss_translucency", "label": "Translucency", "group": "Subsurface", "uniform": "uSssTranslucency", "type": "float", "min": 0, "max": 1, "default": 0.3 }
+  ]
+}

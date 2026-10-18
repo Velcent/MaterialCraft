@@ -8,7 +8,7 @@ layout(location = 5) in float aTanW; // bitangent sign: -1 on mirrored uv island
 uniform mat4 uVP;
 uniform sampler2D uHeight;
 uniform float uDisp;
-uniform float uLevel;
+uniform float uDispLevel; // the height that stays on the surface
 uniform float uVtxLod;
 out vec3 vPos;
 out vec3 vN;
@@ -20,7 +20,7 @@ void main() {
     vec3 p = aPos;
     if (uDisp != 0.0) {
         float h = textureLod(uHeight, aUv, uVtxLod).r;
-        p += aNrm * (h - uLevel) * uDisp * aMisc.z;
+        p += aNrm * (h - uDispLevel) * uDisp * aMisc.z;
     }
     vPos = p;
     vN = aNrm;

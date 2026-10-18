@@ -3,6 +3,7 @@
 use super::GpuMaps;
 use super::mesh::{GpuMesh, uv_density};
 use super::pass::Drawable;
+use super::shading::PartShading;
 use super::textures::MapTextures;
 use crate::render3d::Mesh;
 use eframe::egui_glow::glow;
@@ -67,6 +68,9 @@ pub(super) struct Scene {
     parts: Vec<GpuPart>,
     /// Parts not drawn, by index (a geometry mask being edited hides what it excludes). Kept across uploads.
     hidden: Vec<bool>,
+    /// Each part's shading by index; parts beyond the list use the built-in default. Kept across uploads.
+    shading: Vec<PartShading>,
+    default_shading: PartShading,
 }
 
 impl Scene {
@@ -88,6 +92,23 @@ impl Scene {
     /// next paint, without uploading anything.
     pub fn set_hidden(&mut self, hidden: Vec<bool>) {
         self.hidden = hidden;
+    }
+
+    /// Each part's shading (`shading[i]` for part `i`; parts beyond the list use the built-in default). Takes
+    /// effect at the next paint; programs of new shader files are compiled then.
+    pub fn set_shading(&mut self, shading: Vec<PartShading>) {
+        self.shading = shading;
+    }
+
+    /// The shader files the parts use (each once).
+    pub fn shader_files(&self) -> Vec<&crate::shading::ShaderFile> {
+        let mut out: Vec<&crate::shading::ShaderFile> = Vec::new();
+        for s in self.shading.iter().take(self.parts.len()) {
+            if !out.iter().any(|f| f.program_key == s.shader.program_key) {
+                out.push(&s.shader);
+            }
+        }
+        out
     }
 
     pub fn set_part_maps(&mut self, part: usize, maps: GpuMaps) {
@@ -136,9 +157,10 @@ impl Scene {
             .iter()
             .enumerate()
             .filter(|(i, _)| !self.hidden.get(*i).copied().unwrap_or(false))
-            .map(|(_, p)| {
+            .map(|(i, p)| {
                 let hw = p.maps.height_size().0;
-                Drawable { mesh: &p.mesh, maps: &p.maps, vtx_lod: (hw as f32 / p.density).max(1.0).log2(), cull: false }
+                let shading = self.shading.get(i).unwrap_or(&self.default_shading);
+                Drawable { mesh: &p.mesh, maps: &p.maps, vtx_lod: (hw as f32 / p.density).max(1.0).log2(), cull: false, shading }
             })
             .collect()
     }

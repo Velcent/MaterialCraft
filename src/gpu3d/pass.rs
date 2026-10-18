@@ -2,6 +2,7 @@
 use super::camera::CamOut;
 use super::mesh::GpuMesh;
 use super::shaders::Program;
+use super::shading::{PartShading, send_uniforms};
 use super::textures::MapTextures;
 use crate::render3d::{RELIEF_BUMP, RELIEF_DISPLACE, RELIEF_PARALLAX, View};
 use eframe::egui_glow::glow;
@@ -18,6 +19,8 @@ pub(super) struct Drawable<'a> {
     pub vtx_lod: f32,
     /// Discard walls facing away from the camera (shapes seen from the inside).
     pub cull: bool,
+    /// The shader instance's program, values and displacement.
+    pub shading: &'a PartShading,
 }
 
 /// Frame-wide shading switches.
@@ -85,8 +88,8 @@ impl<'a> MaterialPass<'a> {
         }
     }
 
-    /// Shade every mesh.
-    pub unsafe fn draw(&self, items: &[Drawable]) {
+    /// Shade every mesh (all drawn with this pass's program).
+    pub unsafe fn draw<'d, 'm: 'd>(&self, items: impl IntoIterator<Item = &'d Drawable<'m>>) {
         unsafe {
             for d in items {
                 self.bind(d);
@@ -125,9 +128,15 @@ impl<'a> MaterialPass<'a> {
             let (gl, view, m) = (self.gl, self.view, d.maps);
             let loc = |n: &str| self.prog.loc(n);
             let has_h = m.height.is_some();
-            let disp = if has_h && view.relief == RELIEF_DISPLACE { view.height_scale } else { 0.0 };
+            // the instance's displacement, else the view's height display
+            let (disp, level) = match d.shading.displacement {
+                Some(x) => (if has_h { x.distance } else { 0.0 }, x.level),
+                None => (if has_h && view.relief == RELIEF_DISPLACE { view.height_scale } else { 0.0 }, view.height_level),
+            };
             let (hw, hh) = m.height_size();
             gl.uniform_1_f32(loc("uDisp"), disp);
+            gl.uniform_1_f32(loc("uDispLevel"), level);
+            send_uniforms(gl, self.prog, &d.shading.uniforms);
             gl.uniform_1_f32(loc("uVtxLod"), d.vtx_lod);
             gl.uniform_1_f32(loc("uTexel"), 1.0 / hw.max(hh).max(1) as f32);
             gl.uniform_1_i32(loc("uHasHeight"), has_h as i32);

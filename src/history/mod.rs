@@ -45,6 +45,7 @@
 mod budget;
 mod command;
 mod paint;
+mod shading;
 mod stack;
 mod step;
 
@@ -57,3 +58,6 @@ pub use step::{CoalesceKey, StepInfo};
 
 /// The project history of a paint document.
 pub type PaintHistory = History<crate::paint::edit::Edit>;
+
+/// The shader settings' own history (VS-06): never on the project timeline.
+pub type ShaderHistory = History<crate::shading::ShaderEdit>;

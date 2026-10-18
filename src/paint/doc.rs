@@ -8,6 +8,7 @@ use super::saved_view::SavedView;
 use super::texture_set::TextureSet;
 use super::validate::{self, DocError};
 use crate::mesh::Mesh;
+use crate::shading::{ShaderInstance, ShaderSettings};
 
 /// A file kept untouched from an import (e.g. `foreign/substance/document.bin`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +36,9 @@ pub struct Document {
     pub import_report: Option<ImportReport>,
     /// The cameras, exposure and environment it was last looked at with (display state; ADR 0008 mc2-vq15).
     pub view: Option<SavedView>,
+    /// Shader instances, which texture set uses which, and the mesh's length unit (VS-03, VS-12). Changed only
+    /// through the shader settings' own history, never the project timeline.
+    pub shading: ShaderSettings,
 }
 
 impl Document {
@@ -53,6 +57,11 @@ impl Document {
     /// The texture set painted on material slot `slot`.
     pub fn texture_set_for_slot(&self, slot: usize) -> Option<&TextureSet> {
         self.texture_sets.iter().find(|s| s.material_slot == slot)
+    }
+
+    /// The shader instance texture set `set` (id) is shaded with; `None` for the built-in defaults.
+    pub fn shader_instance(&self, set: &str) -> Option<&ShaderInstance> {
+        self.shading.instance_for(set)
     }
 
     pub fn foreign_file(&self, path: &str) -> Option<&ForeignFile> {
