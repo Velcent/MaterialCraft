@@ -7,7 +7,7 @@ use super::layout::Layout;
 use super::paths;
 use super::resources::ResourceRef;
 use crate::container::hdf5::Hdf5File;
-use crate::decode::assbin::AssbinScene;
+use crate::decode::assbin::{AssbinScene, MeshMetadata, Normalization};
 use crate::decode::document::{ClassCensus, DocumentMaterials, DocumentSettings, MaterialRecord};
 use crate::decode::resource_toc::ResourceToc;
 use crate::decode::settings::ProjectSettings;
@@ -74,6 +74,19 @@ impl SppProject {
     pub fn mesh(&self) -> Result<AssbinScene, ProjectError> {
         let data = self.read(paths::SCENE)?;
         AssbinScene::parse(&data).map_err(ProjectError::decode(paths::SCENE))
+    }
+
+    /// The mesh's metadata record; `None` when the project has none.
+    pub fn mesh_metadata(&self) -> Result<Option<MeshMetadata>, ProjectError> {
+        self.decode_optional(paths::SCENE_META, MeshMetadata::parse)
+    }
+
+    /// How Painter moved the imported mesh file into the stored mesh's space (also where high-poly files modelled
+    /// next to it belong). `scene` is this project's `scene.assbin`. An unreadable metadata record leaves the
+    /// scene root's record.
+    pub fn mesh_normalization(&self, scene: &[u8]) -> Result<Option<Normalization>, ProjectError> {
+        let meta = self.mesh_metadata().ok().flatten();
+        Normalization::of_scene(scene, meta.as_ref()).map_err(ProjectError::decode(paths::SCENE))
     }
 
     pub fn document_census(&self) -> Result<ClassCensus, ProjectError> {

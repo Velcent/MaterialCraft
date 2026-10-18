@@ -14,6 +14,7 @@ mod header;
 mod material;
 mod mesh;
 mod mesh_block;
+mod mesh_meta;
 mod node;
 mod normalization;
 mod part;
@@ -31,6 +32,7 @@ pub use geometry::AssbinGeometry;
 pub use header::{AssbinHeader, HEADER_LEN};
 pub use material::MaterialSummary;
 pub use mesh::MeshSummary;
+pub use mesh_meta::MeshMetadata;
 pub use normalization::Normalization;
 
 use crate::decode::DecodeError;

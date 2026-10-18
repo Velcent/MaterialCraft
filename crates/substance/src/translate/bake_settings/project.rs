@@ -2,7 +2,6 @@
 //! settings, the uid link to them and the normalisation that moves high-poly files into the document's space.
 
 use super::{MappedBake, material_uids};
-use crate::decode::assbin::Normalization;
 use crate::decode::document::MaterialRecord;
 use crate::model::baking::{BAKING_INI, MaterialBaking, PainterBaking};
 use crate::project::SppProject;
@@ -24,7 +23,7 @@ impl ProjectBaking {
             .read(BAKING_INI)
             .ok()
             .and_then(|data| PainterBaking::parse(&data).ok());
-        let placement = Normalization::read(scene).ok().flatten().map(|n| HighPlacement {
+        let placement = project.mesh_normalization(scene).ok().flatten().map(|n| HighPlacement {
             center: n.center,
             radius: n.radius,
         });

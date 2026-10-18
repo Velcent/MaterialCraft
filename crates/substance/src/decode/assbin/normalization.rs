@@ -5,9 +5,13 @@
 //! the root's `ALG_PTV_TOTAL_TRANSFORM` is exactly that). Metadata layout in Painter's variant: `u16` flag
 //! (1 = present), `u32` key count, keys (strings), `u32` value count, values as `u32` type + payload
 //! (3 = f32, 5 = vec3, 6 = 4×4 matrix). Unknown types end the reading.
+//!
+//! The root record is missing in about a third of the projects; the mesh's own metadata record
+//! ([`MeshMetadata`]) has the same numbers in every project, so [`Normalization::of_scene`] reads that first.
 
 use super::RECORD;
 use super::block::{read_block, read_count, read_string, read_u32};
+use super::mesh_meta::MeshMetadata;
 use super::scene::{SceneBlocks, scene_bytes};
 use crate::container::bytes::ByteReader;
 use crate::decode::DecodeError;
@@ -24,6 +28,15 @@ pub struct Normalization {
 }
 
 impl Normalization {
+    /// The normalisation of the stored mesh: from the mesh metadata (`meta`, the `.alg_meta` record) when it has
+    /// one, else from the scene root's record.
+    pub fn of_scene(scene: &[u8], meta: Option<&MeshMetadata>) -> Result<Option<Normalization>, DecodeError> {
+        match meta.and_then(|m| m.normalization) {
+            Some(n) => Ok(Some(n)),
+            None => Normalization::read(scene),
+        }
+    }
+
     /// Reads it from a whole `scene.assbin`; `None` when the root node carries no such metadata.
     pub fn read(data: &[u8]) -> Result<Option<Normalization>, DecodeError> {
         let scene = scene_bytes(data)?;

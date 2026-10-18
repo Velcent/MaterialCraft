@@ -37,7 +37,7 @@ impl OpenedProject {
         let scene = spp.read(paths::SCENE).map_err(|e| e.to_string())?;
         let mesh = AssbinGeometry::parse(&scene).map_err(|e| format!("mesh: {e}"))?;
         let mut notes = Vec::new();
-        let normalization = Normalization::read(&scene).unwrap_or_else(|e| {
+        let normalization = spp.mesh_normalization(&scene).unwrap_or_else(|e| {
             notes.push(format!("mesh normalisation unreadable: {e}"));
             None
         });
