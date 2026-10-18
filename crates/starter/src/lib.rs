@@ -33,6 +33,7 @@ mod patterns;
 mod preview;
 mod recipe;
 mod textures;
+mod texturizer;
 
 pub use build::{Built, Options, build, recipes};
 pub use error::StarterError;
