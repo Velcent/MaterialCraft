@@ -27,7 +27,7 @@ fn fill(id: &str, c: Channel, v: f32) -> Layer {
     Layer::new(id, id, LayerKind::Fill(Fill::uniform(vec![(c, [v, v * 0.7, v * 0.3, 1.0])]))).with_blend(c, BlendMode::Normal, 1.0)
 }
 
-/// A local stack with masks on top that the cache keeps: a blurred painted mask holding an anchor, a mask reading
+/// One of [`local_stacks`] with masks on top that the cache keeps: a blurred painted mask holding an anchor, a mask reading
 /// the height below, a mask referencing the anchor.
 fn stack(k: usize) -> TextureSet {
     let mut s = local_stacks().remove(k);

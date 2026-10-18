@@ -79,7 +79,7 @@ impl MaterialMaps {
         MaterialMaps::build_cached(set, options, effects, fills, None)
     }
 
-    /// Like [`MaterialMaps::build_with`], with expensive masks kept in and taken from `cache` (the same maps).
+    /// Like [`MaterialMaps::build_with`], with expensive masks and fills and the composite below the edited layer kept in and taken from `cache` (the same maps).
     pub fn build_cached(
         set: &TextureSet,
         options: &OutputOptions,

@@ -85,7 +85,8 @@ impl<'a> Compositor<'a> {
         self
     }
 
-    /// Builder: takes the results of expensive masks from `cache` and keeps the ones it computes there. The
+    /// Builder: takes kept results (expensive masks and fills, the composite below a layer) from `cache` and keeps
+    /// the ones it computes there. The
     /// composite is the same as without.
     pub fn with_cache(mut self, cache: Option<&'a CacheSession<'a>>) -> Compositor<'a> {
         self.cache = cache;

@@ -4,6 +4,12 @@
 //!
 //! Keeping it is cheap: texture sets share their image tiles with the document (copy-on-write), and comparing
 //! shared tiles compares pointers.
+//!
+//! This is not the stack cache's invalidation ([`crate::paint::stack::StackCache`]) twice: that one compares layer
+//! revisions inside a build, to tell which kept tiles of a set are still valid; this one runs on the editor's side
+//! before any build, to tell which sets to build at all. A set it leaves out is never handed to a maps worker; a set
+//! it names is built, and the cache then saves what did not change in it. Edits made through the layer panel or a
+//! brush know their set and skip this comparison.
 
 use super::doc::Document;
 use super::height_normal::HeightFilter;

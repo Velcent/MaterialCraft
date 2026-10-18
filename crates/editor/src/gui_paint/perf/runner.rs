@@ -33,7 +33,8 @@ fn play(s: &Scenario, r: &mut RunReport) -> Result<(), String> {
 }
 
 /// The editor's `--perf-run` entry (see `materialcraft_perf::editor`): `Some(exit code)` when the command line
-/// asks for it.
+/// asks for it. An internal option for `mcperf` only: it is not part of the editor's user-facing command line and
+/// is not listed anywhere users see.
 pub fn from_args() -> Option<i32> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     materialcraft_perf::editor::serve(&args, run)

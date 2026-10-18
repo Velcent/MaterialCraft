@@ -1,14 +1,20 @@
-//! [`StackCache`]: results of expensive masks kept across builds of a texture set's maps, so that an edit
-//! recomputes only what depends on it. On big imported projects most compositing time goes into masks with
-//! generators, filters and references (AS: two thirds), and a mask is evaluated again for every channel; an edit
-//! of one layer leaves almost all of them as they were.
+//! [`StackCache`]: results kept across builds of a texture set's maps, so that an edit or a brush stroke recomputes
+//! only what depends on it: expensive masks, expensive fills (materials, procedural textures, fills projected
+//! through the mesh), the composite below the top-level layer edited last, and baked maps resampled to the set's
+//! resolution. On big imported projects most compositing time goes into masks with generators, filters and
+//! references (AS: two thirds), and a mask is evaluated again for every channel; an edit of one layer leaves almost
+//! all of them as they were.
 //!
 //! A mask's tiles are kept under a key of everything the mask reads ([`CacheSession::mask_key`]): the layer itself
 //! (its mask is part of it), the caller's context (surface maps, the mesh) and the set's baked maps; a mask with a
 //! generator also reads the stack below its layer and its layer's content, a reference the stack it points into.
 //! Those are covered by layer revisions ([`revisions`]): copies of the layers as last seen are compared with the
 //! layers of each build, so any change, however it was made (an edit, an undo, a stroke), gives new keys. Masks
-//! made of paint, fills and levels only are cheap and not kept.
+//! made of paint, fills and levels only are cheap and not kept, and so are fills of images read through the UVs
+//! (keeping them crowded out the masks: AS stroke frames 2.5 times slower).
+//!
+//! The cache decides which kept tiles are still valid inside one set. Which sets need compositing at all after an
+//! undo or a redo is decided before any build, by [`crate::paint::set_changes::CompositeState`].
 //!
 //! A cached mask is the very values a computation gives, so a build with the cache has the same bits as one
 //! without. Only masks evaluated directly for their layer are cached (not those read through references, which
@@ -37,12 +43,12 @@ const RESAMPLED: usize = 4;
 /// The part name of kept fills.
 const FILL: &str = "fill";
 
-/// Bytes of mask tiles a [`StackCache`] keeps by default.
+/// Bytes of mask and composite tiles a [`StackCache`] keeps by default (fills get half as much again).
 pub const DEFAULT_BUDGET: usize = 1 << 30;
 /// How far references are followed for a mask's key (as far as the compositor follows them).
 const REFERENCE_DEPTH: usize = 4;
 
-/// Mask results of the texture sets composited with it (see the module docs). Shared between threads.
+/// Results kept for the texture sets composited with it (see the module docs). Shared between threads.
 pub struct StackCache {
     inner: Mutex<Inner>,
 }
@@ -99,7 +105,7 @@ impl std::fmt::Debug for StackCache {
 }
 
 impl StackCache {
-    /// A cache keeping at most `budget` bytes of mask tiles.
+    /// A cache keeping at most `budget` bytes of mask and composite tiles and half of that of fill tiles.
     pub fn new(budget: usize) -> StackCache {
         StackCache {
             inner: Mutex::new(Inner { sets: HashMap::new(), store: TileStore::new(budget), fills: TileStore::new(budget / 2), resampled: Vec::new() }),
@@ -146,13 +152,13 @@ impl StackCache {
         CacheSession { cache: self, set: set.id.clone(), keys: keys.masks, fills: keys.fills, below, baked }
     }
 
-    /// Bytes of mask tiles kept.
+    /// Bytes of tiles kept.
     pub fn bytes(&self) -> usize {
         self.inner.lock().map(|i| i.store.bytes() + i.fills.bytes()).unwrap_or(0)
     }
 }
 
-/// One build's view of a [`StackCache`]: the keys of the set's expensive masks.
+/// One build's view of a [`StackCache`]: the keys of what is kept for the set.
 pub struct CacheSession<'c> {
     cache: &'c StackCache,
     set: String,

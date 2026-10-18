@@ -68,7 +68,7 @@ pub struct SceneSync {
     pub error: Option<String>,
     /// What keeping the scene in step has cost so far.
     stats: SceneStats,
-    /// Expensive masks of the document's sets, kept across maps runs (dropped with the document).
+    /// What compositing the document's sets keeps across maps runs (`StackCache`; dropped with the document).
     stack_cache: Arc<StackCache>,
 }
 
@@ -299,7 +299,8 @@ impl SceneSync {
         self.geometry.is_some() || self.maps.is_busy() || !self.waiting.is_empty()
     }
 
-    /// What keeping the scene in step has cost so far (the performance benchmarks read it).
+    /// What keeping the scene in step has cost so far. Read only by the performance runner (`perf`), which compares
+    /// it before and after each recomposite.
     pub fn stats(&self) -> SceneStats {
         self.stats
     }

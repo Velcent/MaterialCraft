@@ -120,7 +120,8 @@ pub fn paint_images(s: &mut TextureSet) -> &mut Vec<(Channel, TiledImage)> {
     }
 }
 
-/// Several local stacks (see the module docs), each with a paint layer `paint` to paint into.
+/// Several stacks of effects that read only the same texel (no filters, generators or references; see the module
+/// docs), each with a paint layer `paint` to paint into.
 pub fn local_stacks() -> Vec<TextureSet> {
     let size = (300, 260);
     let all = [Channel::BaseColor, Channel::Roughness, Channel::Height, Channel::Metallic];

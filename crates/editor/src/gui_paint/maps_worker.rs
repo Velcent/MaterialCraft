@@ -84,7 +84,7 @@ pub struct RunSetup {
     /// The quick mask laid over the maps (PT-42).
     pub tint: Option<Arc<QuickMaskTint>>,
     pub surfaces: Option<Arc<FillSurfaces>>,
-    /// Expensive masks kept across runs (the same maps as without).
+    /// Results kept across runs (`StackCache`: the same maps as without).
     pub cache: Option<Arc<StackCache>>,
 }
 

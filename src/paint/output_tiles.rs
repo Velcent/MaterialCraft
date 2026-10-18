@@ -91,7 +91,7 @@ impl MaterialMaps {
         Ok(Reached { tiles, area })
     }
 
-    /// The maps over `tiles` (see the module docs), with expensive masks from and into `cache`; an error if the
+    /// The maps over `tiles` (see the module docs), with expensive masks and fills and the composite below the edited layer from and into `cache`; an error if the
     /// set's maps can't be built tile by tile. Tiles outside the set's grid are left out. Compositing warnings are
     /// not collected (the whole build reports them).
     pub fn build_tiles(

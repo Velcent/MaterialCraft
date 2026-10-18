@@ -2,7 +2,8 @@
 //! ([`MaterialMaps::build_tiles`]) turned into the bytes the whole preparation has there ([`gpu3d::prepare_patch`]).
 //! Only for the lit material view without a quick mask tint, a square set the viewer shows at full size, and a change
 //! that does not reach most of the set ([`MaterialMaps::tiles_reached`]); otherwise `None` and the caller composites
-//! the whole set. Expensive masks come from the stack cache, which keeps what the change does not reach.
+//! the whole set. Kept masks, fills and composites come from the stack cache, which keeps what the change does not
+//! reach.
 
 use super::channel_view::{ChannelView, Shown};
 use materialcraft::generators;
