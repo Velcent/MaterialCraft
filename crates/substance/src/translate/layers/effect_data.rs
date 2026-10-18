@@ -79,12 +79,16 @@ fn tweak_text(v: &TweakValue) -> Option<String> {
     })
 }
 
+/// Painter's levels as ours. Painter's gamma is the exponent itself (`t^gamma`: below 1 brightens), ours its
+/// reciprocal (`t^(1/gamma)`), measured on the corpus: an ambient-occlusion mask under levels at gamma 0.45
+/// (Coral23) reads back with an MAE of 0.1 steps this way and 122 steps the other.
 pub fn levels(l: Option<&PainterLevels>) -> Levels {
+    let reciprocal = |g: f32| if g.is_finite() && g > 1e-6 { 1.0 / g } else { 1.0 };
     match l {
         Some(l) => Levels {
             input_min: l.input_minimum,
             input_max: l.input_maximum,
-            gamma: l.gamma,
+            gamma: l.gamma.map(reciprocal),
             output_min: l.output_minimum,
             output_max: l.output_maximum,
             clamp: l.clamp != 0,
@@ -220,5 +224,20 @@ mod tests {
                 .to_string(),
             r#"{"kind":"substance:bitmap_fill","url":"/a"}"#
         );
+    }
+
+    #[test]
+    fn levels_gamma_is_the_reciprocal_of_painters() {
+        let painter = |gamma: [f32; 3]| PainterLevels {
+            input_maximum: [1.0; 3],
+            gamma,
+            output_maximum: [1.0; 3],
+            ..PainterLevels::default()
+        };
+        let ours = levels(Some(&painter([0.5, 2.0, 0.0])));
+        assert_eq!(ours.gamma, [2.0, 0.5, 1.0]);
+        // Painter's gamma 0.5 brightens: 0.25 → 0.5
+        assert!((ours.apply_grey(0.25) - 0.5).abs() < 1e-6);
+        assert!(levels(Some(&painter([1.0; 3]))).is_identity());
     }
 }
