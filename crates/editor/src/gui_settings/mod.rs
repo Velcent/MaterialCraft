@@ -1,12 +1,13 @@
 //! The editor's user settings, stored through craft-settings in `config.toml` (TOML, hand-editable,
 //! atomic saves, damaged files moved aside). Layouts, shortcuts, interface, library roots and
-//! saved searches, swatches. Headless code gets plain values from here, never the store.
+//! saved searches, swatches, the Paint viewport's display defaults. Headless code gets plain values from here, never the store.
 //!
 //! Where the file lives: `MATERIALCRAFT_CONFIG_DIR` if set (empty = in memory only, for tests),
 //! a `portable` marker next to the executable, else the platform folder
 //! (`~/.config/materialcraft/` on Linux).
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod display;
 pub mod sections;
 
 use std::path::Path;
@@ -33,6 +34,7 @@ pub struct EditorSettings {
     pub color_picker: ColorPickerSettings,
     pub prompts: PromptSettings,
     pub pen: PenSettings,
+    pub display: display::DisplaySettings,
 }
 
 impl Settings for EditorSettings {
@@ -134,6 +136,8 @@ mod tests {
         want.color_picker = ColorPickerSettings { sliders: ColorSliders::Rgb, units: ColorUnits::Float, tinted: false };
         want.prompts.missing_maps = MissingMaps::Skip;
         want.pen = PenSettings { use_pressure: false, pressure_curve: vec![[0.0, 0.0], [0.25, 0.5], [1.0, 1.0]] };
+        want.display.tone_curve = "aces".into();
+        want.display.project.exposure_stops = -1.5;
         {
             let (mut s, problems) = UserSettings::open(Location::Dir(dir.clone()));
             assert!(problems.is_empty(), "{problems:?}");

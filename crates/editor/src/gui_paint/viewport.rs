@@ -1,29 +1,32 @@
 //! [`Viewport`]: the 3D view of the Paint screen. Navigation follows the shortcut table (by
 //! default Alt+left orbit, Alt+Shift+left orbit snapping to axis views, Alt+middle pan,
 //! Alt+right or the wheel zoom, Shift+right turns the light; ADR 0008 mc2-vq12); drawing goes
-//! through the shared GPU renderer in an egui paint callback.
+//! through the shared GPU renderer in an egui paint callback with the [`ViewState`]'s display settings, and keeps
+//! painting while a still view accumulates. The axis gizmo sits in the lower-right corner.
 
+use super::axis_gizmo;
 use super::channel_view::ChannelView;
 use super::input::stylus::StylusFeed;
 use super::input::{PointerLog, StrokeInput};
 use super::navigation;
 use super::shell::actions;
 use super::tools::screen_image::gizmo::GizmoAction;
+use super::view_state::ViewState;
 use crate::gui_settings::PenSettings;
 use crate::gui_workspace::shortcuts::ShortcutTable;
 use eframe::egui::{self, Align2, Color32, FontId, PointerButton, Sense};
-use materialcraft::camera::Camera;
+use materialcraft::camera::{Camera, Projection};
 use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, Shared};
-use materialcraft::render3d::{RELIEF_NONE, View};
+use materialcraft::render3d::View;
 use std::sync::Arc;
 
 const BACKGROUND: Color32 = crate::gui_theme::HEADER_BG;
 
 pub struct Viewport {
     gpu: Shared,
-    /// Camera, light and relief settings.
-    view: View,
+    /// Camera, light, relief and display settings.
+    state: ViewState,
     /// The unsnapped yaw and pitch during a snapping orbit.
     snap: Option<(f32, f32)>,
     /// Where the renderer reports shader and GL errors.
@@ -64,29 +67,36 @@ pub struct Hover {
 }
 
 impl Viewport {
-    pub fn new(diag: Arc<dyn Sink>) -> Viewport {
-        // Painter shows height through the normal map; displacement stays opt-in.
-        Viewport {
-            gpu: gpu3d::new_shared(),
-            view: View { relief: RELIEF_NONE, ..View::default() },
-            snap: None,
-            diag,
-            rect: None,
-            pointer: PointerLog::default(),
-            hover: None,
-            layer: None,
-            image_key: false,
-            image_drag: None,
+    /// A viewport starting with `state` and the GPU options `opts`.
+    pub fn new(diag: Arc<dyn Sink>, state: ViewState, opts: gpu3d::GpuOpts) -> Viewport {
+        let gpu = gpu3d::new_shared();
+        if let Ok(mut g) = gpu.lock() {
+            g.opts = opts;
         }
+        Viewport { gpu, state, snap: None, diag, rect: None, pointer: PointerLog::default(), hover: None, layer: None, image_key: false, image_drag: None }
     }
 
     pub fn gpu(&self) -> &Shared {
         &self.gpu
     }
 
-    /// The view settings together with the renderer (for its options), for the settings panel.
-    pub fn settings_mut(&mut self) -> (&mut View, &Shared) {
-        (&mut self.view, &self.gpu)
+    /// The view and display settings together with the renderer (for its options), for the settings panel.
+    pub fn settings_mut(&mut self) -> (&mut ViewState, &Shared) {
+        (&mut self.state, &self.gpu)
+    }
+
+    pub fn state(&self) -> &ViewState {
+        &self.state
+    }
+
+    /// The renderer's options (height self-shadowing, anisotropic filtering).
+    pub fn opts(&self) -> gpu3d::GpuOpts {
+        self.gpu.lock().map(|g| g.opts.clone()).unwrap_or_default()
+    }
+
+    /// True while a still view is accumulating more frames (screenshots wait for it).
+    pub fn refining(&self) -> bool {
+        self.gpu.lock().is_ok_and(|g| g.refining())
     }
 
     /// Frames drawn so far.
@@ -98,7 +108,7 @@ impl Viewport {
     /// [`Viewport::rect`]'s top-left corner), or `None` before the view was laid out.
     pub fn camera(&self) -> Option<Camera> {
         let r = self.rect?;
-        Some(gpu3d::view_camera(&self.view, [r.width(), r.height()]))
+        Some(self.state.view.camera(&self.state.display.camera, [r.width(), r.height()]))
     }
 
     /// Where the view was laid out last frame, in UI points.
@@ -146,11 +156,19 @@ impl Viewport {
         self.pointer.is_down()
     }
 
+    /// Switches between perspective and orthographic projection (the framing of the pivot stays).
+    pub fn toggle_projection(&mut self) {
+        let p = &mut self.state.display.camera.projection;
+        *p = match *p {
+            Projection::Perspective => Projection::Orthographic,
+            Projection::Orthographic => Projection::Perspective,
+        };
+    }
+
     pub fn reset_camera(&mut self) {
         let d = View::default();
-        (self.view.yaw, self.view.pitch, self.view.dist) = (d.yaw, d.pitch, d.dist);
-        (self.view.pan_x, self.view.pan_y) = (d.pan_x, d.pan_y);
-        (self.view.light_yaw, self.view.light_pitch) = (d.light_yaw, d.light_pitch);
+        self.state.view.set_orbit(&d.orbit());
+        (self.state.view.light_yaw, self.state.view.light_pitch) = (d.light_yaw, d.light_pitch);
     }
 
     /// Fills the remaining space of `ui` with the view; `keys` decides the navigation gestures.
@@ -169,9 +187,16 @@ impl Viewport {
         let error = self.gpu.lock().ok().and_then(|g| g.error.clone());
         match error {
             None => {
-                let (gpu, view, sink) = (self.gpu.clone(), display.view_for(&self.view), self.diag.clone());
-                let cb = eframe::egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&gpu, &info, painter, &view, &*sink));
+                let (gpu, view, sink) = (self.gpu.clone(), self.state.view.clone(), self.diag.clone());
+                let shown = self.state.display_for(display);
+                let cb = eframe::egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint_with(&gpu, &info, painter, &view, &shown, &*sink));
                 ui.painter().add(egui::PaintCallback { rect, callback: Arc::new(cb) });
+                if self.refining() {
+                    ui.ctx().request_repaint();
+                }
+                if let Some(camera) = self.camera() {
+                    axis_gizmo::draw(ui.painter(), rect, &camera);
+                }
             }
             Some(e) => {
                 let msg = format!("The GPU viewer is unavailable: {e}");
@@ -213,7 +238,7 @@ impl Viewport {
         } else {
             None
         };
-        let v = &mut self.view;
+        let v = &mut self.state.view;
         let d = resp.drag_delta();
         match gesture {
             Some(actions::ORBIT) => navigation::orbit(v, d.x, d.y),
@@ -232,7 +257,7 @@ impl Viewport {
         if resp.hovered() && keys.wheel(mods) == Some(actions::ZOOM) {
             let scroll = ui.input(|i| crate::gui_input::raw_scroll_delta(i).y);
             if scroll != 0.0 {
-                navigation::zoom(&mut self.view, scroll);
+                navigation::zoom(&mut self.state.view, scroll);
             }
         }
     }

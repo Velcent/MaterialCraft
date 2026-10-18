@@ -20,6 +20,7 @@ pub fn show(
     quick_mask: QuickMaskState,
     keys: &ShortcutTable,
     display: ChannelView,
+    orthographic: bool,
     has_document: bool,
     paintable: bool,
     events: &mut Vec<PanelEvent>,
@@ -27,6 +28,7 @@ pub fn show(
     let tool = tool_state.current;
     let unavailable = tools::unavailable(has_document, paintable);
     let reset_key = keys.label("paint.view.reset_camera");
+    let projection_key = keys.label("paint.view.projection");
     let mut view_events = Vec::new();
     let mut camera_events = Vec::new();
     let mut mask_events = Vec::new();
@@ -59,6 +61,10 @@ pub fn show(
             }
             if ui.add_enabled(has_document, button).clicked() {
                 camera_events.push(PanelEvent::ResetCamera);
+            }
+            let tip = if projection_key.is_empty() { "Orthographic projection".to_string() } else { format!("Orthographic projection ({projection_key})") };
+            if ui.add_enabled(has_document, egui::Button::selectable(orthographic, "Ortho")).on_hover_text(tip).clicked() {
+                camera_events.push(PanelEvent::ToggleProjection);
             }
         }),
         Group::new(Side::Right, |ui: &mut Ui| {

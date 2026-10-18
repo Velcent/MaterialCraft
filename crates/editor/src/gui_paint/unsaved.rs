@@ -149,7 +149,8 @@ impl PaintMode {
         let Some(path) = path else { return };
         let lookup = self.asset_lookup();
         let Some(doc) = &mut self.document else { return };
-        let (copy, _) = prepare(doc, lookup);
+        let (mut copy, _) = prepare(doc, lookup);
+        copy.view = Some(self.viewport.state().saved());
         match format::save_path(&copy, &path) {
             Ok(()) => {
                 doc.saved_to(path.clone());

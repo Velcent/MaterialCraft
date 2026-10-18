@@ -4,6 +4,7 @@
 pub mod bakers;
 mod brush_panel;
 pub mod channel_bar;
+mod display_settings;
 mod dock_content;
 pub mod import_report;
 pub mod import_review;
@@ -23,7 +24,6 @@ mod symmetry_menu;
 pub mod texture_sets;
 mod timeline;
 mod tools_strip;
-pub mod view_settings;
 mod viewport_toolbar;
 
 use super::channel_view::ChannelView;
@@ -55,6 +55,10 @@ pub enum PanelEvent {
     SaveAs,
     Home,
     ResetCamera,
+    /// Switch the camera between perspective and orthographic (VP-06).
+    ToggleProjection,
+    /// Make the current camera, exposure and environment the defaults for new documents.
+    UseDisplayDefaults,
     ShowChannel(ChannelView),
     SetVisible(usize, bool),
     /// Cancel the running load or import.

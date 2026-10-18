@@ -16,7 +16,7 @@ use super::bakers::{BakeStatus, BakersPanel};
 use super::import_report::ReportPanel;
 use super::layers::LayerPanel;
 use super::log::LogPanel;
-use super::{PanelEvent, brush_panel, interface_settings, pen_settings, texture_sets, timeline, view_settings, viewport_toolbar};
+use super::{PanelEvent, brush_panel, display_settings, interface_settings, pen_settings, texture_sets, timeline, viewport_toolbar};
 use crate::gui_assets::AssetTray;
 use crate::gui_settings::PenSettings;
 use crate::gui_workspace::shortcuts::{ShortcutTable, ShortcutsPage};
@@ -78,8 +78,8 @@ impl DockContent<PaintPanel> for Bodies<'_> {
             PaintPanel::Display => {
                 margin.show(ui, |ui| {
                     egui::ScrollArea::vertical().id_salt("paint_display").show(ui, |ui| {
-                        let (view, gpu) = self.viewport.settings_mut();
-                        view_settings::show(ui, view, gpu);
+                        let (state, gpu) = self.viewport.settings_mut();
+                        display_settings::show(ui, state, gpu, self.events);
                     })
                 });
             }
@@ -125,7 +125,8 @@ impl Bodies<'_> {
     fn viewport_body(&mut self, ui: &mut Ui) {
         let has_document = self.document.is_some();
         let paintable = self.document.is_some_and(|d| self.layers.paintable(d.doc()));
-        viewport_toolbar::show(ui, self.tools, self.brush, self.quick_mask, self.shortcuts, self.display, has_document, paintable, self.events);
+        let orthographic = self.viewport.state().display.camera.projection == materialcraft::camera::Projection::Orthographic;
+        viewport_toolbar::show(ui, self.tools, self.brush, self.quick_mask, self.shortcuts, self.display, orthographic, has_document, paintable, self.events);
         if let Some(doc) = self.document {
             timeline::show(ui, doc.history(), self.events);
         }

@@ -1,12 +1,11 @@
 //! [`ChannelView`]: what the viewport shows, the lit material or one channel, and how a texture
-//! set's [`MaterialMaps`] become GPU maps for it.
+//! set's [`MaterialMaps`] become GPU maps for it. A channel is shown as the base colour of a plain rough
+//! surface; the viewport draws it unlit (as it is) or, with lit channels on, lit by the scene.
 
-use super::unlit;
 use materialcraft::bake::MapKind;
 use materialcraft::gpu3d::{self, GpuMaps, MapInputs};
 use materialcraft::paint::bake_config::baked_kind;
 use materialcraft::paint::{Channel, MaterialMaps, TextureSet};
-use materialcraft::render3d::View;
 use materialcraft::tex::Tex;
 
 /// The viewport's display mode.
@@ -14,9 +13,9 @@ use materialcraft::tex::Tex;
 pub enum ChannelView {
     /// Full PBR shading, as in Painter's material mode.
     Material,
-    /// One channel's values, unlit (colour channels in colour, the others in grey).
+    /// One channel's values (colour channels in colour, the others in grey).
     Single(Channel),
-    /// A baked mesh map of each set, unlit (the bakers panel's show toggle, BK2-11); black where a set has none.
+    /// A baked mesh map of each set (the bakers panel's show toggle, BK2-11); black where a set has none.
     Baked(MapKind),
 }
 
@@ -47,30 +46,19 @@ impl ChannelView {
                 emissive: set.has_channel(Channel::Emissive).then_some(&maps.emissive),
                 height,
             }),
-            ChannelView::Single(c) => unlit_maps(maps.map(c).unwrap_or(&maps.base_color), height),
+            ChannelView::Single(c) => shown_maps(maps.map(c).unwrap_or(&maps.base_color), height),
             ChannelView::Baked(kind) => match set.baked(&baked_kind(kind)) {
-                Some(image) => unlit_maps(&image.to_tex(), height),
-                None => unlit_maps(&Tex::solid(1, 1, [0.0, 0.0, 0.0, 1.0]), height),
+                Some(image) => shown_maps(&image.to_tex(), height),
+                None => shown_maps(&Tex::solid(1, 1, [0.0, 0.0, 0.0, 1.0]), height),
             },
-        }
-    }
-
-    /// The camera and light settings to draw with: single channels are drawn with the lights off.
-    pub fn view_for(self, view: &View) -> View {
-        match self {
-            ChannelView::Material => view.clone(),
-            ChannelView::Single(_) | ChannelView::Baked(_) => View { light_intensity: 0.0, ambient: 0.0, ..view.clone() },
         }
     }
 }
 
-/// `source` shown as it is, with the lights off.
-fn unlit_maps(source: &Tex, height: Option<&Tex>) -> GpuMaps {
-    let shown = source.map(|p| {
-        let e = unlit::emissive_for([p[0], p[1], p[2]]);
-        [e[0], e[1], e[2], 1.0]
-    });
-    let black = Tex::solid(1, 1, [0.0, 0.0, 0.0, 1.0]);
-    let rough = Tex::solid(1, 1, [1.0; 4]);
-    gpu3d::prepare(&MapInputs { base: Some(&black), normal: None, rough: Some(&rough), metal: None, ao: None, emissive: Some(&shown), height })
+/// `source`'s values as the base colour of a rough, flat, non-metal surface (the values are display values, as
+/// the base colour's sRGB texture expects, so unlit shading shows them exactly).
+fn shown_maps(source: &Tex, height: Option<&Tex>) -> GpuMaps {
+    let opaque = source.map(|p| [p[0], p[1], p[2], 1.0]);
+    let rough = Tex::solid(1, 1, [0.8, 0.8, 0.8, 1.0]);
+    gpu3d::prepare(&MapInputs { base: Some(&opaque), normal: None, rough: Some(&rough), metal: None, ao: None, emissive: None, height })
 }

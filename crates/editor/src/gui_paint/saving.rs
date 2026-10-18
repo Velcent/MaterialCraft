@@ -154,7 +154,8 @@ impl PaintMode {
         }
         let lookup = self.asset_lookup();
         let Some(doc) = &mut self.document else { return };
-        let (copy, report) = prepare(doc, lookup);
+        let (mut copy, report) = prepare(doc, lookup);
+        copy.view = Some(self.viewport.state().saved());
         if !report.missing.is_empty() {
             self.diag.warn(Area::Assets, format!("{} could not be found in the libraries; the document is saved without them.", report.missing.join(", ")));
         }

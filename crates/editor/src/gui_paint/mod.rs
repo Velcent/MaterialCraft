@@ -9,6 +9,7 @@
 //! colour picker ([`crate::gui_color::ColorPicker`]) floats above the screen; [`eyedrop`] answers its viewport
 //! eyedropper.
 
+mod axis_gizmo;
 mod bake_editor;
 mod bake_queue;
 mod baking;
@@ -16,6 +17,7 @@ mod cache;
 mod channel_view;
 mod demo;
 mod dialogs;
+mod display_prefs;
 mod document_state;
 mod documents;
 mod editing;
@@ -49,9 +51,9 @@ mod stroke_test;
 mod strokes;
 mod tools;
 mod tray_host;
-mod unlit;
 mod unsaved;
 mod view_pick;
+mod view_state;
 mod view_thumbnail;
 mod viewport;
 mod window;
@@ -152,6 +154,8 @@ impl PaintMode {
     pub fn from_args(diag: Arc<dyn Sink>, settings: UserSettings) -> PaintMode {
         let launch = Launch::from_args(std::env::args().skip(1));
         let (tray, first_run) = AssetTray::new(&settings.get().library, settings.dir(), diag.clone());
+        let prefs = &settings.get().display;
+        let viewport = Viewport::new(diag.clone(), display_prefs::state_from(prefs), display_prefs::opts_from(prefs));
         if let Some(note) = first_run {
             diag.info(Area::Assets, note);
         }
@@ -160,7 +164,7 @@ impl PaintMode {
             loader: None,
             review: None,
             scene: SceneSync::default(),
-            viewport: Viewport::new(diag.clone()),
+            viewport,
             display: launch.channel.unwrap_or(ChannelView::Material),
             report: ReportPanel::default(),
             log: LogPanel::default(),
@@ -237,6 +241,7 @@ impl PaintMode {
             }
         }
         self.color.frame(ctx, &mut self.shell.settings);
+        display_prefs::sync(&mut self.shell.settings, self.viewport.state(), &self.viewport.opts());
         self.eyedrop(ctx);
         self.poll_smart_assets(ctx);
         self.poll_unsaved(ctx);
@@ -248,15 +253,15 @@ impl PaintMode {
         let settled = self.loader.is_none() && self.document.is_some() && !self.scene.is_busy() && self.picking.is_ready();
         let tested = self.run_stroke_test(settled);
         if let Some(shot) = &mut self.shot {
-            let settled = tested && self.loader.is_none() && self.document.is_some() && !self.scene.is_busy();
+            let settled = tested && self.loader.is_none() && self.document.is_some() && !self.scene.is_busy() && !self.viewport.refining();
             shot.update(ctx, settled, self.viewport.frames());
         }
         if let Some(check) = &mut self.check {
             let settled = self.loader.is_none() && !self.scene.is_busy() && self.picking.is_ready();
             let frames = self.viewport.frames();
             let (doc, picking) = (self.document.as_ref().map(|d| d.doc()), &self.picking);
-            let (view, gpu) = self.viewport.settings_mut();
-            check.update(ctx, settled, frames, gpu, view, doc, |camera| doc.and_then(|d| picking.projector(d, camera)));
+            let (state, gpu) = self.viewport.settings_mut();
+            check.update(ctx, settled, frames, gpu, &mut state.view, doc, |camera| doc.and_then(|d| picking.projector(d, camera)));
         }
         action
     }
@@ -322,6 +327,11 @@ impl PaintMode {
                 return PaintAction::Home;
             }
             PanelEvent::ResetCamera => self.viewport.reset_camera(),
+            PanelEvent::ToggleProjection => self.viewport.toggle_projection(),
+            PanelEvent::UseDisplayDefaults => {
+                display_prefs::save_project_defaults(&mut self.shell.settings, self.viewport.state());
+                self.diag.info(Area::General, "New documents will start with this camera, exposure and environment.");
+            }
             PanelEvent::ShowChannel(view) => self.show_channel(view),
             PanelEvent::CycleChannel(step) => {
                 let all = ChannelView::ALL;

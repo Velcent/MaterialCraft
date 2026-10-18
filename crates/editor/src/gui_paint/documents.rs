@@ -104,8 +104,18 @@ impl PaintMode {
         self.painting.forget_document();
         self.scene.set_tint(None);
         self.scene.rebuild(&mut doc, self.display);
-        self.viewport.reset_camera();
+        self.open_view(doc.doc().view.as_ref());
         self.document = Some(doc);
+    }
+
+    /// Shows a document's saved view, or for a document without one the user's defaults for new documents.
+    fn open_view(&mut self, saved: Option<&materialcraft::paint::saved_view::SavedView>) {
+        let project = self.shell.settings.get().display.project.clone();
+        let (state, _) = self.viewport.settings_mut();
+        match saved {
+            Some(v) => state.apply_saved(v),
+            None => super::display_prefs::apply_project(state, &project),
+        }
     }
 
     pub(super) fn close(&mut self) {
