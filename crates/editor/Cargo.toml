@@ -14,6 +14,8 @@ materialcraft-substance = { path = "../substance" }
 materialcraft-brush = { path = "../brush" }
 # The starter library, built on first run when no installed copy is current (gui_assets::starter).
 materialcraft-starter = { path = "../starter" }
+# Performance scenarios and their reports (the runner in gui_paint::perf plays them for mcperf).
+materialcraft-perf = { path = "../perf" }
 log = "0.4"
 # The Craft suite's shared UI and settings crates, pinned (reuse level 1: depend, nothing goes upstream; ADR 0007).
 craft-settings = { git = "https://github.com/storytold/craft-libs", rev = "04e83f095ab080c5672243514f9a44ca6364b0e2" }

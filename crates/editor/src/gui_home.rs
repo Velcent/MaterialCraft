@@ -2517,6 +2517,10 @@ fn boot() -> (logging::Diagnostics, gui_settings::UserSettings) {
 }
 
 fn main() -> eframe::Result<()> {
+    // `--perf-run <scenario> --out <report>`: one headless benchmark run for mcperf, no window.
+    if let Some(code) = gui_paint::perf::runner::from_args() {
+        std::process::exit(code);
+    }
     // 4x MSAA + depth buffer for the GPU viewport; fall back to no MSAA on drivers that cannot provide it.
     let make = |msaa: u16| eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1500.0, 920.0]).with_title("MaterialCraft").with_icon(window_icon()),

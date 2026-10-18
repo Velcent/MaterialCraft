@@ -193,7 +193,6 @@ impl ActiveStroke {
     }
 
     /// Dabs placed so far (the performance benchmarks count them).
-    #[cfg(test)]
     pub fn dabs(&self) -> usize {
         self.stroke.dabs()
     }

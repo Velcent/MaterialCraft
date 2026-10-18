@@ -296,7 +296,6 @@ impl SceneSync {
     }
 
     /// What keeping the scene in step has cost so far (the performance benchmarks read it).
-    #[cfg(test)]
     pub fn stats(&self) -> SceneStats {
         self.stats
     }

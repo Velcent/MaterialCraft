@@ -353,7 +353,6 @@ impl Painting {
     }
 
     /// Dabs the stroke in progress has placed so far (the performance benchmarks count them).
-    #[cfg(test)]
     pub fn stroke_dabs(&self) -> Option<usize> {
         self.active.as_ref().map(ActiveStroke::dabs)
     }

@@ -12,9 +12,21 @@
 //!
 //! `MC_PERF_MESH` names the stroke benchmark's mesh (default: the corpus's Capricon `LP.obj`), `MC_PERF_DOCS` the edit
 //! benchmark's documents (`.mcpaint`, separated by `:`).
+//!
+//! Step 52 made them general: a benchmark is a scenario described as data (`materialcraft_perf::Scenario`), played
+//! by the one [`runner`] ([`source`] opens, [`stroke_play`] and [`edit_play`] act, [`measure`] records). The two
+//! tests above are thin wrappers around the built-in scenarios `stroke-2k` and `edits-big`; `mcperf` runs any
+//! scenario through the editor binary's `--perf-run` and keeps the history.
 
+mod edit_play;
+#[cfg(test)]
 mod edits;
+mod measure;
+pub mod runner;
+mod source;
+#[cfg(test)]
 mod stroke;
+mod stroke_play;
 
 use super::channel_view::ChannelView;
 use super::document_state::OpenDocument;
@@ -86,21 +98,8 @@ pub fn delta(a: SceneStats, b: SceneStats) -> SceneStats {
     }
 }
 
-/// Milliseconds, for the tables.
-pub fn ms(d: Duration) -> f64 {
-    d.as_secs_f64() * 1000.0
-}
-
-/// Mean and maximum of `values` in milliseconds.
-pub fn mean_max(values: &[Duration]) -> (f64, f64) {
-    if values.is_empty() {
-        return (0.0, 0.0);
-    }
-    let sum: f64 = values.iter().map(|d| ms(*d)).sum();
-    (sum / values.len() as f64, values.iter().map(|d| ms(*d)).fold(0.0, f64::max))
-}
-
 /// A corpus file from an environment variable or its default place; `None` (the benchmark is skipped) if missing.
+#[cfg(test)]
 pub fn corpus_file(var: &str, default: &str) -> Option<PathBuf> {
     let path = std::env::var_os(var).map(PathBuf::from).unwrap_or_else(|| PathBuf::from(default));
     if path.exists() {
