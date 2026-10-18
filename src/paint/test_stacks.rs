@@ -5,6 +5,7 @@
 
 use crate::paint::Mask;
 use crate::paint::effect::{Anchor, EffectRegistry, EvalRequest, FilterInput, FilterKernel, GeneratorSource, Grey, Levels, Procedural, Reach, Reference};
+use crate::paint::output::MaterialMaps;
 use crate::paint::{
     BakedKind, BakedMap, BlendMode, Channel, ContentEffect, EffectKind, Fill, GreyBlend, Layer, LayerKind, MaskEffect, PaintContent, PixelFormat, PixelLayout,
     SampleType, TextureSet, TiledImage,
@@ -99,6 +100,24 @@ fn base(size: (u32, u32)) -> TextureSet {
         1.0,
     ));
     s
+}
+
+/// Bit for bit, every map.
+pub fn assert_same_maps(a: &MaterialMaps, b: &MaterialMaps, what: &str) {
+    for c in Channel::STANDARD {
+        let (Some(x), Some(y)) = (a.map(c), b.map(c)) else { continue };
+        assert_eq!((x.w, x.h), (y.w, y.h));
+        let diff = x.px.iter().zip(&y.px).position(|(p, q)| p.map(f32::to_bits) != q.map(f32::to_bits));
+        assert!(diff.is_none(), "{what}: {c:?} differs at texel {:?}", diff.map(|i| (i % x.w, i / x.w)));
+    }
+}
+
+/// The images of the stack's paint layer `paint` (it may sit in a folder).
+pub fn paint_images(s: &mut TextureSet) -> &mut Vec<(Channel, TiledImage)> {
+    match s.layer_mut("paint").map(|l| &mut l.kind) {
+        Some(LayerKind::Paint(p)) => &mut p.images,
+        _ => panic!("no paint layer"),
+    }
 }
 
 /// Several local stacks (see the module docs), each with a paint layer `paint` to paint into.
@@ -255,7 +274,8 @@ fn proc(id: &str) -> Procedural {
     Procedural::new(id)
 }
 
-fn grey_effect(kind: EffectKind<Grey>) -> MaskEffect {
+/// A mask effect blended normally at full opacity.
+pub fn grey_effect(kind: EffectKind<Grey>) -> MaskEffect {
     MaskEffect::new(GreyBlend { mode: BlendMode::Normal, opacity: 1.0 }, kind)
 }
 

@@ -2,11 +2,11 @@
 //! mask that reads the stack, of a layer a reference reads, of a filter's parameter, of unrelated layers.
 
 use super::*;
-use crate::paint::effect::{Anchor, EffectRegistry, Grey, Procedural, Reference};
+use crate::paint::effect::{Anchor, EffectRegistry, Procedural, Reference};
 use crate::paint::output::{MaterialMaps, OutputOptions};
 use crate::paint::stack::NO_FILL_CONTEXT;
-use crate::paint::test_stacks::{Blur, HeightBelow, blobs, local_stacks, paint_disc};
-use crate::paint::{BlendMode, Channel, Fill, GreyBlend, LayerKind, Mask, MaskEffect, PixelFormat, PixelLayout, SampleType};
+use crate::paint::test_stacks::{Blur, HeightBelow, assert_same_maps as assert_same, blobs, grey_effect, local_stacks, paint_disc, paint_images};
+use crate::paint::{BlendMode, Channel, Fill, LayerKind, Mask, PixelFormat, PixelLayout, SampleType};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static ANY: AtomicUsize = AtomicUsize::new(0);
@@ -23,10 +23,6 @@ fn counting(calls: &'static AtomicUsize) -> EffectRegistry {
     r
 }
 
-fn grey(mode: BlendMode, kind: EffectKind<Grey>) -> MaskEffect {
-    MaskEffect::new(GreyBlend { mode, opacity: 1.0 }, kind)
-}
-
 fn fill(id: &str, c: Channel, v: f32) -> Layer {
     Layer::new(id, id, LayerKind::Fill(Fill::uniform(vec![(c, [v, v * 0.7, v * 0.3, 1.0])]))).with_blend(c, BlendMode::Normal, 1.0)
 }
@@ -40,27 +36,18 @@ fn stack(k: usize) -> TextureSet {
     let mut blurred = fill("blurred", Channel::BaseColor, 0.9);
     blurred.mask = Some(
         Mask::new(0.0)
-            .with_effect(grey(BlendMode::Normal, EffectKind::Paint(crate::paint::MaskPixels::new(blobs(size, 70, ga8)))))
-            .with_effect(grey(BlendMode::Normal, EffectKind::Filter(Procedural::new("blur"))))
-            .with_effect(grey(BlendMode::Normal, EffectKind::Anchor(Anchor { id: "a1".into() }))),
+            .with_effect(grey_effect(EffectKind::Paint(crate::paint::MaskPixels::new(blobs(size, 70, ga8)))))
+            .with_effect(grey_effect(EffectKind::Filter(Procedural::new("blur"))))
+            .with_effect(grey_effect(EffectKind::Anchor(Anchor { id: "a1".into() }))),
     );
     s.layers.push(blurred);
     let mut heights = fill("heights", Channel::Roughness, 0.1);
-    heights.mask = Some(Mask::new(0.0).with_effect(grey(BlendMode::Normal, EffectKind::Generator(Procedural::new("below")))));
+    heights.mask = Some(Mask::new(0.0).with_effect(grey_effect(EffectKind::Generator(Procedural::new("below")))));
     s.layers.push(heights);
     let mut refers = fill("refers", Channel::Metallic, 1.0);
-    refers.mask =
-        Some(Mask::new(0.0).with_effect(grey(BlendMode::Normal, EffectKind::Reference(Reference { anchor: "a1".into(), channel: None, levels: None }))));
+    refers.mask = Some(Mask::new(0.0).with_effect(grey_effect(EffectKind::Reference(Reference { anchor: "a1".into(), channel: None, levels: None }))));
     s.layers.push(refers);
     s
-}
-
-fn assert_same(a: &MaterialMaps, b: &MaterialMaps, what: &str) {
-    for c in Channel::STANDARD {
-        let (Some(x), Some(y)) = (a.map(c), b.map(c)) else { continue };
-        let diff = x.px.iter().zip(&y.px).position(|(p, q)| p.map(f32::to_bits) != q.map(f32::to_bits));
-        assert!(diff.is_none(), "{what}: {c:?} differs at texel {diff:?}");
-    }
 }
 
 /// Builds `s` with the cache and fresh; they must agree.
@@ -73,8 +60,7 @@ fn check(cache: &StackCache, s: &TextureSet, reg: &EffectRegistry, what: &str) {
 }
 
 fn paint_layer(s: &mut TextureSet) -> &mut crate::paint::TiledImage {
-    let Some(LayerKind::Paint(p)) = s.layer_mut("paint").map(|l| &mut l.kind) else { panic!("no paint layer") };
-    &mut p.images[0].1
+    &mut paint_images(s)[0].1
 }
 
 #[test]
@@ -172,8 +158,7 @@ fn references_into_an_effect_layer_follow_the_stack_below_it() {
     fx.effects.push(crate::paint::ContentEffect::new(Vec::new(), EffectKind::Anchor(Anchor { id: "a2".into() })));
     s.layers.push(fx);
     let mut reads = fill("reads", Channel::Roughness, 0.8);
-    reads.mask =
-        Some(Mask::new(0.0).with_effect(grey(BlendMode::Normal, EffectKind::Reference(Reference { anchor: "a2".into(), channel: None, levels: None }))));
+    reads.mask = Some(Mask::new(0.0).with_effect(grey_effect(EffectKind::Reference(Reference { anchor: "a2".into(), channel: None, levels: None }))));
     s.layers.push(reads);
     check(&cache, &s, &reg, "first");
     s.layer_mut("dirt").expect("dirt").opacity = 0.1;

@@ -101,21 +101,9 @@ fn has_reference(l: &Layer) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paint::effect::{EvalRequest, FilterInput, FilterKernel, Procedural, Reference};
+    use crate::paint::effect::{Procedural, Reference};
+    use crate::paint::test_stacks::Blur;
     use crate::paint::{Channel, ContentEffect, EffectRegistry, Fill, PaintContent, TextureSet};
-
-    struct Wide(u32);
-    impl FilterKernel for Wide {
-        fn radius(&self, _: &EvalRequest) -> u32 {
-            self.0
-        }
-        fn reach(&self, _: &EvalRequest) -> Reach {
-            Reach::radius(self.0)
-        }
-        fn apply(&self, _: &EvalRequest, _: &FilterInput, _: &mut [[f32; 4]]) -> Result<(), String> {
-            Ok(())
-        }
-    }
 
     fn layer(id: &str, mode: BlendMode) -> Layer {
         Layer::new(id, id, LayerKind::Fill(Fill::uniform(vec![(Channel::BaseColor, [0.5; 4])]))).with_blend(Channel::BaseColor, mode, 1.0)
@@ -128,8 +116,8 @@ mod tests {
     #[test]
     fn filters_reading_the_changed_layer_add_up() {
         let mut reg = EffectRegistry::new();
-        reg.add_filter("r3", Box::new(Wide(3)));
-        reg.add_filter("r5", Box::new(Wide(5)));
+        reg.add_filter("r3", Box::new(Blur(3)));
+        reg.add_filter("r5", Box::new(Blur(5)));
         let f = |id: &str| EffectKind::Filter(Procedural::new(id));
         let mut s = TextureSet::new("s", "S", (64, 64)).with_channel(Channel::BaseColor);
         s.layers.push(with(layer("below", BlendMode::Normal), f("r5"))); // reads only itself

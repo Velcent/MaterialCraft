@@ -5,7 +5,7 @@ use super::*;
 use crate::paint::effect::EffectRegistry;
 use crate::paint::height_normal::HeightFilter;
 use crate::paint::stack::{NO_FILL_CONTEXT, StackCache};
-use crate::paint::test_stacks::{Blur, local_stacks, paint_disc, reaching_stacks, registry};
+use crate::paint::test_stacks::{Blur, assert_same_maps as assert_same, local_stacks, paint_disc, paint_images, reaching_stacks, registry};
 use crate::paint::{Layer, LayerKind};
 use crate::tex::Tex;
 
@@ -61,24 +61,6 @@ fn map_mut(m: &mut MaterialMaps, c: Channel) -> Option<&mut Tex> {
         Channel::Opacity => &mut m.opacity,
         Channel::User(_) => return None,
     })
-}
-
-/// Bit for bit, every map.
-fn assert_same(a: &MaterialMaps, b: &MaterialMaps, what: &str) {
-    for c in Channel::STANDARD {
-        let (Some(x), Some(y)) = (a.map(c), b.map(c)) else { continue };
-        assert_eq!((x.w, x.h), (y.w, y.h));
-        let diff = x.px.iter().zip(&y.px).position(|(p, q)| p.map(f32::to_bits) != q.map(f32::to_bits));
-        assert!(diff.is_none(), "{what}: {c:?} differs at texel {:?}", diff.map(|i| (i % x.w, i / x.w)));
-    }
-}
-
-/// The paint layer's images (it may sit in a folder).
-fn paint_images(s: &mut TextureSet) -> &mut Vec<(Channel, crate::paint::TiledImage)> {
-    match s.layer_mut("paint").map(|l| &mut l.kind) {
-        Some(LayerKind::Paint(p)) => &mut p.images,
-        _ => panic!("no paint layer"),
-    }
 }
 
 /// Paints a disc into every image of the paint layer; the tiles it changed.
