@@ -4,6 +4,7 @@
 //! The state lives in [`super::projection_edit::ProjectionEditing`].
 
 use super::PaintMode;
+use super::instance_reach::Reach;
 use super::panels::PanelEvent;
 use super::panels::projection::ProjectionEvent;
 use super::projection_edit::view::GizmoView;
@@ -44,12 +45,13 @@ impl PaintMode {
         }
     }
 
-    /// Recomposites the texture set of `target`.
+    /// Recomposites the texture set of `target`, and the sets with instances of its layer (IN-13).
     fn refresh_fill(&mut self, target: &FillRef) {
         if let Some(doc) = &mut self.document
             && let Some(set) = doc.set_index(&target.layer.set)
         {
-            self.scene.refresh(doc, self.display, vec![set]);
+            let also = Reach::of_layer(doc.doc(), &target.layer).also(doc.doc(), Some(set));
+            self.scene.refresh(doc, self.display, std::iter::once(set).chain(also).collect());
         }
     }
 

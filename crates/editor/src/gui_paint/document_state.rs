@@ -56,14 +56,16 @@ impl OpenDocument {
         &self.doc
     }
 
-    /// What a maps worker compositing `sets` reads: those texture sets and the output settings. Other sets keep
-    /// only their placement; the mesh, the kept files and the import report are left out (fills that need the
-    /// mesh's surface get it from [`Self::shared_mesh`]). Cheap (layer images share their tiles), and the document
-    /// itself stays unshared, so edits while the worker runs change it in place instead of copying it.
+    /// What a maps worker compositing `sets` reads: those texture sets, with their layer instances resolved (IN-01),
+    /// and the output settings. Other sets keep only their placement; the mesh, the kept files and the import report
+    /// are left out (fills that need the mesh's surface get it from [`Self::shared_mesh`]). Cheap (layer images share
+    /// their tiles), and the document itself stays unshared, so edits while the worker runs change it in place
+    /// instead of copying it.
     pub fn maps_view(&self, sets: &[usize]) -> Arc<Document> {
         let doc = &self.doc;
+        let composited = |i: usize, s: &TextureSet| doc.resolved_set(i).map_or_else(|| s.clone(), |r| r.into_owned());
         let texture_sets: Vec<TextureSet> =
-            doc.texture_sets.iter().enumerate().map(|(i, s)| if sets.contains(&i) { s.clone() } else { placement(s) }).collect();
+            doc.texture_sets.iter().enumerate().map(|(i, s)| if sets.contains(&i) { composited(i, s) } else { placement(s) }).collect();
         Arc::new(Document { texture_sets, height_filter: doc.height_filter, ..Document::default() })
     }
 

@@ -2,6 +2,7 @@
 //! `paint::edit::ops` operation inside [`OpenDocument::edit`], so it can be undone as a whole.
 
 use super::document_state::OpenDocument;
+use super::instance_reach::Reach;
 use super::panels::layers::LayerEvent;
 use materialcraft::paint::edit::ops::{self, DropOutcome};
 use materialcraft::paint::edit::{Edit, EditError, LayerProperty, LayerRef, Transaction};
@@ -12,6 +13,8 @@ use materialcraft::paint::{BlendMode, Channel, Layer};
 pub struct Applied {
     /// Index of the texture set whose stack changed (its maps need recompositing).
     pub set: Option<usize>,
+    /// Other sets the change reaches through layer instances (IN-13); they need recompositing too.
+    pub also: Vec<usize>,
     /// Layers to select afterwards (new layers, copies, a new folder).
     pub select: Option<Vec<String>>,
 }
@@ -28,9 +31,12 @@ pub fn apply(doc: &mut OpenDocument, ev: LayerEvent) -> Result<Applied, EditErro
             return Ok(Applied::default());
         }
     };
-    let select = run(doc, ev)?;
+    let mut reach = Reach::before(doc.doc(), &ev);
+    let select = run(doc, ev.clone())?;
+    reach.after(doc.doc(), &ev, select.as_deref().unwrap_or_default());
     let set = doc.doc().texture_sets.iter().position(|s| s.id == set_id);
-    Ok(Applied { set, select })
+    let also = reach.also(doc.doc(), set);
+    Ok(Applied { set, also, select })
 }
 
 fn set_of(ev: &LayerEvent) -> Option<&str> {
@@ -42,6 +48,8 @@ fn set_of(ev: &LayerEvent) -> Option<&str> {
             &layer.set
         }
         Drop { target, .. } => target.set(),
+        Instantiate { source, .. } => &source.set,
+        PasteInstance { set, .. } => set,
         EndGesture | Isolate(_) | EditGeometryMask(_) | SaveAsset(_) => return None,
     })
 }
@@ -85,6 +93,10 @@ fn run(doc: &mut OpenDocument, ev: LayerEvent) -> Result<Option<Vec<String>>, Ed
                 DropOutcome::Effects { .. } => None,
             })
         }),
+        Instantiate { source, sets } => none(doc.edit("Instantiate across texture sets", None, |tx| ops::instantiate(tx, &source, &sets).map(|_| ()))),
+        PasteInstance { source, set, above } => {
+            doc.edit("Paste as instance", None, |tx| ops::paste_instance(tx, &source, &set, above.as_deref()).map(|id| Some(vec![id])))
+        }
         EndGesture | Isolate(_) | EditGeometryMask(_) | SaveAsset(_) => Ok(None),
     }
 }

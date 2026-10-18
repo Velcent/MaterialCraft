@@ -75,6 +75,17 @@ pub enum LayerEvent {
     SetGeometryMask(LayerRef, Option<GeometryMask>),
     /// Enter the geometry mask edit mode for this layer (`None`: leave it, GM-03). View state only.
     EditGeometryMask(Option<LayerRef>),
+    /// Instances of `source` in each of the texture sets `sets` (ids), one history step (IN-07).
+    Instantiate {
+        source: LayerRef,
+        sets: Vec<String>,
+    },
+    /// An instance of `source` in texture set `set`, directly above layer `above` (the top without one) (IN-05).
+    PasteInstance {
+        source: LayerRef,
+        set: String,
+        above: Option<String>,
+    },
     /// Save layers or a mask into the user's asset library (MK-15). Not a document change.
     SaveAsset(SaveAsset),
     /// An asset dropped onto the stack; `replace` is Ctrl. Sent by the asset tray (step 15).

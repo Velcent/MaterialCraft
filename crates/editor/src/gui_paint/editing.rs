@@ -31,7 +31,7 @@ impl PaintMode {
                     self.layers.select(ids);
                 }
                 if let Some(set) = applied.set {
-                    self.scene.refresh(doc, self.display, vec![set]);
+                    self.scene.refresh(doc, self.display, std::iter::once(set).chain(applied.also).collect());
                 }
             }
             Err(e) => self.diag.warn(Area::Project, format!("That layer change was not made: {e}.")),
