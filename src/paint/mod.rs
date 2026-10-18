@@ -55,6 +55,7 @@ pub mod report;
 pub mod saved_camera;
 pub mod saved_view;
 pub mod see_through;
+pub mod set_changes;
 pub mod stack;
 pub mod stroke;
 pub mod texture_set;

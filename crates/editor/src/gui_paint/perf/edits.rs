@@ -4,6 +4,7 @@
 //! an undo (which goes through the history's path).
 
 use super::{Bench, ms};
+use crate::gui_paint::editing::{Moved, history_move};
 use crate::gui_paint::panels::layers::LayerEvent;
 use crate::gui_paint::stack_editor;
 use materialcraft::history::CoalesceKey;
@@ -80,8 +81,12 @@ fn edits_on(path: &Path) {
         report("effect parameter", &mut b, vec![set]);
     }
     // undo goes through the history path (`editing::move_in_history`)
-    b.doc.undo().expect("undo");
-    report("undo", &mut b, (0..sets).collect());
+    let (result, moved) = history_move(&mut b.doc, |d| d.undo().map(|_| ()));
+    result.expect("undo");
+    match moved {
+        Moved::Changed(changed) => report("undo", &mut b, changed),
+        Moved::SetsAddedOrRemoved => report("undo", &mut b, (0..sets).collect()),
+    }
 }
 
 fn report(what: &str, b: &mut Bench, sets: Vec<usize>) {

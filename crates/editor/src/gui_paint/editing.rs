@@ -7,6 +7,7 @@ use super::panels::layers::LayerEvent;
 use super::stack_editor;
 use materialcraft::diag::{Area, SinkExt};
 use materialcraft::paint::edit::EditError;
+use materialcraft::paint::set_changes::CompositeState;
 
 impl PaintMode {
     /// A layer panel request: an edit of the stack as one history step, then the set is recomposited.
@@ -38,17 +39,59 @@ impl PaintMode {
         }
     }
 
-    /// Undo, redo or a timeline jump, then recompositing: the history does not say which sets changed.
+    /// Undo, redo or a timeline jump, then recompositing the sets that changed (the history does not say which, so
+    /// the state before the move is compared with the state after it).
     pub(super) fn move_in_history(&mut self, what: &str, step: impl FnOnce(&mut OpenDocument) -> Result<(), EditError>) {
         let Some(doc) = &mut self.document else { return };
-        if let Err(e) = step(doc) {
+        let (result, moved) = history_move(doc, step);
+        if let Err(e) = result {
             self.diag.warn(Area::Project, format!("{what} failed: {e}. The history before that point was dropped."));
         }
-        if doc.sync_sets() {
-            self.scene.rebuild(doc, self.display);
-        } else {
-            let all = (0..doc.doc().texture_sets.len()).collect();
-            self.scene.refresh(doc, self.display, all);
+        match moved {
+            Moved::SetsAddedOrRemoved => self.scene.rebuild(doc, self.display),
+            Moved::Changed(sets) => self.scene.refresh(doc, self.display, sets),
         }
+    }
+}
+
+/// What a move in the history needs recomposited.
+#[derive(Debug, PartialEq)]
+pub(super) enum Moved {
+    /// The number of texture sets changed: the scene is rebuilt.
+    SetsAddedOrRemoved,
+    /// These sets changed.
+    Changed(Vec<usize>),
+}
+
+/// Runs a move in the history (`step`) and finds out what it changed.
+pub(super) fn history_move(doc: &mut OpenDocument, step: impl FnOnce(&mut OpenDocument) -> Result<(), EditError>) -> (Result<(), EditError>, Moved) {
+    let before = CompositeState::of(doc.doc());
+    let result = step(doc);
+    let moved = if doc.sync_sets() { Moved::SetsAddedOrRemoved } else { Moved::Changed(before.changed_sets(doc.doc())) };
+    (result, moved)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gui_paint::panels::layers::LayerEvent;
+    use crate::gui_paint::stack_editor;
+    use materialcraft::paint::{Document, TextureSet};
+    use std::path::PathBuf;
+
+    #[test]
+    fn undo_names_only_the_set_it_changed() {
+        let mut d = Document::default();
+        for id in ["a", "b", "c"] {
+            d.texture_sets.push(TextureSet::new(id, id, (8, 8)));
+        }
+        let mut doc = OpenDocument::new(d, PathBuf::from("t.mcpaint"), None);
+        let create = LayerEvent::Create { set: "b".into(), what: materialcraft::paint::edit::ops::NewLayer::Fill, above: None };
+        stack_editor::apply(&mut doc, create).expect("create");
+        let (r, moved) = history_move(&mut doc, |d| d.undo().map(|_| ()));
+        assert!(r.is_ok());
+        assert_eq!(moved, Moved::Changed(vec![1]));
+        let (_, moved) = history_move(&mut doc, |d| d.redo().map(|_| ()));
+        assert_eq!(moved, Moved::Changed(vec![1]));
     }
 }
