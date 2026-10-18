@@ -10,6 +10,7 @@
 //!   effect stacks, blend entries and geometry masks of layers.
 //! - [`view`]: the camera list, exposure and environment the document was last looked at with.
 //! - [`shading`]: shader instances, the texture sets' instances and the mesh's length unit.
+//! - [`project`]: the settings chosen when the project was made (normal map format, tangent frame, fill sizing).
 
 pub mod bake_config;
 pub mod bake_enums;
@@ -25,6 +26,7 @@ pub mod geometry_mask;
 pub mod image_ref;
 pub mod layer;
 pub mod mesh_faces;
+pub mod project;
 pub mod projection;
 pub mod report;
 pub mod shading;
@@ -119,6 +121,7 @@ pub fn write(doc: &Document, ctx: &WriteCtx, thumbnail: bool) -> Value {
         v.insert("view", view::write(view, ctx.extras));
     }
     shading::write(&doc.shading, &mut v, ctx.extras);
+    project::write(&doc.project, &mut v, ctx.extras);
     if doc.import_report.is_some() {
         v.insert("import_report", paths::IMPORT_REPORT);
     }
@@ -154,6 +157,7 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
     let mesh_faces = mesh_faces::read(&mut o)?;
     doc.view = view::read(&mut o, &mut ctx);
     doc.shading = shading::read(&mut o, &mut ctx)?;
+    doc.project = project::read(&mut o, &mut ctx)?;
     let manifest = Manifest {
         version,
         mesh: o.str("mesh")?.to_string(),

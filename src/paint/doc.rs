@@ -3,6 +3,7 @@
 use super::bake_config::BakeLinks;
 use super::embedded::EmbeddedAsset;
 use super::height_normal::HeightFilter;
+use super::project_settings::ProjectSettings;
 use super::report::ImportReport;
 use super::saved_view::SavedView;
 use super::texture_set::TextureSet;
@@ -39,6 +40,8 @@ pub struct Document {
     /// Shader instances, which texture set uses which, and the mesh's length unit (VS-03, VS-12). Changed only
     /// through the shader settings' own history, never the project timeline.
     pub shading: ShaderSettings,
+    /// Normal map convention, tangent frame and fill sizing chosen when the project was made.
+    pub project: ProjectSettings,
 }
 
 impl Document {

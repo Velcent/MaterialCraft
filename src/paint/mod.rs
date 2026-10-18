@@ -47,6 +47,7 @@ pub mod output;
 pub(crate) mod par;
 pub mod pixel;
 pub mod probe;
+pub mod project_settings;
 pub mod report;
 pub mod saved_camera;
 pub mod saved_view;
@@ -72,6 +73,7 @@ pub use layer::{ChannelBlend, Fill, FillSource, Layer, LayerImage, LayerKind, Pa
 pub use mask::Mask;
 pub use output::{MaterialMaps, OutputOptions};
 pub use pixel::{PixelFormat, PixelLayout, SampleType};
+pub use project_settings::{NormalMapFormat, ProjectSettings};
 pub use report::{Fidelity, ImportReport, ReportEntry};
 pub use stack::{ChainedSources, CompositeWarning, Compositor, FillContext, FillRequest, FillSources, NO_FILL_CONTEXT, NoFillSources};
 pub use texture_set::{BakedKind, BakedMap, TextureSet};

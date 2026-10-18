@@ -10,6 +10,7 @@ mod fixtures;
 mod fragments;
 mod instances;
 mod manifest_errors;
+mod project;
 mod projections;
 mod round_trip;
 mod shading;

@@ -57,7 +57,7 @@ fn texture_fills_round_trip() {
     assert_eq!(back, doc);
     assert_eq!(to_bytes(&back), bytes, "load → save reproduces the file");
     let v = manifest(&bytes);
-    assert_eq!(v["format_version"].as_str(), Some("0.16"));
+    assert_eq!(v["format_version"].as_str(), Some(crate::paint::format::FORMAT_VERSION));
     let fill = &v["texture_sets"][0]["layers"][0]["fill"];
     assert_eq!(fill["textures"]["roughness"]["id"].as_str(), Some("perlin"));
     assert_eq!(fill["textures"]["roughness"]["params"]["scale"].as_str(), Some("2"));
