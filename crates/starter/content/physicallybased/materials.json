@@ -1,0 +1,6410 @@
+{
+ "header": {
+  "schemaVersion": 2.2,
+  "updated": 202610110901,
+  "license": "CC0 1.0 Universal",
+  "origin": "https://api.physicallybased.info/v2/materials",
+  "deprecated": false
+ },
+ "data": [
+  {
+   "name": "Aluminum",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.916,
+      0.923,
+      0.924
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.918,
+      0.922,
+      0.923
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.989,
+        0.989,
+        0.972
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.985,
+        0.989,
+        0.993
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.91,
+        0.936,
+        0.959
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.921,
+        0.934,
+        0.955
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0.728978,
+      0.588215,
+      0.78354
+     ],
+     "k": [
+      6.45971,
+      5.19646,
+      4.37746
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.73826,
+      0.58846,
+      0.401312
+     ],
+     "k": [
+      5.76125,
+      5.26448,
+      4.35851
+     ]
+    }
+   ],
+   "density": [
+    2700
+   ],
+   "category": [
+    "Metal"
+   ],
+   "tags": [
+    "aluminium",
+    "mirror"
+   ]
+  },
+  {
+   "name": "Aluminum (Anodized Red)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.6,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.368,
+      0.042,
+      0.012
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.989,
+        0.989,
+        0.972
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.985,
+        0.989,
+        0.993
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.91,
+        0.936,
+        0.959
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.921,
+        0.934,
+        0.955
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0.3,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0.728978,
+      0.588215,
+      0.78354
+     ],
+     "k": [
+      6.45971,
+      5.19646,
+      4.37746
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.73826,
+      0.58846,
+      0.401312
+     ],
+     "k": [
+      5.76125,
+      5.26448,
+      4.35851
+     ]
+    }
+   ],
+   "density": [
+    2700
+   ],
+   "category": [
+    "Metal"
+   ],
+   "tags": [
+    "aluminium"
+   ]
+  },
+  {
+   "name": "Amber",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.83,
+      0.288,
+      0.036
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.5,
+   "transmission": 1,
+   "density": [
+    1060,
+    1100
+   ],
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Asphalt (Fresh)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.0429,
+      0.0414,
+      0.0401
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.6,
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "tarmac",
+    "bitumen"
+   ]
+  },
+  {
+   "name": "Banana",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.634,
+      0.532,
+      0.111
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.5,
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Beer (Pale Lager)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.889,
+      0.775,
+      0.558
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.33,
+   "transmission": 1,
+   "transmissionDepth": 1,
+   "transmissionDispersion": 56,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.1149,
+       0.2491,
+       0.5779
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.003,
+       0.005,
+       0.006
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.917,
+       0.956,
+       0.982
+      ]
+     }
+    ]
+   },
+   "density": [
+    958,
+    1000,
+    1000
+   ],
+   "viscosity": [
+    1.002
+   ],
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Beryllium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.539,
+      0.533,
+      0.534
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.537,
+      0.534,
+      0.534
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.549,
+        0.503,
+        0.364
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.504,
+        0.509,
+        0.545
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.731,
+        0.738,
+        0.755
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.734,
+        0.738,
+        0.752
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      3.21038,
+      3.32907,
+      3.77105
+     ],
+     "k": [
+      3.29815,
+      3.11669,
+      2.66995
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      3.36492,
+      3.30825,
+      3.09051
+     ],
+     "k": [
+      3.16402,
+      3.13463,
+      3.12791
+     ]
+    }
+   ],
+   "density": [
+    1850
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Blackboard",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.039,
+      0.039,
+      0.039
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.9,
+   "ior": 1.5,
+   "category": [
+    "Manmade"
+   ]
+  },
+  {
+   "name": "Blood (Deoxygenated)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.415,
+      0.0,
+      0.0
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.35,
+   "transmission": 1,
+   "transmissionDepth": 0.08,
+   "transmissionDispersion": 54,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       40.7,
+       259.9,
+       91.2
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       901.2,
+       864.5,
+       1220.8
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.9869,
+       0.9886,
+       0.9896
+      ]
+     }
+    ]
+   },
+   "density": [
+    1060
+   ],
+   "viscosity": [
+    2.35,
+    4,
+    2.78
+   ],
+   "surfaceTension": 56,
+   "category": [
+    "Human"
+   ],
+   "tags": [
+    "liquid"
+   ]
+  },
+  {
+   "name": "Blood (Oxygenated)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.644,
+      0.003,
+      0.005
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.35,
+   "transmission": 1,
+   "transmissionDepth": 0.08,
+   "transmissionDispersion": 54,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       8.8,
+       238.6,
+       189.7
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       880.9,
+       714.9,
+       817.4
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.986,
+       0.9874,
+       0.989
+      ]
+     }
+    ]
+   },
+   "density": [
+    1060
+   ],
+   "viscosity": [
+    2.35,
+    4,
+    2.78
+   ],
+   "surfaceTension": 56,
+   "category": [
+    "Human"
+   ],
+   "tags": [
+    "liquid"
+   ]
+  },
+  {
+   "name": "Bone",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.793,
+      0.793,
+      0.664
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.9,
+   "ior": 1.5,
+   "density": [
+    1000,
+    2000,
+    1500
+   ],
+   "category": [
+    "Organic"
+   ],
+   "tags": [
+    "skeleton"
+   ]
+  },
+  {
+   "name": "Brass",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.91,
+      0.778,
+      0.423
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.844,
+      0.782,
+      0.473
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.995,
+        0.974,
+        0.747
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.983,
+        0.975,
+        0.866
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.952,
+        0.979,
+        1.021
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.963,
+        0.977,
+        1.013
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0.341048,
+      0.53349,
+      1.42749
+     ],
+     "k": [
+      4.14088,
+      2.67993,
+      1.87543
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.473454,
+      0.521254,
+      1.0339
+     ],
+     "k": [
+      3.16368,
+      2.69584,
+      1.92658
+     ]
+    }
+   ],
+   "density": [
+    8600
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Brick",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.262,
+      0.095,
+      0.061
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 1.0,
+   "diffuseRoughness": 1.0,
+   "ior": 1.5,
+   "density": [
+    500,
+    2400,
+    2000
+   ],
+   "acousticAbsorption": [
+    0.03,
+    0.03,
+    0.03,
+    0.04,
+    0.05,
+    0.07
+   ],
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "acoustics",
+    "audio"
+   ]
+  },
+  {
+   "name": "Car Paint",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.1,
+      0.1,
+      0.1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.5,
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "acrylic",
+    "coat",
+    "lacquer"
+   ]
+  },
+  {
+   "name": "Cardboard",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.351,
+      0.208,
+      0.11
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.5,
+   "density": [
+    700
+   ],
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "corrugated fiberboard"
+   ]
+  },
+  {
+   "name": "Carrot",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.713,
+      0.17,
+      0.026
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.5,
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Cast Iron",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.027,
+      0.026,
+      0.026
+     ]
+    }
+   ],
+   "metalness": 1,
+   "roughness": 0.3,
+   "ior": 1.5,
+   "density": [
+    6800,
+    7800
+   ],
+   "category": [
+    "Manmade"
+   ]
+  },
+  {
+   "name": "Cesium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.718,
+      0.554,
+      0.237
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.633,
+      0.561,
+      0.299
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.997,
+        1.002,
+        1.073
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.997,
+        1.002,
+        1.055
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        1.087,
+        1.18,
+        1.44
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        1.128,
+        1.175,
+        1.394
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0.204334,
+      0.272018,
+      0.449252
+     ],
+     "k": [
+      1.19256,
+      0.906033,
+      0.517209
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.247616,
+      0.26693,
+      0.382321
+     ],
+     "k": [
+      1.06956,
+      0.91021,
+      0.519484
+     ]
+    }
+   ],
+   "density": [
+    1886
+   ],
+   "category": [
+    "Metal"
+   ],
+   "tags": [
+    "caesium"
+   ]
+  },
+  {
+   "name": "Charcoal",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.02,
+      0.02,
+      0.02
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 1.0,
+   "diffuseRoughness": 1.0,
+   "ior": 1.5,
+   "density": [
+    200,
+    500,
+    200
+   ],
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Chocolate",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.162,
+      0.091,
+      0.06
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.5,
+   "subsurfaceRadius": [
+    0.1,
+    0.05,
+    0.025
+   ],
+   "density": [
+    1229,
+    1336,
+    1300
+   ],
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Chromium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.654,
+      0.685,
+      0.701
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.666,
+      0.682,
+      0.698
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.591,
+        0.675,
+        0.703
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.608,
+        0.674,
+        0.797
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.688,
+        0.728,
+        0.798
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.706,
+        0.726,
+        0.788
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      4.19382,
+      3.53806,
+      2.91521
+     ],
+     "k": [
+      4.85545,
+      4.89986,
+      4.25568
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      3.99955,
+      3.5489,
+      2.40724
+     ],
+     "k": [
+      4.78865,
+      4.90046,
+      4.50602
+     ]
+    }
+   ],
+   "density": [
+    7200
+   ],
+   "category": [
+    "Metal"
+   ],
+   "tags": [
+    "chrome"
+   ]
+  },
+  {
+   "name": "Clay",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.256,
+      0.118,
+      0.091
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.5,
+   "density": [
+    812
+   ],
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "plasticine"
+   ]
+  },
+  {
+   "name": "Cobalt",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.699,
+      0.704,
+      0.671
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.699,
+      0.703,
+      0.676
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.731,
+        0.775,
+        0.715
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.73,
+        0.774,
+        0.814
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.727,
+        0.772,
+        0.823
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.747,
+        0.77,
+        0.815
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      3.33754,
+      2.6841,
+      2.57555
+     ],
+     "k": [
+      5.27723,
+      4.73548,
+      3.81892
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      3.14981,
+      2.70481,
+      2.06112
+     ],
+     "k": [
+      4.96614,
+      4.76092,
+      4.00685
+     ]
+    }
+   ],
+   "density": [
+    8900
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Coffee",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.447,
+      0.133,
+      0.034
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.34,
+   "transmission": 1,
+   "transmissionDepth": 0.1,
+   "transmissionDispersion": 55.78,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       47.9838,
+       65.7512,
+       88.4925
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       77.826,
+       81.305,
+       85.388
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.907,
+       0.896,
+       0.88
+      ]
+     }
+    ]
+   },
+   "density": [
+    1020
+   ],
+   "viscosity": [
+    1.7
+   ],
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Cola",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.358,
+      0.186,
+      0.085
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.3325,
+   "transmission": 1,
+   "transmissionDepth": 1.0,
+   "transmissionDispersion": 55.78,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       1.0014,
+       1.6503,
+       2.468
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.025,
+       0.03,
+       0.0
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.965,
+       0.972,
+       1.0
+      ]
+     }
+    ]
+   },
+   "density": [
+    958,
+    1000,
+    1000
+   ],
+   "viscosity": [
+    1.002
+   ],
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Concrete",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.51,
+      0.51,
+      0.51
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.5,
+   "density": [
+    2400
+   ],
+   "acousticAbsorption": [
+    0.01,
+    0.01,
+    0.02,
+    0.02,
+    0.02,
+    0.02
+   ],
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "acoustics",
+    "audio"
+   ]
+  },
+  {
+   "name": "Cooking Oil",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.737911,
+      0.687,
+      0.091
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.47,
+   "transmission": 1,
+   "density": [
+    920
+   ],
+   "viscosity": [
+    46
+   ],
+   "surfaceTension": 31,
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Copper",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.932,
+      0.623,
+      0.522
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.811,
+      0.643,
+      0.542
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.999,
+        0.9,
+        0.744
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.979,
+        0.915,
+        0.85
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.982,
+        0.947,
+        0.945
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.97,
+        0.95,
+        0.946
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0.133762,
+      1.05661,
+      1.68637
+     ],
+     "k": [
+      3.10615,
+      2.63095,
+      2.42655
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.4946,
+      0.974095,
+      1.23853
+     ],
+     "k": [
+      2.87217,
+      2.65208,
+      2.41041
+     ]
+    }
+   ],
+   "density": [
+    8940
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Cream",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.976,
+      0.9,
+      0.725
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.348,
+   "subsurfaceRadius": [
+    1.503,
+    0.466,
+    0.254
+   ],
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.002,
+       0.028,
+       0.163
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       73.8,
+       54.7,
+       31.5
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "density": [
+    1010,
+    1020,
+    1012
+   ],
+   "viscosity": [
+    20
+   ],
+   "surfaceTension": 40,
+   "category": [
+    "Liquid"
+   ],
+   "tags": [
+    "sss"
+   ]
+  },
+  {
+   "name": "Diamond",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 2.4168,
+   "transmission": 1,
+   "transmissionDispersion": 55.3,
+   "density": [
+    3500
+   ],
+   "category": [
+    "Crystal"
+   ]
+  },
+  {
+   "name": "Egg Shell (Brown)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.493,
+      0.248,
+      0.123
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.9,
+   "ior": 1.5,
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Egg Shell (White)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.61,
+      0.624,
+      0.631
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.9,
+   "ior": 1.5,
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Ethanol",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.362,
+   "transmission": 1,
+   "transmissionDispersion": 60,
+   "density": [
+    789
+   ],
+   "viscosity": [
+    1.2
+   ],
+   "surfaceTension": 22.27,
+   "category": [
+    "Liquid"
+   ],
+   "tags": [
+    "alcohol",
+    "vodka"
+   ]
+  },
+  {
+   "name": "Eye (Cornea)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.376,
+   "transmission": 1,
+   "category": [
+    "Human"
+   ]
+  },
+  {
+   "name": "Eye (Lens)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.386,
+   "transmission": 1,
+   "category": [
+    "Human"
+   ]
+  },
+  {
+   "name": "Eye (Sclera)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.652,
+      0.5,
+      0.394
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.4,
+   "subsurfaceRadius": [
+    0.482,
+    0.169,
+    0.109
+   ],
+   "category": [
+    "Human"
+   ]
+  },
+  {
+   "name": "Gasoline",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      0.97,
+      0.617
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.427,
+   "transmission": 1,
+   "density": [
+    770
+   ],
+   "viscosity": [
+    0.6
+   ],
+   "category": [
+    "Liquid"
+   ],
+   "tags": [
+    "petrol",
+    "fuel"
+   ]
+  },
+  {
+   "name": "Germanium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.5,
+      0.517,
+      0.465
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.504,
+      0.515,
+      0.472
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.068,
+        0.179,
+        0.002
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.069,
+        0.175,
+        0.252
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.62,
+        0.653,
+        0.701
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.635,
+        0.651,
+        0.694
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      5.63391,
+      5.06611,
+      4.81402
+     ],
+     "k": [
+      1.44383,
+      2.25088,
+      0.279501
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      5.51092,
+      5.07691,
+      4.11938
+     ],
+     "k": [
+      1.431,
+      2.22993,
+      2.23401
+     ]
+    }
+   ],
+   "density": [
+    5327
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Glass (Borosilicate)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.988,
+      0.992,
+      0.985
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.52,
+   "transmission": 1,
+   "transmissionDepth": 50,
+   "transmissionDispersion": 64,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.00237,
+       0.0018,
+       0.00301
+      ]
+     },
+     {
+      "colorSpace": "acescg",
+      "color": [
+       0.00221,
+       0.00186,
+       0.00286
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "colorSpace": "acescg",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "density": [
+    2230
+   ],
+   "acousticAbsorption": [
+    0.04,
+    0.04,
+    0.03,
+    0.03,
+    0.02,
+    0.02
+   ],
+   "category": [
+    "Crystal"
+   ],
+   "tags": [
+    "acoustics",
+    "audio",
+    "crown",
+    "bk7"
+   ]
+  },
+  {
+   "name": "Glass (Soda-lime)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.984,
+      0.995,
+      0.995
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.52,
+   "transmission": 1,
+   "transmissionDepth": 1,
+   "transmissionDispersion": 64,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.13941,
+       0.04527,
+       0.05334
+      ]
+     },
+     {
+      "colorSpace": "acescg",
+      "color": [
+       0.10337,
+       0.05197,
+       0.05422
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "colorSpace": "acescg",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "density": [
+    2520
+   ],
+   "acousticAbsorption": [
+    0.04,
+    0.04,
+    0.03,
+    0.03,
+    0.02,
+    0.02
+   ],
+   "category": [
+    "Crystal"
+   ],
+   "tags": [
+    "acoustics",
+    "audio"
+   ]
+  },
+  {
+   "name": "Gold",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1.059,
+      0.773,
+      0.307
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.929,
+      0.788,
+      0.374
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        1.001,
+        0.985,
+        0.523
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.997,
+        0.987,
+        0.757
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.971,
+        1.018,
+        0.994
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.987,
+        1.013,
+        0.997
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0,
+      0.351563,
+      1.85894
+     ],
+     "k": [
+      6.59401,
+      2.08143,
+      1.49631
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.190506,
+      0.330771,
+      1.35292
+     ],
+     "k": [
+      3.04413,
+      2.11776,
+      1.76193
+     ]
+    }
+   ],
+   "density": [
+    19320
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Grass",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.105,
+      0.133,
+      0.041
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.5,
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Gray Card",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.18,
+      0.18,
+      0.18
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.9,
+   "ior": 1.5,
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "grey",
+    "middle gray"
+   ]
+  },
+  {
+   "name": "Honey (Crystallized)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.449,
+      0.319,
+      0.011
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.3,
+   "ior": 1.504,
+   "subsurfaceRadius": [
+    0.2,
+    0.2,
+    0.2
+   ],
+   "density": [
+    1380,
+    1450,
+    1400
+   ],
+   "viscosity": [
+    2000,
+    15000,
+    15000
+   ],
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Honey (Liquid)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.831,
+      0.571,
+      0.037
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.504,
+   "transmission": 1,
+   "density": [
+    1380,
+    1450,
+    1400
+   ],
+   "viscosity": [
+    2000,
+    15000,
+    10000
+   ],
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Ice",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.973,
+      0.995,
+      1.0
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.3098,
+   "transmission": 1,
+   "transmissionDepth": 100,
+   "transmissionDispersion": 64.87,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.002075,
+       0.000416,
+       0.0
+      ]
+     },
+     {
+      "colorSpace": "acescg",
+      "color": [
+       0.001411,
+       0.000526,
+       5e-05
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "colorSpace": "acescg",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "density": [
+    917
+   ],
+   "acousticAbsorption": [
+    0.008,
+    0.008,
+    0.013,
+    0.015,
+    0.02,
+    0.025
+   ],
+   "category": [
+    "Crystal"
+   ],
+   "tags": [
+    "acoustics",
+    "audio"
+   ]
+  },
+  {
+   "name": "Iridium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.745,
+      0.734,
+      0.704
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.739,
+      0.734,
+      0.709
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.818,
+        0.81,
+        0.727
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.799,
+        0.812,
+        0.828
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.759,
+        0.781,
+        0.81
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.768,
+        0.78,
+        0.806
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      2.79209,
+      2.56343,
+      2.7216
+     ],
+     "k": [
+      5.68877,
+      5.0549,
+      4.20215
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      2.78993,
+      2.56186,
+      2.14497
+     ],
+     "k": [
+      5.33631,
+      5.08541,
+      4.42262
+     ]
+    }
+   ],
+   "density": [
+    22562
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Iron",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.53,
+      0.513,
+      0.494
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.523,
+      0.514,
+      0.497
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.612,
+        0.541,
+        0.422
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.562,
+        0.549,
+        0.586
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.765,
+        0.767,
+        0.802
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.767,
+        0.768,
+        0.797
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      2.73466,
+      2.94186,
+      3.15654
+     ],
+     "k": [
+      3.14869,
+      2.92718,
+      2.46012
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      2.90278,
+      2.91315,
+      2.59243
+     ],
+     "k": [
+      3.01558,
+      2.94418,
+      2.77805
+     ]
+    }
+   ],
+   "density": [
+    7870
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Juice (Apple)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.856,
+      0.765,
+      0.569
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.3325,
+   "transmission": 1,
+   "transmissionDepth": 1,
+   "transmissionDispersion": 55.78,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.1296,
+       0.2374,
+       0.5218
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.026,
+       0.031,
+       0.041
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.947,
+       0.949,
+       0.945
+      ]
+     }
+    ]
+   },
+   "density": [
+    958,
+    1000,
+    1000
+   ],
+   "viscosity": [
+    1.002
+   ],
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Juice (Cranberry)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.661,
+      0.381,
+      0.28
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.3325,
+   "transmission": 1,
+   "transmissionDepth": 1,
+   "transmissionDispersion": 55.78,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.3944,
+       0.9422,
+       1.2426
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.02,
+       0.024,
+       0.03
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.947,
+       0.951,
+       0.974
+      ]
+     }
+    ]
+   },
+   "density": [
+    958,
+    1000,
+    1000
+   ],
+   "viscosity": [
+    1.002
+   ],
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Juice (Grape)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.348,
+      0.091,
+      0.053
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.3325,
+   "transmission": 1,
+   "transmissionDepth": 1,
+   "transmissionDispersion": 55.78,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       1.0404,
+       2.3958,
+       2.9325
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.014,
+       0.0,
+       0.0
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.961,
+       1.0,
+       1.0
+      ]
+     }
+    ]
+   },
+   "density": [
+    958,
+    1000,
+    1000
+   ],
+   "viscosity": [
+    1.002
+   ],
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Juice (Ruby Grapefruit)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.09,
+      0.034,
+      0.016
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.3325,
+   "transmission": 1,
+   "transmissionDepth": 1,
+   "transmissionDispersion": 55.78,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.8587,
+       1.8314,
+       2.5262
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       1.55,
+       1.539,
+       1.599
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.929,
+       0.929,
+       0.931
+      ]
+     }
+    ]
+   },
+   "density": [
+    958,
+    1000,
+    1000
+   ],
+   "viscosity": [
+    1.002
+   ],
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Juice (White Grapefruit)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.973,
+      0.966,
+      0.93
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.3325,
+   "transmission": 1,
+   "transmissionDepth": 1,
+   "transmissionDispersion": 55.78,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.138,
+       0.1883,
+       0.5678
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       5.05,
+       5.274,
+       7.528
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.54,
+       0.545,
+       0.565
+      ]
+     }
+    ]
+   },
+   "density": [
+    958,
+    1000,
+    1000
+   ],
+   "viscosity": [
+    1.002
+   ],
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Ketchup",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.164,
+      0.006,
+      0.002
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.1,
+   "ior": 1.3,
+   "subsurfaceRadius": [
+    0.476,
+    0.058,
+    0.039
+   ],
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.61,
+       9.7,
+       14.5
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       1.8,
+       0.7,
+       0.3
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "density": [
+    1055,
+    1165,
+    1100
+   ],
+   "viscosity": [
+    10000,
+    20000,
+    15000
+   ],
+   "category": [
+    "Organic"
+   ],
+   "tags": [
+    "liquid",
+    "sss"
+   ]
+  },
+  {
+   "name": "Lead",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.626,
+      0.64,
+      0.693
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.633,
+      0.64,
+      0.686
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.717,
+        0.717,
+        0.696
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.7,
+        0.72,
+        0.796
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.758,
+        0.773,
+        0.799
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.765,
+        0.772,
+        0.795
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      2.71051,
+      2.68791,
+      2.9091
+     ],
+     "k": [
+      4.04246,
+      4.01366,
+      4.17426
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      2.79703,
+      2.6736,
+      2.31165
+     ],
+     "k": [
+      4.01182,
+      4.02443,
+      4.29506
+     ]
+    }
+   ],
+   "density": [
+    11340
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Lemon",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.617,
+      0.366,
+      0.045
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.5,
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Lithium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.916,
+      0.89,
+      0.807
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.902,
+      0.89,
+      0.819
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.998,
+        0.995,
+        0.975
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.996,
+        0.996,
+        0.993
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.985,
+        0.998,
+        1.027
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.991,
+        0.998,
+        1.023
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0.141612,
+      0.215656,
+      0.481854
+     ],
+     "k": [
+      2.7434,
+      2.48258,
+      2.35726
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.214498,
+      0.207691,
+      0.236271
+     ],
+     "k": [
+      2.70456,
+      2.46885,
+      1.92343
+     ]
+    }
+   ],
+   "density": [
+    535
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Magnesium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.956,
+      0.953,
+      0.95
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.955,
+      0.953,
+      0.951
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.998,
+        0.996,
+        0.983
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.996,
+        0.997,
+        0.997
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.954,
+        0.964,
+        0.977
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.958,
+        0.963,
+        0.975
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0.286425,
+      0.322265,
+      0.594764
+     ],
+     "k": [
+      6.75553,
+      4.94909,
+      4.25174
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.365942,
+      0.31319,
+      0.224454
+     ],
+     "k": [
+      5.53795,
+      5.01834,
+      4.09048
+     ]
+    }
+   ],
+   "density": [
+    1737
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Manganese",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.606,
+      0.592,
+      0.573
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.6,
+      0.592,
+      0.576
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.757,
+        0.761,
+        0.715
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.743,
+        0.762,
+        0.808
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.796,
+        0.834,
+        0.889
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.813,
+        0.832,
+        0.88
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      2.22147,
+      2.02055,
+      2.03472
+     ],
+     "k": [
+      3.60175,
+      3.25337,
+      2.862
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      2.21105,
+      2.01942,
+      1.61898
+     ],
+     "k": [
+      3.43301,
+      3.27,
+      2.90038
+     ]
+    }
+   ],
+   "density": [
+    7476
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Marble",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.83,
+      0.791,
+      0.753
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.5,
+   "subsurfaceRadius": [
+    0.851,
+    0.557,
+    0.395
+   ],
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.021,
+       0.041,
+       0.071
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       21.9,
+       26.2,
+       30.0
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "density": [
+    2700
+   ],
+   "acousticAbsorption": [
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.02,
+    0.02
+   ],
+   "category": [
+    "Crystal"
+   ],
+   "tags": [
+    "sss",
+    "acoustics",
+    "audio"
+   ]
+  },
+  {
+   "name": "Mercury",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.781,
+      0.78,
+      0.778
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.781,
+      0.78,
+      0.779
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.901,
+        0.91,
+        0.89
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.896,
+        0.911,
+        0.939
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.813,
+        0.852,
+        0.902
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.83,
+        0.85,
+        0.895
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      1.86932,
+      1.53811,
+      1.4963
+     ],
+     "k": [
+      5.36989,
+      4.60484,
+      3.92685
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      1.80044,
+      1.54346,
+      1.0878
+     ],
+     "k": [
+      5.00001,
+      4.64158,
+      3.91158
+     ]
+    }
+   ],
+   "density": [
+    13546
+   ],
+   "viscosity": [
+    1.552
+   ],
+   "surfaceTension": 487,
+   "category": [
+    "Metal"
+   ],
+   "tags": [
+    "liquid"
+   ]
+  },
+  {
+   "name": "Milk",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.815,
+      0.813,
+      0.682
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.348,
+   "subsurfaceRadius": [
+    1.842,
+    1.044,
+    0.35
+   ],
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.014,
+       0.025,
+       0.142
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       7.0,
+       12.2,
+       19.0
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "density": [
+    1026,
+    1035,
+    1030
+   ],
+   "viscosity": [
+    2
+   ],
+   "surfaceTension": 48,
+   "category": [
+    "Liquid"
+   ],
+   "tags": [
+    "sss"
+   ]
+  },
+  {
+   "name": "MIT Black",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      5e-05,
+      5e-05,
+      5e-05
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 1.0,
+   "diffuseRoughness": 1.0,
+   "ior": 1.5,
+   "category": [
+    "Manmade"
+   ]
+  },
+  {
+   "name": "Molybdenum",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.589,
+      0.612,
+      0.594
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.597,
+      0.61,
+      0.596
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.495,
+        0.505,
+        0.383
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.47,
+        0.507,
+        0.561
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.683,
+        0.696,
+        0.726
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.689,
+        0.695,
+        0.721
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      4.13827,
+      4.14866,
+      4.27845
+     ],
+     "k": [
+      3.90428,
+      4.00545,
+      3.21018
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      4.25384,
+      4.12785,
+      3.55369
+     ],
+     "k": [
+      3.82381,
+      4.00138,
+      3.80316
+     ]
+    }
+   ],
+   "density": [
+    10223
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Musou Black",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.006,
+      0.006,
+      0.006
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 1.0,
+   "diffuseRoughness": 1.0,
+   "ior": 1.5,
+   "category": [
+    "Manmade"
+   ]
+  },
+  {
+   "name": "Nickel",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.697,
+      0.641,
+      0.563
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.672,
+      0.643,
+      0.575
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.855,
+        0.805,
+        0.675
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.822,
+        0.81,
+        0.789
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.815,
+        0.834,
+        0.871
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.824,
+        0.833,
+        0.865
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      1.8644,
+      1.92207,
+      2.22915
+     ],
+     "k": [
+      4.21007,
+      3.57008,
+      2.87501
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      1.96219,
+      1.90668,
+      1.74737
+     ],
+     "k": [
+      3.89684,
+      3.59684,
+      2.98191
+     ]
+    }
+   ],
+   "density": [
+    8900
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Office Paper",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.794,
+      0.834,
+      0.884
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.8,
+   "ior": 1.5,
+   "density": [
+    800
+   ],
+   "category": [
+    "Manmade"
+   ]
+  },
+  {
+   "name": "Orange",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.615,
+      0.205,
+      0.01
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.5,
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Palladium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.734,
+      0.7036,
+      0.662
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.721,
+      0.705,
+      0.669
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.874,
+        0.854,
+        0.779
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.854,
+        0.857,
+        0.863
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.811,
+        0.836,
+        0.872
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.822,
+        0.835,
+        0.866
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      1.88141,
+      1.79976,
+      2.00737
+     ],
+     "k": [
+      4.66959,
+      4.03631,
+      3.43839
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      1.92412,
+      1.79229,
+      1.53501
+     ],
+     "k": [
+      4.35994,
+      4.06362,
+      3.47822
+     ]
+    }
+   ],
+   "density": [
+    12007
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Pearl",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.8,
+      0.75,
+      0.7
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.35,
+   "ior": 1.68,
+   "subsurfaceRadius": [
+    0.3,
+    0.5,
+    0.3
+   ],
+   "thinFilmThickness": [
+    200,
+    700,
+    400
+   ],
+   "thinFilmIor": 2,
+   "density": [
+    2700
+   ],
+   "category": [
+    "Organic"
+   ],
+   "tags": [
+    "nacre",
+    "sss"
+   ]
+  },
+  {
+   "name": "Petroleum",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.03,
+      0.027,
+      0.024
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.5,
+   "subsurfaceRadius": [
+    3,
+    1,
+    0.25
+   ],
+   "density": [
+    870,
+    1000,
+    1000
+   ],
+   "viscosity": [
+    100,
+    1000,
+    500
+   ],
+   "surfaceTension": 21,
+   "category": [
+    "Liquid"
+   ],
+   "tags": [
+    "oil",
+    "crude oil",
+    "sss"
+   ]
+  },
+  {
+   "name": "Plastic (Acrylic)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.4905,
+   "transmission": 1,
+   "transmissionDispersion": 53.18,
+   "density": [
+    1180
+   ],
+   "category": [
+    "Plastic"
+   ],
+   "tags": [
+    "PMMA",
+    "plexi",
+    "polymethyl methacrylate"
+   ]
+  },
+  {
+   "name": "Plastic (PC)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.5848,
+   "transmission": 1,
+   "transmissionDispersion": 27.86,
+   "density": [
+    1200
+   ],
+   "category": [
+    "Plastic"
+   ],
+   "tags": [
+    "polycarbonate"
+   ]
+  },
+  {
+   "name": "Plastic (PET)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.575,
+   "transmission": 1,
+   "density": [
+    1380
+   ],
+   "category": [
+    "Plastic"
+   ],
+   "tags": [
+    "polyethylene terephthalate"
+   ]
+  },
+  {
+   "name": "Plastic (PLA)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.4586,
+   "transmission": 1,
+   "density": [
+    1210,
+    1430
+   ],
+   "category": [
+    "Plastic"
+   ],
+   "tags": [
+    "polylactic acid"
+   ]
+  },
+  {
+   "name": "Plastic (PP)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.492,
+   "transmission": 1,
+   "density": [
+    855,
+    946,
+    900
+   ],
+   "category": [
+    "Plastic"
+   ],
+   "tags": [
+    "polypropylene"
+   ]
+  },
+  {
+   "name": "Plastic (PUR)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.6,
+   "transmission": 1,
+   "density": [
+    1050,
+    1250
+   ],
+   "category": [
+    "Plastic"
+   ],
+   "tags": [
+    "acrylic",
+    "coat",
+    "car paint",
+    "lacquer",
+    "polyurethane"
+   ]
+  },
+  {
+   "name": "Plastic (PVC)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.542,
+   "transmission": 1,
+   "density": [
+    1100,
+    1450,
+    1300
+   ],
+   "category": [
+    "Plastic"
+   ],
+   "tags": [
+    "polyvinyl chloride"
+   ]
+  },
+  {
+   "name": "Platinum",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.765,
+      0.73,
+      0.676
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.749,
+      0.732,
+      0.684
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.873,
+        0.85,
+        0.747
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.851,
+        0.853,
+        0.844
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.793,
+        0.815,
+        0.84
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.802,
+        0.814,
+        0.836
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      2.17679,
+      2.02616,
+      2.34437
+     ],
+     "k": [
+      5.44798,
+      4.54881,
+      3.74446
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      2.19707,
+      2.02224,
+      1.80496
+     ],
+     "k": [
+      4.98395,
+      4.58862,
+      3.87107
+     ]
+    }
+   ],
+   "density": [
+    21450
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Polystyrene (Foam)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.8393,
+      0.8384,
+      0.841
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.6,
+   "density": [
+    50,
+    80,
+    75
+   ],
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "styrofoam"
+   ]
+  },
+  {
+   "name": "Porcelain",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.745,
+      0.745,
+      0.723
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.5,
+   "density": [
+    2000,
+    2500,
+    2400
+   ],
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "vitreous china",
+    "ceramic"
+   ]
+  },
+  {
+   "name": "Potassium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.983,
+      0.956,
+      0.906
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.971,
+      0.957,
+      0.914
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        1.0,
+        1.0,
+        0.994
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        1.0,
+        1.0,
+        1.0
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        1.002,
+        1.011,
+        1.032
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        1.006,
+        1.01,
+        1.029
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0.0,
+      0.041228,
+      0.220328
+     ],
+     "k": [
+      3.37295,
+      1.56367,
+      2.05971
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.026298,
+      0.0349856,
+      0.0473681
+     ],
+     "k": [
+      1.59507,
+      1.47657,
+      1.04672
+     ]
+    }
+   ],
+   "density": [
+    859
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Quartz",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.54,
+   "transmission": 1,
+   "transmissionDispersion": 67.82,
+   "density": [
+    2600
+   ],
+   "category": [
+    "Crystal"
+   ]
+  },
+  {
+   "name": "Rubidium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.919,
+      0.859,
+      0.747
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.892,
+      0.862,
+      0.764
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        1.0,
+        0.999,
+        0.998
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.999,
+        0.999,
+        1.002
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        1.016,
+        1.042,
+        1.105
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        1.028,
+        1.041,
+        1.096
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0.0391755,
+      0.101768,
+      0.205178
+     ],
+     "k": [
+      1.22619,
+      1.27629,
+      1.13104
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.0830927,
+      0.0956511,
+      0.111367
+     ],
+     "k": [
+      1.37965,
+      1.25123,
+      0.807355
+     ]
+    }
+   ],
+   "density": [
+    1534
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Rust",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.181,
+      0.057,
+      0.017
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 1.0,
+   "diffuseRoughness": 1.0,
+   "ior": 1.5,
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "iron oxide"
+   ]
+  },
+  {
+   "name": "Salt",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.2,
+   "ior": 1.5441,
+   "transmission": 1,
+   "transmissionDispersion": 42.89,
+   "density": [
+    2170
+   ],
+   "category": [
+    "Crystal"
+   ]
+  },
+  {
+   "name": "Sand",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.44,
+      0.386,
+      0.23074
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 1.0,
+   "diffuseRoughness": 1.0,
+   "ior": 1.5,
+   "density": [
+    1440,
+    1680,
+    1500
+   ],
+   "category": [
+    "Crystal"
+   ]
+  },
+  {
+   "name": "Sapphire",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.086,
+      0.323,
+      0.855
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.7682,
+   "transmission": 1,
+   "transmissionDispersion": 72.2,
+   "density": [
+    3980
+   ],
+   "category": [
+    "Crystal"
+   ]
+  },
+  {
+   "name": "Silicon",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.345,
+      0.369,
+      0.426
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.357,
+      0.368,
+      0.418
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.081,
+        0,
+        0.004
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.001,
+        0,
+        0.002
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.72,
+        0.701,
+        0.663
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.711,
+        0.702,
+        0.669
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      3.65156,
+      4.08561,
+      4.36337
+     ],
+     "k": [
+      0.972551,
+      0,
+      0
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      3.96501,
+      4.08831,
+      4.64341
+     ],
+     "k": [
+      0.100296,
+      0,
+      0.202839
+     ]
+    }
+   ],
+   "density": [
+    2330
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Silver",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.991,
+      0.985,
+      0.974
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.988,
+      0.985,
+      0.975
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        1.0,
+        1.0,
+        0.991
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        1.0,
+        1.0,
+        1.0
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.994,
+        0.995,
+        0.998
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.995,
+        0.995,
+        0.998
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0,
+      0.0626977,
+      0.382178
+     ],
+     "k": [
+      8.06675,
+      3.62828,
+      3.80086
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.0485451,
+      0.0511628,
+      0.0515574
+     ],
+     "k": [
+      3.90854,
+      3.56812,
+      2.69761
+     ]
+    }
+   ],
+   "density": [
+    10500
+   ],
+   "category": [
+    "Metal"
+   ],
+   "tags": [
+    "mirror"
+   ]
+  },
+  {
+   "name": "Skin I",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.847,
+      0.638,
+      0.552
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.4,
+   "subsurfaceRadius": [
+    0.482,
+    0.169,
+    0.109
+   ],
+   "density": [
+    1020
+   ],
+   "category": [
+    "Human"
+   ],
+   "group": "Skin",
+   "tags": [
+    "epidermis",
+    "sss"
+   ]
+  },
+  {
+   "name": "Skin II",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.799,
+      0.485,
+      0.347
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.4,
+   "subsurfaceRadius": [
+    0.482,
+    0.169,
+    0.109
+   ],
+   "density": [
+    1020
+   ],
+   "category": [
+    "Human"
+   ],
+   "group": "Skin",
+   "tags": [
+    "epidermis",
+    "sss"
+   ]
+  },
+  {
+   "name": "Skin III",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.623,
+      0.433,
+      0.343
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.4,
+   "subsurfaceRadius": [
+    0.482,
+    0.169,
+    0.109
+   ],
+   "density": [
+    1020
+   ],
+   "category": [
+    "Human"
+   ],
+   "group": "Skin",
+   "tags": [
+    "epidermis",
+    "sss"
+   ]
+  },
+  {
+   "name": "Skin IV",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.436,
+      0.227,
+      0.131
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.4,
+   "subsurfaceRadius": [
+    0.367,
+    0.137,
+    0.068
+   ],
+   "density": [
+    1020
+   ],
+   "category": [
+    "Human"
+   ],
+   "group": "Skin",
+   "tags": [
+    "epidermis",
+    "sss"
+   ]
+  },
+  {
+   "name": "Skin V",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.283,
+      0.148,
+      0.079
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.4,
+   "subsurfaceRadius": [
+    0.367,
+    0.137,
+    0.068
+   ],
+   "density": [
+    1020
+   ],
+   "category": [
+    "Human"
+   ],
+   "group": "Skin",
+   "tags": [
+    "epidermis",
+    "sss"
+   ]
+  },
+  {
+   "name": "Skin VI",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.09,
+      0.05,
+      0.02
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.4,
+   "subsurfaceRadius": [
+    0.367,
+    0.137,
+    0.068
+   ],
+   "density": [
+    1020
+   ],
+   "category": [
+    "Human"
+   ],
+   "group": "Skin",
+   "tags": [
+    "epidermis",
+    "sss"
+   ]
+  },
+  {
+   "name": "Snow",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.85,
+      0.85,
+      0.85
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.3098,
+   "subsurfaceRadius": [
+    0.2,
+    0.2,
+    1
+   ],
+   "density": [
+    90,
+    450,
+    300
+   ],
+   "acousticAbsorption": [
+    0.45,
+    0.75,
+    0.9,
+    0.95,
+    0.95,
+    0.95
+   ],
+   "category": [
+    "Crystal"
+   ],
+   "tags": [
+    "ice",
+    "acoustics",
+    "audio"
+   ]
+  },
+  {
+   "name": "Soap Bubble",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1,
+   "transmission": 1,
+   "thinFilmThickness": [
+    10,
+    1000,
+    500
+   ],
+   "thinFilmIor": 1.4,
+   "category": [
+    "Organic"
+   ]
+  },
+  {
+   "name": "Sodium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.977,
+      0.962,
+      0.936
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.97,
+      0.962,
+      0.94
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        1.0,
+        1.0,
+        0.991
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        1.0,
+        1.0,
+        0.999
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.998,
+        1.002,
+        1.011
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        1.0,
+        1.002,
+        1.01
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      0.0,
+      0.0669661,
+      0.325253
+     ],
+     "k": [
+      4.94428,
+      2.3243,
+      2.89317
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      0.0525806,
+      0.058413,
+      0.0664729
+     ],
+     "k": [
+      2.43603,
+      2.25156,
+      1.80989
+     ]
+    }
+   ],
+   "density": [
+    969
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Spectralon",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.99,
+      0.99,
+      0.99
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.99,
+   "ior": 1.35,
+   "category": [
+    "Manmade"
+   ]
+  },
+  {
+   "name": "Stainless Steel",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.669,
+      0.639,
+      0.598
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.656,
+      0.64,
+      0.604
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.804,
+        0.791,
+        0.714
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.783,
+        0.793,
+        0.812
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.789,
+        0.823,
+        0.87
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.803,
+        0.821,
+        0.863
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      2.22981,
+      2.04109,
+      2.15682
+     ],
+     "k": [
+      4.21948,
+      3.64081,
+      3.07445
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      2.22853,
+      2.0391,
+      1.69998
+     ],
+     "k": [
+      3.93696,
+      3.66755,
+      3.14717
+     ]
+    }
+   ],
+   "density": [
+    7500,
+    8000,
+    8000
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Terracotta",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.555,
+      0.212,
+      0.11
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 1.0,
+   "diffuseRoughness": 1.0,
+   "ior": 1.5,
+   "density": [
+    1800,
+    2200,
+    2000
+   ],
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "clay"
+   ]
+  },
+  {
+   "name": "Tire",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.023,
+      0.023,
+      0.023
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.7,
+   "ior": 1.5,
+   "category": [
+    "Manmade"
+   ],
+   "tags": [
+    "tyre",
+    "rubber"
+   ]
+  },
+  {
+   "name": "Titanium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.441,
+      0.4,
+      0.361
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.424,
+      0.403,
+      0.367
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.67,
+        0.641,
+        0.52
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.637,
+        0.645,
+        0.657
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.865,
+        0.906,
+        0.946
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.882,
+        0.903,
+        0.94
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      1.9345,
+      1.86761,
+      2.05863
+     ],
+     "k": [
+      2.33987,
+      2.05312,
+      1.74518
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      1.9732,
+      1.86443,
+      1.70307
+     ],
+     "k": [
+      2.20459,
+      2.06955,
+      1.86062
+     ]
+    }
+   ],
+   "density": [
+    4540
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Titanium (Anodized)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.441,
+      0.4,
+      0.361
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.424,
+      0.403,
+      0.367
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.67,
+        0.641,
+        0.52
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.637,
+        0.645,
+        0.657
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.865,
+        0.906,
+        0.946
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.882,
+        0.903,
+        0.94
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      1.9345,
+      1.86761,
+      2.05863
+     ],
+     "k": [
+      2.33987,
+      2.05312,
+      1.74518
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      1.9732,
+      1.86443,
+      1.70307
+     ],
+     "k": [
+      2.20459,
+      2.06955,
+      1.86062
+     ]
+    }
+   ],
+   "density": [
+    4540
+   ],
+   "thinFilmIor": 2.488,
+   "thinFilmThickness": [
+    20,
+    300
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Toilet Paper",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.83,
+      0.835,
+      0.784
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.9,
+   "ior": 1.5,
+   "density": [
+    20,
+    70,
+    50
+   ],
+   "category": [
+    "Manmade"
+   ]
+  },
+  {
+   "name": "Toner (Black)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.05,
+      0.05,
+      0.05
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0.5,
+   "ior": 1.5,
+   "category": [
+    "Manmade"
+   ]
+  },
+  {
+   "name": "Toothpaste",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.9325,
+      0.9369,
+      0.9286
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.5,
+   "density": [
+    1300,
+    1500,
+    1400
+   ],
+   "viscosity": [
+    50000
+   ],
+   "category": [
+    "Manmade"
+   ]
+  },
+  {
+   "name": "Tungsten",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.537,
+      0.536,
+      0.519
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.536,
+      0.535,
+      0.522
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.45,
+        0.409,
+        0.193
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.401,
+        0.414,
+        0.417
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.695,
+        0.704,
+        0.714
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.699,
+        0.703,
+        0.713
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      3.8332,
+      3.92528,
+      4.53149
+     ],
+     "k": [
+      3.26472,
+      3.0739,
+      2.0965
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      3.99552,
+      3.90702,
+      3.74628
+     ],
+     "k": [
+      3.07855,
+      3.09281,
+      2.96596
+     ]
+    }
+   ],
+   "density": [
+    19300
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Vanadium",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.534,
+      0.526,
+      0.546
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.532,
+      0.527,
+      0.543
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.474,
+        0.426,
+        0.175
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.421,
+        0.432,
+        0.409
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.705,
+        0.715,
+        0.695
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.708,
+        0.714,
+        0.698
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      3.6507,
+      3.72723,
+      4.94609
+     ],
+     "k": [
+      3.25065,
+      3.00712,
+      2.17896
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      3.82676,
+      3.7184,
+      4.02213
+     ],
+     "k": [
+      3.06828,
+      3.03516,
+      3.16271
+     ]
+    }
+   ],
+   "density": [
+    6100
+   ],
+   "category": [
+    "Metal"
+   ]
+  },
+  {
+   "name": "Vodka (40%)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      1,
+      1,
+      1
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.3583,
+   "transmission": 1,
+   "transmissionDispersion": 60,
+   "density": [
+    935
+   ],
+   "viscosity": [
+    2.846
+   ],
+   "surfaceTension": 30,
+   "category": [
+    "Liquid"
+   ],
+   "tags": [
+    "alcohol",
+    "ethanol"
+   ]
+  },
+  {
+   "name": "Water",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.969,
+      0.996,
+      0.997
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.3325,
+   "transmission": 1,
+   "transmissionDepth": 100,
+   "transmissionDispersion": 55.78,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.00297,
+       0.00045,
+       0.00017
+      ]
+     },
+     {
+      "colorSpace": "acescg",
+      "color": [
+       0.00198,
+       0.00062,
+       0.00026
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "colorSpace": "acescg",
+      "color": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "density": [
+    958,
+    1000,
+    1000
+   ],
+   "viscosity": [
+    1.002
+   ],
+   "surfaceTension": 72.75,
+   "acousticAbsorption": [
+    0.008,
+    0.008,
+    0.013,
+    0.015,
+    0.02,
+    0.025
+   ],
+   "category": [
+    "Liquid"
+   ],
+   "tags": [
+    "acoustics",
+    "audio"
+   ]
+  },
+  {
+   "name": "Whiteboard",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.869,
+      0.867,
+      0.771
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.5,
+   "category": [
+    "Manmade"
+   ]
+  },
+  {
+   "name": "Wine (Red)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.31,
+      0.081,
+      0.053
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.3325,
+   "transmission": 1,
+   "transmissionDepth": 1,
+   "transmissionDispersion": 55.78,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       1.1632,
+       2.5191,
+       2.9434
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.008,
+       0.0,
+       0.0
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.974,
+       1.0,
+       1.0
+      ]
+     }
+    ]
+   },
+   "density": [
+    958,
+    1000,
+    1000
+   ],
+   "viscosity": [
+    1.002
+   ],
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Wine (White)",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.896,
+      0.885,
+      0.783
+     ]
+    }
+   ],
+   "metalness": 0,
+   "roughness": 0,
+   "ior": 1.3325,
+   "transmission": 1,
+   "transmissionDepth": 1,
+   "transmissionDispersion": 55.78,
+   "volumeCoefficients": {
+    "absorption": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.1078,
+       0.1186,
+       0.24
+      ]
+     }
+    ],
+    "scattering": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.002,
+       0.003,
+       0.005
+      ]
+     }
+    ],
+    "anisotropy": [
+     {
+      "colorSpace": "srgb-linear",
+      "color": [
+       0.914,
+       0.958,
+       0.975
+      ]
+     }
+    ]
+   },
+   "density": [
+    958,
+    1000,
+    1000
+   ],
+   "viscosity": [
+    1.002
+   ],
+   "category": [
+    "Liquid"
+   ]
+  },
+  {
+   "name": "Zinc",
+   "color": [
+    {
+     "colorSpace": "srgb-linear",
+     "color": [
+      0.808,
+      0.844,
+      0.865
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "color": [
+      0.822,
+      0.842,
+      0.861
+     ]
+    }
+   ],
+   "metalness": 1,
+   "specularColor": [
+    {
+     "format": [
+      "Gulbrandsen"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.854,
+        0.922,
+        0.923
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.874,
+        0.92,
+        0.962
+       ]
+      }
+     ]
+    },
+    {
+     "format": [
+      "F82"
+     ],
+     "color": [
+      {
+       "colorSpace": "srgb-linear",
+       "color": [
+        0.762,
+        0.833,
+        0.896
+       ]
+      },
+      {
+       "colorSpace": "acescg",
+       "color": [
+        0.793,
+        0.829,
+        0.887
+       ]
+      }
+     ]
+    }
+   ],
+   "roughness": 0,
+   "complexIor": [
+    {
+     "colorSpace": "srgb-linear",
+     "n": [
+      3.15207,
+      1.89133,
+      1.48736
+     ],
+     "k": [
+      7.39342,
+      6.28678,
+      4.92701
+     ]
+    },
+    {
+     "colorSpace": "acescg",
+     "n": [
+      2.67412,
+      1.94336,
+      1.0947
+     ],
+     "k": [
+      6.83926,
+      6.36293,
+      5.21239
+     ]
+    }
+   ],
+   "density": [
+    7000
+   ],
+   "category": [
+    "Metal"
+   ]
+  }
+ ]
+}

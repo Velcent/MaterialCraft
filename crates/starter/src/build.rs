@@ -2,7 +2,7 @@
 //! in one rename, so a library is never seen half-built.
 
 use crate::manifest;
-use crate::{Made, Recipe, StarterError, alphas, brushes, environment, masks, materials, patterns, textures, texturizer};
+use crate::{Made, Recipe, StarterError, alphas, brushes, environment, masks, materials, patterns, reference, textures, texturizer};
 use materialcraft::assets::{AssetStore, Draft, LibraryRoot, RootKind, Usage, create_standard_layout};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -35,6 +35,7 @@ pub struct Built {
 /// Every starter asset, in build order: materials, smart masks, textures, alphas, brushes, the environment.
 pub fn recipes() -> Vec<Box<dyn Recipe>> {
     let mut all = materials::recipes();
+    all.extend(reference::recipes());
     all.extend(masks::recipes());
     all.extend(textures::recipes());
     all.extend(patterns::recipes());

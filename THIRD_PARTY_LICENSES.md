@@ -2,6 +2,8 @@
 
 The command-line tool and the core library have no dependencies. The editor (feature `gui`) uses the crates below, including the shared Craft libraries from storytold/craft-libs (craft-atomic, craft-settings, craft-cms, craft-ui, craft-quit; MIT OR Apache-2.0), each under the licence shown. All of them allow use in a project licensed under Apache-2.0 OR MIT. Generated from `cargo metadata`.
 
+Vendored data: the starter library's reference materials are built from physicallybased.info's material values (`crates/starter/content/physicallybased/materials.json`, CC0 1.0; see `ATTRIBUTION.md`).
+
 Bundled fonts (via `epaint_default_fonts`): Hack (MIT), Ubuntu-Light (Ubuntu Font Licence 1.0), NotoEmoji-Regular and emoji-icon-font (SIL Open Font Licence 1.1).
 
 | Crate | Version | Licence |

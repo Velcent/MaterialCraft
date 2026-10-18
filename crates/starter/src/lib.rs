@@ -32,6 +32,7 @@ mod materials;
 mod patterns;
 mod preview;
 mod recipe;
+mod reference;
 mod textures;
 mod texturizer;
 mod translated;

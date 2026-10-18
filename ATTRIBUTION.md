@@ -32,5 +32,4 @@ This file lists only code and assets copied into the repository. MaterialCraft's
 
 | Path | What | Author | Source | Licence |
 |---|---|---|---|---|
-
-None yet.
+| `crates/starter/content/physicallybased/materials.json` | Measured material values (colour, metalness, roughness, IOR …) of the Physically Based database, values only (descriptions, references and image links removed); the starter library's reference materials are built from it | Anton Palmqvist and the physicallybased.info contributors | <https://github.com/AntonPalmqvist/physically-based-api>, `deploy/v2/materials.json`, commit c1194e7 (2026-10-11); see the README next to it | CC0 1.0 |
