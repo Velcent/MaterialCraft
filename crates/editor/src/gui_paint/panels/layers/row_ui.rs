@@ -3,6 +3,7 @@
 //! and on the right the view channel's blend mode and opacity (LS-08). An effect row is its kind, label and an on/off box.
 
 use super::geometry_icon;
+use super::instance_icon;
 use super::rows::{EFFECT_ROW, INDENT, LAYER_ROW};
 use super::selection::Part;
 use super::thumbnails::Pair;
@@ -10,6 +11,7 @@ use crate::gui_theme;
 use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, Response, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use materialcraft::paint::edit::StackId;
 use materialcraft::paint::effect::{EffectDomain, EffectKind};
+use materialcraft::paint::instance::InstanceRole;
 use materialcraft::paint::{Channel, Inclusion, Layer, LayerKind};
 
 const EYE: f32 = 22.0;
@@ -58,6 +60,8 @@ pub struct LayerLook<'a> {
     pub geometry: Inclusion,
     /// The geometry mask edit mode is on for this layer.
     pub geometry_editing: bool,
+    /// Source, instance or neither (IN-09).
+    pub instance: InstanceRole,
 }
 
 pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
@@ -107,6 +111,9 @@ pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
         out.clicked = Some(Part::Content);
     }
     whole |= content_r;
+    if let Some(badge) = instance_icon::show(ui, id.with("instance"), content, look.instance) {
+        whole |= badge;
+    }
     x += THUMB + GAP;
     if let Some(mask) = &l.mask {
         let (m0, _) = mask_span(look.depth);

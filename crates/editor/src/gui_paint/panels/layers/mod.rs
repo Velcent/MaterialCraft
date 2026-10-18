@@ -5,12 +5,17 @@
 //!
 //! - [`rows`]: the listed rows and pointer → drop target; [`selection`]: the selection and paint target;
 //! - [`row_ui`], [`bars`], [`menus`]: drawing; [`thumbnails`]: thumbnails off the UI thread;
+//! - [`instance_icon`], [`instance_list`], [`instantiate_dialog`]: layer instances (IN-05 … IN-10): row badges, the
+//!   list of a source's instances, the dialog that instances a layer into other texture sets;
 //! - [`list`]: the scrolling list with drags; [`StackDropTarget`]: what the asset tray calls while dragging
 //!   an asset over the stack (LS-18, LS-19).
 
 mod bars;
 pub mod events;
 mod geometry_icon;
+mod instance_icon;
+mod instance_list;
+pub mod instantiate_dialog;
 mod list;
 mod menus;
 mod row_ui;
@@ -18,6 +23,8 @@ pub mod rows;
 pub mod selection;
 pub mod thumbnails;
 
+#[cfg(test)]
+mod instance_tests;
 #[cfg(test)]
 mod tests;
 
@@ -27,10 +34,13 @@ use super::PanelEvent;
 use crate::gui_paint::document_state::OpenDocument;
 use crate::gui_paint::fill_surfaces::FillSurfaces;
 use eframe::egui::{Pos2, Ui};
+use instantiate_dialog::{InstantiateDialog, Outcome};
 use materialcraft::history::CoalesceKey;
 use materialcraft::paint::edit::LayerRef;
 use materialcraft::paint::edit::ops::{DropPayload, DropTarget, FillAt, FillRef, NewLayer};
+use materialcraft::paint::instance::InstanceIndex;
 use materialcraft::paint::{Channel, Document, GeometryMask, LayerKind, TextureSet};
+use menus::Local;
 use rows::{Folding, Rows};
 use selection::{Part, Selection};
 use std::sync::Arc;
@@ -44,6 +54,10 @@ pub enum LayerAction {
     Group,
     Delete,
     Rename,
+    /// Remember the focused layer for "Paste as instance".
+    Copy,
+    /// An instance of the copied layer above the focus (IN-05).
+    PasteInstance,
 }
 
 /// What the asset tray (step 15) calls while it drags an asset: where it would land and showing that.
@@ -75,6 +89,10 @@ pub struct LayerPanel {
     pub geometry_editing: Option<LayerRef>,
     /// The asset being dragged over the stack from elsewhere.
     external: Option<DropPayload>,
+    /// The layer copied for "Paste as instance".
+    copied: Option<LayerRef>,
+    /// The open "Instantiate across texture sets" dialog.
+    instantiate: Option<InstantiateDialog>,
 }
 
 impl LayerPanel {
@@ -175,6 +193,11 @@ impl LayerPanel {
                 self.list.start_rename(id, name);
                 return None;
             }
+            LayerAction::Copy => {
+                self.copied = Some(LayerRef::new(set, self.selection.focus()?));
+                return None;
+            }
+            LayerAction::PasteInstance => LayerEvent::PasteInstance { source: self.copied.clone()?, set, above: self.selection.focus().map(str::to_string) },
         })
     }
 
@@ -189,11 +212,21 @@ impl LayerPanel {
         let channel = self.view_channel(set);
         let mut out: Vec<LayerEvent> = Vec::new();
         let (new_set, new_channel) = bars::pickers(ui, doc, set, channel);
+        let instances = InstanceIndex::of(doc);
+        let mut reveal: Option<LayerRef> = None;
         if let Some(focus) = self.selection.focus()
             && let (Some(layer), Some(c)) = (set.layer(focus), channel)
         {
             let r = LayerRef::new(set.id.clone(), focus);
-            bars::blending(ui, &r, layer, c, &mut self.drag_key, &mut self.next_key, &mut out);
+            if matches!(layer.kind, LayerKind::Instance(_)) {
+                ui.weak(format!("{} is an instance: its blending, mask and effects are its source's.", layer.name));
+            } else {
+                bars::blending(ui, &r, layer, c, &mut self.drag_key, &mut self.next_key, &mut out);
+            }
+            let entries = instance_list::entries(doc, &instances, &r);
+            if !entries.is_empty() {
+                reveal = instance_list::show(ui, &entries, &r);
+            }
         }
         ui.separator();
         let bottom = 30.0;
@@ -204,8 +237,40 @@ impl LayerPanel {
         }
         let parts = GeometryMask::set_parts(&doc.mesh, set.material_slot);
         let geometry_editing = self.geometry_editing.as_ref();
-        let ctx = list::ListCtx { set, rows: &rows, channel, height, external: self.external.as_ref(), parts: &parts, geometry_editing };
+        let index = doc.texture_sets.iter().position(|s| s.id == set.id);
+        let resolved = index.and_then(|i| doc.resolved_set(i)).unwrap_or(std::borrow::Cow::Borrowed(set));
+        let ctx = list::ListCtx {
+            set,
+            rows: &rows,
+            channel,
+            height,
+            external: self.external.as_ref(),
+            parts: &parts,
+            geometry_editing,
+            resolved: &resolved,
+            instances: &instances,
+            copied: self.copied.as_ref(),
+        };
         self.list.show(ui, ctx, &mut self.selection, &mut self.folding, &mut self.thumbs, self.isolated.as_ref(), &mut out);
+        match self.list.take_request() {
+            Some((Local::Copy, r)) => self.copied = Some(r),
+            Some((Local::Instantiate, r)) => self.instantiate = Some(InstantiateDialog::new(r)),
+            Some((Local::GoToSource, r)) => {
+                let link = doc.texture_set(&r.set).and_then(|s| s.layer(&r.layer)).and_then(|l| l.instance_of()).and_then(|l| doc.instance_source(l));
+                reveal = link.map(|l| LayerRef::new(l.set, l.layer));
+            }
+            Some((Local::Rename, _)) | None => {}
+        }
+        if let Some(dialog) = &mut self.instantiate {
+            match dialog.show(ui.ctx(), doc) {
+                Outcome::Open => {}
+                Outcome::Cancelled => self.instantiate = None,
+                Outcome::Chosen(sets) => {
+                    out.push(LayerEvent::Instantiate { source: dialog.source().clone(), sets });
+                    self.instantiate = None;
+                }
+            }
+        }
         if let Some(c) = channel {
             self.thumbs.end(ui.ctx(), set, c);
         }
@@ -218,6 +283,11 @@ impl LayerPanel {
         }
         if new_channel.is_some() {
             self.channel = new_channel;
+        }
+        if let Some(r) = reveal
+            && let Some(target) = doc.texture_set(&r.set)
+        {
+            self.reveal(target, &r.layer);
         }
         events.extend(out.into_iter().map(PanelEvent::Layers));
     }

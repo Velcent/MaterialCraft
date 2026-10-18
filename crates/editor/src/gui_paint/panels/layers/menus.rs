@@ -6,6 +6,7 @@ use eframe::egui::{self, Ui};
 use materialcraft::generators;
 use materialcraft::paint::edit::ops::{MaskStart, NewEffect};
 use materialcraft::paint::edit::{LayerRef, StackId};
+use materialcraft::paint::instance::InstanceRole;
 use materialcraft::paint::{GeometryMask, Layer};
 
 /// What the context menu acts on.
@@ -17,12 +18,22 @@ pub struct MenuTarget<'a> {
     pub isolated: bool,
     /// The geometry mask edit mode is on for this layer.
     pub geometry_editing: bool,
+    /// Source, instance or neither.
+    pub role: InstanceRole,
+    /// The layer copied for "Paste as instance".
+    pub copied: Option<LayerRef>,
 }
 
 /// Panel actions the menu asks for that the panel itself carries out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Local {
     Rename,
+    /// Remember the layer for "Paste as instance" (IN-05).
+    Copy,
+    /// Open the "Instantiate across texture sets" dialog for the layer (IN-07).
+    Instantiate,
+    /// Select the instance's source, in its texture set (IN-10).
+    GoToSource,
 }
 
 pub fn context(ui: &mut Ui, t: &MenuTarget, events: &mut Vec<LayerEvent>) -> Option<Local> {
@@ -45,8 +56,15 @@ pub fn context(ui: &mut Ui, t: &MenuTarget, events: &mut Vec<LayerEvent>) -> Opt
         ui.close();
     }
     if ui.button("Delete").clicked() {
-        events.push(LayerEvent::Delete { set, ids: t.ids.clone() });
+        events.push(LayerEvent::Delete { set: set.clone(), ids: t.ids.clone() });
         ui.close();
+    }
+    ui.separator();
+    if let Some(chosen) = instancing(ui, t, &set, events) {
+        local = Some(chosen);
+    }
+    if matches!(t.role, InstanceRole::Instance | InstanceRole::Broken) {
+        return local; // its mask, geometry mask and effects are its source's (IN-02)
     }
     ui.separator();
     match &t.layer.mask {
@@ -82,6 +100,31 @@ pub fn context(ui: &mut Ui, t: &MenuTarget, events: &mut Vec<LayerEvent>) -> Opt
     }
     geometry_mask(ui, t, events);
     add_effect(ui, "Add effect", &t.r, StackId::Content, events);
+    local
+}
+
+/// Copy, paste as instance, instantiate across texture sets and go to source (IN-05, IN-07, IN-10).
+fn instancing(ui: &mut Ui, t: &MenuTarget, set: &str, events: &mut Vec<LayerEvent>) -> Option<Local> {
+    let mut local = None;
+    if ui.button("Copy").on_hover_text("To paste as an instance (Ctrl+Shift+V)").clicked() {
+        local = Some(Local::Copy);
+        ui.close();
+    }
+    let paste = ui.add_enabled(t.copied.is_some(), egui::Button::new("Paste as instance")).on_hover_text("An instance of the copied layer above this one");
+    if paste.clicked()
+        && let Some(source) = &t.copied
+    {
+        events.push(LayerEvent::PasteInstance { source: source.clone(), set: set.to_string(), above: Some(t.r.layer.clone()) });
+        ui.close();
+    }
+    if t.role != InstanceRole::Broken && ui.button("Instantiate across texture sets…").clicked() {
+        local = Some(Local::Instantiate);
+        ui.close();
+    }
+    if t.role == InstanceRole::Instance && ui.button("Go to source").clicked() {
+        local = Some(Local::GoToSource);
+        ui.close();
+    }
     local
 }
 

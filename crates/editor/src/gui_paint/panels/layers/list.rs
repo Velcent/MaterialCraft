@@ -12,6 +12,7 @@ use crate::gui_theme;
 use eframe::egui::{self, Key, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use materialcraft::paint::edit::ops::{DropPayload, DropTarget, slot_of};
 use materialcraft::paint::edit::{LayerRef, LayerSlot, StackId};
+use materialcraft::paint::instance::InstanceIndex;
 use materialcraft::paint::{Channel, GeometryMask, LayerKind, TextureSet};
 
 /// What one frame of the list works on.
@@ -25,6 +26,12 @@ pub struct ListCtx<'a> {
     pub parts: &'a [String],
     /// The layer whose geometry mask is being edited.
     pub geometry_editing: Option<&'a LayerRef>,
+    /// The set with its instances resolved: instance rows show their source's thumbnails.
+    pub resolved: &'a TextureSet,
+    /// The document's instances (row badges).
+    pub instances: &'a InstanceIndex,
+    /// The layer copied for "Paste as instance".
+    pub copied: Option<&'a LayerRef>,
 }
 
 /// Layers being dragged inside the list.
@@ -39,11 +46,18 @@ pub struct ListState {
     drag: Option<Drag>,
     /// Screen position of the list's first row last frame, and the visible part of the list.
     origin: Option<(Pos2, Rect)>,
+    /// A context menu action for the panel to carry out, with the layer it was asked for.
+    request: Option<(Local, LayerRef)>,
 }
 
 impl ListState {
     pub fn start_rename(&mut self, id: String, name: String) {
         self.renaming = Some((id, name));
+    }
+
+    /// The context menu action asked for this frame that the panel carries out (copy, instantiate, go to source).
+    pub fn take_request(&mut self) -> Option<(Local, LayerRef)> {
+        self.request.take()
     }
 
     /// The landing under screen position `pos` (for the asset tray).
@@ -90,10 +104,11 @@ impl ListState {
                             focus: (selection.focus() == Some(id.as_str())).then_some(selection.part),
                             isolated: is_isolated,
                             channel: c.channel,
-                            thumbs: thumbs.get(layer),
+                            thumbs: thumbs.get(c.resolved.layer(id).unwrap_or(layer)),
                             effects_open: folding.effects_open.contains(id),
                             geometry: GeometryMask::inclusion(layer.geometry_mask.as_ref(), c.parts),
                             geometry_editing,
+                            instance: c.instances.role(&set.id, id),
                         };
                         let o = row_ui::layer_row(ui, rect, look);
                         let mods = ui.input(|i| ClickMods { toggle: i.modifiers.command, range: i.modifiers.shift });
@@ -126,11 +141,13 @@ impl ListState {
                                 self.drag = Some(Drag { ids: selection.ids().to_vec() });
                             }
                             let ids = if selection.contains(id) { selection.ids().to_vec() } else { vec![id.clone()] };
-                            let target = MenuTarget { layer, r: r.clone(), ids, isolated: is_isolated, geometry_editing };
-                            resp.context_menu(|ui| {
-                                if menus::context(ui, &target, out) == Some(Local::Rename) {
-                                    self.renaming = Some((id.clone(), layer.name.clone()));
-                                }
+                            let role = c.instances.role(&set.id, id);
+                            let copied = c.copied.cloned();
+                            let target = MenuTarget { layer, r: r.clone(), ids, isolated: is_isolated, geometry_editing, role, copied };
+                            resp.context_menu(|ui| match menus::context(ui, &target, out) {
+                                Some(Local::Rename) => self.renaming = Some((id.clone(), layer.name.clone())),
+                                Some(other) => self.request = Some((other, r.clone())),
+                                None => {}
                             });
                         }
                         self.rename_field(ui, rect, row.depth, &r, out);
