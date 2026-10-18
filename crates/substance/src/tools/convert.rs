@@ -3,7 +3,8 @@
 use crate::inspect::Corpus;
 use crate::tools::material_match::ProjectPlanner;
 use crate::tools::parallel::CorpusPool;
-use crate::translate::{Cancel, ImportError, import_spp_planned, import_spp_with};
+use crate::translate::layers::replay::ReplayChoice;
+use crate::translate::{Cancel, ImportError, Importer};
 use materialcraft::paint::format::{FormatError, save_path};
 use materialcraft::paint::layer::LayerWalk;
 use materialcraft::paint::{Document, EffectKind, Fidelity, FillSource, LayerKind};
@@ -99,21 +100,25 @@ impl fmt::Display for ConvertSummary {
 }
 
 /// Imports `input` with the replacements `planner` chooses for it and saves it as `output`; picked materials
-/// are embedded when the planner has a library.
+/// are embedded when the planner has a library, and painted masks are replayed when `replay` says so.
 pub fn convert_one(
     input: &Path,
     output: &Path,
     planner: &ProjectPlanner,
+    replay: ReplayChoice,
     progress: &mut dyn FnMut(f32, &str),
 ) -> Result<ConvertSummary, ConvertError> {
     let start = Instant::now();
     let (plan, _) = planner.plan_for(input).map_err(ConvertError::Plan)?;
     let mut on = |f: f32, m: &str| progress(f * IMPORT_SHARE, m);
-    let doc = match planner.library() {
-        Some(library) => import_spp_planned(input, &plan, library, &mut on, Cancel::NEVER),
-        None => import_spp_with(input, &plan, &mut on, Cancel::NEVER),
+    let mut importer = Importer::open(input)
+        .map_err(ConvertError::Import)?
+        .with_plan(plan)
+        .with_replay(replay);
+    if let Some(library) = planner.library() {
+        importer = importer.with_library(library);
     }
-    .map_err(ConvertError::Import)?;
+    let doc = importer.run(&mut on, Cancel::NEVER).map_err(ConvertError::Import)?;
     let imported = start.elapsed().as_secs_f64();
     progress(IMPORT_SHARE, "saving");
     save_path(&doc, output).map_err(ConvertError::Save)?;
@@ -151,7 +156,8 @@ pub fn convert_all(
         |&(i, input)| {
             log(&format!("[{}/{}] {}", i + 1, files.len(), input.display()));
             let output = out_dir.join(format!("{i:03}.mcpaint"));
-            let result = convert_one(input, &output, planner, &mut |_, _| {}).map_err(|e| e.to_string());
+            let result = convert_one(input, &output, planner, ReplayChoice::default(), &mut |_, _| {})
+                .map_err(|e| e.to_string());
             if discard {
                 let _ = std::fs::remove_file(&output);
             }

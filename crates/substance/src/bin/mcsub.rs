@@ -12,7 +12,7 @@
 //!                                                  suggestions per material fill and how close their looks are
 //!     mcsub library <file.spp> [<library dir>]     what the import review offers for the user's library; with a
 //!                                                  folder every candidate written into it
-//!     mcsub convert <in.spp> <out.mcpaint> [--plan choices.json | --procedurals keep|replace]
+//!     mcsub convert <in.spp> <out.mcpaint> [--plan choices.json | --procedurals keep|replace] [--strokes keep|replay]
 //!                                                  import and save as .mcpaint
 //!     mcsub convert --all <folder> <out dir> [--discard] [--jobs N]   convert every .spp below the folder
 //!     mcsub report <in>                            import and print the import report
@@ -289,8 +289,14 @@ fn run(args: Args) -> Result<(), String> {
             print!("{table}");
         }
         ["convert", input, out] => {
-            let summary = convert::convert_one(Path::new(input), Path::new(out), &args.planner()?, &mut progress_line)
-                .map_err(|e| err(&e))?;
+            let summary = convert::convert_one(
+                Path::new(input),
+                Path::new(out),
+                &args.planner()?,
+                args.replay()?,
+                &mut progress_line,
+            )
+            .map_err(|e| err(&e))?;
             println!("{summary}");
         }
         ["report", input] => {
