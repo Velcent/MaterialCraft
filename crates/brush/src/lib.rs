@@ -5,7 +5,8 @@
 //!   at a pinned revision) behind one adapter file, `engine::photocraft`, the only code naming it (ADR 0007)
 //!   besides `engine::photocraft_tips`, which hands out PhotoCraft's procedural tips ([`procedural_tip`]),
 //!   `engine::photocraft_curve`, its response curve ([`ResponseCurve`], the pen pressure curve), and
-//!   `engine::photocraft_smudge`, its smudge as the stamp stage's local kernel ([`SmudgeKernel`], PT-23).
+//!   `engine::photocraft_smudge`, its smudge as the stamp stage's local kernel ([`SmudgeKernel`], PT-23), and
+//!   `engine::photocraft_patterns`, its procedural patterns ([`pattern`], the starter library's pattern textures).
 //!   Model-sized brushes get a per-point dab scale there (ADR 0006 Q-PT-12).
 //! - [`session`]: [`StrokeSession`] drives one stroke through the core's stamp stage and records its samples.
 //! - [`target`]: [`PaintTarget`], what a tool paints (a paint layer's channels or a mask, ADR 0008), [`mode_for`] how
@@ -42,8 +43,8 @@ pub mod tips;
 pub use clone_source::{CloneSource, SourceMode, texel_under};
 pub use document::{Base, DocumentStroke, Ended, Prepared};
 pub use engine::{
-    DabEngine, EngineExtras, InputPoint, PROCEDURAL_TIP_GENERATOR, PROCEDURAL_TIP_PX, PROCEDURAL_TIPS, ResponseCurve, SmudgeKernel, TipAlpha, TipInfo,
-    procedural_tip, procedural_tip_alpha,
+    DabEngine, EngineExtras, InputPoint, PATTERN_GENERATOR, PATTERN_PERIOD, PATTERN_PX, PROCEDURAL_TIP_GENERATOR, PROCEDURAL_TIP_PX, PROCEDURAL_TIPS, PatternKind,
+    ResponseCurve, SmudgeKernel, TipAlpha, TipInfo, pattern, procedural_tip, procedural_tip_alpha,
 };
 pub use preview::stroke_preview;
 pub use quick_mask::{QuickMask, QuickMaskState, QuickMaskStroke};

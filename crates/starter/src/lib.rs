@@ -29,6 +29,7 @@ mod image;
 mod manifest;
 mod masks;
 mod materials;
+mod patterns;
 mod preview;
 mod recipe;
 mod textures;

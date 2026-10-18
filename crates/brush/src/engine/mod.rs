@@ -2,14 +2,17 @@
 //! PhotoCraft's, behind the [`photocraft`] adapter (ADR 0007: one adapter file, pinned revision). PhotoCraft's
 //! procedural tips, which the starter library ships as alphas, come through [`photocraft_tips`], and its response
 //! curve (the editor's pen pressure curve) through [`photocraft_curve`], and its smudge, as the stamp stage's local
-//! kernel ([`SmudgeKernel`]), through [`photocraft_smudge`].
+//! kernel ([`SmudgeKernel`]), through [`photocraft_smudge`]. Its procedural patterns (paper, canvas, noise, dots),
+//! which the starter library ships as textures, come through [`photocraft_patterns`].
 
 mod photocraft;
 mod photocraft_curve;
+mod photocraft_patterns;
 mod photocraft_smudge;
 mod photocraft_tips;
 
 pub use photocraft_curve::ResponseCurve;
+pub use photocraft_patterns::{PATTERN_GENERATOR, PATTERN_PERIOD, PATTERN_PX, PatternKind, pattern};
 pub use photocraft_smudge::SmudgeKernel;
 pub use photocraft_tips::{PROCEDURAL_TIP_GENERATOR, PROCEDURAL_TIP_PX, PROCEDURAL_TIPS, TipInfo, procedural_tip, procedural_tip_alpha};
 
