@@ -2,6 +2,7 @@
 //! Software PBR renderer for the 3D viewer. Every shape (sphere, cube, plane) is a real tessellated triangle mesh that is
 //! rasterised with a depth buffer, so height maps can displace actual geometry (true displacement), not just fake it.
 //! GGX specular, hemisphere environment lighting, tangent-space normal mapping, bump, outward parallax relief, wireframe.
+use crate::camera::{Basis, Camera, CameraSettings, Orbit};
 use crate::tex::{Tex, lum};
 use crate::v3::*;
 use std::f32::consts::{PI, TAU};
@@ -22,7 +23,7 @@ pub const RELIEF_BUMP: u32 = 1; // normals derived from the height map
 pub const RELIEF_PARALLAX: u32 = 2; // per-pixel relief that rises OUT of the surface
 pub const RELIEF_DISPLACE: u32 = 3; // real geometry displacement along the surface normal
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct View {
     pub yaw: f32,
     pub pitch: f32,
@@ -81,6 +82,23 @@ impl Default for View {
     }
 }
 
+impl View {
+    /// The camera pose as an orbit controller.
+    pub fn orbit(&self) -> Orbit {
+        Orbit { yaw: self.yaw, pitch: self.pitch, distance: self.dist, pan: [self.pan_x, self.pan_y] }
+    }
+
+    /// Takes the camera pose from an orbit controller.
+    pub fn set_orbit(&mut self, o: &Orbit) {
+        (self.yaw, self.pitch, self.dist, [self.pan_x, self.pan_y]) = (o.yaw, o.pitch, o.distance, o.pan);
+    }
+
+    /// The camera drawing this view through `settings` into a viewport of `viewport` units.
+    pub fn camera(&self, settings: &CameraSettings, viewport: [f32; 2]) -> Camera {
+        settings.camera(&self.orbit(), viewport)
+    }
+}
+
 /// Key light direction and the opposite soft fill light (unit vectors pointing TO the lights).
 pub fn light_dirs(v: &View) -> (V, V) {
     let (ly, lp) = (v.light_yaw, v.light_pitch);
@@ -88,13 +106,9 @@ pub fn light_dirs(v: &View) -> (V, V) {
     let (lsp, lcp) = lp.sin_cos();
     let local = [lsy * lcp, lsp, lcy * lcp];
     let ldir = if v.light_follows_camera {
-        let (sy, cy) = v.yaw.sin_cos();
-        let (sp, cp) = v.pitch.sin_cos();
-        let eye0 = [sy * cp, sp, cy * cp];
-        let fwd = norm(mul(eye0, -1.0));
-        let right = norm(cross(fwd, [0.0, 1.0, 0.0]));
-        let up = cross(right, fwd);
-        norm(add(add(mul(right, local[0]), mul(up, local[1])), mul(fwd, -local[2])))
+        // the camera's axes (they don't depend on distance or pan)
+        let b = Orbit { distance: 1.0, pan: [0.0, 0.0], ..v.orbit() }.basis();
+        norm(add(add(mul(b.right, local[0]), mul(b.up, local[1])), mul(b.forward, -local[2])))
     } else {
         norm(local)
     };
@@ -868,13 +882,7 @@ fn parallax(hm: &Tex, s: &Surf, vt: V, depth: f32, level: f32) -> ([f32; 2], f32
 
 pub fn render(m: &Maps, v: &View, w: usize, h: usize) -> Tex {
     let (w, h) = (w.max(1), h.max(1));
-    let (sy, cy) = v.yaw.sin_cos();
-    let (sp, cp) = v.pitch.sin_cos();
-    let eye0 = [v.dist * sy * cp, v.dist * sp, v.dist * cy * cp];
-    let fwd = norm(mul(eye0, -1.0));
-    let right = norm(cross(fwd, [0.0, 1.0, 0.0]));
-    let up = cross(right, fwd);
-    let eye = add(eye0, add(mul(right, v.pan_x), mul(up, v.pan_y)));
+    let Basis { eye, right, up, forward: fwd } = v.orbit().basis();
     let tf = (20.0f32).to_radians().tan();
     let aspect = w as f32 / h as f32;
     let cam = Cam { eye, fwd, right, up, tf, aspect, w, h };
