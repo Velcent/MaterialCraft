@@ -11,20 +11,21 @@
 //! | `projection` 1 + culling fields | planar + depth falloff (`depthCulling*`) + facing falloff (`backfaceCulling*`, angle × 180°) | approximated until fitted |
 //! | `projection` 3, 4 | spherical, cylindrical (`cylinderCullingAngle` × 360°, `cylinderHideCaps`) | approximated: the mode itself is unconfirmed (no Painter test file) |
 //! | `ddd*` of modes 1–4 | volume: `dddPosition` × [`VolumeConvention::position`], `dddEulerAngles` (radians, [`VolumeConvention::euler`] order) → our x-y-z degrees, `dddSize` × [`VolumeConvention::size`]; `dddWrap` 0 → clip | with the mode |
-//! | `projection` 7 | texture space; warp is evaluated from step 43 on | approximated |
+//! | `projection` 7 + `dddGrid` | warp: the volume as for modes 1–4, `gridSize` = (columns, rows), the vertices row by row with `position3D` as grid positions, `positionUV` (v up) → our image coordinate (u, 1 − v), the four tangents as handles (column = along u); `depth` → projection depth; `depthCulling*` → depth falloff | approximated: our own warp, no pixel matching (ADR 0008 mc2-q-pj-05) |
+//! | `projection` 7 with a malformed grid | texture space | approximated |
 //! | other values | texture space | approximated (unknown mode) |
 //! | `filtering` 2 / 0 | smooth / bilinear | 0 is a guess (nearest or bilinear): approximated where it matters |
 //! | `uvSamplingWrap` 0, 1, 2, 3 | repeat none, u, v, both (tri-planar always repeats) | 1 vs 2 unverified: approximated when 1 or 2 |
 //!
-//! Painter's raw fields stay in the kept `document.bin` (`foreign/substance`); size modes, the second UV
-//! transform and the warp grid are not mapped yet.
+//! Painter's raw fields stay in the kept `document.bin` (`foreign/substance`); size modes and the second UV
+//! transform are not mapped yet.
 
 use super::computability::Computability;
-use crate::model::{FillEffect, FillPlacement};
+use crate::model::{FillEffect, FillPlacement, GridDeformation};
 use materialcraft::projection::rotation::{self, EulerOrder};
 use materialcraft::projection::{
     Cylindrical, FacingFalloff, Falloff, Filter, ImagePlacement, Planar, Projection, ProjectionMode, Repeat, Spherical,
-    TriPlanar, Volume,
+    TriPlanar, Volume, Warp, WarpGrid, WarpPoint,
 };
 
 /// How Painter's volume numbers relate to ours (see `materialcraft::projection::volume`: one scene unit is the
@@ -193,6 +194,7 @@ impl ProjectionTable {
         };
         let p = &fill.placement;
         let volume_mode = matches!(fill.projection, 1..=4);
+        let warp = (fill.projection == 7).then(|| self.warp(fill));
         let repeat = match p.uv_wrap.unwrap_or(3) {
             0 => Repeat::None,
             3 => Repeat::Both,
@@ -216,17 +218,22 @@ impl ProjectionTable {
             0 => ProjectionMode::Uv,
             1..=4 => self.volume_mode(fill),
             other => {
-                let why = match other {
-                    7 => "projection 7 (warp) not evaluated yet; imported as texture space".to_string(),
-                    _ => format!(
+                let why = match &warp {
+                    Some(Ok(_)) => "warp grid imported as our own Bézier warp (no pixel matching)".to_string(),
+                    Some(Err(e)) => format!("projection 7 (warp) with {e}; imported as texture space"),
+                    None => format!(
                         "projection {other} ({}) not known; imported as texture space",
                         painter_mode_name(other)
                     ),
                 };
                 status.and(&Computability::approximated(why));
-                ProjectionMode::TextureSpace
+                match warp {
+                    Some(Ok(w)) => ProjectionMode::Warp(w),
+                    _ => ProjectionMode::TextureSpace,
+                }
             }
         };
+        let volume_mode = volume_mode || matches!(mode, ProjectionMode::Warp(_));
         if volume_mode {
             if !self.volume.verified {
                 status.and(&Computability::approximated(format!(
@@ -280,6 +287,24 @@ impl ProjectionTable {
         }
     }
 
+    /// The warp of a mode-7 fill, or why its grid cannot be used.
+    fn warp(&self, fill: &FillEffect) -> Result<Warp, String> {
+        let p = &fill.placement;
+        let grid = match &p.grid {
+            Some(g) => warp_grid(g)?,
+            None => WarpGrid::default(),
+        };
+        grid.validate().map_err(|e| e.to_string())?;
+        Ok(Warp {
+            volume: self.volume.volume(p),
+            depth_falloff: Falloff {
+                on: p.depth_culling.unwrap_or(false),
+                hardness: p.depth_culling_hardness.unwrap_or(0.5),
+            },
+            grid,
+        })
+    }
+
     fn volume_mode(&self, fill: &FillEffect) -> ProjectionMode {
         let p = &fill.placement;
         let volume = self.volume.volume(p);
@@ -313,6 +338,29 @@ impl ProjectionTable {
     }
 }
 
+/// Our warp grid for Painter's `dddGrid`.
+fn warp_grid(g: &GridDeformation) -> Result<WarpGrid, String> {
+    let [columns, rows] = g.size;
+    let (Ok(columns), Ok(rows)) = (u32::try_from(columns), u32::try_from(rows)) else {
+        return Err(format!("a warp grid of size {:?}", g.size));
+    };
+    let points = g
+        .vertices
+        .iter()
+        .map(|v| WarpPoint {
+            pos: v.position,
+            uv: [v.uv[0], 1.0 - v.uv[1]],
+            tangents: v.tangents,
+        })
+        .collect();
+    Ok(WarpGrid {
+        rows,
+        columns,
+        depth: if g.depth.is_finite() { g.depth.max(0.0) } else { 0.1 },
+        points,
+    })
+}
+
 /// [`ProjectionTable::painter`]'s mapping of `fill`.
 pub fn map_projection(fill: &FillEffect) -> MappedProjection {
     ProjectionTable::painter().map(fill)
@@ -322,6 +370,7 @@ pub fn map_projection(fill: &FillEffect) -> MappedProjection {
 mod tests {
     use super::*;
     use crate::model::{EffectHeader, UvTransform};
+    use materialcraft::projection::{Projector, SurfacePoint};
 
     fn fill(projection: u64, filtering: u64, uv: Option<UvTransform>) -> FillEffect {
         FillEffect {
@@ -364,9 +413,67 @@ mod tests {
         let mut wrapped = fill(6, 2, None);
         wrapped.placement.uv_wrap = Some(0);
         assert_eq!(map_projection(&wrapped).projection.repeat, Repeat::None);
-        let warp = map_projection(&fill(7, 2, None));
-        assert_eq!(warp.projection.mode, ProjectionMode::TextureSpace);
-        assert!(warp.status.reasons()[0].contains("warp"));
+    }
+
+    #[test]
+    fn warp_grids_are_imported_approximated() {
+        use crate::model::GridVertex;
+        // Painter's default 3 × 3 grid: rows from the bottom, image v up, handles a third of the spacing
+        let mut vertices = Vec::new();
+        for r in 0..3 {
+            for c in 0..3 {
+                let (x, y) = (c as f32 - 1.0, r as f32 - 1.0);
+                vertices.push(GridVertex {
+                    position: [x, y, 0.0],
+                    uv: [c as f32 / 2.0, r as f32 / 2.0],
+                    tangents: [
+                        [-1.0 / 3.0, 0.0, 0.0],
+                        [1.0 / 3.0, 0.0, 0.0],
+                        [0.0, -1.0 / 3.0, 0.0],
+                        [0.0, 1.0 / 3.0, 0.0],
+                    ],
+                });
+            }
+        }
+        let mut warp = fill(7, 2, None);
+        warp.placement.grid = Some(GridDeformation {
+            size: [3, 3],
+            depth: 0.1,
+            vertices,
+        });
+        warp.placement.depth_culling = Some(true);
+        warp.placement.size = Some([1.0, 1.0, 0.5]);
+        let m = map_projection(&warp);
+        let ProjectionMode::Warp(w) = &m.projection.mode else {
+            panic!("{:?}", m.projection.mode)
+        };
+        assert_eq!((w.grid.rows, w.grid.columns, w.grid.depth), (3, 3, 0.1));
+        assert!(w.depth_falloff.on && w.volume.scale == [1.0, 1.0, 0.5]);
+        // the bottom-left vertex shows the image's bottom-left corner (v = 1 top first)
+        assert_eq!(w.grid.points[0].uv, [0.0, 1.0]);
+        assert!(m.status.reasons().iter().any(|r| r.contains("warp")));
+        // it projects the image as the planar projection would
+        let frame = materialcraft::projection::SceneFrame {
+            centre: [0.0; 3],
+            size: [2.0; 3],
+        };
+        let prepared = m.projection.prepare(Some(&frame), true).unwrap();
+        let taps = prepared.project(&SurfacePoint {
+            pos: [-0.5, -0.5, 0.0],
+            ..SurfacePoint::default()
+        });
+        assert!((taps.taps[0].uv[0] - 0.25).abs() < 1e-5 && (taps.taps[0].uv[1] - 0.75).abs() < 1e-5);
+        // a grid whose points do not fill it falls back to texture space
+        let mut broken = warp.clone();
+        if let Some(g) = &mut broken.placement.grid {
+            g.vertices.truncate(4);
+        }
+        let b = map_projection(&broken);
+        assert_eq!(b.projection.mode, ProjectionMode::TextureSpace);
+        assert!(b.status.reasons().iter().any(|r| r.contains("warp")));
+        // no grid stored: the regular grid
+        let plain = map_projection(&fill(7, 2, None));
+        assert!(matches!(plain.projection.mode, ProjectionMode::Warp(_)));
     }
 
     #[test]
