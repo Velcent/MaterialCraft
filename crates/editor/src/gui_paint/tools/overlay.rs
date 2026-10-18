@@ -1,7 +1,7 @@
 //! The brush tools' visual aids over the 3D view: the lazy mouse's ring and string (PT-35), the straight line's
-//! dotted guide (PT-31), and symmetry's plane or axis, where it meets the mesh, and an extra cursor at each
-//! symmetric place (PT-39). [`Overlay`] is plain view-space geometry built from the tools' state; drawing it is a
-//! few egui shapes.
+//! dotted guide (PT-31), symmetry's plane or axis, where it meets the mesh, and an extra cursor at each symmetric
+//! place (PT-39), and the clone source (PT-27). [`Overlay`] is plain view-space geometry built from the tools' state;
+//! drawing it is a few egui shapes.
 
 use super::super::document_state::OpenDocument;
 use super::super::shell::tools::Tool;
@@ -30,6 +30,8 @@ pub enum Aid {
     Plane,
     Meeting,
     Cursor,
+    /// The clone source (PT-27).
+    Source,
 }
 
 impl Aid {
@@ -40,6 +42,7 @@ impl Aid {
             Aid::Plane => Color32::from_rgba_unmultiplied(110, 190, 255, 170),
             Aid::Meeting => Color32::from_rgb(255, 205, 90),
             Aid::Cursor => Color32::from_gray(200),
+            Aid::Source => Color32::from_rgb(120, 230, 140),
         }
     }
 }
@@ -111,6 +114,14 @@ impl Painting {
             return out;
         }
         let Some(preset) = self.brush.preset(tool).cloned() else { return out };
+        // the clone source: a ring with a cross where it was marked
+        if tool == Tool::Clone
+            && let Some([x, y]) = self.clone_marker(doc, picking, camera)
+        {
+            out.rings.push(([x, y], 7.0, Aid::Source));
+            out.lines.push(([x - 10.0, y], [x + 10.0, y], Aid::Source, false));
+            out.lines.push(([x, y - 10.0], [x, y + 10.0], Aid::Source, false));
+        }
         let mesh = &doc.doc().mesh;
         let projector = camera.and_then(|c| picking.projector_on(mesh, c));
         let view = projector.as_ref().map(|p| p as &dyn ViewProjector);

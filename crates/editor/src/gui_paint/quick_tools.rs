@@ -1,6 +1,7 @@
 //! The Paint screen's side of the tool keys (PT-43, PT-45): quick mask on/off, invert, clear, back to the previous
 //! tool (which applies it), its own undo while it is edited, and the polygon fill settings keys. The state lives in
-//! the brush tools ([`super::tools::Painting`]); this keeps the tint in step with it.
+//! the brush tools ([`super::tools::Painting`]); this keeps the tint in step with it. The clone source key marks
+//! the surface under the pointer (PT-27).
 
 use super::PaintMode;
 use super::quick_mask_tint::QuickMaskTint;
@@ -32,7 +33,20 @@ impl PaintMode {
             }
             ToolEvent::SwapFill => self.painting.brush.polygon.white = !self.painting.brush.polygon.white,
             ToolEvent::PickMode(m) => self.painting.brush.polygon.mode = m,
+            ToolEvent::MarkCloneSource => self.mark_clone_source(),
         }
+    }
+
+    /// The clone source key (PT-27): the surface under the pointer becomes the source.
+    fn mark_clone_source(&mut self) {
+        let Some(doc) = &self.document else { return };
+        let Some((_, set)) = self.layers.paint_target(doc.doc()) else {
+            self.diag.info(Area::General, "Select a paint layer to clone in, then mark the source.");
+            return;
+        };
+        let pointer = self.viewport.hover().map(|h| h.pos);
+        let message = self.painting.mark_clone_source(doc, &self.picking, self.viewport.camera(), pointer, set);
+        self.diag.info(Area::General, message);
     }
 
     /// The previous-tool key also applies a quick mask being edited.

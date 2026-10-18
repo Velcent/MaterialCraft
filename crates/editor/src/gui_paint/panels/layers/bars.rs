@@ -89,6 +89,11 @@ pub fn buttons(ui: &mut Ui, set: &str, focus: Option<(&LayerRef, &Layer)>, ids: 
             (NewLayer::Paint, "+ Paint", "New paint layer above the selection"),
             (NewLayer::Fill, "+ Fill", "New fill layer above the selection"),
             (NewLayer::Folder, "+ Folder", "New empty folder above the selection"),
+            (
+                NewLayer::SeeThrough,
+                "+ See-through",
+                "New see-through layer above the selection: smudge and clone work on the layers below it and follow their changes",
+            ),
         ] {
             if ui.small_button(label).on_hover_text(tip).clicked() {
                 events.push(LayerEvent::Create { set: set.to_string(), what, above: above.clone() });

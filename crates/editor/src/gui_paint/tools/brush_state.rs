@@ -1,13 +1,14 @@
 //! [`BrushTools`]: the settings the brush panel and the quick-access bar edit: one preset per brush tool, the value
-//! painted into each channel (and whether the channel is painted at all, PT-02), the grey value for masks, and the
-//! stroke helpers (lazy mouse, symmetry).
+//! painted into each channel (and whether the channel is painted at all, PT-02), the grey value for masks, the
+//! stroke helpers (lazy mouse, symmetry) and the retouch tools' settings ([`RetouchSettings`]).
 
 use super::super::shell::tools::Tool;
 use super::helpers::StrokeHelpers;
 use super::polygon_fill::PolygonFillSettings;
 use materialcraft::paint::brush::BrushPreset;
+use materialcraft::paint::stroke::StrokeTool;
 use materialcraft::paint::{Channel, TextureSet};
-use materialcraft_brush::PaintValues;
+use materialcraft_brush::{PaintValues, SourceMode};
 
 /// The value painted into one channel.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,11 +19,40 @@ pub struct ChannelValue {
     pub enabled: bool,
 }
 
+/// What the smudge tool does (ADR 0008 mc2-q-pt-06c: smudge drags and mixes, blur is a separate brush mode).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SmudgeMode {
+    /// Drags and mixes paint along the stroke (PT-23).
+    #[default]
+    Smudge,
+    /// Softens the paint under the stroke (PT-26).
+    Blur,
+}
+
+/// The smudge and clone tools' own settings.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RetouchSettings {
+    pub smudge_mode: SmudgeMode,
+    /// Smudge: how much paint each stamp drags along; blur: how much it softens. 0 … 1.
+    pub strength: f32,
+    /// Clone: aligned (the offset stays) or fixed (each stroke starts at the source again) (PT-28).
+    pub clone_mode: SourceMode,
+}
+
+impl Default for RetouchSettings {
+    fn default() -> RetouchSettings {
+        RetouchSettings { smudge_mode: SmudgeMode::Smudge, strength: 0.6, clone_mode: SourceMode::Aligned }
+    }
+}
+
 /// Brush settings of the session.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BrushTools {
     pub paint: BrushPreset,
     pub eraser: BrushPreset,
+    pub smudge: BrushPreset,
+    pub clone: BrushPreset,
+    pub retouch: RetouchSettings,
     /// Values by channel; channels a set has but this list lacks paint their default value.
     pub values: Vec<ChannelValue>,
     /// Grey value painted into masks (0 black … 1 white).
@@ -40,6 +70,9 @@ impl Default for BrushTools {
         BrushTools {
             paint: BrushPreset::default(),
             eraser: BrushPreset::eraser(),
+            smudge: BrushPreset { name: "Smudge".into(), hardness: 0.3, spacing: 0.1, ..BrushPreset::default() },
+            clone: BrushPreset { name: "Clone".into(), hardness: 0.8, ..BrushPreset::default() },
+            retouch: RetouchSettings::default(),
             values: Vec::new(),
             mask_value: 1.0,
             occlusion: true,
@@ -50,11 +83,13 @@ impl Default for BrushTools {
 }
 
 impl BrushTools {
-    /// The preset of `tool`, if it is a brush tool this step provides (paint and eraser).
+    /// The preset of `tool`, if it is a brush tool (paint, eraser, smudge, clone).
     pub fn preset(&self, tool: Tool) -> Option<&BrushPreset> {
         match tool {
             Tool::Paint => Some(&self.paint),
             Tool::Eraser => Some(&self.eraser),
+            Tool::Smudge => Some(&self.smudge),
+            Tool::Clone => Some(&self.clone),
             _ => None,
         }
     }
@@ -63,15 +98,35 @@ impl BrushTools {
         match tool {
             Tool::Paint => Some(&mut self.paint),
             Tool::Eraser => Some(&mut self.eraser),
+            Tool::Smudge => Some(&mut self.smudge),
+            Tool::Clone => Some(&mut self.clone),
             _ => None,
         }
     }
 
     /// The preset of `tool` and the stroke helpers together, for the quick-access bar.
     pub fn quick_mut(&mut self, tool: Tool) -> Option<(&mut BrushPreset, &mut StrokeHelpers)> {
+        let BrushTools { paint, eraser, smudge, clone, helpers, .. } = self;
+        let preset = match tool {
+            Tool::Paint => paint,
+            Tool::Eraser => eraser,
+            Tool::Smudge => smudge,
+            Tool::Clone => clone,
+            _ => return None,
+        };
+        Some((preset, helpers))
+    }
+
+    /// The stroke tool `tool` paints with (the smudge tool's mode picks smudge or blur).
+    pub fn stroke_tool(&self, tool: Tool) -> Option<StrokeTool> {
         match tool {
-            Tool::Paint => Some((&mut self.paint, &mut self.helpers)),
-            Tool::Eraser => Some((&mut self.eraser, &mut self.helpers)),
+            Tool::Paint => Some(StrokeTool::Paint),
+            Tool::Eraser => Some(StrokeTool::Eraser),
+            Tool::Smudge => Some(match self.retouch.smudge_mode {
+                SmudgeMode::Smudge => StrokeTool::Smudge,
+                SmudgeMode::Blur => StrokeTool::Blur,
+            }),
+            Tool::Clone => Some(StrokeTool::Clone),
             _ => None,
         }
     }
@@ -120,6 +175,16 @@ mod tests {
         assert_eq!(v.value(Channel::Roughness), Some([0.2; 4]));
         assert_eq!(v.value(Channel::BaseColor), None, "switched off");
         assert_eq!(v.value(Channel::Height), None, "the set has no height");
-        assert!(b.preset(Tool::Smudge).is_none() && b.preset(Tool::Eraser).is_some());
+        assert!(b.preset(Tool::Projection).is_none() && b.preset(Tool::Smudge).is_some() && b.preset(Tool::Clone).is_some());
+    }
+
+    #[test]
+    fn the_smudge_tool_paints_smudge_or_blur_strokes() {
+        let mut b = BrushTools::default();
+        assert_eq!(b.stroke_tool(Tool::Smudge), Some(StrokeTool::Smudge));
+        b.retouch.smudge_mode = SmudgeMode::Blur;
+        assert_eq!(b.stroke_tool(Tool::Smudge), Some(StrokeTool::Blur));
+        assert_eq!(b.stroke_tool(Tool::Clone), Some(StrokeTool::Clone));
+        assert_eq!(b.stroke_tool(Tool::PolygonFill), None);
     }
 }

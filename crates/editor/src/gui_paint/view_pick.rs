@@ -81,6 +81,11 @@ impl ViewPicking {
         self.scene.as_ref()?.projector(mesh, camera)
     }
 
+    /// The picking scene, once built (replays of recorded strokes pick through it).
+    pub fn scene(&self) -> Option<&ViewScene> {
+        self.scene.as_ref()
+    }
+
     /// False for mesh parts of hidden texture sets (they neither show nor hide anything).
     pub fn is_shown(&self, part: usize) -> bool {
         self.scene.as_ref().is_some_and(|s| s.is_shown(part))

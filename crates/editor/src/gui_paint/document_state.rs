@@ -110,6 +110,13 @@ impl OpenDocument {
         &mut self.doc
     }
 
+    /// The document for repainting derived pixels: see-through layers painted again from their stroke records when
+    /// the composite below them changed (PT-25). That follows from other steps (and their undo), so it is no history
+    /// step of its own. Nothing else may use this.
+    pub fn doc_for_see_through(&mut self) -> &mut Document {
+        &mut self.doc
+    }
+
     /// Records a finished stroke's inverses (in the order its edits were made) as one closed history step.
     pub fn record_stroke(&mut self, label: &str, inverses: Vec<materialcraft::paint::edit::Edit>) {
         if !inverses.is_empty() {

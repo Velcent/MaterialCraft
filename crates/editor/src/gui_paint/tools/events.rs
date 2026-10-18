@@ -1,5 +1,5 @@
 //! [`ToolEvent`]: what the tool keys and the quick-access bar ask of the tools' session state (quick mask, polygon
-//! fill settings).
+//! fill settings, the clone source).
 
 use materialcraft::paint::effect::PickMode;
 
@@ -15,4 +15,6 @@ pub enum ToolEvent {
     SwapFill,
     /// Polygon fill: what a click grows to.
     PickMode(PickMode),
+    /// Clone: mark the surface under the pointer as the source (PT-27).
+    MarkCloneSource,
 }

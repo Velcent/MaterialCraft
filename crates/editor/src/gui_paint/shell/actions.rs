@@ -58,6 +58,7 @@ pub const ACTIONS: &[ActionSpec] = &[
     press("paint.layer.new_paint", "New paint layer", LAYERS, &["Mod+Shift+N"]),
     press("paint.layer.new_fill", "New fill layer", LAYERS, &[]),
     press("paint.layer.new_folder", "New folder", LAYERS, &[]),
+    press("paint.layer.new_see_through", "New see-through layer", LAYERS, &[]),
     press("paint.layer.duplicate", "Duplicate the selected layers", LAYERS, &["Mod+D"]),
     press("paint.layer.group", "Group the selected layers into a folder", LAYERS, &["Mod+G"]),
     press("paint.layer.delete", "Delete the selected layers", LAYERS, &["Delete"]),
@@ -111,7 +112,7 @@ pub const ACTIONS: &[ActionSpec] = &[
 ];
 
 /// What a key press of action `id` does; `None` for gestures and for actions that tools not
-/// built yet will act on (stencil, clone source…).
+/// built yet will act on (stencil).
 pub fn event_for(id: &str) -> Option<PanelEvent> {
     if let Some(tool) = Tool::ALL.iter().find(|t| t.action() == id) {
         return Some(PanelEvent::SelectTool(*tool));
@@ -131,6 +132,8 @@ pub fn event_for(id: &str) -> Option<PanelEvent> {
         "paint.layer.new_paint" => PanelEvent::LayerAction(LayerAction::New(NewLayer::Paint)),
         "paint.layer.new_fill" => PanelEvent::LayerAction(LayerAction::New(NewLayer::Fill)),
         "paint.layer.new_folder" => PanelEvent::LayerAction(LayerAction::New(NewLayer::Folder)),
+        "paint.layer.new_see_through" => PanelEvent::LayerAction(LayerAction::New(NewLayer::SeeThrough)),
+        "paint.tool.clone_source" => PanelEvent::Tool(ToolEvent::MarkCloneSource),
         "paint.layer.duplicate" => PanelEvent::LayerAction(LayerAction::Duplicate),
         "paint.layer.group" => PanelEvent::LayerAction(LayerAction::Group),
         "paint.layer.delete" => PanelEvent::LayerAction(LayerAction::Delete),
@@ -187,7 +190,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     /// Actions that are listed and rebindable now, and are acted on by tools not built yet.
-    const RESERVED: &[&str] = &["paint.stroke", "paint.tool.stencil", "paint.tool.stencil_hide", "paint.tool.clone_source"];
+    const RESERVED: &[&str] = &["paint.stroke", "paint.tool.stencil", "paint.tool.stencil_hide"];
 
     #[test]
     fn every_action_is_on_the_shortcuts_page_and_its_defaults_parse() {

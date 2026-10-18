@@ -9,11 +9,11 @@ use crate::gui_paint::input::PointerSample;
 use materialcraft::camera::Camera;
 use materialcraft::mesh::Sphere;
 use materialcraft::paint::Document;
-use materialcraft::paint::brush::BrushPreset;
+use materialcraft::paint::brush::{BrushPreset, Retouch};
 use materialcraft::paint::stroke::{StrokeTool, Symmetry, ViewKind};
 use materialcraft::projection::ViewProjector;
 use materialcraft::stamp::TexelFactor;
-use materialcraft_brush::{BrushError, DocumentStroke, Ended, InputPoint, LazyMouse, LineAnchor, PaintTarget, PaintValues, SessionScene, StrokeSetup};
+use materialcraft_brush::{Base, BrushError, DocumentStroke, Ended, InputPoint, LazyMouse, LineAnchor, PaintTarget, PaintValues, SessionScene, StrokeSetup};
 use std::sync::Arc;
 
 /// How to start a stroke.
@@ -31,6 +31,10 @@ pub struct StrokeStart {
     pub symmetry: Symmetry,
     /// The lazy mouse, if on (never for straight lines).
     pub lazy: Option<LazyMouse>,
+    /// Smudge and blur strength, clone offset.
+    pub retouch: Retouch,
+    /// On a see-through layer, the composite below it (the stroke starts from it where the layer has no pixels).
+    pub base: Option<Base>,
 }
 
 pub struct ActiveStroke {
@@ -71,7 +75,13 @@ impl ActiveStroke {
         at: PointerSample,
         factors: &[&dyn TexelFactor],
     ) -> Result<ActiveStroke, BrushError> {
-        let label = if start.tool == StrokeTool::Eraser { "Erase" } else { "Paint" };
+        let label = match start.tool {
+            StrokeTool::Eraser => "Erase",
+            StrokeTool::Smudge => "Smudge",
+            StrokeTool::Blur => "Blur",
+            StrokeTool::Clone => "Clone",
+            StrokeTool::Paint | StrokeTool::Projection => "Paint",
+        };
         let model = doc.doc().mesh.bounding_sphere().unwrap_or(Sphere { centre: [0.0; 3], radius: 1.0 });
         let setup = StrokeSetup {
             preset: start.preset,
@@ -82,11 +92,14 @@ impl ActiveStroke {
             values: start.values.clone(),
             model,
             occlusion: start.occlusion,
-            retouch: Default::default(),
+            retouch: start.retouch,
         };
-        let prepared = DocumentStroke::prepare(doc.doc_for_strokes(), start.target, &start.values)?;
+        let mut prepared = DocumentStroke::prepare(doc.doc_for_strokes(), start.target, &start.values)?;
         let result = {
             let (mesh, set) = split(doc.doc_for_strokes(), start.set)?;
+            if let Some(base) = start.base {
+                prepared.see_through(set, base);
+            }
             let projector = picking.projector_on(mesh, start.camera).ok_or(BrushError::NoView)?;
             let scene = SessionScene { surface: &start.surface.map, index: &start.surface.index, projector: Some(&projector as &dyn ViewProjector), factors };
             prepared.start(setup, &scene, mesh, &|part| picking.is_shown(part), set)

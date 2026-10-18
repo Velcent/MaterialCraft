@@ -1,6 +1,7 @@
 //! The brush tools at work (PT-01, PT-20, PT-54, PT-55): [`Painting`] turns the viewport's stroke gesture into
-//! strokes of the paint or eraser tool on the selected paintable target, one history step each. The tool choice
-//! lives in the shell ([`super::shell::tools`]); the settings in [`BrushTools`]; the work in `materialcraft-brush`.
+//! strokes of the paint, eraser, smudge (or blur) and clone tools on the selected paintable target, one history step
+//! each. The tool choice lives in the shell ([`super::shell::tools`]); the settings in [`BrushTools`]; the work in
+//! `materialcraft-brush`.
 //!
 //! State machine: idle → (pen down on a paintable target with a brush tool and a ready surface) painting → (pen
 //! up, or any document change) idle. While painting, the set's maps are recomposited every few frames; at pen up
@@ -12,6 +13,10 @@
 //! Quick mask (PT-42): while it is edited, paint and eraser strokes go into it ([`mask_stroke`]); while it is
 //! applied, every document stroke is multiplied by it. The polygon fill tool ([`polygon_fill`]) turns the same
 //! gesture into picks.
+//!
+//! Retouch tools ([`retouch`], PT-23…PT-30): smudge and blur run local kernels, clone copies from the source marked
+//! with its key (aligned or fixed). Strokes on a see-through layer start from the composite below it; the layer is
+//! painted again from its record whenever the layers below it change.
 
 mod active;
 pub mod brush_state;
@@ -20,6 +25,7 @@ pub mod helpers;
 mod mask_stroke;
 mod overlay;
 pub mod polygon_fill;
+mod retouch;
 mod surfaces;
 
 use super::document_state::OpenDocument;
@@ -86,6 +92,8 @@ pub struct Painting {
     /// The polygon fill pick gesture in progress.
     gesture: Option<polygon_fill::PickGesture>,
     topologies: polygon_fill::TopologyCache,
+    /// The clone source and the see-through layers' cache.
+    retouch: retouch::RetouchState,
 }
 
 impl Painting {
@@ -96,17 +104,26 @@ impl Painting {
         if let Some(e) = self.surfaces.error.take() {
             report.message = Some(format!("The brush can't paint this texture set: {e}."));
         }
-        let tool = match f.tool {
-            Tool::Paint => Some(StrokeTool::Paint),
-            Tool::Eraser => Some(StrokeTool::Eraser),
-            _ => None,
-        };
+        let tool = self.brush.stroke_tool(f.tool);
+        // see-through layers follow the layers below them (PT-25)
+        if !self.is_stroking()
+            && let Some((_, set)) = &f.target
+        {
+            self.keep_see_through(f.doc, f.picking, *set, &mut report);
+        }
         if f.tool == Tool::PolygonFill {
             let mut polygon = self.polygon_frame(input, f);
             polygon.message = polygon.message.or(report.message);
+            polygon.refresh = polygon.refresh.or(report.refresh);
             return polygon;
         }
         if let (true, Some(tool)) = (self.quick_mask.is_editing(), tool) {
+            if !matches!(tool, StrokeTool::Paint | StrokeTool::Eraser) {
+                if input.iter().any(|ev| matches!(ev, StrokeInput::Down(_))) {
+                    report.message = Some("Smudge and clone work on layers; paint or erase the quick mask while it is edited.".into());
+                }
+                return report;
+            }
             return self.mask_frame(input, f, tool, report);
         }
         // keep the selected set's surface warm, so the first stroke does not wait
@@ -178,6 +195,15 @@ impl Painting {
             report.message = Some("The brush is getting this texture set ready; paint again in a moment.".into());
             return None;
         };
+        let retouch = match self.retouch_for(doc, picking, camera, tool, at, set) {
+            Ok(r) => r,
+            Err(why) => {
+                report.message = Some(format!("Nothing was painted: {why}."));
+                return Some(set);
+            }
+        };
+        // a see-through layer is brought up to date first, and the stroke works on the composite below it
+        let base = self.see_through_base(doc, picking, &surface, &target, set);
         let set_ref = doc.doc().texture_sets.get(set)?;
         let preset = self.brush.preset(f.tool).cloned().unwrap_or_default();
         let values = self.brush.values_for(set_ref);
@@ -195,6 +221,8 @@ impl Painting {
             surface,
             symmetry: to_record(helpers.symmetry.spec()),
             lazy: if lazy { helpers.lazy.start() } else { None },
+            retouch,
+            base,
         };
         let factor = factor_for(&self.quick_mask, doc, set);
         match ActiveStroke::begin(doc, picking, start, at, &factors(&factor)) {
@@ -240,6 +268,23 @@ impl Painting {
         self.gesture = None;
         self.quick_mask.forget();
         self.topologies = Default::default();
+        self.retouch.clear();
+    }
+
+    /// Paints the see-through layers of `set` again if the layers below them changed (once its surface is ready).
+    fn keep_see_through(&mut self, doc: &mut OpenDocument, picking: &ViewPicking, set: usize, report: &mut PaintReport) {
+        let has_any = doc.doc().texture_sets.get(set).is_some_and(|s| !materialcraft::paint::see_through::see_through_layers(s).is_empty());
+        if !has_any {
+            return;
+        }
+        let Some(surface) = self.surfaces.get(doc, set) else { return };
+        let (repainted, problem) = self.refresh_see_through(doc, picking, &surface, set);
+        if repainted {
+            report.refresh = Some(set);
+        }
+        if problem.is_some() {
+            report.message = problem;
+        }
     }
 
     fn end(&mut self, doc: &mut OpenDocument, picking: &ViewPicking, report: &mut PaintReport) {

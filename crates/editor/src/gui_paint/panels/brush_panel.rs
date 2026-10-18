@@ -1,24 +1,31 @@
-//! The brush panel (PT-04 … PT-11, PT-02): the active brush tool's settings and the values it paints per channel.
+//! The brush panel (PT-04 … PT-11, PT-02, PT-23 … PT-28): the active brush tool's settings, the smudge and clone
+//! tools' own settings, and the values painted per channel (the channels switched on there are the ones smudge
+//! and clone work on).
 //! Settings take effect from the next stroke.
 
 use super::super::shell::tools::Tool;
 use super::super::tools::BrushTools;
+use super::super::tools::brush_state::{RetouchSettings, SmudgeMode};
 use crate::gui_theme;
 use crate::gui_widgets::SliderRow;
 use eframe::egui::{self, RichText, Ui};
 use materialcraft::paint::TextureSet;
 use materialcraft::paint::brush::{BrushPreset, Placement, SizeSpace};
+use materialcraft_brush::SourceMode;
 
 pub fn show(ui: &mut Ui, brush: &mut BrushTools, tool: Tool, set: Option<&TextureSet>) {
-    let erase = tool == Tool::Eraser;
     if brush.preset(tool).is_none() {
-        ui.weak("The brush settings belong to the paint and eraser tools.");
+        ui.weak("The brush settings belong to the paint, eraser, smudge and clone tools.");
         return;
     }
     egui::ScrollArea::vertical().id_salt("paint_brush_panel").show(ui, |ui| {
         let mut occlusion = brush.occlusion;
+        if tool == Tool::Smudge || tool == Tool::Clone {
+            heading(ui, if tool == Tool::Smudge { "Smudge" } else { "Clone" });
+            retouch(ui, &mut brush.retouch, tool);
+        }
         if let Some(preset) = brush.preset_mut(tool) {
-            heading(ui, if erase { "Eraser" } else { "Brush" });
+            heading(ui, if tool == Tool::Eraser { "Eraser" } else { "Brush" });
             shape(ui, preset);
             heading(ui, "Variation");
             variation(ui, preset);
@@ -26,11 +33,29 @@ pub fn show(ui: &mut Ui, brush: &mut BrushTools, tool: Tool, set: Option<&Textur
             placement(ui, preset, &mut occlusion);
         }
         brush.occlusion = occlusion;
-        if !erase {
-            heading(ui, "Painted values");
+        if tool != Tool::Eraser {
+            // smudge and clone work on the channels switched on here (PT-23)
+            heading(ui, if tool == Tool::Paint { "Painted values" } else { "Channels" });
             values(ui, brush, set);
         }
     });
+}
+
+/// The smudge tool's mode and strength (PT-23, PT-26), the clone tool's source behaviour (PT-27, PT-28).
+fn retouch(ui: &mut Ui, r: &mut RetouchSettings, tool: Tool) {
+    if tool == Tool::Smudge {
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut r.smudge_mode, SmudgeMode::Smudge, "Smudge").on_hover_text("Drag and mix the paint along the stroke");
+            ui.selectable_value(&mut r.smudge_mode, SmudgeMode::Blur, "Blur").on_hover_text("Soften the paint under the stroke");
+        });
+        SliderRow::new("Strength", &mut r.strength, 0.0..=1.0).default_value(RetouchSettings::default().strength).show(ui);
+        return;
+    }
+    ui.horizontal(|ui| {
+        ui.selectable_value(&mut r.clone_mode, SourceMode::Aligned, "Aligned").on_hover_text("The source moves on with every stroke");
+        ui.selectable_value(&mut r.clone_mode, SourceMode::Fixed, "Fixed").on_hover_text("Every stroke starts again at the source");
+    });
+    ui.weak("Hover the model and press V to mark the source.");
 }
 
 fn heading(ui: &mut Ui, text: &str) {
