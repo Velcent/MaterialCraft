@@ -12,6 +12,7 @@ use super::image::Rect;
 use super::stack::{Compositor, FillContext, NO_FILL_CONTEXT};
 use super::texture_set::TextureSet;
 use crate::projection::SurfaceHit;
+use std::borrow::Cow;
 
 /// One texel of one texture set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,17 +71,18 @@ impl<'a> TexelProbe<'a> {
     /// lies outside it.
     pub fn stored(&self, at: TexelAt, channel: Channel) -> Option<StoredValue> {
         let set = self.set_at(at)?;
-        set.has_channel(channel).then(|| self.composite(set, at, channel))
+        set.has_channel(channel).then(|| self.composite(&set, at, channel))
     }
 
     /// Every declared channel's composited value at `at`, in the set's channel order (the material picker).
     pub fn channels(&self, at: TexelAt) -> Vec<StoredValue> {
         let Some(set) = self.set_at(at) else { return Vec::new() };
-        set.channels.iter().map(|spec| self.composite(set, at, spec.channel)).collect()
+        set.channels.iter().map(|spec| self.composite(&set, at, spec.channel)).collect()
     }
 
-    fn set_at(&self, at: TexelAt) -> Option<&'a TextureSet> {
-        let set = self.doc.texture_sets.get(at.set)?;
+    /// The set holding `at`, with its layer instances resolved as for compositing.
+    fn set_at(&self, at: TexelAt) -> Option<Cow<'a, TextureSet>> {
+        let set = self.doc.resolved_set(at.set)?;
         (at.x < set.resolution.0 && at.y < set.resolution.1).then_some(set)
     }
 
