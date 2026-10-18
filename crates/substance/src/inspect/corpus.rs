@@ -85,6 +85,8 @@ impl Corpus {
                 match entry.file_type() {
                     Ok(t) if t.is_dir() => stack.push(path),
                     Ok(t) if t.is_file() && is_spp(&path) => files.push(path),
+                    // a folder of links to chosen projects (a corpus list) counts the files linked to
+                    Ok(t) if t.is_symlink() && path.is_file() && is_spp(&path) => files.push(path),
                     _ => {}
                 }
             }
@@ -149,5 +151,22 @@ mod tests {
         assert!(facts(0, Some((5, 5))).is_clean());
         assert!(!facts(0, Some((4, 5))).is_clean());
         assert!(!facts(1, None).is_clean());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn discover_follows_links_to_projects() {
+        let dir = std::env::temp_dir().join(format!("mcsub-corpus-links-{}", std::process::id()));
+        let (real, list) = (dir.join("real"), dir.join("list"));
+        std::fs::create_dir_all(&real).unwrap();
+        std::fs::create_dir_all(&list).unwrap();
+        std::fs::write(real.join("a.spp"), b"x").unwrap();
+        std::fs::write(real.join("b.txt"), b"x").unwrap();
+        std::os::unix::fs::symlink(real.join("a.spp"), list.join("01_a.spp")).unwrap();
+        std::os::unix::fs::symlink(real.join("b.txt"), list.join("02_b.spp")).unwrap();
+        std::os::unix::fs::symlink(real.join("missing.spp"), list.join("03_c.spp")).unwrap();
+        let found = Corpus::discover(&list).files().to_vec();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(found, vec![list.join("01_a.spp"), list.join("02_b.spp")]);
     }
 }
