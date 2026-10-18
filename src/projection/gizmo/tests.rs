@@ -224,3 +224,26 @@ fn picking_prefers_knobs_then_areas_then_the_nearest_line() {
     let screen = to_screen(&rotate.shapes(), |p: [f32; 3]| Some([200.0 + 100.0 * (p[0] - 1.0), 200.0 - 100.0 * p[1]]));
     assert_eq!(pick(&screen, [200.0 + 100.0 * 0.6f32.cos(), 200.0 - 100.0 * 0.6f32.sin()], 6.0, 8.0), Some(Handle::RotateAxis(2)));
 }
+
+#[test]
+fn a_warp_anchor_follows_the_pointer_and_the_image_with_it() {
+    use super::super::{Warp, WarpGrid};
+    // the volume turned a quarter about z and scaled: a drag in object space lands in grid space
+    let volume = Volume { offset: [0.0; 3], rotation: [0.0, 0.0, 90.0], scale: [1.0, 0.5, 1.0], clip: false };
+    let warp = Warp { volume, grid: WarpGrid { depth: 0.5, ..WarpGrid::default() }, ..Warp::default() };
+    let shape = WarpGridShape::of(&warp, &FRAME).unwrap();
+    assert_eq!((shape.anchors.len(), shape.lines.len(), shape.knobs().len()), (9, 6, 9));
+    let centre = shape.anchors[4];
+    assert!(close3(centre, FRAME.centre));
+    let drag = WarpPointDrag::begin(&warp, &FRAME, 4, down(centre[0], centre[1])).unwrap();
+    let moved = drag.update(down(centre[0] + 0.2, centre[1] - 0.1)).unwrap();
+    // turned a quarter about z, the volume's x is object +y and its y object −x; the box is 2 × 1 object units, so
+    // −0.1 along object y is −0.05 local x (−0.1 grid) and +0.2 along object x is −0.2 local y (−0.4 grid)
+    let p = moved.point_position(4).unwrap();
+    assert!(close3(p, [-0.1, -0.4, 0.0]), "{p:?}");
+    let after = WarpGridShape::of(&Warp { grid: moved.clone(), ..warp.clone() }, &FRAME).unwrap();
+    assert!(close3(after.anchors[4], [centre[0] + 0.2, centre[1] - 0.1, centre[2]]), "{:?}", after.anchors[4]);
+    // the image's centre now lies under the moved anchor
+    let p = Projection { mode: ProjectionMode::Warp(Warp { grid: moved, ..warp }), ..Projection::default() }.prepare(Some(&FRAME), true).unwrap();
+    assert!(close2(uv_at(&p, after.anchors[4]), [0.5, 0.5]));
+}

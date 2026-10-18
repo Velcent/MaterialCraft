@@ -7,7 +7,7 @@ use super::super::modes::Volume;
 use super::super::rotation::{self, EulerOrder, Mat3};
 use super::maths::column;
 use crate::mesh::Vec3;
-use crate::v3::{add, mul};
+use crate::v3::{add, mul, sub};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PlacedVolume {
@@ -52,6 +52,14 @@ impl PlacedVolume {
     pub fn point(&self, l: Vec3) -> Vec3 {
         let scaled = [l[0] * self.size[0], l[1] * self.size[1], l[2] * self.size[2]];
         add(self.centre, rotation::apply(&self.rotation, scaled))
+    }
+
+    /// The local coordinates of object-space point `q` (the inverse of [`PlacedVolume::point`]); `None` for a
+    /// box flat along an axis.
+    pub fn local(&self, q: Vec3) -> Option<Vec3> {
+        let r = rotation::apply(&rotation::transpose(&self.rotation), sub(q, self.centre));
+        let out = [r[0] / self.size[0], r[1] / self.size[1], r[2] / self.size[2]];
+        out.iter().all(|v| v.is_finite()).then_some(out)
     }
 
     /// The box's twelve edges as object-space segments (for drawing its outline).

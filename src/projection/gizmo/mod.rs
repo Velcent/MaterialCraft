@@ -9,6 +9,7 @@
 //! - [`VolumeDrag`]: one drag of a [`Handle`], optionally in [`Steps`].
 //! - [`snap_to_surface`]: the volume set onto a surface point, facing along its normal (planar and warp only).
 //! - [`uv`]: the 2D placement handle of UV mode in UV coordinates.
+//! - [`WarpGridShape`], [`WarpPointDrag`]: the warp grid's anchors and lines, and dragging an anchor.
 //!
 //! Spaces: everything 3D is in the mesh's object space, as [`super::ViewProjector`] picks and projects; rays come
 //! from [`super::ViewProjector::ray`].
@@ -22,6 +23,7 @@ mod surface_snap;
 #[cfg(test)]
 mod tests;
 pub mod uv;
+mod warp_points;
 
 pub use drag::{Steps, VolumeDrag};
 pub use handles::{Gizmo, GizmoMode, Handle, HandleShape, Shape, ShapeKind, Space, axes};
@@ -30,6 +32,7 @@ pub use maths::Ray;
 pub use placed::PlacedVolume;
 pub use surface_snap::snap_to_surface;
 pub use uv::{UvDrag, UvFrame, UvHandle, UvShape};
+pub use warp_points::{WarpGridShape, WarpPointDrag};
 
 use super::view::ViewProjector;
 use crate::mesh::Vec3;
