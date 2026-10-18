@@ -2,11 +2,11 @@
 //! mask that reads the stack, of a layer a reference reads, of a filter's parameter, of unrelated layers.
 
 use super::*;
-use crate::paint::effect::{Anchor, EffectRegistry, Procedural, Reference};
+use crate::paint::effect::{Anchor, EffectKind, EffectRegistry, Procedural, Reference};
 use crate::paint::output::{MaterialMaps, OutputOptions};
 use crate::paint::stack::NO_FILL_CONTEXT;
 use crate::paint::test_stacks::{Blur, HeightBelow, assert_same_maps as assert_same, blobs, grey_effect, local_stacks, paint_disc, paint_images};
-use crate::paint::{BlendMode, Channel, Fill, LayerKind, Mask, PixelFormat, PixelLayout, SampleType};
+use crate::paint::{BlendMode, Channel, Fill, Layer, LayerKind, Mask, PixelFormat, PixelLayout, SampleType};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static ANY: AtomicUsize = AtomicUsize::new(0);
