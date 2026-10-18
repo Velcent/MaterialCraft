@@ -64,7 +64,13 @@ impl Recipe for Pattern {
         tags.push("photocraft");
         Ok(Made {
             bytes: grey16(n, n, &values),
-            sidecar: sidecar(self.0.name, Usage::Texture, &tags, &description, Provenance::Generator { generator: PATTERN_GENERATOR.into(), preset: Some(preset) }),
+            sidecar: sidecar(
+                self.0.name,
+                Usage::Texture,
+                &tags,
+                &description,
+                Provenance::Generator { generator: PATTERN_GENERATOR.into(), preset: Some(preset) },
+            ),
             thumbnail: Some(grey_thumb(at)),
         })
     }

@@ -58,7 +58,8 @@ pub fn pattern(kind: PatternKind, side: u32, seed: u32) -> Option<Vec<f32>> {
     }
     let image = pc::pattern(kind.style(), side, seed);
     let n = side as usize;
-    (image.width == n && image.height == n && image.data.len() == n * n).then(|| image.data.iter().map(|v| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }).collect())
+    (image.width == n && image.height == n && image.data.len() == n * n)
+        .then(|| image.data.iter().map(|v| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }).collect())
 }
 
 #[cfg(test)]

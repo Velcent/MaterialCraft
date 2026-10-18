@@ -46,8 +46,20 @@ pub fn presets() -> Vec<Translated> {
     vec![
         // general
         t("fine-detail", &["round", "hard", "detail"], BrushPreset { spacing: 0.1, ..base("Fine detail", 5.0) }, "General / Hard Round Fine", ""),
-        t("large-soft-wash", &["round", "soft", "large"], BrushPreset { hardness: 0.0, spacing: 0.15, ..base("Large soft wash", 300.0) }, "General / Soft Round Large", ""),
-        t("hard-taper", &["round", "hard", "pressure"], BrushPreset { pressure: pressure(true, false), ..base("Hard taper", 30.0) }, "General / Hard Round Pressure Size", ""),
+        t(
+            "large-soft-wash",
+            &["round", "soft", "large"],
+            BrushPreset { hardness: 0.0, spacing: 0.15, ..base("Large soft wash", 300.0) },
+            "General / Soft Round Large",
+            "",
+        ),
+        t(
+            "hard-taper",
+            &["round", "hard", "pressure"],
+            BrushPreset { pressure: pressure(true, false), ..base("Hard taper", 30.0) },
+            "General / Hard Round Pressure Size",
+            "",
+        ),
         t(
             "soft-taper",
             &["round", "soft", "pressure"],
@@ -139,7 +151,13 @@ pub fn presets() -> Vec<Translated> {
         t(
             "stipple",
             &["spatter", "stipple", "dots", "pressure"],
-            BrushPreset { tip: tip("spatter-fine"), spacing: 0.5, jitter: jitter(0.0, 0.0, 1.0, 0.3), pressure: pressure(false, true), ..base("Stipple", 40.0) },
+            BrushPreset {
+                tip: tip("spatter-fine"),
+                spacing: 0.5,
+                jitter: jitter(0.0, 0.0, 1.0, 0.3),
+                pressure: pressure(false, true),
+                ..base("Stipple", 40.0)
+            },
             "Special Effects / Stipple",
             "random flips",
         ),
@@ -160,7 +178,13 @@ pub fn presets() -> Vec<Translated> {
         t(
             "grass-tuft",
             &["grass", "nature", "pressure"],
-            BrushPreset { tip: tip("grass-2"), spacing: 0.25, jitter: jitter(0.4, 0.0, 0.06, 0.15), pressure: pressure(true, false), ..base("Grass tuft", 70.0) },
+            BrushPreset {
+                tip: tip("grass-2"),
+                spacing: 0.25,
+                jitter: jitter(0.4, 0.0, 0.06, 0.15),
+                pressure: pressure(true, false),
+                ..base("Grass tuft", 70.0)
+            },
             "Special Effects / Grass",
             "flips, the 40 % size minimum and colour variation",
         ),
