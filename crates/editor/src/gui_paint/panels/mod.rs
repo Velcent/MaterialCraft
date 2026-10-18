@@ -10,6 +10,7 @@ mod dock_content;
 pub mod drop_zones;
 pub mod import_report;
 pub mod import_review;
+mod import_review_library;
 mod import_review_materials;
 mod interface_settings;
 pub mod layers;

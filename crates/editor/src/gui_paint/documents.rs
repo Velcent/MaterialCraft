@@ -52,7 +52,8 @@ impl PaintMode {
             return self.open(path);
         }
         self.diag.info(Area::Import, format!("Analysing {}", path.display()));
-        self.review = Some(ImportReview::start(path, self.tray.material_folders()));
+        let user = self.tray.user_library().map(std::path::Path::to_path_buf);
+        self.review = Some(ImportReview::start(path, self.tray.material_folders(), user));
     }
 
     /// Advances the import review and starts the import once the user decided.
@@ -64,10 +65,14 @@ impl PaintMode {
                 self.diag.info(Area::Import, format!("Import of {} cancelled.", review.source().display()));
                 self.review = None;
             }
-            ReviewOutcome::Import(plan) => {
+            ReviewOutcome::Import(plan, to_library) => {
                 let path = review.source().to_path_buf();
                 let library = review.library().to_vec();
                 self.review = None;
+                if let Some(request) = to_library {
+                    self.diag.info(Area::Assets, format!("Adding {} item(s) of {} to {}", request.keys.len(), path.display(), request.library.display()));
+                    self.library_imports.start(path.clone(), request);
+                }
                 self.diag.info(Area::Project, format!("Opening {}", path.display()));
                 self.loader = Some(Loader::start_with(path, plan, library));
             }

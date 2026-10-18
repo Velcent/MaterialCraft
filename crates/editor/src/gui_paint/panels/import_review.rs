@@ -1,18 +1,26 @@
 //! [`ReviewDialog`]: the import review. Per Substance procedural the project uses: MaterialCraft's replacement
 //! (editable, with its measured accuracy against Painter, median MAE in 8-bit steps) or Painter's own result
 //! (exact look, flattened, not editable). Procedurals without a replacement are listed as kept. Substance
-//! material fills get their own section ([`MaterialChoices`]): a material from the tray or Painter's result.
+//! material fills get their own section ([`MaterialChoices`]): a material from the tray or Painter's result. What the
+//! project brings for the user's own library has the last one ([`LibraryChoices`]): a checkbox per item, unticked.
 
+use super::import_review_library::LibraryChoices;
 use super::import_review_materials::MaterialChoices;
 use crate::gui_paint::import_review::Findings;
 use eframe::egui::{self, RichText};
 use materialcraft_substance::tools::analyze::{Analysis, ProceduralSummary};
+use materialcraft_substance::translate::library::LibraryCandidates;
 use materialcraft_substance::translate::replacements::{Choice, ProceduralPlan};
 use std::path::Path;
+use std::sync::Arc;
 
 /// What the user decided.
 pub enum ReviewResult {
-    Import(ProceduralPlan),
+    /// Import with `plan`; write the `library` candidates (their keys) into the user's library.
+    Import {
+        plan: ProceduralPlan,
+        library: Vec<String>,
+    },
     Cancel,
 }
 
@@ -21,15 +29,21 @@ pub struct ReviewDialog {
     /// The choice per replaceable procedural, by name.
     choices: Vec<(String, Choice)>,
     materials: MaterialChoices,
+    library: LibraryChoices,
 }
 
 impl ReviewDialog {
-    /// Every replaceable procedural and every material starts as Painter's result, so an import changes nothing
-    /// unless asked.
-    pub fn new(findings: Findings) -> ReviewDialog {
-        let Findings { analysis, materials, tray } = findings;
+    /// Every replaceable procedural and every material starts as Painter's result and no library item is ticked, so
+    /// an import changes nothing unless asked. `writable`: there is a user library to add items to.
+    pub fn new(findings: Findings, writable: bool) -> ReviewDialog {
+        let Findings { analysis, materials, tray, library } = findings;
         let choices = analysis.procedurals.iter().filter(|p| p.replacement.is_some()).map(|p| (p.name.clone(), Choice::Keep)).collect();
-        ReviewDialog { analysis, choices, materials: MaterialChoices::new(materials, tray) }
+        ReviewDialog { analysis, choices, materials: MaterialChoices::new(materials, tray), library: LibraryChoices::new(Arc::new(library), writable) }
+    }
+
+    /// The candidates the library section offers.
+    pub fn library_candidates(&self) -> &Arc<LibraryCandidates> {
+        self.library.candidates()
     }
 
     /// The plan the current choices make.
@@ -49,7 +63,11 @@ impl ReviewDialog {
         egui::Window::new("Import review").collapsible(false).resizable(true).default_width(620.0).anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]).show(
             ctx,
             |ui| {
-                ui.label(format!("{name} uses Substance procedurals. Choose per procedural how it is imported:"));
+                if self.choices.is_empty() && self.materials.is_empty() {
+                    ui.label(format!("{name} brings things you can add to your own library:"));
+                } else {
+                    ui.label(format!("{name} uses Substance procedurals. Choose per procedural how it is imported:"));
+                }
                 egui::ScrollArea::vertical().max_height(480.0).show(ui, |ui| {
                     if !self.choices.is_empty() {
                         self.procedurals(ui);
@@ -68,11 +86,16 @@ impl ReviewDialog {
                             }
                         });
                     }
+                    if !self.library.is_empty() {
+                        ui.add_space(6.0);
+                        ui.separator();
+                        self.library.show(ui);
+                    }
                 });
                 ui.separator();
                 ui.horizontal(|ui| {
                     if ui.button("Import").clicked() {
-                        result = Some(ReviewResult::Import(self.plan()));
+                        result = Some(ReviewResult::Import { plan: self.plan(), library: self.library.ticked() });
                     }
                     if ui.button("Cancel").clicked() {
                         result = Some(ReviewResult::Cancel);
@@ -149,12 +172,12 @@ mod tests {
         let analysis = Analysis::of_uses("p.spp", uses, &ReplacementAccuracy::default());
         let tray = Arc::new(TrayMaterials::from_materials(vec![], tray));
         let materials = MaterialMatches::from_looks(&analysis, &PainterLooks::default(), &tray);
-        Findings { analysis, materials, tray }
+        Findings { analysis, materials, tray, library: Default::default() }
     }
 
     #[test]
     fn choices_start_as_painters_result_and_make_the_plan() {
-        let mut d = ReviewDialog::new(findings(vec![use_of("mg_dirt"), use_of("PBR_to_Skyrim"), use_of("mg_dirt")], vec![]));
+        let mut d = ReviewDialog::new(findings(vec![use_of("mg_dirt"), use_of("PBR_to_Skyrim"), use_of("mg_dirt")], vec![]), true);
         assert_eq!(d.choices, vec![("mg_dirt".to_string(), Choice::Keep)]);
         assert!(d.materials.is_empty());
         assert_eq!(d.plan().choice("mg_dirt"), Choice::Keep);
@@ -167,7 +190,7 @@ mod tests {
     fn material_choices_flow_into_the_plan() {
         let rust = ProceduralUse { role: Role::Fill, material: true, ..use_of("rust_fine") };
         let iron = TrayMaterial { reference: "materials/iron-rusted.mca".into(), name: "Rusted iron".into(), tags: vec!["rust".into()], look: None };
-        let mut d = ReviewDialog::new(findings(vec![use_of("mg_dirt"), rust], vec![iron]));
+        let mut d = ReviewDialog::new(findings(vec![use_of("mg_dirt"), rust], vec![iron]), true);
         assert!(!d.materials.is_empty());
         assert_eq!(d.plan().material("rust_fine"), None, "Painter's result unless asked");
         d.materials.use_best();

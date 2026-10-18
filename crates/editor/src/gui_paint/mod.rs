@@ -36,6 +36,7 @@ mod instance_reach;
 mod isolate;
 mod job;
 mod launch;
+mod library_import;
 mod loader;
 mod maps_worker;
 mod navigation;
@@ -163,6 +164,8 @@ pub struct PaintMode {
     smart: smart_assets::SmartAssets,
     /// Naming a brush preset saved from the brush panel (AS-06).
     brush_presets: brush_presets::BrushPresets,
+    /// Writing the project assets the import review ticked into the user's library (step 46).
+    library_imports: library_import::LibraryImports,
     /// Editing the selected fill's projection: the view gizmo and the panel's gestures (step 38).
     projection: projection_edit::ProjectionEditing,
     /// The shader settings panel's gesture and where its shader files come from (step 41).
@@ -213,6 +216,7 @@ impl PaintMode {
             saving: unsaved::Saving::default(),
             smart: smart_assets::SmartAssets::default(),
             brush_presets: brush_presets::BrushPresets::default(),
+            library_imports: library_import::LibraryImports::default(),
             tablet: input::tablet::TabletInput::none(),
             projection: projection_edit::ProjectionEditing::default(),
             shader_panel: shading_screen::ShaderPanelState::default(),
@@ -250,6 +254,7 @@ impl PaintMode {
             self.guard(unsaved::Then::OpenPath(p));
         }
         self.poll_review(ctx);
+        self.poll_library_imports(ctx);
         self.poll_loader();
         self.poll_save();
         self.poll_bake();
