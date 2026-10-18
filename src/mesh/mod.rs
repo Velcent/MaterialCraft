@@ -13,11 +13,13 @@ pub mod gltf;
 mod normals;
 mod obj;
 mod obj_read;
+mod subdivide;
 mod surface;
 mod tangents;
 #[cfg(test)]
 pub(crate) mod test_util;
 mod topology;
+mod units;
 mod validate;
 mod viewer;
 
@@ -25,8 +27,10 @@ pub use bounds::{Bounds, Fit, Sphere};
 pub use bvh::{Bvh, Hit, Triangles};
 pub use error::{Attribute, MeshError, MeshErrorKind};
 pub use obj_read::{ObjError, ObjImport};
+pub use subdivide::Scheme as SubdivisionScheme;
 pub use surface::{MAX_SURFACE_SIZE, SurfaceError, SurfaceKey, SurfaceMap, SurfaceSample, TexelKind, mesh_fingerprint};
 pub use topology::{Components, Edge, FaceGroups, Topology, UvEdge, UvEdgeKind, UvEdges};
+pub use units::LengthUnit;
 pub use viewer::ViewportPart;
 
 pub type Vec3 = [f32; 3];
