@@ -17,16 +17,22 @@
 mod revisions;
 mod store;
 
+use super::fill_eval::FillTop;
 use crate::paint::blend::BlendMode;
 use crate::paint::channel::Channel;
 use crate::paint::effect::EffectKind;
 use crate::paint::image::Rect;
-use crate::paint::layer::{Layer, LayerKind, LayerWalk};
+use crate::paint::layer::{FillSource, Layer, LayerKind, LayerWalk};
 use crate::paint::texture_set::TextureSet;
 use revisions::{Revisions, SetRevs, hash};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use store::{TileKey, TileStore};
+
+/// Separates a layer id from what of it an entry holds (ids hold no control characters).
+const SEP: char = '\u{1}';
+/// The part name of kept fills.
+const FILL: &str = "fill";
 
 /// Bytes of mask tiles a [`StackCache`] keeps by default.
 pub const DEFAULT_BUDGET: usize = 1 << 30;
@@ -41,6 +47,8 @@ pub struct StackCache {
 struct Inner {
     sets: HashMap<String, SetState>,
     store: TileStore,
+    /// Fills apart, so many large fills can't push out the masks.
+    fills: TileStore,
 }
 
 /// What the cache knows of one texture set: the context and layer revisions of its last build and the keys its
@@ -55,6 +63,8 @@ struct SetState {
 #[derive(Default, Clone)]
 struct Keys {
     masks: HashMap<String, u64>,
+    /// Layer id → key of its fills (those that vary over the texture).
+    fills: HashMap<String, u64>,
     below: Option<(String, u64)>,
 }
 
@@ -63,6 +73,9 @@ impl Keys {
     fn of(&self, name: &str) -> Option<u64> {
         if let Some(k) = self.masks.get(name) {
             return Some(*k);
+        }
+        if let Some((layer, FILL)) = name.split_once(SEP).map(|(l, rest)| (l, rest.split(SEP).next().unwrap_or(""))) {
+            return self.fills.get(layer).copied();
         }
         self.below.as_ref().filter(|(layer, _)| Below::is_entry(name, layer)).map(|(_, k)| *k)
     }
@@ -83,7 +96,7 @@ impl std::fmt::Debug for StackCache {
 impl StackCache {
     /// A cache keeping at most `budget` bytes of mask tiles.
     pub fn new(budget: usize) -> StackCache {
-        StackCache { inner: Mutex::new(Inner { sets: HashMap::new(), store: TileStore::new(budget) }) }
+        StackCache { inner: Mutex::new(Inner { sets: HashMap::new(), store: TileStore::new(budget), fills: TileStore::new(budget / 2) }) }
     }
 
     /// Starts a build of `set`. `context` stands for what the caller's fill context gives the masks (surface maps,
@@ -95,18 +108,19 @@ impl StackCache {
         let mut keys = Keys::default();
         let mut below = None;
         if let Ok(mut inner) = self.inner.lock() {
-            let Inner { sets, store } = &mut *inner;
+            let Inner { sets, store, fills } = &mut *inner;
             let state = sets.entry(set.id.clone()).or_insert_with(|| SetState { context, revisions: Revisions::default(), keys: Keys::default() });
             if state.context != context {
                 *state = SetState { context, revisions: Revisions::default(), keys: Keys::default() };
             }
             if let Some(revs) = state.revisions.observe(set) {
                 keys.masks = mask_keys(set, &revs, context);
+                keys.fills = fill_keys(set, &revs, context);
                 below = Below::of(set, &revs, context);
             }
             keys.below = below.as_ref().map(|b| (b.layer.clone(), b.key));
             let old = std::mem::replace(&mut state.keys, keys.clone());
-            store.retain_map(|k, dep| {
+            let keep = |k: &TileKey, dep: u64| -> Option<u64> {
                 if k.set != set.id {
                     return Some(dep);
                 }
@@ -116,14 +130,16 @@ impl StackCache {
                 }
                 let outside = confined.is_some_and(|area| !area.iter().any(|a| overlaps(*a, k.rect)));
                 (outside && old.of(&k.layer) == Some(dep)).then_some(new)
-            });
+            };
+            store.retain_map(&keep);
+            fills.retain_map(&keep);
         }
-        CacheSession { cache: self, set: set.id.clone(), keys: keys.masks, below }
+        CacheSession { cache: self, set: set.id.clone(), keys: keys.masks, fills: keys.fills, below }
     }
 
     /// Bytes of mask tiles kept.
     pub fn bytes(&self) -> usize {
-        self.inner.lock().map(|i| i.store.bytes()).unwrap_or(0)
+        self.inner.lock().map(|i| i.store.bytes() + i.fills.bytes()).unwrap_or(0)
     }
 }
 
@@ -133,6 +149,8 @@ pub struct CacheSession<'c> {
     set: String,
     /// Layer id → key of its mask's inputs, for the layers whose mask is kept.
     keys: HashMap<String, u64>,
+    /// Layer id → key of its fills, for the layers whose fills are kept.
+    fills: HashMap<String, u64>,
     /// Where the composite below a layer is kept (the layer edited last).
     below: Option<Below>,
 }
@@ -160,6 +178,40 @@ impl CacheSession<'_> {
             i.store.put(k, key, &v);
         }
         v
+    }
+
+    /// The key of `layer`'s fills if they are kept.
+    pub(crate) fn fill_key(&self, layer: &str) -> Option<u64> {
+        self.fills.get(layer).copied()
+    }
+
+    /// A fill of `layer` (its own for `slot` `None`, else content effect `slot`) for `channel` over `r` (under
+    /// `key`): kept values, or `compute`d (kept when they vary per texel).
+    pub(in crate::paint::stack) fn fill(
+        &self,
+        layer: &str,
+        slot: Option<usize>,
+        channel: Channel,
+        key: u64,
+        r: Rect,
+        compute: impl FnOnce() -> Option<FillTop>,
+    ) -> Option<FillTop> {
+        let name = format!("{layer}{SEP}{FILL}{SEP}{}{SEP}{channel:?}", slot.map_or("base".to_string(), |s| s.to_string()));
+        let k = TileKey::new(&self.set, &name, r);
+        if let Some(v) = self.cache.inner.lock().ok().and_then(|mut i| i.fills.get(&k, key)) {
+            // an empty entry: the fill writes nothing here
+            return (!v.is_empty()).then(|| FillTop::Pixels(v.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect()));
+        }
+        let top = compute();
+        let flat: Option<Vec<f32>> = match &top {
+            Some(FillTop::Pixels(px)) => Some(px.iter().flatten().copied().collect()),
+            Some(FillTop::Constant(_)) => None,
+            None => Some(Vec::new()),
+        };
+        if let (Some(flat), Ok(mut i)) = (flat, self.cache.inner.lock()) {
+            i.fills.put(k, key, &flat);
+        }
+        top
     }
 
     /// Where compositing `channel` over `r` can start: the index of the top-level layer the kept composite below it
@@ -206,16 +258,27 @@ impl Below {
 
     /// The store's layer name of the kept composite of `channel`.
     fn entry(&self, channel: Channel) -> String {
-        format!("{}\u{1}below\u{1}{channel:?}", self.layer)
+        format!("{}{SEP}below{SEP}{channel:?}", self.layer)
     }
 
     fn is_entry(name: &str, layer: &str) -> bool {
-        name.strip_prefix(layer).is_some_and(|rest| rest.starts_with("\u{1}below\u{1}"))
+        name.strip_prefix(layer).is_some_and(|rest| rest.starts_with(&format!("{SEP}below{SEP}")))
     }
 }
 
 fn overlaps(a: Rect, (x, y, w, h): (u32, u32, u32, u32)) -> bool {
     a.x < x + w && x < a.x + a.w && a.y < y + h && y < a.y + a.h
+}
+
+/// The keys of the layers whose fills vary over the texture: what a fill reads is its own layer (and the context).
+fn fill_keys(set: &TextureSet, revs: &SetRevs, context: u64) -> HashMap<String, u64> {
+    // fills that cost more than reading an image: materials, procedural textures, projections through the mesh
+    let varies = |f: &crate::paint::layer::Fill| matches!(f.source, FillSource::Material { .. } | FillSource::Texture(_)) || f.projection.mode.needs_mesh();
+    let channels = format!("{:?}", set.channels);
+    set.walk_layers()
+        .filter(|(_, l)| matches!(&l.kind, LayerKind::Fill(f) if varies(f)) || l.effects.iter().any(|e| matches!(&e.kind, EffectKind::Fill(f) if varies(f))))
+        .map(|(_, l)| (l.id.clone(), hash(&(context, revs.baked, revs.own.get(&l.id).copied().unwrap_or(0), set.resolution, &channels, "fill"))))
+        .collect()
 }
 
 /// True for masks worth keeping: those with an effect that computes more than a texel at a time.

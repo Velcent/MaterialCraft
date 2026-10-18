@@ -219,7 +219,7 @@ impl<'a> Compositor<'a> {
                 }
             }
             LayerKind::Fill(f) => {
-                let Some(top) = self.fill_top(f, pass) else {
+                let Some(top) = self.layer_fill(l, None, f, pass) else {
                     return;
                 };
                 for (i, a) in acc.iter_mut().enumerate() {

@@ -181,3 +181,20 @@ fn references_into_an_effect_layer_follow_the_stack_below_it() {
     paint_disc(paint_layer(&mut s), (150, 120), 40, 3);
     check(&cache, &s, &reg, "painted below the effect layer");
 }
+
+#[test]
+fn kept_fills_follow_their_layer() {
+    let reg = crate::paint::test_stacks::registry();
+    for mut s in crate::paint::test_stacks::reaching_stacks() {
+        let cache = StackCache::default();
+        assert!(cache.session(&s, 7, None).fill_key("texfill").is_some(), "procedural texture fills are kept");
+        assert!(cache.session(&s, 7, None).fill_key("imagefill").is_none(), "image fills through the UVs are cheap to read again");
+        check(&cache, &s, &reg, "first");
+        s.layer_mut("texfill").expect("fill").opacity = 0.3;
+        check(&cache, &s, &reg, "the fill's opacity");
+        let Some(LayerKind::Fill(f)) = s.layer_mut("texfill").map(|l| &mut l.kind) else { panic!("fill") };
+        let crate::paint::FillSource::Texture(t) = &mut f.source else { panic!("texture fill") };
+        t.texture_mut(Channel::Roughness).expect("texture").params = vec![("seed".into(), "6".into())];
+        check(&cache, &s, &reg, "the fill's texture");
+    }
+}

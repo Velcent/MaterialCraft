@@ -48,6 +48,15 @@ pub(super) enum FillProblem {
 }
 
 impl Compositor<'_> {
+    /// [`Self::fill_top`] of the fill of layer `l` (its own with `slot` `None`, else its content effect `slot`): kept
+    /// in and taken from the stack cache where the fill varies over the texture (a fill reads nothing of the
+    /// stack, so a stroke or an edit of another layer leaves it as it is).
+    pub(super) fn layer_fill(&self, l: &crate::paint::layer::Layer, slot: Option<usize>, f: &Fill, pass: &Pass) -> Option<FillTop> {
+        let kept = self.cache.filter(|_| !matches!(f.source, FillSource::Uniform(_)) && super::native::at_top_level());
+        let Some((cache, key)) = kept.and_then(|c| c.fill_key(&l.id).map(|k| (c, k))) else { return self.fill_top(f, pass) };
+        cache.fill(&l.id, slot, pass.channel, key, pass.r, || self.fill_top(f, pass))
+    }
+
     /// The fill's content for the pass's channel, or `None` where the fill does not write the channel or cannot
     /// be evaluated (see [`Self::fill_problem`]).
     pub(super) fn fill_top(&self, f: &Fill, pass: &Pass) -> Option<FillTop> {

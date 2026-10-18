@@ -183,6 +183,17 @@ impl GeneratorSource for Pattern {
     fn stack_reach(&self, _: &EvalRequest) -> Option<Reach> {
         None
     }
+    fn samples_points(&self) -> bool {
+        true
+    }
+    fn sample_points(&self, params: &[(String, String)], taps: &[crate::projection::Tap], out: &mut [[f32; 4]]) -> Result<(), String> {
+        let seed: u32 = params.iter().find(|(k, _)| k == "seed").and_then(|(_, v)| v.parse().ok()).unwrap_or(0);
+        for (t, o) in taps.iter().zip(out.iter_mut()) {
+            let v = noise(seed, (t.uv[0].fract().abs() * 40.0) as u32, (t.uv[1].fract().abs() * 30.0) as u32);
+            *o = [v, v * 0.5, 1.0 - v, 1.0];
+        }
+        Ok(())
+    }
     fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String> {
         let seed: u32 = request.params.iter().find(|(k, _)| k == "seed").and_then(|(_, v)| v.parse().ok()).unwrap_or(0);
         let r = request.rect;
@@ -263,6 +274,20 @@ pub fn reaching_stacks() -> Vec<TextureSet> {
         let mut own = uniform("own", &[(Channel::Metallic, 0.6)], BlendMode::Normal, 0.5);
         own.effects.push(content(EffectKind::Generator(proc("pattern")), Channel::Metallic, BlendMode::Multiply));
         own.effects.push(content(EffectKind::Filter(proc("blur3")), Channel::Metallic, BlendMode::Normal));
+        // an image fill (it varies over the texture, so the stack cache keeps it) with an image fill effect
+        let mut image = crate::paint::ImageFill::default();
+        image.set_image(Channel::Roughness, blobs(s.resolution, 80 + k as u32, rgba8()));
+        let mut fill = Layer::new("imagefill", "Image fill", LayerKind::Fill(Fill::new(crate::paint::FillSource::Image(image.clone()))));
+        fill = fill.with_blend(Channel::Roughness, BlendMode::Multiply, 0.8);
+        fill.effects.push(content(EffectKind::Fill(Fill::new(crate::paint::FillSource::Image(image))), Channel::Roughness, BlendMode::Screen));
+        s.layers.push(fill);
+        // a procedural texture fill (kept by the stack cache)
+        let texture = crate::paint::TextureFill::on(
+            &[Channel::Roughness, Channel::Metallic],
+            &Procedural { params: vec![("seed".into(), "5".into())], ..proc("pattern") },
+        );
+        let tex = Layer::new("texfill", "Texture fill", LayerKind::Fill(Fill::new(crate::paint::FillSource::Texture(texture))));
+        s.layers.insert(2, tex.with_blend(Channel::Roughness, BlendMode::Normal, 0.6).with_blend(Channel::Metallic, BlendMode::Lighten, 0.5));
         s.layers.push(own);
         let mut fx = Layer::new("fx2", "Blurs", LayerKind::Paint(PaintContent::default()));
         for c in [Channel::BaseColor, Channel::Height] {

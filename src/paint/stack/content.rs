@@ -75,7 +75,7 @@ impl Compositor<'_> {
                 img.read_region(pass.r, c);
                 pass.space.to_working_all(c);
             }
-            LayerKind::Fill(f) => match self.fill_top(f, pass) {
+            LayerKind::Fill(f) => match self.layer_fill(l, None, f, pass) {
                 Some(FillTop::Constant(v)) => c.fill(v),
                 Some(FillTop::Pixels(px)) => {
                     for (c, p) in c.iter_mut().zip(px) {
@@ -107,7 +107,7 @@ impl Compositor<'_> {
                 pass.space.to_working_all(&mut px);
                 px
             }
-            EffectKind::Fill(f) => match self.fill_top(f, pass) {
+            EffectKind::Fill(f) => match self.layer_fill(l, Some(index), f, pass) {
                 Some(top) => top.into_pixels(pass.r.area()),
                 None => return,
             },
