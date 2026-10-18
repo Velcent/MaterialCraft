@@ -32,6 +32,7 @@ mod viewport_toolbar;
 use super::channel_view::ChannelView;
 use super::shell::panels::PaintPanel;
 use super::shell::tools::Tool;
+use super::view_state::ViewLayout;
 use crate::gui_assets::TrayEvent;
 use crate::gui_settings::Side;
 use crate::gui_workspace::shortcuts::PageEdit;
@@ -69,6 +70,8 @@ pub enum PanelEvent {
     /// Pick a glTF file and add its cameras to the list (CM-05).
     ImportCameras,
     ShowChannel(ChannelView),
+    /// Show the 3D view, the 2D view or both.
+    ViewLayout(ViewLayout),
     SetVisible(usize, bool),
     /// Cancel the running load or import.
     CancelLoad,

@@ -69,7 +69,7 @@ impl PaintMode {
             let to = PointerSample::mouse([w * 0.42, h * 0.78], 1.0);
             input.extend([StrokeInput::Line { to, snap: true }, StrokeInput::Up]);
         }
-        let frame = PaintFrame { doc, picking: &self.picking, camera: Some(camera), tool: Tool::Paint, target: Some((target, set)) };
+        let frame = PaintFrame { doc, picking: &self.picking, camera: Some(camera), tool: Tool::Paint, target: Some((target, set)), uv: None };
         let report = self.painting.frame(input, frame);
         self.after_painting(report);
         let steps = self.document.as_ref().map_or(0, |d| d.history().len());

@@ -20,7 +20,12 @@
 //!
 //! Stencil and projection (PT-15, PJ-26, [`screen_image`]): a stencil laid over the view masks every document
 //! stroke; the projection tool paints the projection image's channels through the paint tool's brush. Strokes
-//! through either have no symmetry (ADR 0008 mc2-q-pt-04c). The material picker ([`material_picker`]) is handled
+//! through either have no symmetry (ADR 0008 mc2-q-pt-04c).
+//!
+//! The 2D view (PT-53): its gestures arrive with [`PaintFrame::uv`] set. Brush strokes paint in texture space (the
+//! points become texel positions of the target set, the brush size counts texels, symmetry is mirrored through the
+//! mesh as in 3D); the polygon fill picks in UV space. The stencil and the projection image belong to the 3D view
+//! and leave 2D strokes alone; the quick mask is edited in the 3D view. The material picker ([`material_picker`]) is handled
 //! by the screen, which owns the composite's fill context.
 
 mod active;
@@ -34,11 +39,15 @@ pub mod polygon_fill;
 mod retouch;
 pub mod screen_image;
 mod surfaces;
+mod uv_overlay;
+#[cfg(test)]
+mod uv_tests;
 
 use super::document_state::OpenDocument;
 use super::input::{PointerSample, StrokeInput};
 use super::shell::tools::Tool;
 use super::view_pick::ViewPicking;
+use super::view2d::UvMap;
 use active::{ActiveStroke, StrokeStart, Through};
 pub use brush_state::BrushTools;
 pub use events::ToolEvent;
@@ -81,6 +90,8 @@ pub struct PaintFrame<'a> {
     pub tool: Tool,
     /// The selected paintable target and its texture set's index.
     pub target: Option<(PaintTarget, usize)>,
+    /// The input comes from the 2D view, laid out like this (view positions are turned into UV and texels).
+    pub uv: Option<UvMap>,
 }
 
 /// The brush tools' session state.
@@ -93,6 +104,8 @@ pub struct Painting {
     strokes: u32,
     /// Where the last stroke ended (the next straight line's start).
     anchor: Option<LineAnchor>,
+    /// The last stroke was painted in the 2D view (its anchor is a texel position).
+    anchor_uv: bool,
     guides: overlay::GuideCache,
     /// The session's quick mask (PT-42), honoured by every document stroke while applied.
     pub quick_mask: QuickMask,
@@ -131,6 +144,23 @@ impl Painting {
             polygon.refresh = polygon.refresh.or(report.refresh);
             return polygon;
         }
+        let pressed = input.iter().any(|ev| matches!(ev, StrokeInput::Down(_) | StrokeInput::Line { .. }));
+        let input = match f.uv {
+            Some(_) if self.quick_mask.is_editing() || f.tool == Tool::Projection => {
+                if pressed {
+                    report.message = Some(match f.tool {
+                        Tool::Projection => "The projection tool paints in the 3D view.".into(),
+                        _ => "The quick mask is edited in the 3D view.".into(),
+                    });
+                }
+                return report;
+            }
+            Some(map) => match f.target.as_ref().and_then(|(_, set)| f.doc.doc().texture_sets.get(*set)) {
+                Some(s) => to_texels(input, map, s.resolution),
+                None => input,
+            },
+            None => input,
+        };
         if let (true, Some(tool)) = (self.quick_mask.is_editing(), tool) {
             if !matches!(tool, StrokeTool::Paint | StrokeTool::Eraser) {
                 if input.iter().any(|ev| matches!(ev, StrokeInput::Down(_))) {
@@ -167,7 +197,7 @@ impl Painting {
                             .skip(1)
                             .map(|p| PointerSample { pos: p.pos, pressure: p.pressure, time: to.time + p.time, ..to })
                             .collect();
-                        let (factor, stencil) = (factor_for(&self.quick_mask, f.doc, a.set()), self.images.stencil_factor());
+                        let (factor, stencil) = (factor_for(&self.quick_mask, f.doc, a.set()), stencil_of(&self.images, a.in_uv()));
                         let fs = factors(&factor, &stencil);
                         if let Err(e) = a.add(f.doc, f.picking, &samples, through(&fs, &self.images, f.tool)) {
                             report.message = Some(format!("The line stopped: {e}."));
@@ -177,7 +207,7 @@ impl Painting {
                 }
                 StrokeInput::Move(at) => {
                     let Some(a) = &mut self.active else { continue };
-                    let (factor, stencil) = (factor_for(&self.quick_mask, f.doc, a.set()), self.images.stencil_factor());
+                    let (factor, stencil) = (factor_for(&self.quick_mask, f.doc, a.set()), stencil_of(&self.images, a.in_uv()));
                     let fs = factors(&factor, &stencil);
                     match a.add(f.doc, f.picking, &[at], through(&fs, &self.images, f.tool)) {
                         Ok(true) => painted = Some(a.set()),
@@ -204,7 +234,9 @@ impl Painting {
 
     /// Starts a stroke at `at` (with the lazy mouse if `lazy` and it is on); returns the set it painted or tried.
     fn begin(&mut self, f: &mut PaintFrame, tool: Option<StrokeTool>, at: PointerSample, lazy: bool, report: &mut PaintReport) -> Option<usize> {
-        let (Some(tool), Some((target, set)), Some(camera)) = (tool, f.target.clone(), f.camera) else { return None };
+        let (Some(tool), Some((target, set))) = (tool, f.target.clone()) else { return None };
+        // a 2D-view stroke has no camera
+        let camera = if f.uv.is_some() { None } else { Some(f.camera?) };
         let picking = f.picking;
         let doc = &mut *f.doc;
         let Some(surface) = self.surfaces.get(doc, set) else {
@@ -223,14 +255,18 @@ impl Painting {
         let set_ref = doc.doc().texture_sets.get(set)?;
         let preset = self.brush.preset(f.tool).cloned().unwrap_or_default();
         let mut values = self.brush.values_for(set_ref);
-        let placement = match (tool, &mut self.images.projection) {
-            (StrokeTool::Projection, Some(image)) => {
+        let placement = match (tool, &mut self.images.projection, camera) {
+            (StrokeTool::Projection, Some(image), Some(camera)) => {
                 // only the channels the projection provides are painted
                 let provided = image.channels();
                 values.channels.iter_mut().for_each(|(c, _, on)| *on &= provided.contains(c));
                 Some(image.placement(camera.viewport))
             }
-            (StrokeTool::Projection, None) => {
+            (StrokeTool::Projection, Some(_), None) => {
+                report.message = Some("The projection tool paints in the 3D view.".into());
+                return None;
+            }
+            (StrokeTool::Projection, None, _) => {
                 report.message = Some("Load a projection image or drop an image or material from the assets onto the view first.".into());
                 return None;
             }
@@ -239,7 +275,8 @@ impl Painting {
         self.strokes = self.strokes.wrapping_add(1);
         let helpers = &self.brush.helpers;
         // projection painting and stencils have no symmetry (ADR 0008 mc2-q-pt-04c)
-        let symmetry = if placement.is_some() || self.images.stencil.is_some() { SymmetrySpec::None } else { helpers.symmetry.spec() };
+        let stencilled = camera.is_some() && self.images.stencil.is_some();
+        let symmetry = if placement.is_some() || stencilled { SymmetrySpec::None } else { helpers.symmetry.spec() };
         let start = StrokeStart {
             target,
             set,
@@ -256,7 +293,7 @@ impl Painting {
             base,
             placement,
         };
-        let (factor, stencil) = (factor_for(&self.quick_mask, doc, set), self.images.stencil_factor());
+        let (factor, stencil) = (factor_for(&self.quick_mask, doc, set), self.stencil_for(camera.is_none()));
         let fs = factors(&factor, &stencil);
         match ActiveStroke::begin(doc, picking, start, at, through(&fs, &self.images, f.tool)) {
             Ok(a) => {
@@ -267,9 +304,13 @@ impl Painting {
         Some(set)
     }
 
-    /// Where a straight line starts in the current view: the previous stroke's end, re-projected (PT-33).
+    /// Where a straight line starts in the current view: the previous stroke's end, re-projected (PT-33); in the
+    /// 2D view the previous 2D stroke's end texel.
     fn line_start(&self, f: &PaintFrame) -> Option<[f32; 2]> {
         let anchor = self.anchor?;
+        if f.uv.is_some() || self.anchor_uv {
+            return (f.uv.is_some() && self.anchor_uv).then(|| anchor.start(None)).flatten();
+        }
         let camera = f.camera?;
         let projector = f.picking.projector_on(&f.doc.doc().mesh, camera);
         anchor.start(projector.as_ref().map(|p| p as &dyn ViewProjector))
@@ -302,6 +343,7 @@ impl Painting {
     pub fn forget_document(&mut self) {
         self.active = None;
         self.anchor = None;
+        self.anchor_uv = false;
         self.surfaces.clear();
         self.mask_active = None;
         self.gesture = None;
@@ -331,19 +373,46 @@ impl Painting {
         self.end_mask(doc, picking, report);
         let Some(a) = self.active.take() else { return };
         let set = a.set();
-        let (factor, stencil) = (factor_for(&self.quick_mask, doc, set), self.images.stencil_factor());
+        let (factor, stencil) = (factor_for(&self.quick_mask, doc, set), self.stencil_for(a.in_uv()));
         let fs = factors(&factor, &stencil);
         let projection = a.projects().then_some(self.images.projection.as_ref()).flatten();
+        let a_in_uv = a.in_uv();
         let end = a.end(doc, picking, Through { factors: &fs, projection });
         if let Some(problem) = end.problem {
             report.message = Some(format!("The stroke had a problem: {problem}."));
         }
         if end.anchor.is_some() {
             self.anchor = end.anchor;
+            self.anchor_uv = a_in_uv;
         }
         report.refresh = Some(set);
         self.last_refresh = Some(Instant::now());
     }
+}
+
+/// The input of a 2D-view gesture with its positions turned into texel positions of a `resolution` texture.
+fn to_texels(input: Vec<StrokeInput>, map: UvMap, resolution: (u32, u32)) -> Vec<StrokeInput> {
+    let at = |s: PointerSample| PointerSample { pos: map.texel(s.pos, resolution), ..s };
+    input
+        .into_iter()
+        .map(|ev| match ev {
+            StrokeInput::Down(s) => StrokeInput::Down(at(s)),
+            StrokeInput::Move(s) => StrokeInput::Move(at(s)),
+            StrokeInput::Line { to, snap } => StrokeInput::Line { to: at(to), snap },
+            StrokeInput::Up => StrokeInput::Up,
+        })
+        .collect()
+}
+
+impl Painting {
+    /// The stencil's factor for a stroke (none for a 2D-view stroke: the stencil lies over the 3D view).
+    fn stencil_for(&self, uv: bool) -> Option<Stencil<'_>> {
+        stencil_of(&self.images, uv)
+    }
+}
+
+fn stencil_of(images: &ScreenImages, uv: bool) -> Option<Stencil<'_>> {
+    if uv { None } else { images.stencil_factor() }
 }
 
 /// The quick mask's factor for strokes into texture set `set`, while it is applied.

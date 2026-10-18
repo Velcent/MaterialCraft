@@ -6,12 +6,21 @@ use eframe::egui::{self, Id, RichText, Ui};
 use super::super::channel_view::ChannelView;
 use super::super::shell::tools::{self, ToolState};
 use super::super::tools::BrushTools;
+use super::super::view_state::ViewLayout;
 use super::camera_menu::{self, CameraBar};
 use super::{PanelEvent, channel_bar, polygon_bar, quick_bar, quick_mask_bar};
 use crate::gui_theme;
 use crate::gui_widgets::toolbar::{self, Group, Side};
 use crate::gui_workspace::shortcuts::ShortcutTable;
 use materialcraft_brush::QuickMaskState;
+
+/// The fixed view controls' state.
+#[derive(Clone, Copy)]
+pub struct ViewControls<'a> {
+    pub display: ChannelView,
+    pub camera: &'a CameraBar,
+    pub layout: ViewLayout,
+}
 
 #[allow(clippy::too_many_arguments)] // the toolbar shows a little of everything; a struct would only repeat these names
 pub fn show(
@@ -20,12 +29,12 @@ pub fn show(
     brush: &mut BrushTools,
     quick_mask: QuickMaskState,
     keys: &ShortcutTable,
-    display: ChannelView,
-    camera: &CameraBar,
+    view: ViewControls,
     has_document: bool,
     paintable: bool,
     events: &mut Vec<PanelEvent>,
 ) {
+    let ViewControls { display, camera, layout } = view;
     let tool = tool_state.current;
     let unavailable = tools::unavailable(has_document, paintable);
     let reset_key = keys.label("paint.view.reset_camera");
@@ -35,6 +44,7 @@ pub fn show(
     let mut view_events = Vec::new();
     let mut camera_events = Vec::new();
     let mut mask_events = Vec::new();
+    let mut layout_events = Vec::new();
     let groups = vec![
         Group::new(Side::Left, move |ui: &mut Ui| {
             ui.label(RichText::new(tool.label()).strong().color(gui_theme::HEADER_TEXT));
@@ -74,6 +84,15 @@ pub fn show(
             }
         }),
         Group::new(Side::Right, |ui: &mut Ui| {
+            ui.add_enabled_ui(has_document, |ui| {
+                for (l, label, tip) in ViewLayout::ALL {
+                    if ui.add(egui::Button::selectable(l == layout, label)).on_hover_text(tip).clicked() && l != layout {
+                        layout_events.push(PanelEvent::ViewLayout(l));
+                    }
+                }
+            });
+        }),
+        Group::new(Side::Right, |ui: &mut Ui| {
             ui.add_enabled_ui(has_document, |ui| channel_bar::show(ui, display, &mut view_events));
         }),
     ];
@@ -81,4 +100,5 @@ pub fn show(
     events.append(&mut view_events);
     events.append(&mut camera_events);
     events.append(&mut mask_events);
+    events.append(&mut layout_events);
 }

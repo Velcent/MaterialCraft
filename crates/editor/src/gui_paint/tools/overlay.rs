@@ -137,7 +137,7 @@ impl Painting {
             out.lines.push((brush, pointer, Aid::Lazy, false));
         }
         // the straight line from the last stroke's end
-        if let (Some(h), Some(snap), false, Some(anchor)) = (hover, hover.and_then(|h| h.line), stroking, self.anchor)
+        if let (Some(h), Some(snap), false, Some(anchor)) = (hover, hover.and_then(|h| h.line), stroking, self.anchor.filter(|_| !self.anchor_uv))
             && let Some(from) = anchor.start(view)
         {
             let to = if snap { snap_angle(from, h.pos, SNAP_DEGREES) } else { h.pos };

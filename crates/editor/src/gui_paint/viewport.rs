@@ -1,4 +1,6 @@
-//! [`Viewport`]: the 3D view of the Paint screen. Navigation follows the shortcut table (by
+//! [`Viewport`]: the views of the Paint screen: the 3D view and the 2D (UV) view ([`UvView`]), shown alone or side
+//! by side ([`ViewLayout`]). A stroke gesture belongs to the view it started in ([`StrokeView`]). In the 3D view,
+//! navigation follows the shortcut table (by
 //! default Alt+left orbit, Alt+Shift+left orbit snapping to axis views, Alt+middle pan,
 //! Alt+right or the wheel zoom, Shift+right turns the light; ADR 0008 mc2-vq12); drawing goes
 //! through the shared GPU renderer in an egui paint callback with the [`ViewState`]'s display settings, and keeps
@@ -11,10 +13,14 @@ use super::environment::{EnvironmentLoader, EnvironmentStatus};
 use super::input::stylus::StylusFeed;
 use super::input::{PointerLog, StrokeInput};
 use super::navigation;
+use super::panels::PanelEvent;
 use super::projection_edit::{GizmoPointer, Phase};
 use super::shell::actions;
 use super::tools::screen_image::gizmo::GizmoAction;
+use super::uv_view::UvView;
+use super::view_state::ViewLayout;
 use super::view_state::ViewState;
+use super::view2d::UvMap;
 use crate::gui_settings::PenSettings;
 use crate::gui_workspace::shortcuts::ShortcutTable;
 use eframe::egui::{self, Align2, Color32, FontId, PointerButton, Sense};
@@ -56,6 +62,20 @@ pub struct Viewport {
     /// This frame's projection gizmo pointer event.
     gizmo_pointer: Option<GizmoPointer>,
     environment: EnvironmentLoader,
+    /// The 2D view.
+    uv: UvView,
+    /// The view the stroke gesture in progress (or the last one) started in.
+    stroke_view: StrokeView,
+    /// Where the pointer hovers over the 2D view this frame (view coordinates).
+    uv_hover: Option<Hover>,
+}
+
+/// Which view a stroke gesture comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StrokeView {
+    #[default]
+    Mesh,
+    Uv,
 }
 
 /// A drag of the stencil's or projection image's gizmo (the stencil key held).
@@ -100,7 +120,35 @@ impl Viewport {
             gizmo_active: false,
             gizmo_pointer: None,
             environment: EnvironmentLoader::default(),
+            uv: UvView::default(),
+            stroke_view: StrokeView::Mesh,
+            uv_hover: None,
         }
+    }
+
+    /// The 2D view (the screen sets what it shows each frame).
+    pub fn uv_mut(&mut self) -> &mut UvView {
+        &mut self.uv
+    }
+
+    /// The 2D view's transforms this frame, if it is shown.
+    pub fn uv_map(&self) -> Option<UvMap> {
+        self.uv.map()
+    }
+
+    /// Where the 2D view was laid out last frame, in UI points.
+    pub fn uv_rect(&self) -> Option<egui::Rect> {
+        self.uv.rect()
+    }
+
+    /// The pointer over the 2D view this frame.
+    pub fn uv_hover(&self) -> Option<Hover> {
+        self.uv_hover
+    }
+
+    /// The view the stroke input taken last came from.
+    pub fn stroke_view(&self) -> StrokeView {
+        self.stroke_view
     }
 
     pub fn gpu(&self) -> &Shared {
@@ -143,9 +191,9 @@ impl Viewport {
         self.gpu.lock().is_ok_and(|g| g.refining())
     }
 
-    /// Frames drawn so far.
+    /// Frames drawn so far by either view.
     pub fn frames(&self) -> u64 {
-        self.gpu.lock().map_or(0, |g| g.frames)
+        self.gpu.lock().map_or(0, |g| g.frames + g.uv.frames)
     }
 
     /// The camera of the last drawn frame on a viewport in UI points (screen positions relative to
@@ -190,6 +238,11 @@ impl Viewport {
         self.hover
     }
 
+    /// A painter over the 2D view, for overlays drawn after it this frame.
+    pub fn uv_overlay_painter(&self, ctx: &egui::Context) -> Option<egui::Painter> {
+        Some(ctx.layer_painter(self.layer?).with_clip_rect(self.uv.rect()?))
+    }
+
     /// A painter over the view, for overlays drawn after it this frame.
     pub fn overlay_painter(&self, ctx: &egui::Context) -> Option<egui::Painter> {
         Some(ctx.layer_painter(self.layer?).with_clip_rect(self.rect?))
@@ -231,11 +284,52 @@ impl Viewport {
         (self.state.view.light_yaw, self.state.view.light_pitch) = (d.light_yaw, d.light_pitch);
     }
 
-    /// Fills the remaining space of `ui` with the view; `keys` decides the navigation gestures.
-    pub fn ui(&mut self, ui: &mut egui::Ui, display: ChannelView, keys: &ShortcutTable) {
-        let (rect, resp) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
-        self.rect = (rect.width() > 0.0 && rect.height() > 0.0).then_some(rect);
+    /// Fills the remaining space of `ui` with the views of the chosen layout; `keys` decides the navigation
+    /// gestures. The 2D view's corner dropdown adds its events to `events`.
+    pub fn ui(&mut self, ui: &mut egui::Ui, display: ChannelView, keys: &ShortcutTable, events: &mut Vec<PanelEvent>) {
+        let (full, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+        let (mesh, uv) = split(full, self.state.layout);
         self.layer = Some(ui.layer_id());
+        let mesh = mesh.map(|rect| (rect, self.mesh_ui(ui, rect, display, keys)));
+        if mesh.is_none() {
+            (self.rect, self.hover, self.image_drag, self.gizmo_pointer) = (None, None, None, None);
+        }
+        let shown = self.state.display_for(display);
+        let uv = uv.map(|rect| (rect, self.uv.ui(ui, rect, &self.gpu, &self.diag, &self.state.view, shown, display, keys, events)));
+        if uv.is_none() {
+            self.uv_hover = None;
+        }
+        // the gesture belongs to the view it started in; a new one to the view under the pointer
+        let pointer = ui.input(|i| i.pointer.hover_pos());
+        let over_uv = uv.as_ref().is_some_and(|(r, _)| pointer.is_some_and(|p| r.contains(p)));
+        let want = if self.pointer.is_down() {
+            self.stroke_view
+        } else if over_uv || mesh.is_none() {
+            StrokeView::Uv
+        } else {
+            StrokeView::Mesh
+        };
+        let chosen = match want {
+            StrokeView::Uv => uv.as_ref().map(|v| (StrokeView::Uv, v)).or(mesh.as_ref().map(|v| (StrokeView::Mesh, v))),
+            StrokeView::Mesh => mesh.as_ref().map(|v| (StrokeView::Mesh, v)).or(uv.as_ref().map(|v| (StrokeView::Uv, v))),
+        };
+        if let Some((view, (rect, resp))) = chosen {
+            self.stroke_view = view;
+            let hover = self.stroke_input(ui, resp, *rect, keys, view == StrokeView::Mesh);
+            match view {
+                StrokeView::Mesh => (self.hover, self.uv_hover) = (hover, None),
+                StrokeView::Uv => (self.hover, self.uv_hover) = (None, hover),
+            }
+        }
+        if self.refining() {
+            ui.ctx().request_repaint();
+        }
+    }
+
+    /// The 3D view in `rect`: navigation, the stencil and projection gizmos, the GPU picture and its corner aids.
+    fn mesh_ui(&mut self, ui: &mut egui::Ui, rect: egui::Rect, display: ChannelView, keys: &ShortcutTable) -> egui::Response {
+        let resp = ui.allocate_rect(rect, Sense::click_and_drag());
+        self.rect = (rect.width() > 0.0 && rect.height() > 0.0).then_some(rect);
         ui.painter().rect_filled(rect, 0.0, BACKGROUND);
         let image_key = ui.input(|i| keys.held_shifted(i, actions::STENCIL));
         self.image_key = image_key.is_some();
@@ -244,7 +338,6 @@ impl Viewport {
         if !self.image_key {
             self.camera_input(ui, &resp, keys);
         }
-        self.stroke_input(ui, &resp, rect, keys);
         let error = self.gpu.lock().ok().and_then(|g| g.error.clone());
         match error {
             None => {
@@ -252,9 +345,6 @@ impl Viewport {
                 let shown = self.state.display_for(display);
                 let cb = eframe::egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint_with(&gpu, &info, painter, &view, &shown, &*sink));
                 ui.painter().add(egui::PaintCallback { rect, callback: Arc::new(cb) });
-                if self.refining() {
-                    ui.ctx().request_repaint();
-                }
                 if let Some(camera) = self.camera() {
                     axis_gizmo::draw(ui.painter(), rect, &camera);
                 }
@@ -265,12 +355,14 @@ impl Viewport {
             }
         }
         let corner = rect.left_bottom() + egui::vec2(6.0, -5.0);
-        ui.painter().text(corner, Align2::LEFT_BOTTOM, hint(keys), FontId::proportional(10.0), Color32::from_gray(110));
+        ui.painter_at(rect).text(corner, Align2::LEFT_BOTTOM, hint(keys), FontId::proportional(10.0), Color32::from_gray(110));
+        resp
     }
 
-    /// Records the stroke gesture (by default a left drag, or a click for a single stamp; with Shift a straight
-    /// line).
-    fn stroke_input(&mut self, ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect, keys: &ShortcutTable) {
+    /// Records the stroke gesture of the view at `rect` (by default a left drag, or a click for a single stamp;
+    /// with Shift a straight line); returns where the pointer hovers over it. The stencil key and the projection
+    /// gizmo only take the gesture over the 3D view (`mesh`).
+    fn stroke_input(&mut self, ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect, keys: &ShortcutTable, mesh: bool) -> Option<Hover> {
         let mods = ui.input(|i| i.modifiers);
         let gesture = keys.drag(mods, PointerButton::Primary);
         let line = match gesture {
@@ -278,17 +370,17 @@ impl Viewport {
             Some(actions::STROKE_LINE_SNAP) => Some(true),
             _ => None,
         };
-        let hover = resp.hover_pos().filter(|p| rect.contains(*p));
-        self.hover = hover.map(|p| Hover { pos: [p.x - rect.min.x, p.y - rect.min.y], line });
+        let hover = resp.hover_pos().filter(|p| rect.contains(*p)).map(|p| Hover { pos: [p.x - rect.min.x, p.y - rect.min.y], line });
         // with the stencil key held, drags edit the stencil or projection image
         // on the projection gizmo, presses grab it instead
-        let on_gizmo = self.gizmo_active || (self.gizmo_hover && !mods.alt);
-        let is_stroke = (gesture == Some(actions::STROKE) || line.is_some()) && !self.image_key && !on_gizmo;
+        let on_gizmo = mesh && (self.gizmo_active || (self.gizmo_hover && !mods.alt));
+        let is_stroke = (gesture == Some(actions::STROKE) || line.is_some()) && !(mesh && self.image_key) && !on_gizmo;
         let held = is_stroke && resp.dragged_by(PointerButton::Primary);
         let clicked = is_stroke && resp.clicked_by(PointerButton::Primary);
         let started = (is_stroke && resp.drag_started_by(PointerButton::Primary)) || clicked;
         let stopped = resp.drag_stopped_by(PointerButton::Primary) || clicked;
         ui.input(|i| self.pointer.record(i, rect, held, started, stopped, line));
+        hover
     }
 
     fn camera_input(&mut self, ui: &egui::Ui, resp: &egui::Response, keys: &ShortcutTable) {
@@ -375,4 +467,18 @@ fn hint(keys: &ShortcutTable) -> String {
         })
         .collect::<Vec<_>>()
         .join("   ")
+}
+
+/// The 3D view's and the 2D view's rectangles in `full` for `layout` (side by side: 3D left, 2D right).
+fn split(full: egui::Rect, layout: ViewLayout) -> (Option<egui::Rect>, Option<egui::Rect>) {
+    match layout {
+        ViewLayout::Mesh => (Some(full), None),
+        ViewLayout::Uv => (None, Some(full)),
+        ViewLayout::Both => {
+            let mid = full.center().x;
+            let left = egui::Rect::from_min_max(full.min, egui::pos2(mid - 1.0, full.max.y));
+            let right = egui::Rect::from_min_max(egui::pos2(mid + 1.0, full.min.y), full.max);
+            (Some(left), Some(right))
+        }
+    }
 }

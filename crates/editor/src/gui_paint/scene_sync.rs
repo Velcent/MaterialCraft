@@ -35,6 +35,8 @@ pub struct SceneSync {
     mesh_parts: Vec<usize>,
     /// Mesh parts not drawn, by mesh part index (a geometry mask being edited).
     hidden: Vec<bool>,
+    /// The texture set the 2D view shows (its parts only).
+    uv_set: Option<usize>,
     /// Maps that arrived before the geometry.
     waiting: Vec<SetMaps>,
     /// Maps asked for while a worker was still running: started when it has stopped.
@@ -270,10 +272,20 @@ impl SceneSync {
         }
     }
 
+    /// Shows only texture set `set`'s parts in the 2D view (nothing for `None`).
+    pub fn show_uv_set(&mut self, set: Option<usize>, gpu: &Shared) {
+        if self.uv_set != set {
+            self.uv_set = set;
+            self.send_hidden(gpu);
+        }
+    }
+
     fn send_hidden(&self, gpu: &Shared) {
         let per_scene_part = self.mesh_parts.iter().map(|&p| self.hidden.get(p).copied().unwrap_or(false)).collect();
+        let uv_hidden = self.part_sets.as_deref().unwrap_or(&[]).iter().map(|s| s.is_none() || *s != self.uv_set).collect();
         if let Ok(mut g) = gpu.lock() {
             g.set_hidden_parts(per_scene_part);
+            g.set_uv_hidden_parts(uv_hidden);
         }
     }
 

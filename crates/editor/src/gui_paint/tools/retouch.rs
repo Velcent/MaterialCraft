@@ -63,7 +63,7 @@ impl Painting {
         &mut self,
         doc: &OpenDocument,
         picking: &ViewPicking,
-        camera: Camera,
+        camera: Option<Camera>,
         tool: StrokeTool,
         at: PointerSample,
         set: usize,
@@ -74,8 +74,14 @@ impl Painting {
         }
         let d = doc.doc();
         let s = d.texture_sets.get(set).ok_or("the texture set is gone")?;
-        let projector = picking.projector_on(&d.mesh, camera).ok_or("the 3D view is not ready")?;
-        let start = texel_under(&projector, at.pos, s.resolution).ok_or("start the clone stroke on the model")?;
+        // a 2D-view stroke's points are texels already
+        let start = match camera {
+            Some(camera) => {
+                let projector = picking.projector_on(&d.mesh, camera).ok_or("the 3D view is not ready")?;
+                texel_under(&projector, at.pos, s.resolution).ok_or("start the clone stroke on the model")?
+            }
+            None => at.pos,
+        };
         self.retouch.clone.mode = self.brush.retouch.clone_mode;
         let offset =
             self.retouch.clone.offset_for_stroke(&s.id, start).ok_or("mark a clone source first: hover the model and press the clone source key (V)")?;

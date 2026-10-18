@@ -13,6 +13,26 @@ use materialcraft::paint::camera_list::CameraList;
 use materialcraft::paint::saved_view::{CameraValues, SavedCamera, SavedEnvironment, SavedView};
 use materialcraft::render3d::{RELIEF_NONE, View};
 
+/// Which views the viewport area shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ViewLayout {
+    /// The 3D view alone.
+    #[default]
+    Mesh,
+    /// The 2D (UV) view alone.
+    Uv,
+    /// Both side by side.
+    Both,
+}
+
+impl ViewLayout {
+    pub const ALL: [(ViewLayout, &'static str, &'static str); 3] = [
+        (ViewLayout::Mesh, "3D", "The 3D view only"),
+        (ViewLayout::Uv, "2D", "The 2D (UV) view only"),
+        (ViewLayout::Both, "3D | 2D", "The 3D and 2D views side by side"),
+    ];
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ViewState {
     pub view: View,
@@ -21,6 +41,8 @@ pub struct ViewState {
     pub lit_channels: bool,
     /// How channel and mesh-map views show their values (component, scale, signed colours).
     pub channel: ChannelDisplay,
+    /// Which views are shown.
+    pub layout: ViewLayout,
     /// The document's cameras; the active one's stored values lag behind the live ones until [`ViewState::sync`].
     pub(super) cameras: CameraList,
     /// The environment's kind as the document named it (kept for documents from newer versions).
@@ -37,6 +59,7 @@ impl Default for ViewState {
             display: Display::default(),
             lit_channels: false,
             channel: ChannelDisplay::default(),
+            layout: ViewLayout::Mesh,
             cameras: CameraList::default(),
             environment_kind: SavedEnvironment::STUDIO.to_string(),
             environment_map: None,

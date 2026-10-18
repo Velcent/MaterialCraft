@@ -1,15 +1,17 @@
 //! The polygon fill tool (PT-45..PT-49): a click picks the triangle under the pointer, a drag a rectangle or a
 //! lasso; the picks grow by the pick mode and go into the selected target's polygon fill effect (white fills,
-//! black un-picks), one history step per pick. The picking itself is `materialcraft::polygon_pick`; the 2D view
-//! will call its `uv_pick` once it takes tool input.
+//! black un-picks), one history step per pick. The picking itself is `materialcraft::polygon_pick`: through the 3D
+//! view's camera, or in UV space with `uv_pick` for gestures in the 2D view (a click outside the 0–1 working area
+//! picks nothing, V2-05).
 
 use super::super::input::StrokeInput;
+use super::super::view2d::{UvMap, in_working_area};
 use super::{PaintFrame, PaintReport, Painting};
 use materialcraft::mesh::Mesh;
 use materialcraft::paint::edit::StackId;
 use materialcraft::paint::edit::ops::{PolygonFillChange, edit_polygon_fill};
 use materialcraft::paint::effect::PickMode;
-use materialcraft::polygon_pick::{MeshTopologies, PickRegion, ScreenPick, apply_pick, name_picks};
+use materialcraft::polygon_pick::{MeshTopologies, PickRegion, ScreenPick, apply_pick, name_picks, uv_pick};
 use materialcraft_brush::TargetPart;
 
 /// A drag shorter than this (view points) is a click.
@@ -118,19 +120,28 @@ impl Painting {
 
     /// Picks `region` into the selected target: one history step.
     fn pick(&mut self, f: &mut PaintFrame, region: PickRegion, report: &mut PaintReport) {
-        let (Some((target, set)), Some(camera)) = (f.target.clone(), f.camera) else { return };
+        let Some((target, set)) = f.target.clone() else { return };
         let (doc, picking) = (&mut *f.doc, f.picking);
         let settings = self.brush.polygon;
         let named = {
             let d = doc.doc();
             let Some(set_ref) = d.texture_sets.get(set) else { return };
-            let Some(projector) = picking.projector_on(&d.mesh, camera) else {
-                report.message = Some("The 3D view is not ready for picking yet.".into());
-                return;
+            let picked = match (f.uv, f.camera) {
+                (Some(map), _) => match region_in_uv(&region, map) {
+                    PickRegion::Point(p) if !in_working_area(p) => return,
+                    uv => uv_pick(&d.mesh, set_ref.material_slot, set_ref.uv_set, &uv),
+                },
+                (None, Some(camera)) => {
+                    let Some(projector) = picking.projector_on(&d.mesh, camera) else {
+                        report.message = Some("The 3D view is not ready for picking yet.".into());
+                        return;
+                    };
+                    let shown = |p: usize| picking.is_shown(p);
+                    let material = set_ref.material_slot;
+                    ScreenPick { projector: &projector, mesh: &d.mesh, material, visible_only: settings.visible_only, shown: &shown }.pick(&region)
+                }
+                (None, None) => return,
             };
-            let shown = |p: usize| picking.is_shown(p);
-            let pick = ScreenPick { projector: &projector, mesh: &d.mesh, material: set_ref.material_slot, visible_only: settings.visible_only, shown: &shown };
-            let picked = pick.pick(&region);
             let grown = self.topologies.get(&d.mesh, set_ref.uv_set).grow(&d.mesh, settings.mode, picked);
             name_picks(&d.mesh, &grown)
         };
@@ -151,9 +162,26 @@ impl Painting {
     }
 }
 
+/// A region marked in the 2D view (view coordinates) in UV units.
+fn region_in_uv(region: &PickRegion, map: UvMap) -> PickRegion {
+    match region {
+        PickRegion::Point(p) => PickRegion::Point(map.uv(*p)),
+        PickRegion::Rect(a, b) => PickRegion::Rect(map.uv(*a), map.uv(*b)),
+        PickRegion::Lasso(points) => PickRegion::Lasso(points.iter().map(|p| map.uv(*p)).collect()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gui_paint::view2d::View2d;
+
+    #[test]
+    fn regions_from_the_2d_view_become_uv() {
+        let map = UvMap { view: View2d { centre: [0.5, 0.5], zoom: 200.0 }, size: [200.0, 200.0] };
+        assert_eq!(region_in_uv(&PickRegion::Point([50.0, 150.0]), map), PickRegion::Point([0.25, 0.75]));
+        assert_eq!(region_in_uv(&PickRegion::Rect([0.0, 0.0], [100.0, 25.0]), map), PickRegion::Rect([0.0, 0.0], [0.5, 0.125]));
+    }
 
     #[test]
     fn a_short_drag_is_a_click_and_a_long_one_a_shape() {

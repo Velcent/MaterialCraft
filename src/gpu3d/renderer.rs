@@ -207,7 +207,7 @@ impl Renderer {
             } else {
                 self.shape.update(gl, view)?;
             }
-            let items = if scene.is_active() { scene.drawables() } else { shape_drawable(&self.shape, &self.maps, &self.shape_shading, view) };
+            let items = if scene.is_active() { scene.drawables(uv) } else { shape_drawable(&self.shape, &self.maps, &self.shape_shading, view) };
             let lighting = Lighting::of(view, self.environment().source());
             if let Step::Draw { index } = step {
                 gl.disable(glow::SCISSOR_TEST);

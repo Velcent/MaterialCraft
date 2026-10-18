@@ -164,12 +164,13 @@ impl Bodies<'_> {
         let has_document = self.document.is_some();
         let paintable = self.document.is_some_and(|d| self.layers.paintable(d.doc()));
         let camera = super::camera_menu::CameraBar::of(self.viewport.state());
-        viewport_toolbar::show(ui, self.tools, self.brush, self.quick_mask, self.shortcuts, self.display, &camera, has_document, paintable, self.events);
+        let view = viewport_toolbar::ViewControls { display: self.display, camera: &camera, layout: self.viewport.state().layout };
+        viewport_toolbar::show(ui, self.tools, self.brush, self.quick_mask, self.shortcuts, view, has_document, paintable, self.events);
         if let Some(doc) = self.document {
             timeline::show(ui, doc.history(), self.events);
         }
         if has_document {
-            self.viewport.ui(ui, self.display, self.shortcuts);
+            self.viewport.ui(ui, self.display, self.shortcuts, self.events);
         } else {
             super::layout::empty_state(ui, self.events);
         }

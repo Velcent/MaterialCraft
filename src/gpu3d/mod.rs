@@ -207,6 +207,11 @@ impl Gpu {
         self.scene.set_shading(shading);
         self.content += 1;
     }
+    /// Leave parts out of the 2D view (`hidden[i]` for part `i`, as passed to `set_scene`), besides the hidden ones;
+    /// kept when the scene is replaced.
+    pub fn set_uv_hidden_parts(&mut self, hidden: Vec<bool>) {
+        self.scene.set_uv_hidden(hidden);
+    }
     /// Go back to the built-in shape; the parts' GPU objects are freed on the next paint.
     pub fn clear_scene(&mut self) {
         self.scene.clear();

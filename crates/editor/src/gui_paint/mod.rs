@@ -60,6 +60,10 @@ mod strokes;
 mod tools;
 mod tray_host;
 mod unsaved;
+mod uv_outlines;
+mod uv_screen;
+mod uv_view;
+mod view2d;
 mod view_cameras;
 mod view_pick;
 mod view_state;
@@ -143,8 +147,9 @@ pub struct PaintMode {
     title: WindowTitle,
     /// The floating colour picker and its eyedropper (step 21).
     color: ColorPicker,
-    /// The viewport frame count when the eyedropper asked the GPU for a displayed colour.
-    color_read: Option<u64>,
+    /// The view's frame count when the eyedropper asked the GPU for a displayed colour, and whether it asked the 2D
+    /// view.
+    color_read: Option<(u64, bool)>,
     /// The brush tools: settings, the stroke in progress, the painted set's surface.
     painting: tools::Painting,
     /// `--stroke-test`: paint one stroke once the document has settled.
@@ -159,6 +164,8 @@ pub struct PaintMode {
     shader_panel: shading_screen::ShaderPanelState,
     /// The platform's pen reader (step 35), kept alive while the screen exists.
     tablet: input::tablet::TabletInput,
+    /// The island outlines of the set the 2D view shows.
+    uv_outlines: uv_outlines::UvOutlines,
 }
 
 impl PaintMode {
@@ -168,7 +175,9 @@ impl PaintMode {
         let launch = Launch::from_args(std::env::args().skip(1));
         let (tray, first_run) = AssetTray::new(&settings.get().library, settings.dir(), diag.clone());
         let prefs = &settings.get().display;
-        let viewport = Viewport::new(diag.clone(), display_prefs::state_from(prefs), display_prefs::opts_from(prefs));
+        let mut state = display_prefs::state_from(prefs);
+        state.layout = launch.layout.unwrap_or(state.layout);
+        let viewport = Viewport::new(diag.clone(), state, display_prefs::opts_from(prefs));
         if let Some(note) = first_run {
             diag.info(Area::Assets, note);
         }
@@ -201,6 +210,7 @@ impl PaintMode {
             tablet: input::tablet::TabletInput::none(),
             projection: projection_edit::ProjectionEditing::default(),
             shader_panel: shading_screen::ShaderPanelState::default(),
+            uv_outlines: uv_outlines::UvOutlines::default(),
         };
         if launch.stroke_test && launch.stroke_helpers {
             pm.painting.brush.helpers = stroke_test::helpers();
@@ -246,6 +256,7 @@ impl PaintMode {
             }
         }
         let env_busy = self.viewport.sync_environment(&self.tray.material_folders());
+        self.sync_uv_view(ctx);
         let mut events = self.shell.take_shortcuts(ctx);
         self.before_tray_frame();
         events.extend(self.draw(ui, history));
@@ -361,6 +372,7 @@ impl PaintMode {
                 self.diag.info(Area::General, "New documents will start with this camera, exposure and environment.");
             }
             PanelEvent::ShowChannel(view) => self.show_channel(view),
+            PanelEvent::ViewLayout(layout) => self.viewport.settings_mut().0.layout = layout,
             PanelEvent::CycleChannel(step) => self.show_channel(self.display.cycled(step)),
             PanelEvent::SetVisible(set, visible) => {
                 if let Some(doc) = &mut self.document {

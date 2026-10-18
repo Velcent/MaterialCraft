@@ -1,11 +1,12 @@
 //! Hidden command-line options for opening Paint mode directly and for automated screenshots:
 //!
-//!     materialcraft-gui --paint <file.mcpaint|file.spp> [--channel <id>] [--shot <out.png>]
+//!     materialcraft-gui --paint <file.mcpaint|file.spp> [--channel <id>] [--layout 3d|2d|both] [--shot <out.png>]
 //!     materialcraft-gui --paint-demo [--channel <id>] [--shot <out.png>]
 //!     materialcraft-gui --paint <file> --occlusion-check <map.png>
 //!     materialcraft-gui --paint <file> --stroke-test [--stroke-helpers] --shot <out.png>
 //!
-//! `--channel` takes a channel id (`base_color`, `roughness`, ...) or `material`; `--shot` saves the
+//! `--channel` takes a channel id (`base_color`, `roughness`, ...) or `material`; `--layout` starts with the 3D view,
+//! the 2D (UV) view or both side by side; `--shot` saves the
 //! window once every map is on the GPU and then quits. `--occlusion-check` compares the CPU view projector
 //! with the GPU's depth buffer once the scene has settled, prints the agreement, saves a map of it and quits
 //! (use it without `--shot`). `--stroke-test` paints one stroke on a new paint layer once the document has
@@ -13,6 +14,7 @@
 //! the lazy mouse on, and adds a straight line in angle steps from the stroke's end.
 
 use super::channel_view::ChannelView;
+use super::view_state::ViewLayout;
 use materialcraft::paint::Channel;
 use std::path::PathBuf;
 
@@ -28,6 +30,7 @@ pub enum StartDocument {
 pub struct Launch {
     pub open: Option<StartDocument>,
     pub channel: Option<ChannelView>,
+    pub layout: Option<ViewLayout>,
     pub shot: Option<PathBuf>,
     pub occlusion_check: Option<PathBuf>,
     pub stroke_test: bool,
@@ -48,6 +51,14 @@ impl Launch {
                 "--stroke-test" => launch.stroke_test = true,
                 "--stroke-helpers" => launch.stroke_helpers = true,
                 "--channel" => launch.channel = it.next().and_then(|c| parse_channel(&c)),
+                "--layout" => {
+                    launch.layout = it.next().and_then(|l| match l.as_str() {
+                        "3d" => Some(ViewLayout::Mesh),
+                        "2d" => Some(ViewLayout::Uv),
+                        "both" => Some(ViewLayout::Both),
+                        _ => None,
+                    })
+                }
                 _ => {}
             }
         }

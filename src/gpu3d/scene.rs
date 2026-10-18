@@ -71,6 +71,8 @@ pub(super) struct Scene {
     /// Each part's shading by index; parts beyond the list use the built-in default. Kept across uploads.
     shading: Vec<PartShading>,
     default_shading: PartShading,
+    /// Parts the 2D view leaves out besides `hidden` (it shows one texture set's parts). Kept across uploads.
+    uv_hidden: Vec<bool>,
 }
 
 impl Scene {
@@ -109,6 +111,11 @@ impl Scene {
             }
         }
         out
+    }
+
+    /// Which parts the 2D view leaves out besides the hidden ones (`hidden[i]` for part `i`).
+    pub fn set_uv_hidden(&mut self, hidden: Vec<bool>) {
+        self.uv_hidden = hidden;
     }
 
     pub fn set_part_maps(&mut self, part: usize, maps: GpuMaps) {
@@ -151,12 +158,14 @@ impl Scene {
         }
     }
 
-    /// Every part that is not hidden, with its own maps; no inside-view culling (open meshes show their back faces).
-    pub fn drawables(&self) -> Vec<Drawable<'_>> {
+    /// Every part that is not hidden (in the 2D view if `uv`), with its own maps; no inside-view culling (open
+    /// meshes show their back faces).
+    pub fn drawables(&self, uv: bool) -> Vec<Drawable<'_>> {
+        let off = |list: &[bool], i: usize| list.get(i).copied().unwrap_or(false);
         self.parts
             .iter()
             .enumerate()
-            .filter(|(i, _)| !self.hidden.get(*i).copied().unwrap_or(false))
+            .filter(|(i, _)| !off(&self.hidden, *i) && (!uv || !off(&self.uv_hidden, *i)))
             .map(|(i, p)| {
                 let hw = p.maps.height_size().0;
                 let shading = self.shading.get(i).unwrap_or(&self.default_shading);
