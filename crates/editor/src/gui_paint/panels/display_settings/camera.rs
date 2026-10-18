@@ -1,5 +1,6 @@
 //! Camera: projection, field of view and focal length (linked through one sensor size), exposure in stops, and
-//! the depth of field's focus distance and aperture (active only while depth of field is on, CM-09).
+//! the depth of field's focus distance and aperture (active only while depth of field is on, CM-09); the camera
+//! settings are locked with a locked camera (CM-08). Below them the document's camera list ([`super::camera_list`]).
 
 use eframe::egui::Ui;
 
@@ -13,7 +14,25 @@ use materialcraft::gpu3d::Display;
 const PROJECTIONS: [(Projection, &str); 2] = [(Projection::Perspective, "Perspective"), (Projection::Orthographic, "Orthographic")];
 
 pub fn show(ui: &mut Ui, state: &mut ViewState, events: &mut Vec<PanelEvent>) {
-    ui.label(format!("Camera: {}", state.camera_name()));
+    let locked = state.active_locked();
+    ui.label(format!("Camera: {}{}", state.camera_name(), if locked { " (locked)" } else { "" }));
+    ui.add_enabled_ui(!locked, |ui| settings(ui, state)).response.on_disabled_hover_text("The camera is locked; unlock it in the list below");
+    let d = &mut state.display;
+    let (elo, ehi) = Display::EXPOSURE_RANGE;
+    SliderRow::new("Exposure", &mut d.exposure_stops, elo..=ehi).default_value(0.0).decimals(2).suffix(" EV").show(ui);
+    ui.horizontal(|ui| {
+        if ui.button("Reset camera").on_hover_text("The default camera back to its start view").clicked() {
+            events.push(PanelEvent::ResetCamera);
+        }
+        if ui.button("Use as defaults").on_hover_text("New and imported documents start with this camera, exposure and environment").clicked() {
+            events.push(PanelEvent::UseDisplayDefaults);
+        }
+    });
+    super::camera_list::show(ui, state, events);
+}
+
+/// Projection, field of view, focal length and depth of field of the active camera.
+fn settings(ui: &mut Ui, state: &mut ViewState) {
     let d = &mut state.display;
     let defaults = CameraSettings::default();
     choice(ui, "paint_projection", "Projection", &mut d.camera.projection, &PROJECTIONS);
@@ -27,8 +46,6 @@ pub fn show(ui: &mut Ui, state: &mut ViewState, events: &mut Vec<PanelEvent>) {
     if SliderRow::new("Focal length", &mut mm, mm_lo..=mm_hi).default_value(defaults.focal_length()).decimals(1).suffix(" mm").show(ui).changed {
         d.camera.set_fov_y(fov_y(mm));
     }
-    let (elo, ehi) = Display::EXPOSURE_RANGE;
-    SliderRow::new("Exposure", &mut d.exposure_stops, elo..=ehi).default_value(0.0).decimals(2).suffix(" EV").show(ui);
     let dof_on = d.camera.depth_of_field.enabled;
     let dof_default = DepthOfField::default();
     ui.add_enabled_ui(dof_on, |ui| {
@@ -42,12 +59,4 @@ pub fn show(ui: &mut Ui, state: &mut ViewState, events: &mut Vec<PanelEvent>) {
     })
     .response
     .on_disabled_hover_text("Turn on depth of field under Post effects");
-    ui.horizontal(|ui| {
-        if ui.button("Reset camera").clicked() {
-            events.push(PanelEvent::ResetCamera);
-        }
-        if ui.button("Use as defaults").on_hover_text("New and imported documents start with this camera, exposure and environment").clicked() {
-            events.push(PanelEvent::UseDisplayDefaults);
-        }
-    });
 }

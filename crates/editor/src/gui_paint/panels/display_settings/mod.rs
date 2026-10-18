@@ -5,6 +5,7 @@
 //! everything else is remembered as a user default.
 
 mod camera;
+mod camera_list;
 mod environment;
 mod post;
 mod viewport;

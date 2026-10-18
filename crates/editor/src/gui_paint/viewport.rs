@@ -188,8 +188,12 @@ impl Viewport {
         self.pointer.is_down()
     }
 
-    /// Switches between perspective and orthographic projection (the framing of the pivot stays).
+    /// Switches between perspective and orthographic projection (the framing of the pivot stays); not on a locked
+    /// camera.
     pub fn toggle_projection(&mut self) {
+        if self.state.active_locked() {
+            return;
+        }
         let p = &mut self.state.display.camera.projection;
         *p = match *p {
             Projection::Perspective => Projection::Orthographic,
@@ -197,7 +201,9 @@ impl Viewport {
         };
     }
 
+    /// Puts the default camera back to its start view (another active camera first hands over to it, CM-06).
     pub fn reset_camera(&mut self) {
+        self.state.before_navigation();
         let d = View::default();
         self.state.view.set_orbit(&d.orbit());
         (self.state.view.light_yaw, self.state.view.light_pitch) = (d.light_yaw, d.light_pitch);
@@ -273,8 +279,14 @@ impl Viewport {
         } else {
             None
         };
-        let v = &mut self.state.view;
         let d = resp.drag_delta();
+        let moves_camera = matches!(gesture, Some(actions::ORBIT | actions::ORBIT_SNAP | actions::PAN | actions::ZOOM));
+        let wheel = resp.hovered() && keys.wheel(mods) == Some(actions::ZOOM) && ui.input(|i| crate::gui_input::raw_scroll_delta(i).y) != 0.0;
+        if (moves_camera && d != egui::Vec2::ZERO) || wheel {
+            // imported cameras never move: the default camera takes over their view first (CM-06)
+            self.state.before_navigation();
+        }
+        let v = &mut self.state.view;
         match gesture {
             Some(actions::ORBIT) => navigation::orbit(v, d.x, d.y),
             Some(actions::ORBIT_SNAP) => {

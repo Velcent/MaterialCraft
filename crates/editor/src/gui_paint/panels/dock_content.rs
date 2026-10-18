@@ -162,8 +162,8 @@ impl Bodies<'_> {
     fn viewport_body(&mut self, ui: &mut Ui) {
         let has_document = self.document.is_some();
         let paintable = self.document.is_some_and(|d| self.layers.paintable(d.doc()));
-        let orthographic = self.viewport.state().display.camera.projection == materialcraft::camera::Projection::Orthographic;
-        viewport_toolbar::show(ui, self.tools, self.brush, self.quick_mask, self.shortcuts, self.display, orthographic, has_document, paintable, self.events);
+        let camera = super::camera_menu::CameraBar::of(self.viewport.state());
+        viewport_toolbar::show(ui, self.tools, self.brush, self.quick_mask, self.shortcuts, self.display, &camera, has_document, paintable, self.events);
         if let Some(doc) = self.document {
             timeline::show(ui, doc.history(), self.events);
         }

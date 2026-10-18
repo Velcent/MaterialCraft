@@ -3,6 +3,7 @@
 
 pub mod bakers;
 mod brush_panel;
+pub mod camera_menu;
 pub mod channel_bar;
 mod display_settings;
 mod dock_content;
@@ -61,6 +62,12 @@ pub enum PanelEvent {
     ToggleProjection,
     /// Make the current camera, exposure and environment the defaults for new documents.
     UseDisplayDefaults,
+    /// Show camera `n` of the document's camera list (CM-02).
+    SelectCamera(usize),
+    /// Show the next camera of the list.
+    NextCamera,
+    /// Pick a glTF file and add its cameras to the list (CM-05).
+    ImportCameras,
     ShowChannel(ChannelView),
     SetVisible(usize, bool),
     /// Cancel the running load or import.

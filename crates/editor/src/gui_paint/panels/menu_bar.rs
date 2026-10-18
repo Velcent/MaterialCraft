@@ -33,6 +33,8 @@ pub fn show(ui: &mut Ui, title: &str, has_document: bool, history: Option<&Paint
             });
             ui.menu_button("View", |ui| {
                 item(ui, shell, events, "Reset camera", "paint.view.reset_camera", has_document, PanelEvent::ResetCamera);
+                item(ui, shell, events, "Next camera", "paint.view.next_camera", has_document, PanelEvent::NextCamera);
+                item(ui, shell, events, "Import cameras…", "", has_document, PanelEvent::ImportCameras);
                 item(ui, shell, events, "Show the material", "paint.view.material", has_document, PanelEvent::ShowChannel(ChannelView::Material));
                 item(ui, shell, events, "Next channel", "paint.view.next_channel", has_document, PanelEvent::CycleChannel(1));
                 item(ui, shell, events, "Previous channel", "paint.view.previous_channel", has_document, PanelEvent::CycleChannel(-1));

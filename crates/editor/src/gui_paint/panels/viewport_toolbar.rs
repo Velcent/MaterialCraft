@@ -6,6 +6,7 @@ use eframe::egui::{self, Id, RichText, Ui};
 use super::super::channel_view::ChannelView;
 use super::super::shell::tools::{self, ToolState};
 use super::super::tools::BrushTools;
+use super::camera_menu::{self, CameraBar};
 use super::{PanelEvent, channel_bar, polygon_bar, quick_bar, quick_mask_bar};
 use crate::gui_theme;
 use crate::gui_widgets::toolbar::{self, Group, Side};
@@ -20,7 +21,7 @@ pub fn show(
     quick_mask: QuickMaskState,
     keys: &ShortcutTable,
     display: ChannelView,
-    orthographic: bool,
+    camera: &CameraBar,
     has_document: bool,
     paintable: bool,
     events: &mut Vec<PanelEvent>,
@@ -29,6 +30,8 @@ pub fn show(
     let unavailable = tools::unavailable(has_document, paintable);
     let reset_key = keys.label("paint.view.reset_camera");
     let projection_key = keys.label("paint.view.projection");
+    let next_camera_key = keys.label("paint.view.next_camera");
+    let orthographic = camera.orthographic;
     let mut view_events = Vec::new();
     let mut camera_events = Vec::new();
     let mut mask_events = Vec::new();
@@ -55,6 +58,9 @@ pub fn show(
             }
         }),
         Group::new(Side::Right, |ui: &mut Ui| {
+            if has_document {
+                camera_menu::show(ui, camera, &next_camera_key, &mut camera_events);
+            }
             let mut button = egui::Button::new("Reset camera");
             if !reset_key.is_empty() {
                 button = button.shortcut_text(reset_key.as_str());

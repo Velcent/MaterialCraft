@@ -14,6 +14,7 @@ mod bake_editor;
 mod bake_queue;
 mod baking;
 mod cache;
+mod camera_files;
 mod channel_view;
 mod demo;
 mod dialogs;
@@ -57,6 +58,7 @@ mod strokes;
 mod tools;
 mod tray_host;
 mod unsaved;
+mod view_cameras;
 mod view_pick;
 mod view_state;
 mod view_thumbnail;
@@ -345,6 +347,9 @@ impl PaintMode {
             }
             PanelEvent::ResetCamera => self.viewport.reset_camera(),
             PanelEvent::ToggleProjection => self.viewport.toggle_projection(),
+            PanelEvent::SelectCamera(i) => self.viewport.settings_mut().0.select_camera(i),
+            PanelEvent::NextCamera => self.viewport.settings_mut().0.next_camera(),
+            PanelEvent::ImportCameras => self.import_cameras(),
             PanelEvent::UseDisplayDefaults => {
                 display_prefs::save_project_defaults(&mut self.shell.settings, self.viewport.state());
                 self.diag.info(Area::General, "New documents will start with this camera, exposure and environment.");
