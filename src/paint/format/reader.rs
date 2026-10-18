@@ -14,8 +14,10 @@ use std::io::{Read, Seek};
 /// Limits for [`super::load_with`].
 #[derive(Debug, Clone)]
 pub struct LoadOptions {
-    /// Most bytes of decoded image data a document may declare (default 16 GiB). Checked
-    /// against the manifest before any image is decoded.
+    /// Most bytes of decoded image data a document may hold in memory (default 16 GiB). No single image may
+    /// declare more (checked against the manifest before decoding); the total counts the tiles actually
+    /// allocated while decoding, since empty tiles cost nothing (imports with many sparse masks declare far
+    /// more than they hold).
     pub max_image_bytes: u64,
 }
 
@@ -48,7 +50,7 @@ impl<R: Read + Seek> DocumentReader<R> {
         // The skeleton already has every image's size and format: reject a broken document
         // before decoding any pixels.
         doc.validate()?;
-        read_images(&mut self.zip, &mut doc, &m.images)?;
+        read_images(&mut self.zip, &mut doc, &m.images, &self.options)?;
         read_strokes(&mut self.zip, &mut doc, &m.strokes);
         for path in m.foreign.iter().filter(|p| *p != manifest::extras::Extras::PATH) {
             paths::check_foreign_path(path)?;
@@ -76,26 +78,33 @@ pub(super) fn read_json<R: Read + Seek>(zip: &mut ZipReader<R>, entry: &str) -> 
     json::parse(text).map_err(|e| FormatError::Json(format!("{entry}: {e}")))
 }
 
-/// Refuses manifests that declare more decoded image data than `options` allow (checked before decoding).
+/// Refuses manifests with an image that alone declares more decoded data than `options` allow (checked before
+/// decoding; the total is checked by [`read_images`] as the images are decoded).
 pub(super) fn check_budget(refs: &[ImageRef], options: &LoadOptions) -> Result<(), FormatError> {
-    let total = refs.iter().fold(0u64, |sum, r| {
+    let too_large = refs.iter().any(|r| {
         let bytes = r.size.0 as u64 * r.size.1 as u64 * r.format.bytes_per_pixel() as u64;
-        sum.saturating_add(bytes)
+        bytes > options.max_image_bytes
     });
-    if total > options.max_image_bytes {
+    if too_large {
         return Err(FormatError::TooLarge { limit: options.max_image_bytes });
     }
     Ok(())
 }
 
-/// Reads a batch of entries at a time, decodes them in parallel and moves them into place.
-pub(super) fn read_images<R: Read + Seek>(zip: &mut ZipReader<R>, doc: &mut Document, refs: &[ImageRef]) -> Result<(), FormatError> {
+/// Reads a batch of entries at a time, decodes them in parallel and moves them into place; refuses the document
+/// once the decoded images hold more than `options` allow.
+pub(super) fn read_images<R: Read + Seek>(zip: &mut ZipReader<R>, doc: &mut Document, refs: &[ImageRef], options: &LoadOptions) -> Result<(), FormatError> {
+    let mut held = 0u64;
     for batch in refs.chunks(batch_size()) {
         let entries = batch.iter().map(|r| Ok((r, zip.read(&r.path)?))).collect::<Result<Vec<_>, FormatError>>()?;
         let decoded = par_map(&entries, |(r, bytes): &(&ImageRef, Vec<u8>)| images::decode(bytes, r.format, r.size));
         drop(entries);
         for (r, img) in batch.iter().zip(decoded) {
             let img = img.map_err(|m| FormatError::image(&r.path, m))?;
+            held = held.saturating_add(img.memory_bytes() as u64);
+            if held > options.max_image_bytes {
+                return Err(FormatError::TooLarge { limit: options.max_image_bytes });
+            }
             let slot = r.slot.image_mut(doc).ok_or_else(|| FormatError::image(&r.path, "no image of the document refers to it"))?;
             *slot = img;
         }

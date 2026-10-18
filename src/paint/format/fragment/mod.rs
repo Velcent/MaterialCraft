@@ -93,7 +93,7 @@ pub fn load_with(input: impl Read + Seek, options: &LoadOptions) -> Result<Fragm
     check_budget(&ctx.images, options)?;
     let mut doc = Document { texture_sets: vec![read.set], ..Document::default() };
     doc.validate()?;
-    read_images(&mut zip, &mut doc, &ctx.images)?;
+    read_images(&mut zip, &mut doc, &ctx.images, options)?;
     read_strokes(&mut zip, &mut doc, &ctx.strokes);
     let assets = embedded::read(&read.assets, &mut zip)?;
     let set = doc.texture_sets.pop().ok_or_else(|| FormatError::Unsupported("fragment without content".into()))?;
