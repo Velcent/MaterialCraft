@@ -11,6 +11,7 @@ mod fragments;
 mod manifest_errors;
 mod projections;
 mod round_trip;
+mod shading;
 mod strokes;
 mod unknown_fields;
 mod view;

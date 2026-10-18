@@ -1,5 +1,6 @@
 //! Texture sets: `{"id", "name", "mesh_material", "uv_set", "resolution", "channels", "layers",
-//! "baked", "bake"}` (`"bake"` since 0.5, see [`super::bake_config`]).
+//! "baked", "bake", "shader"}` (`"bake"` since 0.5, see [`super::bake_config`]; `"shader"` since 0.13, written by
+//! [`super::shading`]).
 
 use super::bake_config;
 use super::extras::loc;
@@ -81,6 +82,9 @@ pub fn read(index: usize, v: &Value, ctx: &mut ReadCtx) -> Result<TextureSet, Fo
         set.baked.push(BakedMap { kind, image });
     }
     set.bake = bake_config::read(o.opt("bake"), o.path("bake"), &format!("{here}/bake"), set.bake.clone(), ctx)?;
+    if let Some(instance) = o.opt_str("shader")? {
+        ctx.set_shaders.push((set.id.clone(), instance.to_string()));
+    }
     ctx.extras.record(&here, &o);
     Ok(set)
 }

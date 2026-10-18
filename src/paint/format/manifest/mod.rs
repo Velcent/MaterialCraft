@@ -9,6 +9,7 @@
 //! - [`effect`] (with [`effect_content`], [`effect_mask`], [`effect_kinds`]), [`blend`], [`geometry_mask`]:
 //!   effect stacks, blend entries and geometry masks of layers.
 //! - [`view`]: the camera list, exposure and environment the document was last looked at with.
+//! - [`shading`]: shader instances, the texture sets' instances and the mesh's length unit.
 
 pub mod bake_config;
 pub mod bake_enums;
@@ -25,6 +26,7 @@ pub mod layer;
 pub mod mesh_faces;
 pub mod projection;
 pub mod report;
+pub mod shading;
 pub mod strokes;
 pub mod texture_set;
 pub mod view;
@@ -67,6 +69,8 @@ pub struct ReadCtx {
     pub extras: Extras,
     pub images: Vec<ImageRef>,
     pub strokes: Vec<StrokeRef>,
+    /// Each texture set's `shader` (set id, instance id), collected for [`shading::read`].
+    pub set_shaders: Vec<(String, String)>,
 }
 
 /// A read manifest: the document without mesh, image pixels, foreign bytes and report, plus
@@ -90,7 +94,8 @@ pub struct Manifest {
 
 /// The manifest of `doc`. `thumbnail` says whether a thumbnail entry is written.
 pub fn write(doc: &Document, ctx: &WriteCtx, thumbnail: bool) -> Value {
-    let sets: Value = doc.texture_sets.iter().enumerate().map(|(i, s)| texture_set::write(i, s, ctx)).collect();
+    let mut sets: Value = doc.texture_sets.iter().enumerate().map(|(i, s)| texture_set::write(i, s, ctx)).collect();
+    shading::assign_sets(&doc.shading, &mut sets);
     let foreign: Value = doc.foreign.iter().map(|f| f.path.as_str()).collect();
     let mut links = bake_config::write_links(&doc.bake_links);
     ctx.extras.inject("bake_links", &mut links);
@@ -112,6 +117,7 @@ pub fn write(doc: &Document, ctx: &WriteCtx, thumbnail: bool) -> Value {
     if let Some(view) = &doc.view {
         v.insert("view", view::write(view, ctx.extras));
     }
+    shading::write(&doc.shading, &mut v, ctx.extras);
     if doc.import_report.is_some() {
         v.insert("import_report", paths::IMPORT_REPORT);
     }
@@ -146,6 +152,7 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
     let assets = super::embedded::references(o.array("assets")?, &o.path("assets"))?;
     let mesh_faces = mesh_faces::read(&mut o)?;
     doc.view = view::read(&mut o, &mut ctx);
+    doc.shading = shading::read(&mut o, &mut ctx)?;
     let manifest = Manifest {
         version,
         mesh: o.str("mesh")?.to_string(),

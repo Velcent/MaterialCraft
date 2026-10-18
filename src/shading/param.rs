@@ -67,8 +67,16 @@ impl ParamDecl {
     }
 
     /// `value` made valid for this parameter: clamped into its range, or the default when it has the wrong type or
-    /// is not finite.
+    /// is not finite. Numbers convert between whole and not (files store both as JSON numbers): a whole float is
+    /// taken for an int or choice, an int for a float.
     pub fn sanitize(&self, value: ParamValue) -> ParamValue {
+        let value = match (&self.kind, value) {
+            (ParamKind::Float { .. }, ParamValue::Int(i)) => ParamValue::Float(i as f32),
+            (ParamKind::Int { .. } | ParamKind::Choice { .. }, ParamValue::Float(f)) if f.is_finite() && f.fract() == 0.0 && f.abs() < 2e9 => {
+                ParamValue::Int(f as i32)
+            }
+            _ => value,
+        };
         match (&self.kind, value) {
             (ParamKind::Float { min, max, default, .. }, ParamValue::Float(v)) => ParamValue::Float(if v.is_finite() { v.clamp(*min, *max) } else { *default }),
             (ParamKind::Int { min, max, .. }, ParamValue::Int(v)) => ParamValue::Int(v.clamp(*min, *max)),
@@ -140,5 +148,9 @@ mod tests {
         assert_eq!(ch.sanitize(ParamValue::Int(0)), ParamValue::Int(0));
         let i = decl(ParamKind::Int { min: 1, max: 4, default: 2 });
         assert_eq!(i.sanitize(ParamValue::Int(9)), ParamValue::Int(4));
+        assert_eq!(i.sanitize(ParamValue::Float(3.0)), ParamValue::Int(3), "whole numbers from files");
+        assert_eq!(i.sanitize(ParamValue::Float(2.5)), ParamValue::Int(2), "not whole: the default");
+        assert_eq!(ch.sanitize(ParamValue::Float(0.0)), ParamValue::Int(0));
+        assert_eq!(f.sanitize(ParamValue::Int(1)), ParamValue::Float(1.0));
     }
 }
