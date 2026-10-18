@@ -6,6 +6,7 @@ pub mod accuracy;
 pub mod analyze;
 pub mod compare;
 pub mod convert;
+pub mod library;
 pub mod maps;
 pub mod material_match;
 pub mod model_corpus;

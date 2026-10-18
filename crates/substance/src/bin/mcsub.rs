@@ -10,6 +10,8 @@
 //!                                                  with a library also the material fills and our suggestions
 //!     mcsub match-materials <file.spp | folder> --library <dir> [--jobs N]
 //!                                                  suggestions per material fill and how close their looks are
+//!     mcsub library <file.spp> [<library dir>]     what the import review offers for the user's library; with a
+//!                                                  folder every candidate written into it
 //!     mcsub convert <in.spp> <out.mcpaint> [--plan choices.json | --procedurals keep|replace]
 //!                                                  import and save as .mcpaint
 //!     mcsub convert --all <folder> <out dir> [--discard] [--jobs N]   convert every .spp below the folder
@@ -58,7 +60,7 @@ use materialcraft_substance::tools::verify_layers::isolate::corpus::{CASE_HEADER
 use materialcraft_substance::tools::verify_layers::isolate::joint_cases::JointOptions;
 use materialcraft_substance::tools::verify_layers::isolate::joint_census::{JOINT_CASE_HEADER, joint_census_files};
 use materialcraft_substance::tools::verify_layers::{VerifyOptions, verify_path};
-use materialcraft_substance::tools::{compare, convert, maps, model_corpus};
+use materialcraft_substance::tools::{compare, convert, library, maps, model_corpus};
 use materialcraft_substance::translate::layers::replay::ReplayChoice;
 use materialcraft_substance::translate::replacements::{Choice, ProceduralPlan};
 use materialcraft_substance::translate::{Cancel, import_spp_with};
@@ -66,7 +68,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 
-const USAGE: &str = "usage: mcsub inspect|tree|doc|model|corpus|analyze|convert|report|maps|compare|verify-layers|isolate … (see the source header for details)";
+const USAGE: &str = "usage: mcsub inspect|tree|doc|model|corpus|analyze|library|convert|report|maps|compare|verify-layers|isolate … (see the source header for details)";
 
 /// Parsed command line: positional words, `--flag`s and `--diff <dir>`.
 struct Args {
@@ -207,6 +209,9 @@ fn run(args: Args) -> Result<(), String> {
         ["inspect", path] => {
             let report = ProjectReport::build(Path::new(path), options).map_err(|e| err(&e))?;
             print!("{}", TextReport(&report));
+        }
+        ["library", path, rest @ ..] if rest.len() <= 1 => {
+            print!("{}", library::run(Path::new(path), rest.first().map(Path::new))?);
         }
         ["tree", path] => {
             let project = SppProject::open(Path::new(path)).map_err(|e| err(&e))?;

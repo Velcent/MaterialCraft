@@ -24,6 +24,11 @@ const NAME_PREFIXES: &[(&str, Option<u64>)] = &[
     ("Thickness Map from Mesh ", Some(5)),
 ];
 
+/// True for a resource name Painter gives the maps it bakes (`Ambient Occlusion Map from Mesh Cup`), whatever the set.
+pub(crate) fn is_baked_name(name: &str) -> bool {
+    NAME_PREFIXES.iter().any(|(prefix, _)| name.starts_with(prefix))
+}
+
 /// A baked map to read: its kind, display name and resource id.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BakedSource {

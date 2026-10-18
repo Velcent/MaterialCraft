@@ -6,6 +6,9 @@
 //! Each texture set gets Painter's layer stack ([`layers`], M5) and the flattened channels from the texture
 //! cache (M3) as one paint layer, either on top (when not every layer is computable) or as a hidden reference,
 //! plus its baked mesh maps; everything not translated is kept under `foreign/substance/`.
+//!
+//! Beside the import, [`library`] lists what the project brings for the user's own asset library (brush presets,
+//! alphas, stencils, textures, the environment map) and writes the ones the import review ticks.
 
 pub mod bake_settings;
 mod baked_maps;
@@ -19,6 +22,7 @@ mod error;
 mod foreign;
 mod importer;
 pub mod layers;
+pub mod library;
 pub mod normal_conventions;
 mod pixel_convert;
 pub mod replacements;

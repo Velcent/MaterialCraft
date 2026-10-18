@@ -4,7 +4,7 @@
 //!
 //! Entry point: [`PainterDocument::from_bytes`] → ([`PainterDocument`], [`ModelReport`]).
 //! - [`baking`]: the baking settings (`/baking/baking.ini`), a separate object tree; [`cameras`]: the viewer and
-//!   scene cameras (`/editor/camera.ini`), another one.
+//!   scene cameras (`/editor/camera.ini`), another one; [`viewer`]: the environment map of the viewer settings.
 //! - [`raw`]: the generic tree ([`RawTree`]) the builder reads.
 //! - [`PainterDocument`] → [`PainterTextureSet`]s → [`PainterLayer`]s (bottom → top), each with
 //!   [`ChannelBlending`] entries, an optional [`PainterMask`] and a content stack of [`PainterEffect`]s.
@@ -36,6 +36,7 @@ mod summary;
 #[cfg(test)]
 mod tests;
 mod texture_set;
+pub mod viewer;
 
 pub use blending::{ChannelBlending, PainterBlendMode, blending_for};
 pub use brush::{PainterBrush, PainterEmitter, PressureResponse, StrokeEmitter};
