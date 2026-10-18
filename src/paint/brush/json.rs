@@ -14,20 +14,23 @@ impl BrushPreset {
         let v = Value::object()
             .with("version", PRESET_VERSION)
             .with("name", self.name.as_str())
-            .with("size", self.size)
+            .with("size", short(self.size))
             .with("sizeSpace", self.size_space.id())
             .with("tip", self.tip.kind())
-            .with("hardness", self.hardness)
-            .with("flow", self.flow)
-            .with("opacity", self.opacity)
-            .with("spacing", self.spacing)
-            .with("angle", self.angle)
+            .with("hardness", short(self.hardness))
+            .with("flow", short(self.flow))
+            .with("opacity", short(self.opacity))
+            .with("spacing", short(self.spacing))
+            .with("angle", short(self.angle))
             .with("followDirection", self.follow_direction)
-            .with("roundness", self.roundness)
-            .with("jitter", Value::object().with("size", j.size).with("flow", j.flow).with("angle", j.angle).with("position", j.position))
+            .with("roundness", short(self.roundness))
+            .with(
+                "jitter",
+                Value::object().with("size", short(j.size)).with("flow", short(j.flow)).with("angle", short(j.angle)).with("position", short(j.position)),
+            )
             .with("pressure", Value::object().with("size", self.pressure.size).with("flow", self.pressure.flow))
             .with("placement", self.placement.id())
-            .with("maxAngle", self.max_angle);
+            .with("maxAngle", short(self.max_angle));
         match self.tip.reference() {
             Some(r) => v.with("tipRef", r),
             None => v,
@@ -65,6 +68,12 @@ impl BrushPreset {
             max_angle: num(field(v, "maxAngle"), d.max_angle),
         })
     }
+}
+
+/// `x` as the f64 of its shortest decimal text, so 0.08 is written `0.08`, not `0.07999999821186066`. Read back
+/// and narrowed, it gives the same `f32` (rounding twice is harmless with f64's 53 bits over f32's 24).
+fn short(x: f32) -> f64 {
+    x.to_string().parse().unwrap_or(f64::from(x))
 }
 
 /// Member `key` of `v`, `Null` when missing.

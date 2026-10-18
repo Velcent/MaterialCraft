@@ -42,8 +42,8 @@ pub mod tips;
 pub use clone_source::{CloneSource, SourceMode, texel_under};
 pub use document::{Base, DocumentStroke, Ended, Prepared};
 pub use engine::{
-    DabEngine, EngineExtras, InputPoint, PROCEDURAL_TIP_PX, PROCEDURAL_TIPS, ResponseCurve, SmudgeKernel, TipAlpha, TipInfo, procedural_tip,
-    procedural_tip_alpha,
+    DabEngine, EngineExtras, InputPoint, PROCEDURAL_TIP_GENERATOR, PROCEDURAL_TIP_PX, PROCEDURAL_TIPS, ResponseCurve, SmudgeKernel, TipAlpha, TipInfo,
+    procedural_tip, procedural_tip_alpha,
 };
 pub use preview::stroke_preview;
 pub use quick_mask::{QuickMask, QuickMaskState, QuickMaskStroke};

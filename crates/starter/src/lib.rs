@@ -8,6 +8,7 @@
 //! generator presets       --Fragment::smart_mask--> smart-masks/<id>.mcfrag (masks)
 //! proc_textures looks     --sampled, 16-bit PNG--> textures/<id>.png        (textures)
 //! PhotoCraft's tips + ours --16-bit PNG--> alphas/<id>.png                  (alphas)
+//! brush presets on those tips --.mcbrush + stroke thumbnail--> brushes/<id>.mcbrush (brushes)
 //! the viewport's studio   --lat-long OpenEXR--> environments/studio.exr     (environment)
 //! every asset: <file>.mcmeta (name, usage, tags, provenance) and a thumbnail rendered here
 //! ```
@@ -20,6 +21,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod alphas;
+mod brushes;
 mod build;
 mod environment;
 mod error;

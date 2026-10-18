@@ -12,6 +12,10 @@ use photocraft_paint::procedural as pc;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
+/// The generator an alpha made from a procedural tip records in its provenance, with the tip's id as `tip` in its
+/// preset (the starter library's alphas): such an alpha can be the tip itself.
+pub const PROCEDURAL_TIP_GENERATOR: &str = "photocraft-paint.procedural";
+
 /// Side of a procedural tip as a preset's tip: the starter library's alphas have this size too, so a brush with the
 /// tip and one with its alpha paint the same.
 pub const PROCEDURAL_TIP_PX: u32 = 256;

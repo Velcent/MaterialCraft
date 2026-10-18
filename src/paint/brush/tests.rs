@@ -106,6 +106,15 @@ fn a_saved_preset_file_reloads_bit_identically() {
         assert_eq!(bits(&back), bits(&p));
         assert_eq!(back.to_file_text(), text, "saving the reloaded preset writes the same file");
     }
+    // numbers are written short, and every f32 comes back exactly (a sweep over the bit patterns)
+    assert!(BrushPreset::default().to_file_text().contains("\"size\": 0.08,"));
+    let mut bits = 0x3000_0000u32;
+    while bits < 0x4800_0000 {
+        let x = f32::from_bits(bits);
+        let back = BrushPreset::from_file_text(&BrushPreset { size: x, ..BrushPreset::default() }.to_file_text()).unwrap();
+        assert_eq!(back.size.to_bits(), bits, "{x}");
+        bits += 7919;
+    }
     assert!(BrushPreset::from_file_text(r#"{"format": "materialcraft-starter"}"#).is_err());
     assert!(BrushPreset::from_file_text("[1]").is_err() && BrushPreset::from_file_text("{").is_err());
     assert_eq!(BrushPreset::from_file_text(r#"{"size": 2}"#).unwrap().size, 2.0, "hand-written presets need no tag");

@@ -67,6 +67,7 @@ fn the_starter_library_is_deterministic_complete_and_found_by_the_tray() {
     assert!(count(Usage::SmartMask) >= 10);
     assert!(count(Usage::Texture) >= 20);
     assert!(count(Usage::Alpha) >= 8);
+    assert!(count(Usage::Brush) >= 10);
     assert_eq!(count(Usage::Environment), 1);
 
     let log = Log::default();

@@ -11,7 +11,7 @@ mod photocraft_tips;
 
 pub use photocraft_curve::ResponseCurve;
 pub use photocraft_smudge::SmudgeKernel;
-pub use photocraft_tips::{PROCEDURAL_TIP_PX, PROCEDURAL_TIPS, TipInfo, procedural_tip, procedural_tip_alpha};
+pub use photocraft_tips::{PROCEDURAL_TIP_GENERATOR, PROCEDURAL_TIP_PX, PROCEDURAL_TIPS, TipInfo, procedural_tip, procedural_tip_alpha};
 
 use materialcraft::paint::brush::BrushPreset;
 use materialcraft::stamp::DabSample;

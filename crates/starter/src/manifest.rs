@@ -11,7 +11,8 @@ use std::path::Path;
 pub const MANIFEST: &str = "starter.json";
 
 /// The starter library's content version. Bump it whenever a recipe changes what it makes.
-pub const LIBRARY_VERSION: u64 = 1;
+/// Version 2: brush presets, and the procedural alphas name their tip in their provenance.
+pub const LIBRARY_VERSION: u64 = 2;
 
 const FORMAT: &str = "materialcraft-starter";
 
