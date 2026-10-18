@@ -198,7 +198,9 @@ impl Renderer {
                 self.shadows.invalidate();
             }
             let frames = frames_of(space, display);
-            let step = self.views[at].progress.next(key, frames, frame.restart);
+            // a plain frame without its shadows (smooth navigation) waits for the view to rest before refining
+            let hold = !self.views[at].plain_complete;
+            let step = self.views[at].progress.next(key, frames, frame.restart, hold, std::time::Instant::now());
             // egui's scissor box: restored for the passes into its framebuffer
             let mut scissor = [0i32; 4];
             gl.get_parameter_i32_slice(glow::SCISSOR_BOX, &mut scissor);
