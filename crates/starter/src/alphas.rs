@@ -75,6 +75,11 @@ impl Recipe for Round {
     }
 }
 
+/// The family of a procedural tip id: the part before its variant suffix (`rake-fine` → `rake`).
+fn family(id: &str) -> &str {
+    id.split('-').next().unwrap_or(id)
+}
+
 /// One of PhotoCraft's procedural tips.
 struct PhotoCraftTip(&'static TipInfo);
 
@@ -98,7 +103,8 @@ impl Recipe for PhotoCraftTip {
         let provenance = Provenance::Generator { generator: PROCEDURAL_TIP_GENERATOR.into(), preset: Some(preset) };
         Ok(Made {
             bytes: grey16(n, n, &values),
-            sidecar: sidecar(self.0.label, Usage::Alpha, &["brush", "photocraft", self.0.id], &description, provenance),
+            // a seeded variant (`chalk-2`) is tagged with its tip's family (`chalk`)
+            sidecar: sidecar(self.0.label, Usage::Alpha, &["brush", "photocraft", family(self.0.id)], &description, provenance),
             thumbnail: Some(grey_thumb(at)),
         })
     }
