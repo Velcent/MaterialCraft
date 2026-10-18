@@ -13,6 +13,9 @@
 //! - [`analysis`] and [`plan`]: which slots each channel depends on, and the case per candidate effect.
 //! - [`inverse`], [`frames`], [`measure`]: probes, read-back, compared texels.
 //! - [`cases`]: per project; [`census`]: counts per effect id (`mcsub isolate`).
+//! - Joint read-back (`mcsub isolate --joint`): [`joint_plan`] gathers a candidate mask's channels and the
+//!   other unknown masks, [`joint_solve`] solves them together per texel, [`joint_measure`] composites the probe
+//!   grid, [`joint_cases`] and [`joint_census`] per project and per effect id.
 //!
 //! Used by `mcparity` (`generator.<id>`, `texture.<id>` subjects, isolated cases) and `mcsub isolate`.
 
@@ -23,6 +26,11 @@ pub mod census;
 pub mod corpus;
 pub mod frames;
 pub mod inverse;
+pub mod joint_cases;
+pub mod joint_census;
+pub mod joint_measure;
+pub mod joint_plan;
+pub mod joint_solve;
 pub mod measure;
 pub mod plan;
 pub mod slots;

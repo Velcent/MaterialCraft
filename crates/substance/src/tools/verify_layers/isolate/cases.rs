@@ -6,6 +6,7 @@ use super::analysis::SetAnalysis;
 use super::cached_images::CachedImages;
 use super::frames::FrameGrid;
 use super::inverse::InversionSettings;
+use super::joint_measure::MultiComposer;
 use super::measure::{Composer, Measurement, Measurer};
 use super::plan::{CasePlan, plans};
 use crate::model::PainterTextureSet;
@@ -142,7 +143,7 @@ pub fn isolated_cases(
 }
 
 /// The set's analysis, importing with `set`'s plan (keep every procedural) on the set's mesh.
-fn analyse(
+pub(super) fn analyse(
     set: &PreparedSet,
     painter: &PainterTextureSet,
     table: &BlendTable,
@@ -153,10 +154,10 @@ fn analyse(
 }
 
 /// Imports with the set's channels, resolution and mesh and composites as `verify-layers` does.
-struct StackComposer<'s, 'a> {
-    set: &'s PreparedSet<'a>,
-    table: &'s BlendTable,
-    images: &'s dyn ImageSource,
+pub(super) struct StackComposer<'s, 'a> {
+    pub set: &'s PreparedSet<'a>,
+    pub table: &'s BlendTable,
+    pub images: &'s dyn ImageSource,
 }
 
 impl Composer for StackComposer<'_, '_> {
@@ -168,5 +169,20 @@ impl Composer for StackComposer<'_, '_> {
     ) -> (Tex, Computability) {
         let stack = self.set.import_copy(painter, self.table, self.images, procedurals);
         (self.set.composite(&stack, channel), stack.verdict.channel(channel))
+    }
+}
+
+impl MultiComposer for StackComposer<'_, '_> {
+    fn composite_channels(
+        &self,
+        painter: &PainterTextureSet,
+        procedurals: &ProceduralPlan,
+        channels: &[Channel],
+    ) -> Vec<(Tex, Computability)> {
+        let stack = self.set.import_copy(painter, self.table, self.images, procedurals);
+        channels
+            .iter()
+            .map(|c| (self.set.composite(&stack, *c), stack.verdict.channel(*c)))
+            .collect()
     }
 }

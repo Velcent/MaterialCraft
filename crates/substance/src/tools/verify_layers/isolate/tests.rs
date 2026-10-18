@@ -266,3 +266,88 @@ fn every_candidate_of_a_channel_gets_a_plan() {
     assert_eq!(colour.status, CaseStatus::WithNuisances);
     assert_eq!(all.len(), 2);
 }
+
+impl super::joint_measure::MultiComposer for TestComposer<'_> {
+    fn composite_channels(
+        &self,
+        painter: &PainterTextureSet,
+        procedurals: &ProceduralPlan,
+        channels: &[Channel],
+    ) -> Vec<(Tex, Computability)> {
+        channels
+            .iter()
+            .map(|c| self.composite(painter, procedurals, *c))
+            .collect()
+    }
+}
+
+#[test]
+fn two_unknown_masks_are_solved_together_across_channels() {
+    use super::joint_measure::{JointMeasurer, MultiComposer};
+    use super::joint_plan::{JointStatus, joint_plans};
+    use super::joint_solve::JointSettings;
+    use super::slots::Nuisance;
+    use super::substitute::{Swap, apply};
+    let (mut set, channels) = fixture();
+    // the paint layer becomes a fill over both channels whose mask is painted (unknown)
+    set.layers[2] = layer(
+        "Top",
+        LayerKind::Fill,
+        vec![fill(u64::MAX, vec![uniform(BASE, 0.8), uniform(ROUGH, 0.3)])],
+        mask(vec![strokes(0)]),
+    );
+    let analysis = SetAnalysis::new(&set, &channels, &|s| import_verdict(s, &channels));
+    let single = plans(&analysis);
+    assert!(
+        single.iter().all(|p| p.status == CaseStatus::WithNuisances),
+        "{single:?}"
+    );
+    let joint = joint_plans(&single);
+    assert_eq!(joint.len(), 1);
+    let plan = &joint[0];
+    assert_eq!(
+        (plan.status, plan.unknowns(), plan.components()),
+        (JointStatus::Feasible, 2, 4)
+    );
+    let candidate = plan.candidate.address.clone();
+    let top = plan.masks[0].clone();
+    assert!(matches!(top, Nuisance::MaskEffect(_)));
+    // Painter's cache: per texel the dirt mask `a` and the painted mask `b`
+    let truth = |i: usize| (i as f32 / 15.0, 0.4 * ((i * 7) % 16) as f32 / 15.0);
+    let composer = TestComposer { channels: &channels };
+    let mut observed = vec![vec![[0.0f32; 3]; 16]; plan.channels.len()];
+    for i in 0..16 {
+        let (a, b) = truth(i);
+        let swaps = [Swap::Output(candidate.clone(), a), Swap::Grey(top.clone(), b)];
+        let frames = composer.composite_channels(
+            &apply(&set, &swaps, &channels),
+            &ProceduralPlan::default(),
+            &plan.channels,
+        );
+        for (frame, (tex, _)) in observed.iter_mut().zip(&frames) {
+            let p = tex.px[i];
+            frame[i] = [p[0], p[1], p[2]];
+        }
+    }
+    let grid = FrameGrid::new((4, 4), 4, None);
+    let measurer = JointMeasurer {
+        composer: &composer,
+        painter: &set,
+        channels: &channels,
+        grid: &grid,
+        settings: JointSettings::default(),
+    };
+    let m = measurer.measure(plan, &observed, false);
+    // none of the single-channel cases has a clean texel; jointly most texels are solved (the rest are where
+    // the masks barely move the linear values)
+    assert_eq!((m.stats.island, m.stats.clean), (16, 16));
+    assert!(m.stats.solved >= 12, "{:?} {:?}", m.stats, m.notes);
+    assert_eq!(m.stats.composites, 9 + 2);
+    for i in (0..16).filter(|i| m.mask[*i]) {
+        assert!(
+            (m.theirs.px[i][0] - truth(i).0).abs() < 2e-3,
+            "texel {i}: {:?}",
+            m.theirs.px[i]
+        );
+    }
+}

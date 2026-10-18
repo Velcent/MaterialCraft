@@ -25,6 +25,8 @@ pub enum Swap {
     Output(EffectAddress, f32),
     /// The nuisance in state `n` (`0..states()`).
     Nuisance(Nuisance, usize),
+    /// A mask nuisance (one effect or the whole mask) at the grey value `v`, at full strength.
+    Grey(Nuisance, f32),
 }
 
 /// The set with every swap applied (addresses that do not resolve are ignored).
@@ -34,6 +36,7 @@ pub fn apply(set: &PainterTextureSet, swaps: &[Swap], channels: &SetChannels) ->
     let mut ordered: Vec<&Swap> = swaps.iter().collect();
     ordered.sort_by_key(|s| match s {
         Swap::Nuisance(Nuisance::Layer(_) | Nuisance::Mask(_) | Nuisance::LayerWithMask(_), _) => 1,
+        Swap::Grey(Nuisance::Layer(_) | Nuisance::Mask(_) | Nuisance::LayerWithMask(_), _) => 1,
         _ => 0,
     });
     for swap in ordered {
@@ -62,6 +65,26 @@ pub fn apply(set: &PainterTextureSet, swaps: &[Swap], channels: &SetChannels) ->
                     });
                 }
             }
+            Swap::Grey(Nuisance::MaskEffect(at), v) => {
+                if let Some(e) = effect_mut(&mut out, at) {
+                    *e = PainterEffect::Fill(mask_fill(header_of(e), *v, 1.0));
+                }
+            }
+            Swap::Grey(Nuisance::Mask(at), v) => {
+                if let Some(l) = layer_mut(&mut out, at) {
+                    let header = EffectHeader {
+                        enabled: true,
+                        ..EffectHeader::default()
+                    };
+                    l.mask = Some(PainterMask {
+                        enabled: true,
+                        initial: MaskInitial::Black,
+                        effects: vec![PainterEffect::Fill(mask_fill(header, *v, 1.0))],
+                    });
+                }
+            }
+            // content has no single grey value
+            Swap::Grey(Nuisance::Layer(_) | Nuisance::LayerWithMask(_), _) => {}
             Swap::Nuisance(Nuisance::LayerWithMask(at), n) => {
                 if let Some(l) = layer_mut(&mut out, at) {
                     layer_state(l, *n, channels);

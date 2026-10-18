@@ -19,10 +19,11 @@
 //!                                                  compare with Painter's exported textures
 //!     mcsub verify-layers <file.spp> [--fit]       imported layer stacks against Painter's texture cache
 //!     mcsub verify-layers --all <folder> [--fit] [--jobs N]   the same for every .spp below the folder
-//!     mcsub isolate <file.spp|folder|list.txt> [--measure] [--cases] [--jobs N]
+//!     mcsub isolate <file.spp|folder|list.txt> [--measure] [--cases] [--joint] [--jobs N]
 //!                                                  isolated effect cases per effect id (procedural fills and
 //!                                                  filters measurable against the texture cache), see
-//!                                                  `tools::verify_layers::isolate`
+//!                                                  `tools::verify_layers::isolate`; `--joint`: candidate masks
+//!                                                  solved together with the other unknown masks across channels
 //!
 //! `convert`, `report`, `maps`, `compare` and `verify-layers` take `--plan <choices.json>` or
 //! `--procedurals keep|replace`: which Substance procedurals are replaced by MaterialCraft's generators
@@ -52,6 +53,8 @@ use materialcraft_substance::tools::parallel::CorpusPool;
 use materialcraft_substance::tools::report_text::ReportText;
 use materialcraft_substance::tools::verify_layers::isolate::IsolateOptions;
 use materialcraft_substance::tools::verify_layers::isolate::corpus::{CASE_HEADER, census_files};
+use materialcraft_substance::tools::verify_layers::isolate::joint_cases::JointOptions;
+use materialcraft_substance::tools::verify_layers::isolate::joint_census::{JOINT_CASE_HEADER, joint_census_files};
 use materialcraft_substance::tools::verify_layers::{VerifyOptions, verify_path};
 use materialcraft_substance::tools::{compare, convert, maps, model_corpus};
 use materialcraft_substance::translate::replacements::{Choice, ProceduralPlan};
@@ -304,6 +307,20 @@ fn run(args: Args) -> Result<(), String> {
             };
             let result = verify_path(Path::new(path), options, args.pool(), &|p| eprintln!("{}", p.display()));
             print!("{result}");
+        }
+        ["isolate", root] if args.has("--joint") => {
+            let result = joint_census_files(
+                &project_files(Path::new(root)),
+                args.has("--measure"),
+                &JointOptions::default(),
+                args.pool(),
+                &|p| eprintln!("{}", p.display()),
+            );
+            print!("{result}");
+            if args.has("--cases") {
+                println!("\n{JOINT_CASE_HEADER}");
+                result.cases.iter().for_each(|line| println!("{line}"));
+            }
         }
         ["isolate", root] => {
             let result = census_files(
