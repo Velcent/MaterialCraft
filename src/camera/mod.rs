@@ -12,7 +12,8 @@
 //! [`Camera::looking_at`]. The viewport's camera is an [`Orbit`] pose (the orbit controller navigation moves) seen
 //! through [`CameraSettings`] (perspective or orthographic, field of view or focal length, depth of field);
 //! [`Camera::jittered`] and [`Camera::through_lens`] vary it per frame for accumulated anti-aliasing and depth of
-//! field ([`pixel_jitter`], [`lens_point`]).
+//! field ([`pixel_jitter`], [`lens_point`]). Cameras imported from other programs arrive as [`SceneCamera`]s (a free
+//! pose and a lens) and become an orbit pose with a roll through [`Orbit::from_pose`].
 //!
 //! Std only; no dependency besides `v3`.
 
@@ -21,9 +22,13 @@
 mod lens;
 mod mat4;
 mod orbit;
+mod orbit_pose;
 #[cfg(test)]
 mod orbit_tests;
 mod sampling;
+mod scene;
+#[cfg(test)]
+mod scene_tests;
 mod settings;
 mod snapshot;
 #[cfg(test)]
@@ -33,6 +38,7 @@ pub use lens::{Lens, SENSOR_HEIGHT_MM, focal_length, fov_y};
 pub use mat4::{IDENTITY, Mat4, inverse, look_along, look_at, multiply, transform_point};
 pub use orbit::{Basis, Orbit};
 pub use sampling::{lens_point, pixel_jitter};
+pub use scene::{SceneCamera, SceneLens};
 pub use settings::{CameraSettings, DepthOfField, Projection};
 pub use snapshot::{Camera, CameraTransform, Projected, Ray};
 

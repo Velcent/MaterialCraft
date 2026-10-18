@@ -70,7 +70,13 @@ fn read_camera(i: usize, value: &Value, at: String, ctx: &mut ReadCtx) -> Result
             .and_then(|a| Some([as_f32(a.first()?)?, as_f32(a.get(1)?)?]))
             .ok_or_else(|| o.error("pan", "expected [x, y]"))?,
     };
-    let orbit = Orbit { yaw: o.f32_or("yaw", d.orbit.yaw)?, pitch: o.f32_or("pitch", d.orbit.pitch)?, distance: o.f32_or("distance", d.orbit.distance)?, pan };
+    let orbit = Orbit {
+        yaw: o.f32_or("yaw", d.orbit.yaw)?,
+        pitch: o.f32_or("pitch", d.orbit.pitch)?,
+        distance: o.f32_or("distance", d.orbit.distance)?,
+        pan,
+        roll: d.orbit.roll,
+    };
     if let Some(dof) = o.opt("depth_of_field") {
         let def = DepthOfField::default();
         let mut p = Obj::new(dof, o.path("depth_of_field"))?;

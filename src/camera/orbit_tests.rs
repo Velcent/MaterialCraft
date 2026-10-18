@@ -8,7 +8,7 @@ const VIEWPORT: [f32; 2] = [800.0, 600.0];
 
 #[test]
 fn the_orbit_looks_at_its_pivot_from_its_distance() {
-    let o = Orbit { yaw: 0.7, pitch: -0.4, distance: 2.5, pan: [0.0, 0.0] };
+    let o = Orbit { yaw: 0.7, pitch: -0.4, distance: 2.5, pan: [0.0, 0.0], roll: 0.0 };
     let c = CameraSettings::default().camera(&o, VIEWPORT);
     let p = c.project([0.0, 0.0, 0.0]).unwrap();
     assert!(close(&p.screen, &[400.0, 300.0], 1e-3), "{p:?}");
@@ -60,7 +60,7 @@ fn field_of_view_and_focal_length_stay_linked() {
 
 #[test]
 fn orthographic_keeps_the_framing_of_the_pivot_plane() {
-    let o = Orbit { yaw: 0.0, pitch: 0.0, distance: 3.0, pan: [0.0, 0.0] };
+    let o = Orbit { yaw: 0.0, pitch: 0.0, distance: 3.0, pan: [0.0, 0.0], roll: 0.0 };
     let persp = CameraSettings::default();
     let ortho = CameraSettings { projection: Projection::Orthographic, ..persp };
     let (a, b) = (persp.camera(&o, VIEWPORT), ortho.camera(&o, VIEWPORT));
@@ -89,7 +89,7 @@ fn a_jittered_camera_moves_every_point_by_the_offset() {
 
 #[test]
 fn looking_through_the_lens_keeps_the_focus_plane_in_place() {
-    let o = Orbit { yaw: 0.3, pitch: 0.2, distance: 3.0, pan: [0.0, 0.0] };
+    let o = Orbit { yaw: 0.3, pitch: 0.2, distance: 3.0, pan: [0.0, 0.0], roll: 0.0 };
     let c = CameraSettings::default().camera(&o, VIEWPORT);
     let shifted = c.through_lens([0.05, -0.03], 3.0);
     // the pivot lies on the focus plane

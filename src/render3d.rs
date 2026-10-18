@@ -30,6 +30,8 @@ pub struct View {
     pub dist: f32,
     pub pan_x: f32,
     pub pan_y: f32,
+    /// Turn of the camera about its viewing axis (radians; 0 unless an imported camera set one).
+    pub roll: f32,
     pub light_yaw: f32,
     pub light_pitch: f32,
     pub light_intensity: f32,
@@ -63,6 +65,7 @@ impl Default for View {
             dist: 3.4,
             pan_x: 0.0,
             pan_y: 0.0,
+            roll: 0.0,
             light_yaw: 0.9,
             light_pitch: 0.7,
             light_intensity: 3.0,
@@ -85,12 +88,12 @@ impl Default for View {
 impl View {
     /// The camera pose as an orbit controller.
     pub fn orbit(&self) -> Orbit {
-        Orbit { yaw: self.yaw, pitch: self.pitch, distance: self.dist, pan: [self.pan_x, self.pan_y] }
+        Orbit { yaw: self.yaw, pitch: self.pitch, distance: self.dist, pan: [self.pan_x, self.pan_y], roll: self.roll }
     }
 
     /// Takes the camera pose from an orbit controller.
     pub fn set_orbit(&mut self, o: &Orbit) {
-        (self.yaw, self.pitch, self.dist, [self.pan_x, self.pan_y]) = (o.yaw, o.pitch, o.distance, o.pan);
+        (self.yaw, self.pitch, self.dist, [self.pan_x, self.pan_y], self.roll) = (o.yaw, o.pitch, o.distance, o.pan, o.roll);
     }
 
     /// The camera drawing this view through `settings` into a viewport of `viewport` units.

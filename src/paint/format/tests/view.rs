@@ -12,7 +12,7 @@ use std::io::Cursor;
 fn view() -> SavedView {
     let close = SavedCamera {
         name: "Close-up".into(),
-        orbit: Orbit { yaw: -1.25, pitch: 0.5, distance: 2.0, pan: [0.125, -0.25] },
+        orbit: Orbit { yaw: -1.25, pitch: 0.5, distance: 2.0, pan: [0.125, -0.25], roll: 0.0 },
         settings: CameraSettings {
             projection: Projection::Orthographic,
             fov_y: 0.5,

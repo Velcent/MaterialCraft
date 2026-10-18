@@ -1,6 +1,8 @@
 //! [`Orbit`]: the orbit controller. A turntable camera circling a pivot at the origin (yaw around the world's up
-//! axis, pitch above or below the horizon, no roll), at a distance, shifted sideways by a pan in the view plane.
-//! Navigation moves it; [`Orbit::basis`] turns it into an eye position and viewing axes.
+//! axis, pitch above or below the horizon), at a distance, shifted sideways by a pan in the view plane, and turned
+//! about its viewing axis by a roll (zero for navigation; cameras imported from other programs may have one).
+//! Navigation moves it; [`Orbit::basis`] turns it into an eye position and viewing axes, [`Orbit::from_pose`] finds
+//! the orbit of any camera pose.
 
 use super::Vec3;
 use crate::v3::{add, cross, mul, norm};
@@ -26,12 +28,14 @@ pub struct Orbit {
     pub distance: f32,
     /// Shift of eye and pivot along the camera's right and up axes.
     pub pan: [f32; 2],
+    /// Turn about the viewing axis (radians, counter-clockwise as seen from the eye). Navigation keeps it.
+    pub roll: f32,
 }
 
 impl Default for Orbit {
     /// The viewport's start view of the unit-size model.
     fn default() -> Orbit {
-        Orbit { yaw: 0.5, pitch: 0.3, distance: 3.4, pan: [0.0, 0.0] }
+        Orbit { yaw: 0.5, pitch: 0.3, distance: 3.4, pan: [0.0, 0.0], roll: 0.0 }
     }
 }
 
@@ -43,15 +47,18 @@ impl Orbit {
     /// How far navigation pans from the pivot along either axis.
     pub const PAN_LIMIT: f32 = 3.0;
 
-    /// The eye and the camera's axes.
+    /// The eye and the camera's axes. The viewing direction follows from yaw and pitch alone, so a distance of
+    /// zero or below (an imported camera whose pivot plane lies behind it) still looks the right way.
     pub fn basis(&self) -> Basis {
         let (sy, cy) = self.yaw.sin_cos();
         let (sp, cp) = self.pitch.sin_cos();
-        let eye0 = [self.distance * sy * cp, self.distance * sp, self.distance * cy * cp];
-        let forward = norm(mul(eye0, -1.0));
-        let right = norm(cross(forward, [0.0, 1.0, 0.0]));
+        let towards_eye = [sy * cp, sp, cy * cp];
+        let forward = mul(towards_eye, -1.0);
+        let level = norm(cross(forward, [0.0, 1.0, 0.0]));
+        let (sr, cr) = self.roll.sin_cos();
+        let right = add(mul(level, cr), mul(cross(level, forward), sr));
         let up = cross(right, forward);
-        let eye = add(eye0, add(mul(right, self.pan[0]), mul(up, self.pan[1])));
+        let eye = add(mul(towards_eye, self.distance), add(mul(right, self.pan[0]), mul(up, self.pan[1])));
         Basis { eye, right, up, forward }
     }
 
