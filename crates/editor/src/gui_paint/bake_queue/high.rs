@@ -49,7 +49,8 @@ impl HighScenes {
         Ok(mesh.to_high())
     }
 
-    /// `name` as given if that file exists, else its file name searched below the document's folder.
+    /// `name` as given if that file exists, else searched below the document's folder by its file name (and its
+    /// folders, for a path recorded on another machine).
     fn locate(&self, name: &str) -> Result<PathBuf, String> {
         let given = Path::new(name.trim_start_matches("file://"));
         if given.is_file() {
@@ -60,7 +61,7 @@ impl HighScenes {
             return Err(format!("high-poly '{file}' is not an OBJ or FBX file"));
         }
         let dir = self.base_dir.as_deref().ok_or_else(|| format!("high-poly '{file}' not found (the document has no folder to search)"))?;
-        let path = MeshFinder::new(dir).find(file).ok_or_else(|| format!("high-poly '{file}' not found below {}", dir.display()))?;
+        let path = MeshFinder::new(dir).find(name).ok_or_else(|| format!("high-poly '{file}' not found below {}", dir.display()))?;
         if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("obj")) {
             return Err(format!("high-poly '{file}' found, but FBX files cannot be read yet"));
         }

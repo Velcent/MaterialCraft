@@ -7,8 +7,8 @@ use materialcraft::paint::bake_config::{HighPlacement, HighPoly};
 pub struct HighPolyRequest {
     /// "Use low poly mesh as high poly mesh".
     pub low_as_high: bool,
-    /// File names of the high-poly meshes (only the last path component; the paths are from the machine
-    /// Painter ran on, e.g. `file:///D:/…/Sload HP.OBJ`).
+    /// The high-poly meshes as Painter recorded them, without the URL scheme (paths on the machine Painter ran
+    /// on, e.g. `D:/…/Sload HP.OBJ`; [`materialcraft::bake::MeshFinder`] finds them below the project).
     pub files: Vec<String>,
 }
 
@@ -19,7 +19,7 @@ impl HighPolyRequest {
             files: baking
                 .detail
                 .text("Detail.HipolyMesh")
-                .map(file_names)
+                .map(file_paths)
                 .unwrap_or_default(),
         }
     }
@@ -34,16 +34,24 @@ impl HighPolyRequest {
     }
 }
 
-/// File names in Painter's list of URLs (`file:///a/b.obj`, several separated by `|`, Observed on
-/// `AMULET 5.spp`).
-fn file_names(urls: &str) -> Vec<String> {
+/// Paths in Painter's list of URLs (`file:///a/b.obj`, several separated by `|`, Observed on `AMULET 5.spp`),
+/// without the scheme and the slash before a drive letter.
+fn file_paths(urls: &str) -> Vec<String> {
     urls.split(['|', ';'])
-        .map(|u| u.trim().trim_start_matches("file:"))
-        .map(|u| u.trim().trim_end_matches(['/', '\\']))
-        .filter_map(|u| u.rsplit(['/', '\\']).next())
-        .map(|n| n.replace("%20", " "))
-        .filter(|n| !n.is_empty())
+        .map(|u| u.trim())
+        .map(|u| u.strip_prefix("file://").unwrap_or(u))
+        .map(|u| u.trim_end_matches(['/', '\\']).replace("%20", " "))
+        .map(|u| match u.strip_prefix('/') {
+            Some(rest) if is_drive_path(rest) => rest.to_string(),
+            _ => u,
+        })
+        .filter(|u| u.rsplit(['/', '\\']).next().is_some_and(|n| !n.is_empty()))
         .collect()
+}
+
+/// `D:/…` or `D:\\…`.
+fn is_drive_path(p: &str) -> bool {
+    matches!(p.as_bytes(), [d, b':', b'/' | b'\\', ..] if d.is_ascii_alphabetic())
 }
 
 #[cfg(test)]
@@ -51,15 +59,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extracts_file_names() {
+    fn extracts_file_paths() {
         assert_eq!(
-            file_names("file:///D:/Users/x/Thras/The Sload/Sload HP.OBJ"),
-            ["Sload HP.OBJ"]
+            file_paths("file:///D:/Users/x/Thras/The Sload/Sload HP.OBJ"),
+            ["D:/Users/x/Thras/The Sload/Sload HP.OBJ"]
         );
         assert_eq!(
-            file_names("file:///C:/a.fbx|file:///C:/b%20c.obj"),
-            ["a.fbx", "b c.obj"]
+            file_paths("file:///C:/a.fbx|file:///C:/b%20c.obj"),
+            ["C:/a.fbx", "C:/b c.obj"]
         );
-        assert!(file_names("").is_empty());
+        assert_eq!(file_paths("file:///home/u/h.obj"), ["/home/u/h.obj"]);
+        assert!(file_paths("").is_empty());
     }
 }

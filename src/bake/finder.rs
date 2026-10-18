@@ -1,7 +1,8 @@
-//! [`MeshFinder`]: finds a high-poly mesh file by name near a document or project. Imported projects record the
-//! path on the machine they were made on (`file:///D:/…/Sload HP.OBJ`), so only the file name is used, searched
-//! below the document's own folder (never above it). Only `.obj` and `.fbx` names are ever matched; nothing else is
-//! opened. Shared by the Paint screen's bake queue and `mcparity`.
+//! [`MeshFinder`]: finds a high-poly mesh file near a document or project. Imported projects record the path on the
+//! machine they were made on (`D:/…/The Sload/Sload HP.OBJ`), so the file is searched by name below the document's
+//! own folder (never above it); among several files of that name the one whose folders match the recorded path's
+//! last folders wins, then the nearest. Only `.obj` and `.fbx` names are ever matched; nothing else is opened.
+//! Shared by the Paint screen's bake queue and `mcparity`.
 
 use std::path::{Path, PathBuf};
 
@@ -18,21 +19,34 @@ impl<'a> MeshFinder<'a> {
         MeshFinder { project_dir }
     }
 
-    /// The first file named `name` (case-insensitive), nearest first.
-    pub fn find(&self, name: &str) -> Option<PathBuf> {
+    /// The file `recorded` names (a file name, or a path from any machine with `/` or `\\` separators), matched
+    /// case-insensitively: the candidate sharing most of the recorded path's last folders, then the nearest.
+    pub fn find(&self, recorded: &str) -> Option<PathBuf> {
+        let parts = path_parts(recorded);
+        let (name, folders) = parts.split_last()?;
         if !is_mesh_name(name) {
             return None;
         }
-        let wanted = name.to_lowercase();
         let mut found = Vec::new();
-        search(self.project_dir, &wanted, DEPTH, &mut found);
-        found.sort_by_key(|p| (p.components().count(), p.clone()));
+        search(self.project_dir, name, DEPTH, &mut found);
+        found.sort_by_key(|p| (std::cmp::Reverse(shared_folders(p, folders)), p.components().count(), p.clone()));
         found.into_iter().next()
     }
 }
 
 pub fn is_mesh_name(name: &str) -> bool {
     Path::new(name).extension().and_then(|e| e.to_str()).is_some_and(|e| MESH_EXTENSIONS.contains(&e.to_lowercase().as_str()))
+}
+
+/// The lower-cased components of a recorded path, file name last.
+fn path_parts(recorded: &str) -> Vec<String> {
+    recorded.split(['/', '\\']).filter(|p| !p.is_empty()).map(str::to_lowercase).collect()
+}
+
+/// How many of `path`'s parent folders, from the nearest up, equal the recorded `folders` from the last one back.
+fn shared_folders(path: &Path, folders: &[String]) -> usize {
+    let parents = path.parent().into_iter().flat_map(|p| p.components().rev()).map(|c| c.as_os_str().to_string_lossy().to_lowercase());
+    parents.zip(folders.iter().rev()).take_while(|(a, b)| a == *b).count()
 }
 
 fn search(dir: &Path, wanted: &str, depth: usize, found: &mut Vec<PathBuf>) {
@@ -72,6 +86,10 @@ mod tests {
         assert_eq!(finder.find("Far.fbx"), None);
         assert_eq!(finder.find("notes.txt"), None);
         assert_eq!(finder.find("missing.obj"), None);
+        // a recorded path picks the file in the matching folder over a nearer one
+        assert_eq!(finder.find("D:\\x\\sub\\deeper\\Vase HP.obj"), Some(project.join("sub/deeper/Vase HP.obj")));
+        assert_eq!(finder.find("C:/elsewhere/VASE HP.OBJ"), Some(project.join("sub/vase hp.OBJ")));
+        assert_eq!(finder.find("D:/x/"), None);
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

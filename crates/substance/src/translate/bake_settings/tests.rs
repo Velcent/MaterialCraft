@@ -93,7 +93,7 @@ fn the_configuration_bakes_the_same_and_keeps_enabled_bakers_and_the_source() {
     let c = m.config(Some(placement));
     assert_eq!(c.settings_for(m.settings.maps), m.settings);
     assert_eq!(c.included().kinds().collect::<Vec<_>>(), [MapKind::AmbientOcclusion]);
-    assert_eq!(c.common.high.files, ["Vase HP.obj"]);
+    assert_eq!(c.common.high.files, ["D:/x/Vase HP.obj"]);
     assert_eq!(c.common.high.placement, Some(placement));
     assert!(!c.common.high.low_as_high);
 }
@@ -110,5 +110,5 @@ fn without_settings_uses_defaults_and_says_so() {
 fn reads_the_high_poly_request() {
     let r = HighPolyRequest::of(&material());
     assert!(!r.low_as_high);
-    assert_eq!(r.files, ["Vase HP.obj"]);
+    assert_eq!(r.files, ["D:/x/Vase HP.obj"]);
 }
