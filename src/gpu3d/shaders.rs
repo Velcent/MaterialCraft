@@ -1,4 +1,5 @@
-//! Shader programs: the PBR material program and the background gradient, with their uniform locations.
+//! Shader programs: the PBR material program, the background gradient, the post stage and the accumulation copy,
+//! with their uniform locations.
 use eframe::egui_glow::glow;
 use glow::HasContext;
 use std::collections::HashMap;
@@ -7,6 +8,9 @@ const VS: &str = include_str!("glsl/material.vert");
 const FS: &str = include_str!("glsl/material.frag");
 const BG_VS: &str = include_str!("glsl/background.vert");
 const BG_FS: &str = include_str!("glsl/background.frag");
+const FULL_VS: &str = include_str!("glsl/fullscreen.vert");
+const POST_FS: &str = include_str!("glsl/post.frag");
+const ACCUM_FS: &str = include_str!("glsl/accumulate.frag");
 
 const UNIFORMS: &[&str] = &[
     "uVP",
@@ -34,7 +38,14 @@ const UNIFORMS: &[&str] = &[
     "uWire",
     "uShadow",
     "uCull",
+    "uUnlit",
+    "uMipBias",
+    "uSceneDepth",
+    "uDepthOrigin",
+    "uDepthLin",
 ];
+const POST_UNIFORMS: &[&str] = &["uSrc", "uOrigin", "uExposure", "uCurve", "uBypass"];
+const ACCUM_UNIFORMS: &[&str] = &["uSrc"];
 
 /// A linked program and the locations of the uniforms it uses.
 pub(super) struct Program {
@@ -47,10 +58,24 @@ pub(super) struct Program {
 impl Program {
     /// The PBR material program (vertex displacement + GGX shading).
     pub unsafe fn material(gl: &glow::Context) -> Result<Program, String> {
+        unsafe { Program::with_uniforms(gl, VS, FS, UNIFORMS) }
+    }
+
+    /// The post stage: exposure, tone curve and display transform of the HDR frame, blended over the background.
+    pub unsafe fn post(gl: &glow::Context) -> Result<Program, String> {
+        unsafe { Program::with_uniforms(gl, FULL_VS, POST_FS, POST_UNIFORMS) }
+    }
+
+    /// Copies a frame into the accumulation target (the blend state does the averaging).
+    pub unsafe fn accumulate(gl: &glow::Context) -> Result<Program, String> {
+        unsafe { Program::with_uniforms(gl, FULL_VS, ACCUM_FS, ACCUM_UNIFORMS) }
+    }
+
+    unsafe fn with_uniforms(gl: &glow::Context, vs: &str, fs: &str, names: &[&'static str]) -> Result<Program, String> {
         unsafe {
-            let id = compile(gl, VS, FS)?;
+            let id = compile(gl, vs, fs)?;
             let mut locs = HashMap::new();
-            for name in UNIFORMS {
+            for name in names {
                 if let Some(l) = gl.get_uniform_location(id, name) {
                     locs.insert(*name, l);
                 }

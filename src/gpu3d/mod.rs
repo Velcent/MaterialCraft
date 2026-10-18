@@ -2,12 +2,18 @@
 //!
 //! Every shape is a tessellated triangle mesh. The height map displaces the vertices in the vertex shader (true
 //! displacement), the fragment shader does GGX PBR with normal mapping, outward parallax relief, height-field contact
-//! shadows, an analytic studio environment and ACES tone mapping. Textures are mip-mapped with anisotropic filtering
-//! and the window is multisampled, so fine texture detail stays sharp at any zoom level.
+//! shadows and an analytic studio environment, writing linear radiance into a half-float target multisampled like the
+//! window. A post stage then applies exposure in stops, the tone curve (filmic by default, linear or an ACES fit) and
+//! the display transform, and blends the result over the background. While the view is still, jittered frames
+//! (and, with depth of field, frames through points of the lens) accumulate into a running average; any change
+//! starts again from the plain frame, so moving costs nothing extra. Unlit shading shows the maps as they are and
+//! skips exposure and the curve. Textures are mip-mapped with anisotropic filtering and an optional sharpening bias.
 //!
 //! Files: `maps` prepares texture data on the CPU, `textures` / `mesh` hold GL objects, `shaders` the programs,
 //! `camera` the matrices, `shape` the built-in preview shape, `scene` custom multi-part models, `pass` the material draw
-//! calls and `renderer` ties them into a frame. This file is the public API shared between the UI and the paint callback.
+//! calls, `target` the HDR and accumulation framebuffers, `progress` which accumulation sample is next, `display` the
+//! display settings and `renderer` ties them into a frame. This file is the public API shared between the UI and the
+//! paint callback.
 //!
 //! # Unsafe exception
 //! This module is the documented exception to the workspace's `unsafe_code` lint (see AGENTS.md): glow exposes every
@@ -18,16 +24,20 @@
 #![allow(unsafe_code)]
 
 mod camera;
+mod display;
 mod maps;
 mod mesh;
 mod pass;
+mod progress;
 mod renderer;
 mod scene;
 mod shaders;
 mod shape;
+mod target;
 mod textures;
 
 pub use camera::view_camera;
+pub use display::{Antialiasing, Display, MIP_BIAS_STEPS, Shading, ToneCurve};
 pub use maps::{GpuMaps, MapInputs, prepare};
 pub use scene::ScenePart;
 
@@ -36,7 +46,7 @@ use crate::render3d::View;
 use eframe::egui::PaintCallbackInfo;
 use eframe::egui_glow::{self, glow};
 use glow::HasContext;
-use renderer::Renderer;
+use renderer::{Frame, Renderer, ViewRect};
 use scene::Scene;
 use std::sync::{Arc, Mutex};
 
@@ -105,11 +115,21 @@ pub struct Gpu {
     /// Custom model drawn instead of `View::shape` while active.
     scene: Scene,
     pub frames: u64,
+    /// Bumped by every map or scene change, so the accumulation restarts when the content changes.
+    content: u64,
+    /// The last frame left the accumulation incomplete: paint again soon (the view is still refining).
+    refining: bool,
 }
 
 impl Gpu {
     pub fn set_maps(&mut self, maps: GpuMaps) {
         self.pending = Some(maps);
+        self.content += 1;
+    }
+
+    /// True while the last drawn frame wants more accumulation samples: the UI should paint again.
+    pub fn refining(&self) -> bool {
+        self.refining && self.error.is_none()
     }
     pub fn ready(&self) -> bool {
         self.error.is_none()
@@ -117,14 +137,17 @@ impl Gpu {
     /// Draw these parts instead of `View::shape` until `clear_scene` is called. Uploads happen on the next paint.
     pub fn set_scene(&mut self, parts: Vec<ScenePart>) {
         self.scene.set(parts);
+        self.content += 1;
     }
     /// Replace the maps of one part (e.g. after the user edits that texture set). Out-of-range parts are ignored.
     pub fn set_part_maps(&mut self, part: usize, maps: GpuMaps) {
         self.scene.set_part_maps(part, maps);
+        self.content += 1;
     }
     /// Go back to the built-in shape; the parts' GPU objects are freed on the next paint.
     pub fn clear_scene(&mut self) {
         self.scene.clear();
+        self.content += 1;
     }
     pub fn has_scene(&self) -> bool {
         self.scene.is_active()
@@ -138,11 +161,17 @@ fn bytes_of<T>(v: &[T]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, std::mem::size_of_val(v)) }
 }
 
-/// Draw the viewport into the rectangle of the paint callback. Call from an `egui_glow::CallbackFn`.
-/// Shader compile and link failures and GL errors go to `sink` once, when they stop the viewer; the
-/// GPU's name is reported when the renderer starts.
-// SAFETY (every block in `paint`): it runs inside an egui_glow paint callback, so `painter.gl()` is current.
+/// Draw the viewport into the rectangle of the paint callback with [`Display::plain`] (each change drawn once, no
+/// accumulation). Call from an `egui_glow::CallbackFn`.
 pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Painter, view: &View, sink: &dyn Sink) {
+    paint_with(shared, info, painter, view, &Display::plain(), sink);
+}
+
+/// Draw the viewport into the rectangle of the paint callback with `display`'s camera, post stage and accumulation.
+/// While [`Gpu::refining`] is true the UI should keep painting. Shader compile and link failures and GL errors go to
+/// `sink` once, when they stop the viewer; the GPU's name is reported when the renderer starts.
+// SAFETY (every block in `paint_with`): it runs inside an egui_glow paint callback, so `painter.gl()` is current.
+pub fn paint_with(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Painter, view: &View, display: &Display, sink: &dyn Sink) {
     let mut g = match shared.lock() {
         Ok(g) => g,
         Err(_) => return,
@@ -190,15 +219,23 @@ pub fn paint(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow::Pai
     if vp_px.width_px <= 0 || vp_px.height_px <= 0 {
         return;
     }
-    let aspect = vp_px.width_px as f32 / vp_px.height_px as f32;
-    let result = unsafe { r.draw(gl, view, aspect, self_shadow, &g.scene) };
+    let frame = Frame {
+        view,
+        display,
+        self_shadow,
+        aniso_req,
+        content: g.content,
+        rect: ViewRect { left: vp_px.left_px, bottom: vp_px.from_bottom_px, width: vp_px.width_px, height: vp_px.height_px },
+        restart: want_depth,
+    };
+    let result = unsafe { r.draw(gl, &frame, &g.scene) };
+    g.refining = r.refining(display);
     if want_shot && result.is_ok() {
         g.shot = Some(read_back(gl, info));
     }
-    if want_depth && result.is_ok() {
+    if want_depth && let Ok(camera) = &result {
         let (width, height) = (vp_px.width_px as usize, vp_px.height_px as usize);
-        let camera = view_camera(view, [width as f32, height as f32]);
-        g.depth = read_depth(gl, info).map(|depth| DepthShot { width, height, depth, camera });
+        g.depth = r.target().and_then(|t| read_depth(gl, t)).map(|depth| DepthShot { width, height, depth, camera: *camera });
     }
     if let Some(at) = want_color
         && result.is_ok()
@@ -234,12 +271,11 @@ fn read_back(gl: &glow::Context, info: &PaintCallbackInfo) -> (usize, usize, Vec
     (w, h, top)
 }
 
-/// Read the viewport's depth buffer back (rows from the top), or `None` if the driver refuses (the frame stays
+/// Read the scene's resolved depth back (rows from the top), or `None` if the driver refuses (the frame stays
 /// drawn; a depth read-back is a check, not part of drawing).
-// SAFETY: called from `paint` on its current context; `buf` holds exactly w * h f32 depth values of the viewport.
-fn read_depth(gl: &glow::Context, info: &PaintCallbackInfo) -> Option<Vec<f32>> {
-    let vp_px = info.viewport_in_pixels();
-    let (w, h) = (vp_px.width_px as usize, vp_px.height_px as usize);
+// SAFETY: called from `paint_with` on its current context; `buf` holds exactly w * h f32 depth values of the target.
+fn read_depth(gl: &glow::Context, target: &target::HdrTarget) -> Option<Vec<f32>> {
+    let (w, h) = (target.width.max(0) as usize, target.height.max(0) as usize);
     let mut buf = vec![0f32; w * h];
     let ok = unsafe {
         // clear errors left by earlier calls (bounded: a lost context keeps reporting one)
@@ -248,16 +284,11 @@ fn read_depth(gl: &glow::Context, info: &PaintCallbackInfo) -> Option<Vec<f32>> 
                 break;
             }
         }
-        gl.read_pixels(
-            vp_px.left_px,
-            vp_px.from_bottom_px,
-            w as i32,
-            h as i32,
-            glow::DEPTH_COMPONENT,
-            glow::FLOAT,
-            glow::PixelPackData::Slice(Some(bytes_of_mut(&mut buf))),
-        );
-        gl.get_error() == glow::NO_ERROR
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(target.resolved_fbo()));
+        gl.read_pixels(0, 0, w as i32, h as i32, glow::DEPTH_COMPONENT, glow::FLOAT, glow::PixelPackData::Slice(Some(bytes_of_mut(&mut buf))));
+        let ok = gl.get_error() == glow::NO_ERROR;
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None);
+        ok
     };
     if !ok {
         return None;

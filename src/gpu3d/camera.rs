@@ -1,45 +1,25 @@
-//! Orbit camera: the [`Camera`] the viewport draws a [`View`] with, and the matrices the shaders take from it.
-use crate::camera::{Camera, Lens, Mat4, look_along};
+//! The [`Camera`] the viewport draws a [`View`] with, and the matrices the shaders take from it.
+use crate::camera::{Camera, CameraSettings, Mat4};
 use crate::render3d::View;
-
-/// The viewport's lens: 40° vertical field of view, near and far planes around the unit-size model.
-const LENS: Lens = Lens::Perspective { fov_y: 40.0 * std::f32::consts::PI / 180.0, near: 0.03, far: 60.0 };
 
 pub(super) struct CamOut {
     pub vp: Mat4,
     pub eye: [f32; 3],
+    /// Projection elements 10, 11, 14 and 15: what turns window depth back into view distance.
+    pub depth_lin: [f32; 4],
 }
 
 impl CamOut {
-    pub fn of(c: &Camera, eye: [f32; 3]) -> CamOut {
-        CamOut { vp: c.view_projection(), eye }
+    pub fn of(c: &Camera) -> CamOut {
+        let p = &c.projection;
+        // a camera from an orbit always has an invertible view matrix; the origin is a harmless fallback
+        CamOut { vp: c.view_projection(), eye: c.eye().unwrap_or([0.0; 3]), depth_lin: [p[10], p[11], p[14], p[15]] }
     }
 }
 
 /// The camera that draws `v` into a viewport of `viewport` units (pixels or UI points; only the aspect ratio
-/// matters to the image, the units are those of screen positions on the camera). The model is the one placed by
-/// its unit-size fit, as the viewport draws it.
+/// matters to the image, the units are those of screen positions on the camera) with the default camera
+/// settings (a 40° perspective). The model is the one placed by its unit-size fit, as the viewport draws it.
 pub fn view_camera(v: &View, viewport: [f32; 2]) -> Camera {
-    let (eye, right, up, fwd) = basis(v);
-    let aspect = viewport[0] / viewport[1];
-    let aspect = if aspect.is_finite() && aspect > 0.0 { aspect } else { 1.0 };
-    Camera::new(look_along(eye, right, up, fwd), LENS.matrix(aspect), viewport)
-}
-
-/// Eye position and the right, up and forward axes of the orbit camera.
-fn basis(v: &View) -> ([f32; 3], [f32; 3], [f32; 3], [f32; 3]) {
-    use crate::v3::*;
-    let (sy, cy) = v.yaw.sin_cos();
-    let (sp, cp) = v.pitch.sin_cos();
-    let eye0 = [v.dist * sy * cp, v.dist * sp, v.dist * cy * cp];
-    let fwd = norm(mul(eye0, -1.0));
-    let right = norm(cross(fwd, [0.0, 1.0, 0.0]));
-    let up = cross(right, fwd);
-    let eye = add(eye0, add(mul(right, v.pan_x), mul(up, v.pan_y)));
-    (eye, right, up, fwd)
-}
-
-pub(super) fn camera(v: &View, aspect: f32) -> CamOut {
-    let c = view_camera(v, [aspect, 1.0]);
-    CamOut::of(&c, basis(v).0)
+    v.camera(&CameraSettings::default(), viewport)
 }

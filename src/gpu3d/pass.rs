@@ -7,6 +7,9 @@ use crate::render3d::{RELIEF_BUMP, RELIEF_DISPLACE, RELIEF_PARALLAX, View};
 use eframe::egui_glow::glow;
 use glow::HasContext;
 
+/// The texture unit of the scene depth the wireframe tests against (after the five map units).
+const WIRE_DEPTH_UNIT: u32 = 5;
+
 /// One mesh to draw with its own maps.
 pub(super) struct Drawable<'a> {
     pub mesh: &'a GpuMesh,
@@ -15,6 +18,23 @@ pub(super) struct Drawable<'a> {
     pub vtx_lod: f32,
     /// Discard walls facing away from the camera (shapes seen from the inside).
     pub cull: bool,
+}
+
+/// Frame-wide shading switches.
+pub(super) struct Shade {
+    /// Contact shadows from the height field.
+    pub self_shadow: bool,
+    /// Show the maps as they are, without light (the post stage then leaves them alone).
+    pub unlit: bool,
+    /// Mip-map bias (0 … −3: sharper texture sampling).
+    pub mip_bias: f32,
+}
+
+/// What the wireframe overlay tests its lines against: the scene's resolved depth.
+pub(super) struct WireDepth {
+    pub texture: glow::Texture,
+    /// The viewport's lower-left corner in window pixels (where the depth texture's texel 0, 0 lies).
+    pub origin: [f32; 2],
 }
 
 pub(super) struct MaterialPass<'a> {
@@ -29,7 +49,7 @@ pub(super) struct MaterialPass<'a> {
 // by the renderer or scene and outlive the pass (its borrows enforce that).
 impl<'a> MaterialPass<'a> {
     /// Bind the program and set everything that is the same for all meshes of the frame.
-    pub unsafe fn begin(gl: &'a glow::Context, prog: &'a Program, view: &'a View, cam: &CamOut, self_shadow: bool, flat_height: glow::Texture) -> Self {
+    pub unsafe fn begin(gl: &'a glow::Context, prog: &'a Program, view: &'a View, cam: &CamOut, shade: &Shade, flat_height: glow::Texture) -> Self {
         unsafe {
             let (ldir, fill) = crate::render3d::light_dirs(view);
             let mode = if view.relief == RELIEF_BUMP {
@@ -55,8 +75,12 @@ impl<'a> MaterialPass<'a> {
             gl.uniform_1_f32(loc("uDepth"), view.height_scale);
             gl.uniform_1_f32(loc("uLevel"), view.height_level);
             gl.uniform_1_i32(loc("uMode"), mode);
-            gl.uniform_1_i32(loc("uShadow"), self_shadow as i32);
+            gl.uniform_1_i32(loc("uShadow"), shade.self_shadow as i32);
+            gl.uniform_1_i32(loc("uUnlit"), shade.unlit as i32);
+            gl.uniform_1_f32(loc("uMipBias"), shade.mip_bias);
             gl.uniform_1_i32(loc("uWire"), 0);
+            let d = cam.depth_lin;
+            gl.uniform_4_f32(loc("uDepthLin"), d[0], d[1], d[2], d[3]);
             MaterialPass { gl, prog, view, flat_height }
         }
     }
@@ -71,23 +95,27 @@ impl<'a> MaterialPass<'a> {
         }
     }
 
-    /// Wireframe overlay of every mesh (displaced like the shaded surface).
-    pub unsafe fn draw_wire(&self, items: &[Drawable]) {
+    /// Wireframe overlay of every mesh (displaced like the shaded surface), drawn into the current framebuffer after
+    /// the post stage: lines behind the scene's surface (by `depth`) are left out by the shader.
+    pub unsafe fn draw_wire(&self, items: &[Drawable], depth: &WireDepth) {
         unsafe {
             let gl = self.gl;
-            gl.uniform_1_i32(self.prog.loc("uWire"), 1);
+            let loc = |n: &str| self.prog.loc(n);
+            gl.uniform_1_i32(loc("uWire"), 1);
+            gl.uniform_2_f32(loc("uDepthOrigin"), depth.origin[0], depth.origin[1]);
+            gl.active_texture(glow::TEXTURE0 + WIRE_DEPTH_UNIT);
+            gl.bind_texture(glow::TEXTURE_2D, Some(depth.texture));
+            gl.uniform_1_i32(loc("uSceneDepth"), WIRE_DEPTH_UNIT as i32);
+            gl.disable(glow::DEPTH_TEST);
             gl.polygon_mode(glow::FRONT_AND_BACK, glow::LINE);
-            gl.enable(glow::POLYGON_OFFSET_LINE);
-            gl.polygon_offset(-1.0, -1.0);
-            gl.depth_func(glow::LEQUAL);
             for d in items {
                 self.bind(d);
                 d.mesh.draw(gl);
             }
-            gl.disable(glow::POLYGON_OFFSET_LINE);
             gl.polygon_mode(glow::FRONT_AND_BACK, glow::FILL);
-            gl.depth_func(glow::LESS);
-            gl.uniform_1_i32(self.prog.loc("uWire"), 0);
+            gl.uniform_1_i32(loc("uWire"), 0);
+            gl.active_texture(glow::TEXTURE0 + WIRE_DEPTH_UNIT);
+            gl.bind_texture(glow::TEXTURE_2D, None);
         }
     }
 

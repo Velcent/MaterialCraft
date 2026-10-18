@@ -27,6 +27,12 @@ uniform int uHasEmis;
 uniform int uWire;
 uniform int uShadow;
 uniform int uCull;
+uniform int uUnlit;
+uniform float uMipBias;
+// wireframe overlay: drawn after the post stage, tested against the scene's depth by hand
+uniform sampler2D uSceneDepth;
+uniform vec2 uDepthOrigin;
+uniform vec4 uDepthLin; // projection elements 10, 11, 14, 15
 out vec4 oColor;
 
 const float PI = 3.14159265;
@@ -64,22 +70,6 @@ vec3 env(vec3 d, float r) {
     return col;
 }
 
-vec3 aces(vec3 x) {
-    return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
-
-// Tone map on luminance so saturated colours keep their hue (a per-channel curve turns bright oranges pink and white),
-// then let only the very brightest highlights roll off per channel.
-float acesL(float x) {
-    return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
-vec3 tonemap(vec3 c) {
-    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-    vec3 hue = c * (acesL(l) / max(l, 1e-4));
-    hue = min(hue, vec3(1.0)) ;
-    return mix(hue, aces(c), smoothstep(2.0, 8.0, l) * 0.7);
-}
-
 vec3 envBrdf(vec3 f0, float rough, float ndv) {
     const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
     const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
@@ -87,6 +77,16 @@ vec3 envBrdf(vec3 f0, float rough, float ndv) {
     float a004 = min(r.x * r.x, exp2(-9.28 * ndv)) * r.x + r.y;
     vec2 ab = vec2(-1.04, 1.04) * a004 + r.zw;
     return f0 * ab.x + ab.y;
+}
+
+vec3 srgbEncode(vec3 c) {
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+
+// Distance in front of the camera of a window depth (0 … 1), for perspective and parallel projections.
+float viewDepth(float d) {
+    float ndc = 2.0 * d - 1.0;
+    return -(ndc * uDepthLin.w - uDepthLin.z) / (uDepthLin.x - ndc * uDepthLin.y);
 }
 
 float hAt(vec2 uv) {
@@ -151,6 +151,8 @@ float hshadow(vec2 uv, vec3 lt) {
 
 void main() {
     if (uWire == 1) {
+        float scene = texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy - uDepthOrigin), 0).r;
+        if (viewDepth(gl_FragCoord.z) > viewDepth(scene) * 1.003 + 0.002) discard;
         oColor = vec4(1.0, 0.62, 0.12, 1.0);
         return;
     }
@@ -161,8 +163,8 @@ void main() {
     vec3 B = cross(N, T) * vTanW; // uv v runs opposite to the bitangent
     vec3 V = normalize(uEye - vPos);
     bool back = !gl_FrontFacing;
-    gdx = dFdx(vUv);
-    gdy = dFdy(vUv);
+    gdx = dFdx(vUv) * exp2(uMipBias);
+    gdy = dFdy(vUv) * exp2(uMipBias);
     vec2 uv = vUv;
     float cav = 1.0;
     bool hasH = uHasHeight == 1 && uDepth > 0.0;
@@ -173,6 +175,13 @@ void main() {
         cav = 1.0 - 0.45 * dep;
     }
     vec3 albedo = textureGrad(uBase, uv, gdx, gdy).rgb; // sRGB texture: already linear here
+    if (uUnlit == 1) {
+        // the maps as they are: base colour plus emissive, encoded back to the display values they came from
+        vec3 shown = albedo;
+        if (uHasEmis == 1) shown += textureGrad(uEmis, uv, gdx, gdy).rgb;
+        oColor = vec4(srgbEncode(clamp(shown, 0.0, 1.0)), 1.0);
+        return;
+    }
     vec3 rma = textureGrad(uRma, uv, gdx, gdy).rgb;
     float rough = clamp(rma.r, 0.04, 1.0);
     float metal = clamp(rma.g, 0.0, 1.0);
@@ -221,7 +230,6 @@ void main() {
     vec3 ambS = envR * envBrdf(f0, rough, ndv) * uAmbient * specOcc * horizon * horizon;
     vec3 col = ((diff + spec * uLightI * 1.2) * sh + diffFill + (ambD * ao + ambS)) * uExposure;
     if (uHasEmis == 1) col += textureGrad(uEmis, uv, gdx, gdy).rgb;
-    col = tonemap(col);
-    col = pow(col, vec3(1.0 / 2.2));
+    // linear radiance: exposure in stops, the tone curve and the display transform follow in the post stage
     oColor = vec4(col, 1.0);
 }

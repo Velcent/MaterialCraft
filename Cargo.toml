@@ -65,6 +65,11 @@ name = "scene_shot"
 path = "examples/scene_shot.rs"
 required-features = ["gui"]
 
+[[example]]
+name = "viewport_bench"
+path = "examples/viewport_bench.rs"
+required-features = ["gui"]
+
 [profile.release]
 opt-level = 3
 lto = true

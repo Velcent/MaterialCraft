@@ -28,6 +28,11 @@ impl ShapeMesh {
         }
     }
 
+    /// The mesh built by the last [`ShapeMesh::update`].
+    pub fn current(&self) -> Option<&GpuMesh> {
+        self.mesh.as_ref()
+    }
+
     pub unsafe fn free(&mut self, gl: &glow::Context) {
         unsafe {
             if let Some(m) = self.mesh.take() {
