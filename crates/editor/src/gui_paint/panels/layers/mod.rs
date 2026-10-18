@@ -10,6 +10,7 @@
 
 mod bars;
 pub mod events;
+mod geometry_icon;
 mod list;
 mod menus;
 mod row_ui;
@@ -29,7 +30,7 @@ use eframe::egui::{Pos2, Ui};
 use materialcraft::history::CoalesceKey;
 use materialcraft::paint::edit::LayerRef;
 use materialcraft::paint::edit::ops::{DropPayload, DropTarget, NewLayer};
-use materialcraft::paint::{Channel, Document, LayerKind, TextureSet};
+use materialcraft::paint::{Channel, Document, GeometryMask, LayerKind, TextureSet};
 use rows::{Folding, Rows};
 use selection::{Part, Selection};
 use std::sync::Arc;
@@ -70,6 +71,8 @@ pub struct LayerPanel {
     next_key: u64,
     /// The layer whose mask the viewport shows alone.
     pub isolated: Option<LayerRef>,
+    /// The layer whose geometry mask is being edited (GM-03): the viewport hides what it excludes.
+    pub geometry_editing: Option<LayerRef>,
     /// The asset being dragged over the stack from elsewhere.
     external: Option<DropPayload>,
 }
@@ -183,7 +186,9 @@ impl LayerPanel {
         if let Some(c) = channel {
             self.thumbs.begin(ui.ctx(), &set.id, c);
         }
-        let ctx = list::ListCtx { set, rows: &rows, channel, height, external: self.external.as_ref() };
+        let parts = GeometryMask::set_parts(&doc.mesh, set.material_slot);
+        let geometry_editing = self.geometry_editing.as_ref();
+        let ctx = list::ListCtx { set, rows: &rows, channel, height, external: self.external.as_ref(), parts: &parts, geometry_editing };
         self.list.show(ui, ctx, &mut self.selection, &mut self.folding, &mut self.thumbs, self.isolated.as_ref(), &mut out);
         if let Some(c) = channel {
             self.thumbs.end(ui.ctx(), set, c);

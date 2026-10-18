@@ -21,6 +21,10 @@ impl PaintMode {
             self.scene.isolate(doc, self.display, layer);
             return;
         }
+        if let LayerEvent::EditGeometryMask(layer) = ev {
+            self.layers.geometry_editing = layer;
+            return;
+        }
         match stack_editor::apply(doc, ev) {
             Ok(applied) => {
                 if let Some(ids) = applied.select {

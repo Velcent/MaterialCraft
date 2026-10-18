@@ -10,6 +10,8 @@ pub struct PartGeometry {
     pub tangent_w: Vec<f32>,
     /// Index of the texture set painted on this part; `None` for unpainted material slots.
     pub set: Option<usize>,
+    /// Index of the mesh part this is.
+    pub part: usize,
 }
 
 /// Geometry of every part whose texture set is visible (`visible` is indexed by texture set).
@@ -25,7 +27,7 @@ pub fn build(doc: &Document, visible: &[bool]) -> Result<Vec<PartGeometry>, Stri
         }
         let uv_set = set.map_or(0, |s| doc.texture_sets[s].uv_set);
         let vp = part.to_viewport(&fit, uv_set).map_err(|e| format!("Mesh part {i} ('{}'): {e}", part.name))?;
-        parts.push(PartGeometry { mesh: vp.mesh, tangent_w: vp.tangent_w, set });
+        parts.push(PartGeometry { mesh: vp.mesh, tangent_w: vp.tangent_w, set, part: i });
     }
     Ok(parts)
 }

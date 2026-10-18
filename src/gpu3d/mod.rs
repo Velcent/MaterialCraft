@@ -146,6 +146,11 @@ impl Gpu {
         self.scene.set_part_maps(part, maps);
         self.content += 1;
     }
+    /// Hide parts of the scene (`hidden[i]` for part `i`, as passed to `set_scene`); parts beyond the list are drawn.
+    /// Kept when the scene is replaced, so the caller sends it again for a new scene.
+    pub fn set_hidden_parts(&mut self, hidden: Vec<bool>) {
+        self.scene.set_hidden(hidden);
+    }
     /// Go back to the built-in shape; the parts' GPU objects are freed on the next paint.
     pub fn clear_scene(&mut self) {
         self.scene.clear();

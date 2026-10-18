@@ -24,6 +24,7 @@ mod editing;
 mod eyedrop;
 mod fill_surfaces;
 mod geometry;
+mod geometry_mask_edit;
 mod import_review;
 mod input;
 mod isolate;
@@ -223,6 +224,7 @@ impl PaintMode {
         self.poll_save();
         self.poll_bake();
         self.picking.poll(self.document.as_ref());
+        self.sync_geometry_editing();
         if let Some(doc) = &mut self.document {
             self.scene.poll(doc, self.viewport.gpu(), &*self.diag);
             if let Some(e) = self.scene.error.take() {
@@ -232,6 +234,7 @@ impl PaintMode {
         let mut events = self.shell.take_shortcuts(ctx);
         self.before_tray_frame();
         events.extend(self.draw(ui, history));
+        events.extend(self.geometry_mask_window(ctx));
         events.extend(self.tray.end_frame(ctx).map(PanelEvent::Assets));
         self.paint_strokes(ctx);
         let mut action = PaintAction::Stay;

@@ -2,11 +2,11 @@
 //! and add-effect menus shared with the bottom bar (MK-02, MK-14).
 
 use super::events::{LayerEvent, SaveAsset};
-use eframe::egui::Ui;
+use eframe::egui::{self, Ui};
 use materialcraft::generators;
-use materialcraft::paint::Layer;
 use materialcraft::paint::edit::ops::{MaskStart, NewEffect};
 use materialcraft::paint::edit::{LayerRef, StackId};
+use materialcraft::paint::{GeometryMask, Layer};
 
 /// What the context menu acts on.
 pub struct MenuTarget<'a> {
@@ -15,6 +15,8 @@ pub struct MenuTarget<'a> {
     /// The selection the panel operations use (contains the row's layer).
     pub ids: Vec<String>,
     pub isolated: bool,
+    /// The geometry mask edit mode is on for this layer.
+    pub geometry_editing: bool,
 }
 
 /// Panel actions the menu asks for that the panel itself carries out.
@@ -78,8 +80,28 @@ pub fn context(ui: &mut Ui, t: &MenuTarget, events: &mut Vec<LayerEvent>) -> Opt
             });
         }
     }
+    geometry_mask(ui, t, events);
     add_effect(ui, "Add effect", &t.r, StackId::Content, events);
     local
+}
+
+/// The geometry mask submenu (GM-03, GM-04): edit mode, include all, exclude all.
+fn geometry_mask(ui: &mut Ui, t: &MenuTarget, events: &mut Vec<LayerEvent>) {
+    ui.menu_button("Geometry mask", |ui| {
+        let edit = if t.geometry_editing { "Finish editing" } else { "Choose parts…" };
+        if ui.button(edit).on_hover_text("Pick parts in the viewport or from a list").clicked() {
+            events.push(LayerEvent::EditGeometryMask(if t.geometry_editing { None } else { Some(t.r.clone()) }));
+            ui.close();
+        }
+        if ui.add_enabled(t.layer.geometry_mask.is_some(), egui::Button::new("Include all")).clicked() {
+            events.push(LayerEvent::SetGeometryMask(t.r.clone(), None));
+            ui.close();
+        }
+        if ui.add_enabled(t.layer.geometry_mask != Some(GeometryMask::nothing()), egui::Button::new("Exclude all")).clicked() {
+            events.push(LayerEvent::SetGeometryMask(t.r.clone(), Some(GeometryMask::nothing())));
+            ui.close();
+        }
+    });
 }
 
 /// "Add mask" with its starting choices.

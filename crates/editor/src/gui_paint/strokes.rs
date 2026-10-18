@@ -12,6 +12,7 @@ impl PaintMode {
     /// Runs this frame's strokes. Call after the panels were drawn (the viewport recorded the gesture).
     pub(super) fn paint_strokes(&mut self, ctx: &egui::Context) {
         let input = self.viewport.take_stroke_input();
+        let input = self.geometry_pick(input);
         let input = self.material_pick(input);
         self.screen_image_input(ctx);
         let Some(doc) = self.document.as_mut() else {

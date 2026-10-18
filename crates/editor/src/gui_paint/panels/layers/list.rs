@@ -12,7 +12,7 @@ use crate::gui_theme;
 use eframe::egui::{self, Key, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use materialcraft::paint::edit::ops::{DropPayload, DropTarget, slot_of};
 use materialcraft::paint::edit::{LayerRef, LayerSlot, StackId};
-use materialcraft::paint::{Channel, LayerKind, TextureSet};
+use materialcraft::paint::{Channel, GeometryMask, LayerKind, TextureSet};
 
 /// What one frame of the list works on.
 pub struct ListCtx<'a> {
@@ -21,6 +21,10 @@ pub struct ListCtx<'a> {
     pub channel: Option<Channel>,
     pub height: f32,
     pub external: Option<&'a DropPayload>,
+    /// The names of the set's mesh parts (what a geometry mask chooses from).
+    pub parts: &'a [String],
+    /// The layer whose geometry mask is being edited.
+    pub geometry_editing: Option<&'a LayerRef>,
 }
 
 /// Layers being dragged inside the list.
@@ -77,6 +81,7 @@ impl ListState {
                         let Some(layer) = set.layer(id) else { continue };
                         let r = LayerRef::new(set.id.clone(), id.clone());
                         let is_isolated = isolated == Some(&r);
+                        let geometry_editing = c.geometry_editing == Some(&r);
                         let look = LayerLook {
                             layer,
                             depth: row.depth,
@@ -87,6 +92,8 @@ impl ListState {
                             channel: c.channel,
                             thumbs: thumbs.get(layer),
                             effects_open: folding.effects_open.contains(id),
+                            geometry: GeometryMask::inclusion(layer.geometry_mask.as_ref(), c.parts),
+                            geometry_editing,
                         };
                         let o = row_ui::layer_row(ui, rect, look);
                         let mods = ui.input(|i| ClickMods { toggle: i.modifiers.command, range: i.modifiers.shift });
@@ -95,6 +102,9 @@ impl ListState {
                         }
                         if o.isolate {
                             out.push(LayerEvent::Isolate(if is_isolated { None } else { Some(r.clone()) }));
+                        }
+                        if o.edit_geometry {
+                            out.push(LayerEvent::EditGeometryMask(if geometry_editing { None } else { Some(r.clone()) }));
                         }
                         if o.toggle_visible {
                             out.push(LayerEvent::SetVisible(r.clone(), !layer.visible));
@@ -116,7 +126,7 @@ impl ListState {
                                 self.drag = Some(Drag { ids: selection.ids().to_vec() });
                             }
                             let ids = if selection.contains(id) { selection.ids().to_vec() } else { vec![id.clone()] };
-                            let target = MenuTarget { layer, r: r.clone(), ids, isolated: is_isolated };
+                            let target = MenuTarget { layer, r: r.clone(), ids, isolated: is_isolated, geometry_editing };
                             resp.context_menu(|ui| {
                                 if menus::context(ui, &target, out) == Some(Local::Rename) {
                                     self.renaming = Some((id.clone(), layer.name.clone()));

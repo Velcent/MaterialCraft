@@ -65,6 +65,8 @@ pub(super) struct Scene {
     active: bool,
     pending: Pending,
     parts: Vec<GpuPart>,
+    /// Parts not drawn, by index (a geometry mask being edited hides what it excludes). Kept across uploads.
+    hidden: Vec<bool>,
 }
 
 impl Scene {
@@ -80,6 +82,12 @@ impl Scene {
     pub fn clear(&mut self) {
         self.active = false;
         self.pending = Pending::Replace(Vec::new());
+    }
+
+    /// Which parts are not drawn (`hidden[i]` for part `i`; parts beyond the list are drawn). Takes effect at the
+    /// next paint, without uploading anything.
+    pub fn set_hidden(&mut self, hidden: Vec<bool>) {
+        self.hidden = hidden;
     }
 
     pub fn set_part_maps(&mut self, part: usize, maps: GpuMaps) {
@@ -122,11 +130,13 @@ impl Scene {
         }
     }
 
-    /// Every part with its own maps; no inside-view culling (open meshes show their back faces).
+    /// Every part that is not hidden, with its own maps; no inside-view culling (open meshes show their back faces).
     pub fn drawables(&self) -> Vec<Drawable<'_>> {
         self.parts
             .iter()
-            .map(|p| {
+            .enumerate()
+            .filter(|(i, _)| !self.hidden.get(*i).copied().unwrap_or(false))
+            .map(|(_, p)| {
                 let hw = p.maps.height_size().0;
                 Drawable { mesh: &p.mesh, maps: &p.maps, vtx_lod: (hw as f32 / p.density).max(1.0).log2(), cull: false }
             })

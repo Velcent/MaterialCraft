@@ -4,7 +4,7 @@
 use materialcraft::history::CoalesceKey;
 use materialcraft::paint::edit::ops::{DropPayload, DropTarget, MaskStart, NewEffect, NewLayer};
 use materialcraft::paint::edit::{LayerRef, LayerSlot, StackId};
-use materialcraft::paint::{BlendMode, Channel};
+use materialcraft::paint::{BlendMode, Channel, GeometryMask};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LayerEvent {
@@ -71,6 +71,10 @@ pub enum LayerEvent {
     InvertMask(LayerRef),
     /// Show only this layer's mask in the viewport (`None`: show the material again). View state only.
     Isolate(Option<LayerRef>),
+    /// Replace the layer's geometry mask (`None`: the layer includes all geometry), one history step (GM-01).
+    SetGeometryMask(LayerRef, Option<GeometryMask>),
+    /// Enter the geometry mask edit mode for this layer (`None`: leave it, GM-03). View state only.
+    EditGeometryMask(Option<LayerRef>),
     /// Save layers or a mask into the user's asset library (MK-15). Not a document change.
     SaveAsset(SaveAsset),
     /// An asset dropped onto the stack; `replace` is Ctrl. Sent by the asset tray (step 15).

@@ -35,6 +35,10 @@ impl SceneKey {
 #[derive(Default)]
 pub struct ViewPicking {
     scene: Option<ViewScene>,
+    /// Per mesh part: shown by its texture set's visibility (as the scene was built).
+    by_sets: Vec<bool>,
+    /// Mesh parts hidden on top of that (a geometry mask being edited): neither picked nor occluding.
+    hidden: Vec<bool>,
     building: Option<Job<ViewScene>>,
     key: Option<SceneKey>,
 }
@@ -44,7 +48,7 @@ impl ViewPicking {
     /// frame.
     pub fn poll(&mut self, doc: Option<&OpenDocument>) {
         let Some(doc) = doc else {
-            *self = ViewPicking::default();
+            *self = ViewPicking { hidden: std::mem::take(&mut self.hidden), ..ViewPicking::default() };
             return;
         };
         let key = SceneKey::of(doc);
@@ -56,13 +60,33 @@ impl ViewPicking {
             self.scene = None;
             self.key = Some(key);
         }
+        let mut arrived = None;
         if let Some(job) = &mut self.building {
-            if let Some(scene) = job.poll().pop() {
-                self.scene = Some(scene);
-            }
+            arrived = job.poll().pop();
             if job.is_finished() {
                 self.building = None;
             }
+        }
+        if let Some(scene) = arrived {
+            self.by_sets = (0..doc.doc().mesh.parts.len()).map(|i| scene.is_shown(i)).collect();
+            self.scene = Some(scene);
+            self.apply_hidden();
+        }
+    }
+
+    /// Hides mesh parts (`hidden[i]` for part `i`) from picking and occlusion on top of the texture sets'
+    /// visibility; kept for later scenes. Cheap: no rebuild.
+    pub fn set_hidden_parts(&mut self, hidden: Vec<bool>) {
+        if self.hidden != hidden {
+            self.hidden = hidden;
+            self.apply_hidden();
+        }
+    }
+
+    fn apply_hidden(&mut self) {
+        let Some(scene) = &mut self.scene else { return };
+        for (i, by_set) in self.by_sets.iter().enumerate() {
+            scene.set_shown(i, *by_set && !self.hidden.get(i).copied().unwrap_or(false));
         }
     }
 
@@ -86,7 +110,7 @@ impl ViewPicking {
         self.scene.as_ref()
     }
 
-    /// False for mesh parts of hidden texture sets (they neither show nor hide anything).
+    /// False for mesh parts of hidden texture sets and for hidden parts (they neither show nor hide anything).
     pub fn is_shown(&self, part: usize) -> bool {
         self.scene.as_ref().is_some_and(|s| s.is_shown(part))
     }

@@ -16,7 +16,8 @@ pub struct Applied {
     pub select: Option<Vec<String>>,
 }
 
-/// Applies `ev` to `doc` as one history step. `Isolate` (view state) and `SaveAsset` (a file) are not handled here.
+/// Applies `ev` to `doc` as one history step. `Isolate`, `EditGeometryMask` (view state) and `SaveAsset` (a file) are not
+/// handled here.
 pub fn apply(doc: &mut OpenDocument, ev: LayerEvent) -> Result<Applied, EditError> {
     let set_id = match set_of(&ev) {
         Some(s) => s.to_string(),
@@ -36,12 +37,12 @@ fn set_of(ev: &LayerEvent) -> Option<&str> {
     use LayerEvent::*;
     Some(match ev {
         Create { set, .. } | Duplicate { set, .. } | Delete { set, .. } | Group { set, .. } | Move { set, .. } => set,
-        Rename(r, _) | SetVisible(r, _) | AddMask(r, _) | RemoveMask(r) | SetMaskEnabled(r, _) | InvertMask(r) => &r.set,
+        Rename(r, _) | SetVisible(r, _) | AddMask(r, _) | RemoveMask(r) | SetMaskEnabled(r, _) | InvertMask(r) | SetGeometryMask(r, _) => &r.set,
         SetOpacity { layer, .. } | SetBlendMode { layer, .. } | AddEffect { layer, .. } | RemoveEffect { layer, .. } | SetEffectEnabled { layer, .. } => {
             &layer.set
         }
         Drop { target, .. } => target.set(),
-        EndGesture | Isolate(_) | SaveAsset(_) => return None,
+        EndGesture | Isolate(_) | EditGeometryMask(_) | SaveAsset(_) => return None,
     })
 }
 
@@ -74,6 +75,9 @@ fn run(doc: &mut OpenDocument, ev: LayerEvent) -> Result<Option<Vec<String>>, Ed
         RemoveMask(r) => none(doc.edit("Remove mask", None, |tx| ops::remove_mask(tx, &r))),
         SetMaskEnabled(r, on) => none(doc.edit(if on { "Enable mask" } else { "Disable mask" }, None, |tx| ops::set_mask_enabled(tx, &r, on))),
         InvertMask(r) => none(doc.edit("Invert mask", None, |tx| ops::invert_mask(tx, &r))),
+        SetGeometryMask(r, mask) => {
+            none(doc.edit("Geometry mask", None, |tx| tx.apply(Edit::SetLayer { layer: r, property: LayerProperty::GeometryMask(mask) })))
+        }
         Drop { target, payload, replace } => doc.edit("Drop asset", None, |tx| {
             ops::drop_onto(tx, &target, &payload, replace).map(|out| match out {
                 DropOutcome::NewLayer(id) => Some(vec![id]),
@@ -81,7 +85,7 @@ fn run(doc: &mut OpenDocument, ev: LayerEvent) -> Result<Option<Vec<String>>, Ed
                 DropOutcome::Effects { .. } => None,
             })
         }),
-        EndGesture | Isolate(_) | SaveAsset(_) => Ok(None),
+        EndGesture | Isolate(_) | EditGeometryMask(_) | SaveAsset(_) => Ok(None),
     }
 }
 

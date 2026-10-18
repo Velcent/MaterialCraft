@@ -1,7 +1,8 @@
 //! Drawing one row of the layer list and reporting what was clicked in it. A layer row is: eye, indent,
-//! fold arrow (folders), content thumbnail, mask thumbnail (if any), name and kind, and on the right the
-//! view channel's blend mode and opacity (LS-08). An effect row is its kind, label and an on/off box.
+//! fold arrow (folders), content thumbnail, mask thumbnail (if any), name, kind, effects and geometry mask icon,
+//! and on the right the view channel's blend mode and opacity (LS-08). An effect row is its kind, label and an on/off box.
 
+use super::geometry_icon;
 use super::rows::{EFFECT_ROW, INDENT, LAYER_ROW};
 use super::selection::Part;
 use super::thumbnails::Pair;
@@ -9,7 +10,7 @@ use crate::gui_theme;
 use eframe::egui::{self, Align2, Color32, FontId, Id, Rect, Response, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use materialcraft::paint::edit::StackId;
 use materialcraft::paint::effect::{EffectDomain, EffectKind};
-use materialcraft::paint::{Channel, Layer, LayerKind};
+use materialcraft::paint::{Channel, Inclusion, Layer, LayerKind};
 
 const EYE: f32 = 22.0;
 const FOLD: f32 = 12.0;
@@ -33,6 +34,8 @@ pub struct LayerRowOut {
     pub toggle_fold: bool,
     pub rename: bool,
     pub toggle_effects: bool,
+    /// The geometry mask icon was clicked (GM-03).
+    pub edit_geometry: bool,
     /// The whole row with every part in it (eye, thumbnails, name, effects toggle), for drags and the
     /// context menu: a right-click anywhere on the row opens the menu, not only on the bare background
     /// the parts leave free (the parts sit on top and take the click).
@@ -51,6 +54,10 @@ pub struct LayerLook<'a> {
     pub channel: Option<Channel>,
     pub thumbs: Pair<'a>,
     pub effects_open: bool,
+    /// How much of the set's geometry the layer's geometry mask includes.
+    pub geometry: Inclusion,
+    /// The geometry mask edit mode is on for this layer.
+    pub geometry_editing: bool,
 }
 
 pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
@@ -143,6 +150,10 @@ pub fn layer_row(ui: &mut Ui, rect: Rect, look: LayerLook) -> LayerRowOut {
         out.toggle_effects = fx_r.clicked();
         whole |= fx_r;
     }
+    let geo_x = x + 52.0 + if n_effects > 0 { 56.0 } else { 0.0 };
+    let geo = geometry_icon::show(ui, id.with("geometry"), geo_x, rect.min.y + 32.0, look.geometry, look.geometry_editing);
+    out.edit_geometry = geo.clicked();
+    whole |= geo;
     // The view channel's blend and opacity.
     let right = pos2(rect.max.x - 6.0, rect.center().y);
     let blend = look.channel.and_then(|c| l.blend_for(c));

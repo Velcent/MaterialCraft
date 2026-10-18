@@ -28,6 +28,10 @@ pub struct SceneSync {
     maps: Option<MapsWorker>,
     /// Texture set of each scene part, once the geometry is on its way to the GPU.
     part_sets: Option<Vec<Option<usize>>>,
+    /// Mesh part of each scene part (parts of hidden texture sets are not in the scene).
+    mesh_parts: Vec<usize>,
+    /// Mesh parts not drawn, by mesh part index (a geometry mask being edited).
+    hidden: Vec<bool>,
     /// Maps that arrived before the geometry.
     waiting: Vec<SetMaps>,
     /// Maps asked for while a worker was still running: started when it has stopped.
@@ -187,13 +191,30 @@ impl SceneSync {
         self.maps.as_ref().map(|m| m.progress())
     }
 
+    /// Hides the mesh parts with `hidden[i]` set in the view (others are drawn); kept for later scenes.
+    pub fn set_hidden_parts(&mut self, hidden: Vec<bool>, gpu: &Shared) {
+        if self.hidden != hidden {
+            self.hidden = hidden;
+            self.send_hidden(gpu);
+        }
+    }
+
+    fn send_hidden(&self, gpu: &Shared) {
+        let per_scene_part = self.mesh_parts.iter().map(|&p| self.hidden.get(p).copied().unwrap_or(false)).collect();
+        if let Ok(mut g) = gpu.lock() {
+            g.set_hidden_parts(per_scene_part);
+        }
+    }
+
     fn set_scene(&mut self, parts: Vec<PartGeometry>, gpu: &Shared) {
         let part_sets = parts.iter().map(|p| p.set).collect();
+        self.mesh_parts = parts.iter().map(|p| p.part).collect();
         let scene = parts.into_iter().map(|p| ScenePart { mesh: p.mesh, tangent_w: p.tangent_w, maps: placeholder() }).collect();
         if let Ok(mut g) = gpu.lock() {
             g.set_scene(scene);
         }
         self.part_sets = Some(part_sets);
+        self.send_hidden(gpu);
     }
 }
 

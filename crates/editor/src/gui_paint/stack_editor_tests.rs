@@ -6,7 +6,7 @@ use materialcraft::history::CoalesceKey;
 use materialcraft::paint::edit::ops::{AssetEffect, DropPayload, DropTarget, EffectAsset, MaskStart, NewEffect, NewLayer};
 use materialcraft::paint::edit::{LayerSlot, StackId};
 use materialcraft::paint::effect::Procedural;
-use materialcraft::paint::{Document, Fill, LayerKind, PaintContent, TextureSet};
+use materialcraft::paint::{Document, Fill, GeometryMask, LayerKind, PaintContent, TextureSet};
 use std::path::PathBuf;
 
 fn open() -> OpenDocument {
@@ -50,6 +50,8 @@ fn every_panel_request_is_one_undoable_step() {
         LayerEvent::SetBlendMode { layer: lr("a"), channel: Channel::Roughness, mode: BlendMode::Multiply },
         LayerEvent::AddEffect { layer: lr("a"), stack: StackId::Content, what: NewEffect::Levels },
         LayerEvent::AddMask(lr("a"), MaskStart::Black),
+        LayerEvent::SetGeometryMask(lr("a"), Some(GeometryMask::Parts(ids(&["body"])))),
+        LayerEvent::SetGeometryMask(lr("g"), Some(GeometryMask::nothing())),
         LayerEvent::Drop { target: DropTarget::Between { set: "s".into(), at: LayerSlot::top(1) }, payload: blur.clone(), replace: false },
         LayerEvent::Drop { target: DropTarget::OntoLayer(lr("top")), payload: blur, replace: true },
     ];
@@ -110,4 +112,17 @@ fn an_opacity_drag_is_one_step_and_failures_record_nothing() {
     apply(&mut d, LayerEvent::Move { set: "s".into(), ids: ids(&["top"]), to: LayerSlot::top(2), copy: false }).unwrap();
     assert_eq!(d.history().done(), 0);
     assert_eq!(apply(&mut d, LayerEvent::Isolate(Some(lr("a")))).unwrap(), Applied::default());
+}
+
+#[test]
+fn each_geometry_mask_change_is_its_own_step() {
+    let mut d = open();
+    let masks = [Some(GeometryMask::Parts(ids(&["body", "trim"]))), Some(GeometryMask::Parts(ids(&["body"]))), None];
+    for m in masks.iter().cloned() {
+        apply(&mut d, LayerEvent::SetGeometryMask(lr("top"), m)).unwrap();
+    }
+    assert_eq!(d.history().len(), 3, "toggling parts one after another is not coalesced");
+    d.undo().unwrap();
+    assert_eq!(d.doc().texture_sets[0].layer("top").unwrap().geometry_mask, masks[1]);
+    assert_eq!(apply(&mut d, LayerEvent::EditGeometryMask(Some(lr("top")))).unwrap(), Applied::default(), "edit mode is view state");
 }
