@@ -46,6 +46,15 @@ impl Weights {
             Weights::Masked(m) => m.get(i).copied().unwrap_or(0.0),
         }
     }
+
+    /// These weights multiplied per pixel by `coverage` (one value per pixel), or `None` where that leaves nothing.
+    pub fn times(self, coverage: Vec<f32>) -> Option<Weights> {
+        let mut out = coverage;
+        for (i, c) in out.iter_mut().enumerate() {
+            *c *= self.at(i);
+        }
+        out.iter().any(|w| *w > 0.0).then_some(Weights::Masked(out))
+    }
 }
 
 /// True if the layer is visible and has an enabled blend entry for the channel.

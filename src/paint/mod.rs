@@ -58,7 +58,7 @@ pub use effect::{ContentEffect, Effect, EffectKind, EffectRegistry, GreyBlend, M
 pub use embedded::EmbeddedAsset;
 pub use fill_image::{FillImage, FillImageRef, ImageFill};
 pub use fragment::{Fragment, FragmentContent, FragmentKind};
-pub use geometry_mask::GeometryMask;
+pub use geometry_mask::{GeometryMask, Inclusion};
 pub use image::{ImageError, Rect, TILE_SIZE, Tile, TiledImage};
 pub use layer::{ChannelBlend, Fill, FillSource, Layer, LayerImage, LayerKind, PaintContent};
 pub use mask::Mask;

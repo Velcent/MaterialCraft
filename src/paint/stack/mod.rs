@@ -2,8 +2,10 @@
 //!
 //! Rules, bottom to top, starting from the channel default with coverage 0:
 //! - hidden layers, layers without a blend entry for the channel and `Disable` entries are skipped;
-//! - a layer's strength is `layer opacity × entry opacity × mask`; the mask is its initial value with its
-//!   effects on top ([`crate::paint::mask`]), a disabled mask counts as 1;
+//! - a layer's strength is `layer opacity × entry opacity × mask × geometry mask`; the mask is its initial value
+//!   with its effects on top ([`crate::paint::mask`]), a disabled mask counts as 1; the geometry mask is 1 on the
+//!   mesh parts it includes and 0 elsewhere, from the [`FillContext`]'s surface map (without one it counts as 1 and
+//!   is reported);
 //! - a layer's content is its base (paint image with alpha = coverage, uniform fill with coverage 1, image
 //!   fill through its projection; other sources through the [`FillContext`], else skipped and reported) with its content effects on top, each blended by its own entry for the
 //!   channel; the content is blended over the stack with the layer's mode and strength;
@@ -39,6 +41,7 @@ mod below;
 mod content;
 mod fill_context;
 mod fill_eval;
+mod geometry;
 mod mask_eval;
 mod native;
 mod pass;
@@ -222,5 +225,7 @@ mod tests;
 mod tests_effects;
 #[cfg(test)]
 mod tests_fills;
+#[cfg(test)]
+mod tests_geometry;
 #[cfg(test)]
 mod tests_native;

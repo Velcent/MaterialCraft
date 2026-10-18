@@ -1,5 +1,6 @@
 //! A layer's strength over a rectangle: its opacity times its mask. The mask is its initial value with its
-//! effects blended on top (see [`crate::paint::mask`]); effects the compositor cannot evaluate are left out.
+//! effects blended on top (see [`crate::paint::mask`]); effects the compositor cannot evaluate are left out. The
+//! geometry mask (see `geometry`) is multiplied in last.
 
 use super::Compositor;
 use super::below::LayerStack;
@@ -11,8 +12,17 @@ use crate::paint::layer::Layer;
 use crate::paint::mask::{Mask, mix_grey};
 
 impl Compositor<'_> {
-    /// The layer's strength over `r`, or `None` where it has no effect at all.
+    /// The layer's strength over `r` (opacity × mask × geometry mask), or `None` where it has no effect at all.
     pub(super) fn layer_weights(&self, l: &Layer, strength: f32, r: Rect) -> Option<Weights> {
+        let weights = self.mask_weights(l, strength, r)?;
+        match self.geometry_coverage(l, r) {
+            Some(geometry) => weights.times(geometry),
+            None => Some(weights),
+        }
+    }
+
+    /// The layer's strength over `r` from its opacity and mask only.
+    fn mask_weights(&self, l: &Layer, strength: f32, r: Rect) -> Option<Weights> {
         let strength = if strength.is_finite() { strength.clamp(0.0, 1.0) } else { 0.0 };
         if strength <= 0.0 {
             return None;

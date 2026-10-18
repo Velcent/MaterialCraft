@@ -7,6 +7,7 @@ use super::pass::affects;
 use crate::paint::blend::BlendMode;
 use crate::paint::channel::Channel;
 use crate::paint::effect::EffectKind;
+use crate::paint::geometry_mask::GeometryMask;
 use crate::paint::layer::{Layer, LayerImage, LayerKind};
 use crate::paint::validate::MAX_GROUP_DEPTH;
 use crate::projection::NotComputable;
@@ -25,8 +26,11 @@ pub enum CompositeWarning {
     EffectNotComputable { layer: String, in_mask: bool, index: usize, kind: String },
     /// Content effects on a pass-through group are not evaluated.
     GroupEffectsSkipped { layer: String },
-    /// The layer's geometry mask is not applied yet.
-    GeometryMaskIgnored { layer: String },
+    /// The layer's geometry mask lists mesh parts and the compositor has no surface map for the set; the layer was
+    /// applied without it.
+    GeometryMaskNeedsMesh { layer: String },
+    /// The layer's geometry mask lists UV tiles, which the format does not have yet; the layer was applied without it.
+    UvTileMaskNotComputable { layer: String },
     /// A fill (the layer's own, or content effect `effect`) projects from a volume and the compositor has no
     /// surface map for the set (no mesh, or the set's UV set is missing); it was left out instead of guessed.
     FillNeedsMesh { layer: String, effect: Option<usize>, mode: String },
@@ -82,8 +86,11 @@ impl Compositor<'_> {
                 out.push(CompositeWarning::EffectNotComputable { layer: l.id.clone(), in_mask: true, index, kind: e.kind.id().to_string() });
             }
         }
-        if l.geometry_mask.is_some() {
-            out.push(CompositeWarning::GeometryMaskIgnored { layer: l.id.clone() });
+        match &l.geometry_mask {
+            Some(m) if self.geometry_mask_computable(m) => {}
+            Some(GeometryMask::Parts(_)) => out.push(CompositeWarning::GeometryMaskNeedsMesh { layer: l.id.clone() }),
+            Some(GeometryMask::UvTiles(_)) => out.push(CompositeWarning::UvTileMaskNotComputable { layer: l.id.clone() }),
+            None => {}
         }
     }
 }

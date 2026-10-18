@@ -179,7 +179,7 @@ fn group_effects_and_data_only_parts_are_reported() {
     assert!(close(px(&c, 0, 0)[0], 0.5));
     let w = c.warnings(R);
     assert!(w.contains(&CompositeWarning::GroupEffectsSkipped { layer: "g".into() }), "{w:?}");
-    assert!(w.contains(&CompositeWarning::GeometryMaskIgnored { layer: "g".into() }), "{w:?}");
+    assert!(w.contains(&CompositeWarning::GeometryMaskNeedsMesh { layer: "g".into() }), "{w:?}");
 }
 
 /// Mask value 1 where the layer's own height is above the height below it, else 0.

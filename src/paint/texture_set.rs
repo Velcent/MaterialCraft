@@ -3,6 +3,7 @@
 use super::bake_config::SetBakeConfig;
 use super::channel::{Channel, ChannelSpec};
 use super::effect::{Content, EffectKind, Grey, Procedural};
+use super::geometry_mask::GeometryMask;
 use super::image::TiledImage;
 use super::layer::{Layer, LayerKind, LayerWalk};
 use crate::projection::ProjectionMode;
@@ -137,11 +138,12 @@ impl TextureSet {
             .any(|(_, l)| l.effects.iter().any(|e| picks(e.kind.id())) || l.mask.as_ref().is_some_and(|m| m.effects.iter().any(|e| picks(e.kind.id()))))
     }
 
-    /// True if compositing reads the set's surface map: a polygon fill, or a fill, fill effect or procedural texture
-    /// projected from a volume (tri-planar, planar, spherical, cylindrical). Without the surface map those are left out
-    /// and reported ([`super::stack::CompositeWarning::FillNeedsMesh`]).
+    /// True if compositing reads the set's surface map: a polygon fill, a geometry mask listing parts, or a fill, fill
+    /// effect or procedural texture projected from a volume (tri-planar, planar, spherical, cylindrical). Without the
+    /// surface map those are left out (geometry masks: not applied) and reported
+    /// ([`super::stack::CompositeWarning::FillNeedsMesh`], [`super::stack::CompositeWarning::GeometryMaskNeedsMesh`]).
     pub fn needs_surface(&self) -> bool {
-        self.uses_polygon_fill() || self.walk_layers().any(|(_, l)| projects_from_volume(l))
+        self.uses_polygon_fill() || self.walk_layers().any(|(_, l)| projects_from_volume(l) || matches!(l.geometry_mask, Some(GeometryMask::Parts(_))))
     }
 
     /// The first baked map of `kind`.

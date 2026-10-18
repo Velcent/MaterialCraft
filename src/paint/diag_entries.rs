@@ -58,7 +58,8 @@ pub fn composite_warning(set: &TextureSet, warning: &CompositeWarning) -> Entry 
             format!("{stack} effect {} ({kind}) can't be computed yet and is left out", index.saturating_add(1))
         }
         CompositeWarning::GroupEffectsSkipped { .. } => "effects on a pass-through group are not applied".to_owned(),
-        CompositeWarning::GeometryMaskIgnored { .. } => "its geometry mask is not applied yet".to_owned(),
+        CompositeWarning::GeometryMaskNeedsMesh { .. } => "its geometry mask needs the mesh and is not applied".to_owned(),
+        CompositeWarning::UvTileMaskNotComputable { .. } => "its geometry mask lists UV tiles, which are not supported yet, and is not applied".to_owned(),
         CompositeWarning::FillNeedsMesh { effect, mode, .. } => {
             format!("{} uses a {mode} projection, which needs the mesh, and is left out", fill_name(*effect))
         }
@@ -75,7 +76,8 @@ fn layer_of(w: &CompositeWarning) -> &str {
         | CompositeWarning::ImageSizeMismatch { layer }
         | CompositeWarning::EffectNotComputable { layer, .. }
         | CompositeWarning::GroupEffectsSkipped { layer }
-        | CompositeWarning::GeometryMaskIgnored { layer }
+        | CompositeWarning::GeometryMaskNeedsMesh { layer }
+        | CompositeWarning::UvTileMaskNotComputable { layer }
         | CompositeWarning::FillNeedsMesh { layer, .. }
         | CompositeWarning::ProjectionNotComputable { layer, .. } => layer,
     }
@@ -116,7 +118,7 @@ mod tests {
         set.layers.push(Layer::new("l7", "Rust", LayerKind::Paint(PaintContent::default())));
         let w = [
             CompositeWarning::EffectNotComputable { layer: "l7".into(), in_mask: true, index: 0, kind: "hologram".into() },
-            CompositeWarning::GeometryMaskIgnored { layer: "gone".into() },
+            CompositeWarning::GeometryMaskNeedsMesh { layer: "gone".into() },
         ];
         let es = composite_warnings(&set, &w);
         assert_eq!(es[0].text, "Body / Rust: mask effect 1 (hologram) can't be computed yet and is left out.");
