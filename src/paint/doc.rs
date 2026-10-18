@@ -4,6 +4,7 @@ use super::bake_config::BakeLinks;
 use super::embedded::EmbeddedAsset;
 use super::height_normal::HeightFilter;
 use super::report::ImportReport;
+use super::saved_view::SavedView;
 use super::texture_set::TextureSet;
 use super::validate::{self, DocError};
 use crate::mesh::Mesh;
@@ -32,6 +33,8 @@ pub struct Document {
     pub assets: Vec<EmbeddedAsset>,
     /// Present if the document came from an import.
     pub import_report: Option<ImportReport>,
+    /// The cameras, exposure and environment it was last looked at with (display state; ADR 0008 mc2-vq15).
+    pub view: Option<SavedView>,
 }
 
 impl Document {

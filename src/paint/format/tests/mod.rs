@@ -13,3 +13,4 @@ mod projections;
 mod round_trip;
 mod strokes;
 mod unknown_fields;
+mod view;

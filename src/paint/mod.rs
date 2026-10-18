@@ -43,6 +43,7 @@ pub(crate) mod par;
 pub mod pixel;
 pub mod probe;
 pub mod report;
+pub mod saved_view;
 pub mod see_through;
 pub mod stack;
 pub mod stroke;

@@ -8,6 +8,7 @@
 //!   references of paint pixels.
 //! - [`effect`] (with [`effect_content`], [`effect_mask`], [`effect_kinds`]), [`blend`], [`geometry_mask`]:
 //!   effect stacks, blend entries and geometry masks of layers.
+//! - [`view`]: the camera list, exposure and environment the document was last looked at with.
 
 pub mod bake_config;
 pub mod bake_enums;
@@ -26,6 +27,7 @@ pub mod projection;
 pub mod report;
 pub mod strokes;
 pub mod texture_set;
+pub mod view;
 
 use super::paths::{self, ImagePlan};
 use super::slot::ImageSlot;
@@ -107,6 +109,9 @@ pub fn write(doc: &Document, ctx: &WriteCtx, thumbnail: bool) -> Value {
     if !doc.assets.is_empty() {
         v.insert("assets", super::embedded::manifest(&doc.assets));
     }
+    if let Some(view) = &doc.view {
+        v.insert("view", view::write(view, ctx.extras));
+    }
     if doc.import_report.is_some() {
         v.insert("import_report", paths::IMPORT_REPORT);
     }
@@ -140,6 +145,7 @@ pub fn read(root: &Value) -> Result<Manifest, FormatError> {
         .ok_or_else(|| o.error("foreign", "expected an array of paths"))?;
     let assets = super::embedded::references(o.array("assets")?, &o.path("assets"))?;
     let mesh_faces = mesh_faces::read(&mut o)?;
+    doc.view = view::read(&mut o, &mut ctx);
     let manifest = Manifest {
         version,
         mesh: o.str("mesh")?.to_string(),
