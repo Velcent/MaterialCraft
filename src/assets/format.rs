@@ -1,7 +1,7 @@
 //! Which files in a library are assets, sidecars or thumbnails (AS-23).
 //!
 //! Only MaterialCraft's own formats are assets: `.mca` graphs, PNG and OpenEXR images, Radiance `.hdr` environment
-//! maps, `.mcfrag` fragments (smart materials and smart masks). A `.sbsar`
+//! maps, `.mcfrag` fragments (smart materials and smart masks), `.mcbrush` brush presets. A `.sbsar`
 //! file is recognised so the tray can show it as *importable*; it is never run (ADR 0008,
 //! q-sbsar-in-library).
 
@@ -25,13 +25,15 @@ pub enum Format {
     Hdr,
     /// A smart material or smart mask (`.mcfrag`, [`crate::paint::format::fragment`]); the file says which.
     Fragment,
+    /// A brush preset (`.mcbrush`, [`crate::paint::brush::file`]).
+    Brush,
     /// A Substance archive: shown as importable only, never shipped or run.
     Sbsar,
 }
 
 impl Format {
     /// Every format.
-    pub const ALL: [Format; 6] = [Format::Graph, Format::Png, Format::Exr, Format::Hdr, Format::Fragment, Format::Sbsar];
+    pub const ALL: [Format; 7] = [Format::Graph, Format::Png, Format::Exr, Format::Hdr, Format::Fragment, Format::Brush, Format::Sbsar];
 
     /// The format of a file name, by its extension (case-insensitive).
     pub fn of(file_name: &str) -> Option<Format> {
@@ -48,6 +50,7 @@ impl Format {
             Format::Exr => "exr",
             Format::Hdr => "hdr",
             Format::Fragment => crate::paint::format::fragment::EXTENSION,
+            Format::Brush => crate::paint::brush::file::EXTENSION,
             Format::Sbsar => "sbsar",
         }
     }

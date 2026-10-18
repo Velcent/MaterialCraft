@@ -8,6 +8,7 @@ use crate::engine::{EngineExtras, InputPoint};
 use crate::session::{Finished, SessionScene, StrokeSession, StrokeSetup};
 use crate::stroke::LazyMouse;
 use crate::target::PaintValues;
+use crate::tips::{AlphaSource, NoAlphas, alpha_for};
 use materialcraft::mesh::{Mesh, Sphere, SurfaceMap};
 use materialcraft::paint::brush::{BrushPreset, RecordedBrush, Retouch};
 use materialcraft::paint::stroke::{Stroke, StrokeTool, ViewKind};
@@ -54,22 +55,22 @@ pub fn recorded_values(brush: &RecordedBrush) -> PaintValues {
 
 /// Paints `stroke` again into `targets` (built with [`recorded_values`] and [`crate::target::mode_for`] of the stroke's
 /// tool and recorded retouch settings).
+/// Alpha-image tips paint round here; [`replay_with`] finds them.
 pub fn replay(stroke: &Stroke, scene: &ReplayScene, targets: &mut [ChannelTarget]) -> Result<Finished, BrushError> {
+    replay_with(stroke, scene, targets, &NoAlphas)
+}
+
+/// [`replay`], with the alpha image of a brush with an alpha-image tip taken from `alphas`.
+pub fn replay_with(stroke: &Stroke, scene: &ReplayScene, targets: &mut [ChannelTarget], alphas: &dyn AlphaSource) -> Result<Finished, BrushError> {
     if stroke.tool == StrokeTool::Projection {
         // the record keeps the camera but not the projected image and its placement (PJ-28)
         return Err(BrushError::NotReplayable("projection strokes do not record their image yet"));
     }
     let brush = recorded_brush(stroke)?;
     let camera = stroke.camera.on_viewport(brush.viewport);
-    let painting = Painting {
-        preset: &brush.preset,
-        extras: &EngineExtras::default(),
-        lazy: None,
-        values: recorded_values(&brush),
-        occlusion: true,
-        model: None,
-        retouch: brush.retouch,
-    };
+    let extras = EngineExtras { tip: alpha_for(&brush.preset.tip, alphas), ..EngineExtras::default() };
+    let painting =
+        Painting { preset: &brush.preset, extras: &extras, lazy: None, values: recorded_values(&brush), occlusion: true, model: None, retouch: brush.retouch };
     paint(stroke, &painting, camera, scene, targets)
 }
 

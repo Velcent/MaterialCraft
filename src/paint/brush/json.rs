@@ -5,17 +5,18 @@ use super::preset::{BrushPreset, Jitter, Placement, PressureUse, SizeSpace, Tip}
 use crate::json::Value;
 
 /// The format version written into each preset.
-pub const PRESET_VERSION: u64 = 1;
+/// Version 2 added procedural and alpha-image tips (`tip` names the kind, `tipRef` the tip).
+pub const PRESET_VERSION: u64 = 2;
 
 impl BrushPreset {
     pub fn to_json(&self) -> Value {
         let j = &self.jitter;
-        Value::object()
+        let v = Value::object()
             .with("version", PRESET_VERSION)
             .with("name", self.name.as_str())
             .with("size", self.size)
             .with("sizeSpace", self.size_space.id())
-            .with("tip", self.tip.id())
+            .with("tip", self.tip.kind())
             .with("hardness", self.hardness)
             .with("flow", self.flow)
             .with("opacity", self.opacity)
@@ -26,7 +27,11 @@ impl BrushPreset {
             .with("jitter", Value::object().with("size", j.size).with("flow", j.flow).with("angle", j.angle).with("position", j.position))
             .with("pressure", Value::object().with("size", self.pressure.size).with("flow", self.pressure.flow))
             .with("placement", self.placement.id())
-            .with("maxAngle", self.max_angle)
+            .with("maxAngle", self.max_angle);
+        match self.tip.reference() {
+            Some(r) => v.with("tipRef", r),
+            None => v,
+        }
     }
 
     /// Reads a preset; missing or unreadable fields keep the default's value. `None` if `v` is not an object.
@@ -41,7 +46,7 @@ impl BrushPreset {
             name: field(v, "name").as_str().map_or(d.name.clone(), str::to_string),
             size: num(field(v, "size"), d.size),
             size_space: field(v, "sizeSpace").as_str().and_then(SizeSpace::from_id).unwrap_or(d.size_space),
-            tip: field(v, "tip").as_str().and_then(Tip::from_id).unwrap_or(d.tip),
+            tip: field(v, "tip").as_str().and_then(|k| Tip::from_parts(k, field(v, "tipRef").as_str())).unwrap_or_default(),
             hardness: num(field(v, "hardness"), d.hardness),
             flow: num(field(v, "flow"), d.flow),
             opacity: num(field(v, "opacity"), d.opacity),

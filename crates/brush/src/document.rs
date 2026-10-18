@@ -93,6 +93,12 @@ impl DocumentStroke {
         Ended { owner: resolved.owner, target, inverses, captures, base, finished: None }
     }
 
+    /// Builder, before the first [`DocumentStroke::add`]: paint with `extras` (an alpha-image tip,
+    /// [`StrokeSession::with_extras`]).
+    pub fn with_extras(self, extras: crate::engine::EngineExtras) -> DocumentStroke {
+        DocumentStroke { session: self.session.with_extras(extras), ..self }
+    }
+
     /// Paints `points` (see [`StrokeSession::add`]); returns the changed tiles of the set's images.
     pub fn add(&mut self, scene: &SessionScene, points: &[InputPoint], set: &mut TextureSet) -> Result<Vec<(u32, u32)>, BrushError> {
         let mut targets = self.target.projected_targets(set, &self.resolved, self.mode, scene.projected)?;

@@ -1,10 +1,35 @@
 //! PhotoCraft's procedural brush tips (`photocraft_paint::procedural`): generated, seeded greyscale tips (chalk,
 //! spatter, bristles …) written for PhotoCraft from scratch, no bundled brush files. The starter library ships them
-//! as alphas (ADR 0008 rm-starter-scope). Besides [`super::photocraft`], this is the only file naming
-//! `photocraft_paint`.
+//! as alphas (ADR 0008 rm-starter-scope), and a preset's procedural tip ([`Tip::Procedural`]) is rendered here
+//! ([`procedural_tip_alpha`]), so it paints, and replays, without any image. Besides [`super::photocraft`], this is the only
+//! file naming `photocraft_paint`.
+//!
+//! [`Tip::Procedural`]: materialcraft::paint::brush::Tip::Procedural
 
+use super::TipAlpha;
 use photocraft_paint::GrayTile;
 use photocraft_paint::procedural as pc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
+
+/// Side of a procedural tip as a preset's tip: the starter library's alphas have this size too, so a brush with the
+/// tip and one with its alpha paint the same.
+pub const PROCEDURAL_TIP_PX: u32 = 256;
+
+/// The procedural tip `id` as a stamp tip, [`PROCEDURAL_TIP_PX`] square; rendered once per id and process. `None` for an unknown
+/// id.
+pub fn procedural_tip_alpha(id: &str) -> Option<TipAlpha> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Arc<TipAlpha>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(Mutex::default);
+    if let Some(t) = cache.lock().ok().and_then(|c| c.get(id).cloned()) {
+        return Some((*t).clone());
+    }
+    let tip = TipAlpha::new(PROCEDURAL_TIP_PX, PROCEDURAL_TIP_PX, procedural_tip(id, PROCEDURAL_TIP_PX)?)?;
+    if let Ok(mut c) = cache.lock() {
+        c.insert(id.to_string(), Arc::new(tip.clone()));
+    }
+    Some(tip)
+}
 
 /// One procedural tip: its id, a display name and how PhotoCraft makes it (function and fixed arguments, for the
 /// asset's provenance).

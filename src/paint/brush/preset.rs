@@ -60,22 +60,47 @@ impl Placement {
     }
 }
 
-/// The shape of every stamp (PT-11). Image tips come with the asset tray.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The shape of every stamp (PT-11, AS-06).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Tip {
     /// A round tip whose edge softness is the preset's hardness.
+    #[default]
     Round,
+    /// A built-in procedural tip (chalk, spatter, bristles …) by its id: the brush crate renders it, so the preset
+    /// needs no image and a stroke painted with it replays without the library.
+    Procedural(String),
+    /// A greyscale alpha image (white paints) by its library-relative path (`alphas/scratch.png`), looked up in the
+    /// asset libraries like material references.
+    Alpha(String),
 }
 
 impl Tip {
-    pub fn id(self) -> &'static str {
+    /// The tip's kind as a preset writes it: `round`, `procedural` or `alpha`.
+    pub fn kind(&self) -> &'static str {
         match self {
             Tip::Round => "round",
+            Tip::Procedural(_) => "procedural",
+            Tip::Alpha(_) => "alpha",
         }
     }
 
-    pub fn from_id(id: &str) -> Option<Tip> {
-        (id == "round").then_some(Tip::Round)
+    /// The procedural tip's id or the alpha's reference; `None` for the round tip.
+    pub fn reference(&self) -> Option<&str> {
+        match self {
+            Tip::Round => None,
+            Tip::Procedural(r) | Tip::Alpha(r) => Some(r),
+        }
+    }
+
+    /// The tip of `kind` with `reference`; `None` for an unknown kind, or a procedural or alpha tip without one.
+    pub fn from_parts(kind: &str, reference: Option<&str>) -> Option<Tip> {
+        let reference = reference.filter(|r| !r.trim().is_empty()).map(str::to_string);
+        match kind {
+            "round" => Some(Tip::Round),
+            "procedural" => reference.map(Tip::Procedural),
+            "alpha" => reference.map(Tip::Alpha),
+            _ => None,
+        }
     }
 }
 
@@ -170,7 +195,7 @@ impl BrushPreset {
             name: self.name.clone(),
             size: fix(self.size, d.size, 1e-4, 10_000.0),
             size_space: self.size_space,
-            tip: self.tip,
+            tip: self.tip.clone(),
             hardness: unit(self.hardness, d.hardness),
             flow: unit(self.flow, d.flow),
             opacity: unit(self.opacity, d.opacity),

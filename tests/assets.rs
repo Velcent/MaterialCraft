@@ -275,6 +275,28 @@ fn usage_comes_from_the_sidecar_then_the_folder_then_the_format() {
 }
 
 #[test]
+fn brush_presets_are_brushes_wherever_they_lie() {
+    use materialcraft::paint::brush::{BrushPreset, Tip};
+    let dir = scratch("brush-presets");
+    let preset = BrushPreset { name: "Chalk line".into(), tip: Tip::Procedural("chalk".into()), ..BrushPreset::default() };
+    write(&dir, "brushes/chalk.mcbrush", &preset.to_file_text());
+    write(&dir, "materials/stray.mcbrush", &BrushPreset::default().to_file_text());
+    write(&dir, "brushes/chalk.mcbrush.thumb.png", "p");
+    write(&dir, "alphas/dots.png", "p");
+    let lib = Library::with_roots([LibraryRoot::folder("u", "U", RootKind::User, &dir)], &Keep::default());
+    let cat = lib.catalogue();
+    let get = |p: &str| cat.get(&RootId::new("u"), p).unwrap().clone();
+    let chalk = get("brushes/chalk.mcbrush");
+    assert_eq!((chalk.usage, chalk.format), (Usage::Brush, Format::Brush));
+    assert_eq!(chalk.thumbnail, Thumbnail::File("brushes/chalk.mcbrush.thumb.png".into()));
+    assert_eq!(get("materials/stray.mcbrush").usage, Usage::Brush, "the file says what it is");
+    assert_eq!(get("alphas/dots.png").usage, Usage::Alpha);
+    assert_eq!(cat.find(&Search::text("usage:brush")).len(), 2);
+    assert_eq!(cat.find(&Search::text("format:mcbrush")).len(), 2);
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn sidecars_round_trip_with_provenance() {
     let cases = [
         Provenance::Unknown,

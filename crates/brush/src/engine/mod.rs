@@ -11,7 +11,7 @@ mod photocraft_tips;
 
 pub use photocraft_curve::ResponseCurve;
 pub use photocraft_smudge::SmudgeKernel;
-pub use photocraft_tips::{PROCEDURAL_TIPS, TipInfo, procedural_tip};
+pub use photocraft_tips::{PROCEDURAL_TIP_PX, PROCEDURAL_TIPS, TipInfo, procedural_tip, procedural_tip_alpha};
 
 use materialcraft::paint::brush::BrushPreset;
 use materialcraft::stamp::DabSample;
@@ -127,6 +127,22 @@ mod tests {
         // 117 units of path at 5 units per dab
         assert!((22..=26).contains(&a.len()), "{}", a.len());
         assert!(a.iter().all(|d| !d.footprint.values.is_empty() && d.opacity == 1.0));
+    }
+
+    #[test]
+    fn a_procedural_tip_paints_like_its_alpha_image_and_unlike_the_round_tip() {
+        let chalk = BrushPreset { tip: materialcraft::paint::brush::Tip::Procedural("chalk".into()), ..BrushPreset::default() };
+        let pts = line(30);
+        let procedural = dabs(&chalk, &pts, 4);
+        assert_ne!(procedural, dabs(&BrushPreset::default(), &pts, 4));
+        let extras = EngineExtras { tip: procedural_tip_alpha("chalk"), ..EngineExtras::default() };
+        let mut e = DabEngine::with_extras(&BrushPreset::default(), &extras, 20.0, 7);
+        let mut image = Vec::new();
+        e.push(&pts, &mut image);
+        e.finish(&mut image);
+        assert_eq!(procedural, image);
+        let unknown = BrushPreset { tip: materialcraft::paint::brush::Tip::Procedural("nope".into()), ..BrushPreset::default() };
+        assert_eq!(dabs(&unknown, &pts, 4), dabs(&BrushPreset::default(), &pts, 4), "an unknown tip paints round");
     }
 
     #[test]

@@ -188,9 +188,11 @@ fn settings(preset: &BrushPreset, extras: &EngineExtras, diameter: f32, seed: u6
         seed,
         ..BrushSettings::default()
     };
-    s.tip = match (&extras.tip, p.tip) {
+    // an alpha-image tip comes in the extras (the host loads it); without them it paints round
+    s.tip = match (&extras.tip, &p.tip) {
         (Some(t), _) => sampled(t).unwrap_or(TipShape::Round),
-        (None, Tip::Round) => TipShape::Round,
+        (None, Tip::Procedural(id)) => super::photocraft_tips::procedural_tip_alpha(id).and_then(|t| sampled(&t)).unwrap_or(TipShape::Round),
+        (None, Tip::Round | Tip::Alpha(_)) => TipShape::Round,
     };
     s.smoothing.enabled = false;
     let sd = &mut s.shape_dynamics;

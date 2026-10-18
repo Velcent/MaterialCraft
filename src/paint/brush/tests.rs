@@ -70,3 +70,43 @@ fn recorded_brushes_round_trip_through_their_reference() {
     assert!(RecordedBrush::from_reference("substance:DataBrush/12").is_none());
     assert!(RecordedBrush::from_reference(&format!("{REFERENCE_PREFIX}{{broken")).is_none());
 }
+
+#[test]
+fn tips_round_trip_and_bad_ones_fall_back_to_round() {
+    for tip in [Tip::Round, Tip::Procedural("chalk".into()), Tip::Alpha("alphas/scratch 2.png".into())] {
+        let p = BrushPreset { tip: tip.clone(), ..odd_preset() };
+        assert_eq!(BrushPreset::from_json(&json::parse(&p.to_json().to_string()).unwrap()).map(|p| p.tip), Some(tip));
+    }
+    let v = json::parse(r#"{"tip": "alpha"}"#).unwrap();
+    assert_eq!(BrushPreset::from_json(&v).unwrap().tip, Tip::Round, "an alpha tip without its image is round");
+    let v = json::parse(r#"{"version": 1, "tip": "round"}"#).unwrap();
+    assert_eq!(BrushPreset::from_json(&v).unwrap().tip, Tip::Round, "version 1 presets still read");
+}
+
+/// The gate of roadmap step 45: a saved preset reloads bit for bit, and saving it again writes the same bytes.
+#[test]
+fn a_saved_preset_file_reloads_bit_identically() {
+    let awkward = [0.1f32, 1.0 / 3.0, f32::MIN_POSITIVE, 0.123_456_79, 7.0e-5, 359.99997];
+    for (i, x) in awkward.iter().enumerate() {
+        let p = BrushPreset {
+            size: *x,
+            hardness: awkward[(i + 1) % awkward.len()],
+            flow: awkward[(i + 2) % awkward.len()],
+            angle: -*x,
+            tip: if i % 2 == 0 { Tip::Procedural("spatter".into()) } else { Tip::Alpha("alphas/ü ñ \"q\".png".into()) },
+            ..odd_preset()
+        };
+        let text = p.to_file_text();
+        let back = BrushPreset::from_file_text(&text).unwrap();
+        assert_eq!(back, p);
+        let bits = |p: &BrushPreset| {
+            let j = p.jitter;
+            [p.size, p.hardness, p.flow, p.opacity, p.spacing, p.angle, p.roundness, p.max_angle, j.size, j.flow, j.angle, j.position].map(f32::to_bits)
+        };
+        assert_eq!(bits(&back), bits(&p));
+        assert_eq!(back.to_file_text(), text, "saving the reloaded preset writes the same file");
+    }
+    assert!(BrushPreset::from_file_text(r#"{"format": "materialcraft-starter"}"#).is_err());
+    assert!(BrushPreset::from_file_text("[1]").is_err() && BrushPreset::from_file_text("{").is_err());
+    assert_eq!(BrushPreset::from_file_text(r#"{"size": 2}"#).unwrap().size, 2.0, "hand-written presets need no tag");
+}

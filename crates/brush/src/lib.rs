@@ -19,6 +19,8 @@
 //! - [`replay`]: painting a recorded stroke again, bit for bit; imported strokes with a mapped [`ReplayBrush`].
 //! - [`stroke`]: input transforms in front of a session: [`LazyMouse`], straight lines ([`LineAnchor`]).
 //! - [`symmetry`]: symmetric copies in a stroke record's form, built the same way live and on replay.
+//! - [`tips`]: alpha-image tips found in the asset libraries ([`FolderAlphas`]); [`preview`]: a brush's sample
+//!   stroke for its tray thumbnail ([`stroke_preview`]).
 //!
 //! Rule: the std-only core never depends on this crate; it sees only plain dabs and coverage grids.
 
@@ -27,6 +29,7 @@
 pub mod clone_source;
 pub mod document;
 pub mod engine;
+pub mod preview;
 pub mod quick_mask;
 pub mod replay;
 pub mod see_through;
@@ -34,16 +37,22 @@ pub mod session;
 pub mod stroke;
 pub mod symmetry;
 pub mod target;
+pub mod tips;
 
 pub use clone_source::{CloneSource, SourceMode, texel_under};
 pub use document::{Base, DocumentStroke, Ended, Prepared};
-pub use engine::{DabEngine, EngineExtras, InputPoint, PROCEDURAL_TIPS, ResponseCurve, SmudgeKernel, TipAlpha, TipInfo, procedural_tip};
+pub use engine::{
+    DabEngine, EngineExtras, InputPoint, PROCEDURAL_TIP_PX, PROCEDURAL_TIPS, ResponseCurve, SmudgeKernel, TipAlpha, TipInfo, procedural_tip,
+    procedural_tip_alpha,
+};
+pub use preview::stroke_preview;
 pub use quick_mask::{QuickMask, QuickMaskState, QuickMaskStroke};
-pub use replay::{ReplayBrush, ReplayScene, recorded_brush, recorded_values, replay, replay_imported};
+pub use replay::{ReplayBrush, ReplayScene, recorded_brush, recorded_values, replay, replay_imported, replay_with};
 pub use see_through::{BelowSource, Refreshed, SeeThroughCache, repaint};
 pub use session::{Finished, SessionScene, StrokeSession, StrokeSetup};
 pub use stroke::{LazyMouse, LineAnchor};
 pub use target::{PaintTarget, PaintValues, Resolved, TargetPart, mode_for};
+pub use tips::{AlphaSource, FolderAlphas, NoAlphas, alpha_for, decode_alpha};
 
 use materialcraft::paint::edit::EditError;
 use materialcraft::stamp::StampError;
