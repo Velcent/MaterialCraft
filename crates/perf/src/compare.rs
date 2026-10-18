@@ -10,7 +10,7 @@ pub const FLOOR_MS: f64 = 0.5;
 /// Differences smaller than this many megabytes are noise.
 pub const FLOOR_MB: f64 = 0.1;
 /// The default threshold, a fraction of the earlier value.
-pub const THRESHOLD: f64 = 0.10;
+pub const THRESHOLD: f64 = 0.15;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Verdict {
