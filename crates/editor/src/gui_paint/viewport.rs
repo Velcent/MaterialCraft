@@ -2,10 +2,12 @@
 //! default Alt+left orbit, Alt+Shift+left orbit snapping to axis views, Alt+middle pan,
 //! Alt+right or the wheel zoom, Shift+right turns the light; ADR 0008 mc2-vq12); drawing goes
 //! through the shared GPU renderer in an egui paint callback with the [`ViewState`]'s display settings, and keeps
-//! painting while a still view accumulates. The axis gizmo sits in the lower-right corner.
+//! painting while a still view accumulates. The axis gizmo sits in the lower-right corner. The environment the view
+//! names is prepared by its [`EnvironmentLoader`].
 
 use super::axis_gizmo;
 use super::channel_view::ChannelView;
+use super::environment::{EnvironmentLoader, EnvironmentStatus};
 use super::input::stylus::StylusFeed;
 use super::input::{PointerLog, StrokeInput};
 use super::navigation;
@@ -20,6 +22,7 @@ use materialcraft::camera::{Camera, Projection};
 use materialcraft::diag::Sink;
 use materialcraft::gpu3d::{self, Shared};
 use materialcraft::render3d::View;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 const BACKGROUND: Color32 = crate::gui_theme::HEADER_BG;
@@ -52,6 +55,7 @@ pub struct Viewport {
     gizmo_active: bool,
     /// This frame's projection gizmo pointer event.
     gizmo_pointer: Option<GizmoPointer>,
+    environment: EnvironmentLoader,
 }
 
 /// A drag of the stencil's or projection image's gizmo (the stencil key held).
@@ -95,6 +99,7 @@ impl Viewport {
             gizmo_hover: false,
             gizmo_active: false,
             gizmo_pointer: None,
+            environment: EnvironmentLoader::default(),
         }
     }
 
@@ -109,6 +114,23 @@ impl Viewport {
 
     pub fn state(&self) -> &ViewState {
         &self.state
+    }
+
+    /// Lights the view with the environment map at library path `map` (`None`: the built-in studio).
+    pub fn set_environment_map(&mut self, map: Option<String>) {
+        self.state.set_environment_map(map);
+    }
+
+    /// Prepares the environment the view names when it changed; `roots` are the library folders maps are looked
+    /// up in. Returns true while a map is being prepared.
+    pub fn sync_environment(&mut self, roots: &[PathBuf]) -> bool {
+        self.environment.sync(self.state.environment_map(), roots, &self.gpu, &*self.diag);
+        self.environment.is_busy()
+    }
+
+    /// What lights the view.
+    pub fn environment_status(&self) -> &EnvironmentStatus {
+        self.environment.status()
     }
 
     /// The renderer's options (height self-shadowing, anisotropic filtering).

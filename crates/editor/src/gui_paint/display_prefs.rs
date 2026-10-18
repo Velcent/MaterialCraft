@@ -6,7 +6,8 @@ use super::view_state::ViewState;
 use crate::gui_settings::UserSettings;
 use crate::gui_settings::display::{DisplaySettings as Prefs, ProjectDisplayDefaults};
 use materialcraft::camera::{CameraSettings, Orbit, Projection};
-use materialcraft::gpu3d::{Antialiasing, GpuOpts, ToneCurve};
+use materialcraft::gpu3d::{Antialiasing, GpuOpts, ShadowQuality, ToneCurve};
+use materialcraft::paint::saved_view::SavedEnvironment;
 
 /// A view state from the user's defaults (a document's own view is applied on top when it has one).
 pub fn state_from(p: &Prefs) -> ViewState {
@@ -21,6 +22,10 @@ pub fn state_from(p: &Prefs) -> ViewState {
     v.height_scale = finite(p.height_scale, v.height_scale).clamp(0.0, 0.5);
     v.normal_amt = finite(p.normal_strength, v.normal_amt).clamp(0.0, 1.0);
     v.wireframe = p.wireframe;
+    let sh = &mut s.display.shadows;
+    sh.enabled = p.shadows;
+    sh.opacity = finite(p.shadow_opacity, 1.0).clamp(0.0, 1.0);
+    sh.quality = ShadowQuality::from_id(&p.shadow_quality).unwrap_or_default();
     apply_project(&mut s, &p.project);
     s
 }
@@ -43,6 +48,10 @@ pub fn apply_project(s: &mut ViewState, p: &ProjectDisplayDefaults) {
     let e = &mut saved.environment;
     (e.light_yaw, e.light_pitch, e.light_intensity, e.light_follows_camera, e.ambient) =
         (finite(p.light_yaw, 0.9), finite(p.light_pitch, 0.7), finite(p.light_intensity, 3.0), p.light_follows_camera, finite(p.ambient, 1.0));
+    let map = p.environment_map.trim();
+    (e.kind, e.map) = if map.is_empty() { (SavedEnvironment::STUDIO.into(), None) } else { (SavedEnvironment::MAP.into(), Some(map.to_string())) };
+    (e.exposure_stops, e.background_opacity, e.background_blur) =
+        (finite(p.environment_exposure, 0.0), finite(p.background_opacity, 0.0).clamp(0.0, 1.0), finite(p.background_blur, 0.3).clamp(0.0, 1.0));
     s.apply_saved(&saved);
 }
 
@@ -60,6 +69,10 @@ pub fn project_of(s: &ViewState) -> ProjectDisplayDefaults {
         light_intensity: v.light_intensity,
         light_follows_camera: v.light_follows_camera,
         ambient: v.ambient,
+        environment_map: s.environment_map().unwrap_or_default().to_string(),
+        environment_exposure: s.display.environment.exposure_stops,
+        background_opacity: s.display.environment.backdrop.opacity,
+        background_blur: s.display.environment.backdrop.blur,
     }
 }
 
@@ -78,6 +91,9 @@ pub fn sync(settings: &mut UserSettings, s: &ViewState, opts: &GpuOpts) {
         height_self_shadow: opts.self_shadow,
         normal_strength: s.view.normal_amt,
         wireframe: s.view.wireframe,
+        shadows: d.shadows.enabled,
+        shadow_opacity: d.shadows.opacity,
+        shadow_quality: d.shadows.quality.id().into(),
         project: current.project.clone(),
     };
     if &want != current {
@@ -109,11 +125,14 @@ mod tests {
         q.project.projection = "orthographic".into();
         q.project.exposure_stops = 1.0;
         q.project.fov_y_degrees = 25.0;
+        q.project.environment_map = "environments/sky.hdr".into();
+        q.shadow_quality = "fine".into();
         let s = state_from(&q);
         assert_eq!((s.display.tone_curve, s.display.antialiasing, s.display.mip_bias, s.lit_channels), (ToneCurve::Aces, Antialiasing::High, -2.0, true));
         let back = project_of(&s);
         assert_eq!(back.projection, "orthographic");
         assert!((back.fov_y_degrees - 25.0).abs() < 1e-4 && back.exposure_stops == 1.0);
+        assert_eq!((back.environment_map.as_str(), s.display.shadows.quality), ("environments/sky.hdr", ShadowQuality::Fine));
         // damaged values fall back
         let bad = Prefs { tone_curve: "sepia".into(), mip_bias: f32::NAN, ..Prefs::default() };
         let s = state_from(&bad);

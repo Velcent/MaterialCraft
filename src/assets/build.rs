@@ -127,6 +127,7 @@ pub(crate) fn default_usage(format: Format) -> Usage {
     match format {
         Format::Graph | Format::Sbsar => Usage::Material,
         Format::Png | Format::Exr => Usage::Texture,
+        Format::Hdr => Usage::Environment,
         Format::Fragment => Usage::SmartMaterial,
     }
 }

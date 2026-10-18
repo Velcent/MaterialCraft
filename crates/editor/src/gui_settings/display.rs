@@ -1,7 +1,8 @@
 //! `[display]`: the Paint viewport's display settings as user defaults (DS-02, ADR 0008 mc2-vq15). The view
 //! preferences (tone curve, anti-aliasing, texture sharpness, height display, lit channels) follow every change;
 //! the project part (camera, exposure, environment) is what new and imported documents start with, changed only
-//! by "Use as defaults" (a document keeps its own). Enums are stored by id, so the file stays hand-editable.
+//! by "Use as defaults" (a document keeps its own). Shadows are view preferences. Enums are stored by id, so the
+//! file stays hand-editable.
 
 use serde::{Deserialize, Serialize};
 
@@ -24,6 +25,10 @@ pub struct DisplaySettings {
     pub height_self_shadow: bool,
     pub normal_strength: f32,
     pub wireframe: bool,
+    /// Scene shadows (EN-07, EN-08): on, opacity 0…1, and `smooth`, `balanced` or `fine`.
+    pub shadows: bool,
+    pub shadow_opacity: f32,
+    pub shadow_quality: String,
     /// The project part's defaults.
     pub project: ProjectDisplayDefaults,
 }
@@ -41,6 +46,9 @@ impl Default for DisplaySettings {
             height_self_shadow: true,
             normal_strength: 1.0,
             wireframe: false,
+            shadows: true,
+            shadow_opacity: 1.0,
+            shadow_quality: "smooth".into(),
             project: ProjectDisplayDefaults::default(),
         }
     }
@@ -61,6 +69,11 @@ pub struct ProjectDisplayDefaults {
     pub light_intensity: f32,
     pub light_follows_camera: bool,
     pub ambient: f32,
+    /// The environment map's library path; empty for the built-in studio.
+    pub environment_map: String,
+    pub environment_exposure: f32,
+    pub background_opacity: f32,
+    pub background_blur: f32,
 }
 
 impl Default for ProjectDisplayDefaults {
@@ -76,6 +89,10 @@ impl Default for ProjectDisplayDefaults {
             light_intensity: 3.0,
             light_follows_camera: true,
             ambient: 1.0,
+            environment_map: String::new(),
+            environment_exposure: 0.0,
+            background_opacity: 0.0,
+            background_blur: 0.3,
         }
     }
 }

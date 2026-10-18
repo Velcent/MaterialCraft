@@ -12,12 +12,13 @@ mod viewport;
 
 use eframe::egui::{self, Ui};
 
+use super::super::environment::EnvironmentStatus;
 use super::super::view_state::ViewState;
 use super::PanelEvent;
 use materialcraft::gpu3d::Shared;
 
-pub fn show(ui: &mut Ui, state: &mut ViewState, gpu: &Shared, events: &mut Vec<PanelEvent>) {
-    section(ui, "Environment and shadows", |ui| environment::show(ui, state, gpu));
+pub fn show(ui: &mut Ui, state: &mut ViewState, gpu: &Shared, environment: &EnvironmentStatus, events: &mut Vec<PanelEvent>) {
+    section(ui, "Environment and shadows", |ui| environment::show(ui, state, gpu, environment));
     section(ui, "Camera", |ui| camera::show(ui, state, events));
     section(ui, "Post effects", |ui| post::show(ui, state));
     section(ui, "Viewport", |ui| viewport::show(ui, state, gpu));

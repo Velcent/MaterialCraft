@@ -1,4 +1,6 @@
-//! `view` (since 0.12): the document's [`SavedView`]: camera list, active camera, exposure and environment.
+//! `view` (since 0.12): the document's [`SavedView`]: camera list, active camera, exposure and environment (the
+//! environment map's library path, its exposure and backdrop are optional fields of `view/environment`, written when
+//! they differ from the defaults).
 //! Since 0.14 a camera may be `locked` and carry `imported` (its source and original values, see
 //! [`camera_values`]). Optional; absent when the document has none. Unknown fields are kept like everywhere else
 //! (locations `view`, `view/cameras/<index>`, `…/depth_of_field`, `…/imported`, `…/imported/original`,
@@ -42,6 +44,18 @@ pub fn write(v: &SavedView, extras: &Extras) -> Value {
         .with("light_intensity", num(e.light_intensity))
         .with("light_follows_camera", e.light_follows_camera)
         .with("ambient", num(e.ambient));
+    let d = SavedEnvironment::default();
+    if let Some(map) = &e.map {
+        env.insert("map", map.as_str());
+    }
+    if e.exposure_stops != d.exposure_stops {
+        env.insert("exposure", num(e.exposure_stops));
+    }
+    if (e.background_opacity, e.background_blur) != (d.background_opacity, d.background_blur) {
+        let mut bg = Value::object().with("opacity", num(e.background_opacity)).with("blur", num(e.background_blur));
+        extras.inject(&format!("{HERE}/environment/background"), &mut bg);
+        env.insert("background", bg);
+    }
     extras.inject(&format!("{HERE}/environment"), &mut env);
     let mut out = Value::object()
         .with("cameras", v.cameras.iter().enumerate().map(|(i, c)| camera(i, c, extras)).collect::<Value>())
@@ -87,6 +101,20 @@ fn read_environment(value: &Value, at: String, ctx: &mut ReadCtx) -> Result<Save
         light_intensity: o.f32_or("light_intensity", d.light_intensity)?,
         light_follows_camera: o.bool_or("light_follows_camera", d.light_follows_camera)?,
         ambient: o.f32_or("ambient", d.ambient)?,
+        map: o.opt_str("map")?.map(str::to_string),
+        exposure_stops: o.f32_or("exposure", d.exposure_stops)?,
+        background_opacity: d.background_opacity,
+        background_blur: d.background_blur,
+    };
+    let e = match o.opt("background") {
+        None => e,
+        Some(b) => {
+            let mut b = Obj::new(b, o.path("background"))?;
+            let e =
+                SavedEnvironment { background_opacity: b.f32_or("opacity", d.background_opacity)?, background_blur: b.f32_or("blur", d.background_blur)?, ..e };
+            ctx.extras.record(&format!("{HERE}/environment/background"), &b);
+            e
+        }
     };
     ctx.extras.record(&format!("{HERE}/environment"), &o);
     Ok(e)

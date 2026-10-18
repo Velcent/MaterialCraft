@@ -22,6 +22,7 @@ mod display_prefs;
 mod document_state;
 mod documents;
 mod editing;
+mod environment;
 mod eyedrop;
 mod fill_surfaces;
 mod geometry;
@@ -243,6 +244,7 @@ impl PaintMode {
                 self.diag.error(Area::Gpu, e);
             }
         }
+        let env_busy = self.viewport.sync_environment(&self.tray.material_folders());
         let mut events = self.shell.take_shortcuts(ctx);
         self.before_tray_frame();
         events.extend(self.draw(ui, history));
@@ -262,14 +264,14 @@ impl PaintMode {
         self.poll_unsaved(ctx);
         let name = self.document.as_ref().map(|d| d.title());
         self.title.update(ctx, name.as_deref());
-        if self.loader.is_some() || self.scene.is_busy() || self.baking.is_busy() || self.is_saving() {
+        if self.loader.is_some() || self.scene.is_busy() || self.baking.is_busy() || self.is_saving() || env_busy {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
         let settled = self.loader.is_none() && self.document.is_some() && !self.scene.is_busy() && self.picking.is_ready();
         let tested = self.run_stroke_test(settled);
         if let Some(shot) = &mut self.shot {
             let settled = tested && self.loader.is_none() && self.document.is_some() && !self.scene.is_busy() && !self.viewport.refining();
-            shot.update(ctx, settled, self.viewport.frames());
+            shot.update(ctx, settled, self.viewport.frames(), self.viewport.rect());
         }
         if let Some(check) = &mut self.check {
             let settled = self.loader.is_none() && !self.scene.is_busy() && self.picking.is_ready();

@@ -4,28 +4,54 @@
 
 pub use super::saved_camera::{CameraOrigin, CameraValues, SavedCamera};
 
-/// The lighting environment the view uses.
+/// The lighting environment the view uses (EN-01…EN-05).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SavedEnvironment {
-    /// Which environment: `studio` (the built-in analytic studio) is the only one so far; image environments come
-    /// later and keep their own id here.
+    /// Which environment: [`SavedEnvironment::STUDIO`] (the built-in studio) or [`SavedEnvironment::MAP`] (the
+    /// environment map at `map`). Other ids (from newer versions) are kept and shown as the studio.
     pub kind: String,
-    /// Key light direction (radians), relative to the camera when `light_follows_camera`.
+    /// The environment map's library path (`/`-separated, relative to a library root, as the asset tray lists
+    /// it) when `kind` is [`SavedEnvironment::MAP`].
+    pub map: Option<String>,
+    /// Key light direction (radians), relative to the camera when `light_follows_camera`. For an environment map
+    /// the azimuth is its turn and `light_follows_camera` its alignment (turning with the camera).
     pub light_yaw: f32,
     pub light_pitch: f32,
     pub light_intensity: f32,
     pub light_follows_camera: bool,
-    /// Strength of the environment's ambient light.
+    /// Strength of the studio's ambient light.
     pub ambient: f32,
+    /// The environment's exposure in stops (0 = as authored).
+    pub exposure_stops: f32,
+    /// How much of the environment shows behind the model (0 = the plain backdrop) and how blurred.
+    pub background_opacity: f32,
+    pub background_blur: f32,
 }
 
 impl SavedEnvironment {
     pub const STUDIO: &'static str = "studio";
+    pub const MAP: &'static str = "map";
+
+    /// The environment map's library path, if this environment is one.
+    pub fn map_path(&self) -> Option<&str> {
+        if self.kind == Self::MAP { self.map.as_deref() } else { None }
+    }
 }
 
 impl Default for SavedEnvironment {
     fn default() -> SavedEnvironment {
-        SavedEnvironment { kind: Self::STUDIO.to_string(), light_yaw: 0.9, light_pitch: 0.7, light_intensity: 3.0, light_follows_camera: true, ambient: 1.0 }
+        SavedEnvironment {
+            kind: Self::STUDIO.to_string(),
+            map: None,
+            light_yaw: 0.9,
+            light_pitch: 0.7,
+            light_intensity: 3.0,
+            light_follows_camera: true,
+            ambient: 1.0,
+            exposure_stops: 0.0,
+            background_opacity: 0.0,
+            background_blur: 0.3,
+        }
     }
 }
 

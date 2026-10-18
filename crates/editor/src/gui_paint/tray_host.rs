@@ -47,6 +47,14 @@ impl PaintMode {
                     self.diag.info(Area::Assets, format!("Drop {} on the 3D view to use it as the stencil or projection image.", item.name));
                 }
             }
+            TrayEvent::DroppedEnvironment { item, pos } => {
+                self.layers.hover(None);
+                if self.viewport.rect().is_some_and(|r| r.contains(pos)) {
+                    self.viewport.set_environment_map(Some(item.path.clone()));
+                } else {
+                    self.diag.info(Area::Assets, format!("Drop {} on the 3D view to light the view with it.", item.name));
+                }
+            }
             TrayEvent::SetRoots(roots) => {
                 self.shell.settings.update(|s| s.library.roots = roots);
             }

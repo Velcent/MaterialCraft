@@ -1,7 +1,8 @@
-//! The studio environment: the analytic studio the viewport lights and reflects with (`src/gpu3d/glsl/material.frag`,
-//! `envSoft` and `env` at roughness 0: soft sky and floor, a key softbox, a side strip, a top panel, a horizon
-//! line), baked into a lat-long OpenEXR so it can be picked as an environment asset. The formulas are the shader's,
-//! restated here; keep them in step when the shader's studio changes (and bump the library version).
+//! The studio environment: the analytic studio the viewport lights and reflects with (`src/gpu3d/glsl/studio.glsl`,
+//! `studioSoft`, `studioRest` and `studioKey` at roughness 0: soft sky and floor, a key softbox, a side strip, a top
+//! panel, a horizon line), baked into a lat-long OpenEXR so it can be picked as an environment asset. The formulas
+//! are the shader's, restated here; keep them in step when the shader's studio changes (and bump the library
+//! version).
 
 use crate::build::Options;
 use crate::image::{THUMB_PX, rgb8};

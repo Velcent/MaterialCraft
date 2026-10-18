@@ -1,8 +1,9 @@
 //! [`ViewState`]: everything the Paint viewport draws with besides the document: the camera pose, light and
 //! height display ([`View`]), the display settings ([`Display`]: camera settings, exposure, tone curve,
-//! accumulation, texture sharpness) and whether channel views are lit. Converts to and from the view a document
-//! is saved with ([`SavedView`]); the camera being navigated is the document's active camera, whose live values
-//! are in `view` and `display.camera` (the camera list's rules are [`CameraList`]'s; the operations on it are in
+//! accumulation, texture sharpness, the environment's exposure and backdrop, shadows), which environment lights the
+//! view and whether channel views are lit. Converts to and from the view a document is saved with ([`SavedView`]);
+//! the camera being navigated is the document's active camera, whose live values are in `view` and
+//! `display.camera` (the camera list's rules are [`CameraList`]'s; the operations on it are in
 //! [`super::view_cameras`]).
 
 use super::channel_view::ChannelView;
@@ -21,6 +22,8 @@ pub struct ViewState {
     pub(super) cameras: CameraList,
     /// The environment's kind as the document named it (kept for documents from newer versions).
     environment_kind: String,
+    /// The environment map's library path (kept even while the kind is another, so it survives a round trip).
+    environment_map: Option<String>,
 }
 
 impl Default for ViewState {
@@ -32,6 +35,7 @@ impl Default for ViewState {
             lit_channels: false,
             cameras: CameraList::default(),
             environment_kind: SavedEnvironment::STUDIO.to_string(),
+            environment_map: None,
         }
     }
 }
@@ -41,6 +45,17 @@ impl ViewState {
     pub fn display_for(&self, mode: ChannelView) -> Display {
         let unlit = mode != ChannelView::Material && !self.lit_channels;
         Display { shading: if unlit { Shading::Unlit } else { Shading::Lit }, ..self.display }
+    }
+
+    /// The environment map lighting the view (its library path), or `None` for the built-in studio.
+    pub fn environment_map(&self) -> Option<&str> {
+        if self.environment_kind == SavedEnvironment::MAP { self.environment_map.as_deref() } else { None }
+    }
+
+    /// Lights the view with the environment map at library path `map`, or with the built-in studio for `None`.
+    pub fn set_environment_map(&mut self, map: Option<String>) {
+        self.environment_kind = if map.is_some() { SavedEnvironment::MAP } else { SavedEnvironment::STUDIO }.to_string();
+        self.environment_map = map;
     }
 
     /// The name of the camera being navigated.
@@ -79,14 +94,18 @@ impl ViewState {
     /// The view to save with the document.
     pub fn saved(&self) -> SavedView {
         let (cameras, active_camera) = self.camera_list().into_parts();
-        let v = &self.view;
+        let (v, look) = (&self.view, &self.display.environment);
         let environment = SavedEnvironment {
             kind: self.environment_kind.clone(),
+            map: self.environment_map.clone(),
             light_yaw: v.light_yaw,
             light_pitch: v.light_pitch,
             light_intensity: v.light_intensity,
             light_follows_camera: v.light_follows_camera,
             ambient: v.ambient,
+            exposure_stops: look.exposure_stops,
+            background_opacity: look.backdrop.opacity,
+            background_blur: look.backdrop.blur,
         };
         SavedView { active_camera, cameras, exposure_stops: self.display.exposure_stops, environment }
     }
@@ -98,6 +117,9 @@ impl ViewState {
         self.display.exposure_stops = saved.exposure_stops;
         let e = &saved.environment;
         self.environment_kind = e.kind.clone();
+        self.environment_map = e.map.clone();
+        let look = &mut self.display.environment;
+        (look.exposure_stops, look.backdrop.opacity, look.backdrop.blur) = (e.exposure_stops, e.background_opacity, e.background_blur);
         let v = &mut self.view;
         (v.light_yaw, v.light_pitch, v.light_intensity, v.light_follows_camera, v.ambient) =
             (e.light_yaw, e.light_pitch, e.light_intensity, e.light_follows_camera, e.ambient);
@@ -124,6 +146,9 @@ mod tests {
         s.view.ambient = 0.25;
         s.display.exposure_stops = 1.5;
         s.display.camera.projection = Projection::Orthographic;
+        s.display.environment.exposure_stops = -0.5;
+        s.display.environment.backdrop.opacity = 0.75;
+        s.set_environment_map(Some("environments/sky.hdr".into()));
         let saved = s.saved();
         assert_eq!(saved.cameras.len(), 1);
         assert_eq!(saved.cameras[0].orbit.yaw, 1.5);
@@ -131,6 +156,9 @@ mod tests {
         back.apply_saved(&saved);
         assert_eq!(back.saved(), saved);
         assert_eq!((&back.view, &back.display), (&s.view, &s.display));
+        assert_eq!(back.environment_map(), Some("environments/sky.hdr"));
+        back.set_environment_map(None);
+        assert_eq!((back.environment_map(), back.saved().environment.kind.as_str()), (None, SavedEnvironment::STUDIO));
         // a list with a second, active camera: navigating changes only that one
         let mut two = saved.clone();
         two.cameras.push(SavedCamera { name: "Top".into(), orbit: Orbit { pitch: 1.3, ..Orbit::default() }, ..SavedCamera::default() });

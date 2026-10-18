@@ -1,5 +1,6 @@
 //! [`ShotJob`]: automated screenshots for testing. Waits until the scene has settled and a few frames
-//! were drawn with the final maps, saves the whole window as PNG and closes the editor.
+//! were drawn with the final maps, saves the whole window as PNG and closes the editor. It prints where the 3D view
+//! lies in the image (`view x y w h`, pixels), so tools can cut the view out.
 
 use eframe::egui::{self, ColorImage, ViewportCommand};
 use materialcraft::deflate::Level;
@@ -14,20 +15,26 @@ pub struct ShotJob {
     /// GPU frame count when the scene was first seen settled.
     settled_at: Option<u64>,
     requested: bool,
+    /// The 3D view's rectangle in window pixels when the screenshot was asked for.
+    view: Option<[u32; 4]>,
 }
 
 impl ShotJob {
     pub fn new(out: PathBuf) -> ShotJob {
-        ShotJob { out, settled_at: None, requested: false }
+        ShotJob { out, settled_at: None, requested: false, view: None }
     }
 
-    /// Call every frame. `settled` is true when no work is pending; `frames` is the GPU frame count.
-    pub fn update(&mut self, ctx: &egui::Context, settled: bool, frames: u64) {
+    /// Call every frame. `settled` is true when no work is pending; `frames` is the GPU frame count; `view` is the
+    /// 3D view's rectangle (UI points).
+    pub fn update(&mut self, ctx: &egui::Context, settled: bool, frames: u64, view: Option<egui::Rect>) {
         ctx.request_repaint();
         if let Some(image) = screenshot_event(ctx) {
             let code = match self.save(&image) {
                 Ok(()) => {
-                    println!("screenshot {}", self.out.display());
+                    match self.view {
+                        Some([x, y, w, h]) => println!("screenshot {} view {x} {y} {w} {h}", self.out.display()),
+                        None => println!("screenshot {}", self.out.display()),
+                    }
                     0
                 }
                 Err(e) => {
@@ -49,6 +56,8 @@ impl ShotJob {
             (true, None) => self.settled_at = Some(frames),
             (true, Some(at)) if frames >= at + SETTLE_FRAMES => {
                 self.requested = true;
+                let ppp = ctx.pixels_per_point();
+                self.view = view.map(|r| [r.min.x * ppp, r.min.y * ppp, r.width() * ppp, r.height() * ppp].map(|v| v.round().max(0.0) as u32));
                 ctx.send_viewport_cmd(ViewportCommand::Screenshot(egui::UserData::default()));
             }
             _ => {}

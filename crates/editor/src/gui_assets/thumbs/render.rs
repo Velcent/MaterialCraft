@@ -1,5 +1,5 @@
-//! Making one thumbnail (on a worker thread): an image asset (or an asset's thumbnail file) decoded from PNG or
-//! OpenEXR and scaled down, a fragment's own thumbnail, or a material graph on a lit ball
+//! Making one thumbnail (on a worker thread): an image asset (or an asset's thumbnail file) decoded from PNG,
+//! OpenEXR or Radiance `.hdr` and scaled down, a fragment's own thumbnail, or a material graph on a lit ball
 //! ([`material_fill::ball`]).
 
 use std::path::Path;
@@ -25,6 +25,7 @@ pub fn image(path: &Path) -> Result<Tex, String> {
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     let tex = match ext.as_str() {
         "exr" => exr_to_display(&exr::decode(&bytes)?)?,
+        "hdr" => hdr_to_display(materialcraft::hdr::decode(&bytes)?),
         _ => png::decode(&bytes)?,
     };
     Ok(fit(&tex, THUMB_PX))
@@ -72,6 +73,15 @@ fn exr_to_display(img: &exr::ExrImage) -> Result<Tex, String> {
         })
         .collect();
     Ok(Tex { w: img.width, h: img.height, px })
+}
+
+/// Linear Radiance values as display values (clipped at white, like EXR thumbnails).
+fn hdr_to_display(mut t: Tex) -> Tex {
+    let enc = |v: f32| if v.is_finite() { linear_to_srgb(v.clamp(0.0, 1.0)) } else { 0.0 };
+    for p in &mut t.px {
+        *p = [enc(p[0]), enc(p[1]), enc(p[2]), 1.0];
+    }
+    t
 }
 
 /// `t` scaled down (box filter) to fit `side` × `side`; smaller images are kept as they are.

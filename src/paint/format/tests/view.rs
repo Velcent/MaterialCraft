@@ -31,7 +31,17 @@ fn view() -> SavedView {
         cameras: vec![SavedCamera::default(), close, shot],
         active_camera: 1,
         exposure_stops: -0.75,
-        environment: SavedEnvironment { light_yaw: 0.25, light_follows_camera: false, ambient: 0.5, ..SavedEnvironment::default() },
+        environment: SavedEnvironment {
+            kind: SavedEnvironment::MAP.into(),
+            map: Some("environments/sky.hdr".into()),
+            light_yaw: 0.25,
+            light_follows_camera: false,
+            ambient: 0.5,
+            exposure_stops: -1.5,
+            background_opacity: 0.75,
+            background_blur: 0.125,
+            ..SavedEnvironment::default()
+        },
     }
 }
 
