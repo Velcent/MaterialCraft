@@ -2,11 +2,12 @@
 //!
 //! Every shape is a tessellated triangle mesh. The height map displaces the vertices in the vertex shader (true
 //! displacement), the fragment shader does GGX PBR with normal mapping, outward parallax relief, height-field contact
-//! shadows and an analytic studio environment, writing linear radiance into a half-float target multisampled like the
-//! window. A post stage then applies exposure in stops, the tone curve (filmic by default, linear or an ACES fit) and
+//! shadows, scene shadows from the environment's dominant lights and image-based light from the environment
+//! (prefiltered levels and a diffuse image; the built-in studio is baked into the same form), writing linear
+//! radiance into a half-float target multisampled like the window. A post stage then applies exposure in stops, the tone curve (filmic by default, linear or an ACES fit) and
 //! the display transform, and blends the result over the background. While the view is still, jittered frames
 //! (and, with depth of field, frames through points of the lens) accumulate into a running average; any change
-//! starts again from the plain frame, so moving costs nothing extra. Unlit shading shows the maps as they are and
+//! starts again from the plain frame, so moving costs nothing extra; soft shadows refine the same way. Unlit shading shows the maps as they are and
 //! skips exposure and the curve. Textures are mip-mapped with anisotropic filtering and an optional sharpening bias.
 //!
 //! The material program comes from a shader file (`crate::shading`): the built-in default, or another file a
@@ -17,7 +18,8 @@
 //! `shading` the parts' shader files and values,
 //! `camera` the matrices, `shape` the built-in preview shape, `scene` custom multi-part models, `pass` the material draw
 //! calls, `target` the HDR and accumulation framebuffers, `progress` which accumulation sample is next, `display` the
-//! display settings and `renderer` ties them into a frame. This file is the public API shared between the UI and the
+//! display settings (`lighting` its environment and shadow part), `env` the environment's textures and a frame's
+//! lights, `shadow` the shadow maps, and `renderer` ties them into a frame. This file is the public API shared between the UI and the
 //! paint callback.
 //!
 //! # Unsafe exception
@@ -30,6 +32,8 @@
 
 mod camera;
 mod display;
+mod env;
+mod lighting;
 mod maps;
 mod mesh;
 mod pass;
@@ -38,17 +42,20 @@ mod renderer;
 mod scene;
 mod shaders;
 mod shading;
+mod shadow;
 mod shape;
 mod target;
 mod textures;
 
 pub use camera::view_camera;
 pub use display::{Antialiasing, Display, MIP_BIAS_STEPS, Shading, ToneCurve};
+pub use lighting::{Backdrop, EnvironmentLook, ShadowQuality, Shadows};
 pub use maps::{GpuMaps, MapInputs, prepare};
 pub use scene::ScenePart;
 pub use shading::{InstanceDisplacement, PartShading};
 
 use crate::diag::{Area, Sink, SinkExt};
+use crate::envmap::EnvMap;
 use crate::render3d::View;
 use eframe::egui::PaintCallbackInfo;
 use eframe::egui_glow::{self, glow};
@@ -124,6 +131,10 @@ pub struct Gpu {
     pub frames: u64,
     /// Bumped by every map or scene change, so the accumulation restarts when the content changes.
     content: u64,
+    /// Bumped when the scene's parts are replaced (kept shadow maps then no longer fit).
+    geometry: u64,
+    /// An environment change waiting for the next paint: `Some(None)` goes back to the built-in studio.
+    pending_env: Option<Option<Arc<EnvMap>>>,
     /// The last frame left the accumulation incomplete: paint again soon (the view is still refining).
     refining: bool,
     /// The anisotropic filtering request the uploaded textures have.
@@ -133,6 +144,13 @@ pub struct Gpu {
 impl Gpu {
     pub fn set_maps(&mut self, maps: GpuMaps) {
         self.pending = Some(maps);
+        self.content += 1;
+    }
+
+    /// Light the scene with a prefiltered environment from the next paint on, or with the built-in studio for
+    /// `None`.
+    pub fn set_environment(&mut self, env: Option<Arc<EnvMap>>) {
+        self.pending_env = Some(env);
         self.content += 1;
     }
 
@@ -147,6 +165,7 @@ impl Gpu {
     pub fn set_scene(&mut self, parts: Vec<ScenePart>) {
         self.scene.set(parts);
         self.content += 1;
+        self.geometry += 1;
     }
     /// Replace the maps of one part (e.g. after the user edits that texture set). Out-of-range parts are ignored.
     pub fn set_part_maps(&mut self, part: usize, maps: GpuMaps) {
@@ -168,6 +187,7 @@ impl Gpu {
     pub fn clear_scene(&mut self) {
         self.scene.clear();
         self.content += 1;
+        self.geometry += 1;
     }
     pub fn has_scene(&self) -> bool {
         self.scene.is_active()
@@ -227,6 +247,12 @@ pub fn paint_with(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow
     }
     let g = &mut *g;
     let r = g.res.as_mut().unwrap();
+    if let Some(env) = g.pending_env.take()
+        && let Err(e) = unsafe { r.set_environment(gl, env.as_deref()) }
+    {
+        // a map the GPU refuses leaves the studio lighting the scene; the viewer goes on
+        sink.warn(Area::Gpu, format!("The environment can't be used: {e}"));
+    }
     if let Err(e) = unsafe { g.scene.sync(gl, r.aniso(aniso_req)) } {
         fail(&mut g.error, sink, e);
         return;
@@ -255,6 +281,7 @@ pub fn paint_with(shared: &Shared, info: &PaintCallbackInfo, painter: &egui_glow
         self_shadow,
         aniso_req,
         content: g.content,
+        geometry: g.geometry,
         rect: ViewRect { left: vp_px.left_px, bottom: vp_px.from_bottom_px, width: vp_px.width_px, height: vp_px.height_px },
         restart: want_depth,
     };

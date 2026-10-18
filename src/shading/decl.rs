@@ -63,6 +63,23 @@ pub const RESERVED_UNIFORMS: &[&str] = &[
     "uSceneDepth",
     "uDepthOrigin",
     "uDepthLin",
+    // environment and scene shadows (step 39); the environment lookups and the studio are added to every
+    // fragment stage after its #version line (src/gpu3d/glsl/environment.glsl, studio.glsl)
+    "uEnvSharp",
+    "uEnvSpec",
+    "uEnvDiff",
+    "uEnvLevels",
+    "uEnvRot",
+    "uEnvScale",
+    "uStudioKey",
+    "uShadowMode",
+    "uShadowMap",
+    "uShadowVP",
+    "uShadowOpacity",
+    "uShadowOffset",
+    "uDomCount",
+    "uDomDir",
+    "uDomE",
 ];
 
 /// A parsed, checked declaration.

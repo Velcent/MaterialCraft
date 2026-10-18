@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Frame times of the GPU viewport while the camera moves and while it stands still, with and without frame
 //! accumulation (the gate of step 33: accumulation must never lower the interaction frame rate).
-//! usage: cargo run --release --features gui --example viewport_bench -- [plain|standard|high|dof] [width height] [frames]
+//! usage: cargo run --release --features gui --example viewport_bench -- [plain|standard|high|dof|noshadow|balanced|world] [width height] [frames]
+//!   standard: the Paint viewport's defaults (accumulated anti-aliasing, shadows refining while still); noshadow: the
+//!   same without scene shadows; balanced: shadows drawn while moving too; world: the light fixed in the world
 //! Vsync is off, so frames follow each other as fast as the GPU draws them; prints the median and 95th percentile
 //! of the time between frames (the interaction frame time) for the moving and the still phase.
 use eframe::egui;
 use eframe::egui_glow;
-use materialcraft::gpu3d::{self, Antialiasing, Display, MapInputs, Shared};
+use materialcraft::gpu3d::{self, Antialiasing, Display, MapInputs, ShadowQuality, Shared};
 use materialcraft::render3d::{RELIEF_DISPLACE, View};
 use materialcraft::tex::Tex;
 use std::sync::Arc;
@@ -75,8 +77,11 @@ fn main() -> eframe::Result<()> {
         "plain" => display.antialiasing = Antialiasing::Off,
         "high" => display.antialiasing = Antialiasing::High,
         "dof" => display.camera.depth_of_field.enabled = true,
+        "noshadow" => display.shadows.enabled = false,
+        "balanced" => display.shadows.quality = ShadowQuality::Balanced,
         _ => {}
     }
+    let world = a.get(1).is_some_and(|m| m == "world");
     let (w, h) = (a.get(2).and_then(|s| s.parse().ok()).unwrap_or(1280.0f32), a.get(3).and_then(|s| s.parse().ok()).unwrap_or(800.0f32));
     let frames = a.get(4).and_then(|s| s.parse().ok()).unwrap_or(300u32);
     let n = 1024;
@@ -89,7 +94,7 @@ fn main() -> eframe::Result<()> {
     if let Ok(mut g) = gpu.lock() {
         g.set_maps(maps);
     }
-    let view = View { shape: 0, relief: RELIEF_DISPLACE, height_scale: 0.05, ..View::default() };
+    let view = View { shape: 0, relief: RELIEF_DISPLACE, height_scale: 0.05, light_follows_camera: !world, ..View::default() };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([w, h]),
         multisampling: 4,

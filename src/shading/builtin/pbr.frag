@@ -42,42 +42,23 @@ uniform int uSss;
 uniform vec3 uSssColor;
 uniform float uSssRadius;
 uniform float uSssTranslucency;
+// environment: its exposure as a linear scale, and whether the studio's key softbox is added to reflections
+uniform float uEnvScale;
+uniform int uStudioKey;
+// scene shadows (EN-07): 0 off, 1 on the key light, 2 on the environment's dominant light share
+uniform int uShadowMode;
+uniform sampler2DShadow uShadowMap;
+uniform mat4 uShadowVP;
+uniform float uShadowOpacity;
+uniform float uShadowOffset; // normal offset in world units (about two shadow-map texels)
+uniform int uDomCount;
+uniform vec3 uDomDir[4];
+uniform vec3 uDomE[4];
 out vec4 oColor;
 
 const float PI = 3.14159265;
 vec2 gdx;
 vec2 gdy;
-
-// Smooth gradient only: used for diffuse ambient light.
-vec3 envSoft(vec3 d) {
-    vec3 sky = vec3(0.30, 0.34, 0.42);
-    vec3 hor = vec3(0.52, 0.52, 0.53);
-    vec3 ground = vec3(0.20, 0.19, 0.18);
-    return d.y > 0.0 ? mix(hor, sky, pow(d.y, 0.6)) : mix(hor, ground, pow(-d.y, 0.5));
-}
-
-// Studio environment for reflections: softboxes, a rim strip and a horizon line on a dark floor. The boxes soften and
-// dim with roughness, so a smooth surface mirrors clear shapes and a rough one only shows a broad sheen.
-vec3 env(vec3 d, float r) {
-    float soft = r * r;
-    vec3 col = mix(envSoft(d), vec3(0.30), soft * 0.5);
-    float w = 0.015 + soft * 0.9;
-    float keyI = 4.5 / (1.0 + soft * 14.0);
-    float key = smoothstep(0.93 - w, 0.93 + 0.015, dot(d, uL));
-    col += vec3(1.0, 0.96, 0.90) * key * keyI;
-    // tall side strip opposite the key
-    vec3 side = normalize(vec3(-uL.z, 0.0, uL.x));
-    float sdot = dot(normalize(vec3(d.x, 0.0, d.z) + 1e-5), side);
-    float strip = smoothstep(0.93 - w, 0.97, sdot) * smoothstep(0.02 - w, 0.12, d.y) * (1.0 - smoothstep(0.55, 0.75 + w, d.y));
-    col += vec3(0.85, 0.92, 1.0) * strip * 1.5 / (1.0 + soft * 10.0);
-    // top panel
-    float top = smoothstep(0.90 - w, 0.97, d.y);
-    col += vec3(1.0) * top * 1.0 / (1.0 + soft * 10.0);
-    // bright horizon line
-    float hl = exp(-pow(d.y / (0.035 + soft * 0.4), 2.0));
-    col += vec3(0.9) * hl * 0.25 / (1.0 + soft * 8.0);
-    return col;
-}
 
 vec3 envBrdf(vec3 f0, float rough, float ndv) {
     const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
@@ -170,6 +151,34 @@ float hshadow(vec2 uv, vec3 lt) {
     return mix(0.55, 1.0, res);
 }
 
+// Light reaching the point from the shadow map's direction: 1 lit, 0 shadowed (2 × 2 filtered by the hardware, plus
+// four taps around it to soften the edge a little).
+float shadowVis(vec3 gN) {
+    vec3 p = vPos + gN * uShadowOffset;
+    vec4 c = uShadowVP * vec4(p, 1.0);
+    vec3 s = c.xyz / c.w * 0.5 + 0.5;
+    if (s.x <= 0.0 || s.y <= 0.0 || s.x >= 1.0 || s.y >= 1.0 || s.z >= 1.0) return 1.0;
+    vec2 texel = 1.0 / vec2(textureSize(uShadowMap, 0));
+    float v = texture(uShadowMap, vec3(s.xy, s.z)) * 0.5;
+    v += texture(uShadowMap, vec3(s.xy + vec2(1.0, 0.5) * texel, s.z)) * 0.125;
+    v += texture(uShadowMap, vec3(s.xy + vec2(-1.0, -0.5) * texel, s.z)) * 0.125;
+    v += texture(uShadowMap, vec3(s.xy + vec2(-0.5, 1.0) * texel, s.z)) * 0.125;
+    v += texture(uShadowMap, vec3(s.xy + vec2(0.5, -1.0) * texel, s.z)) * 0.125;
+    return mix(1.0, v, uShadowOpacity);
+}
+
+// The share of the environment's diffuse light at normal n that comes from its dominant lights (what a shadow
+// from them takes away).
+float dominantShare(vec3 n) {
+    vec3 e = vec3(0.0);
+    for (int i = 0; i < 4; i++) {
+        if (i >= uDomCount) break;
+        e += uDomE[i] * max(dot(n, uDomDir[i]), 0.0);
+    }
+    float total = dot(envDiffuse(n), vec3(0.2126, 0.7152, 0.0722)) * PI;
+    return clamp(dot(e, vec3(0.2126, 0.7152, 0.0722)) / max(total, 1e-6), 0.0, 1.0);
+}
+
 void main() {
     if (uWire == 1) {
         float scene = texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy - uDepthOrigin), 0).r;
@@ -245,13 +254,21 @@ void main() {
     float ndl2 = max(dot(n, uFill), 0.0);
     vec3 diffFill = albedo * (1.0 - metal) / PI * ndl2 * uLightI * 0.5;
     vec3 refl = reflect(-V, n);
-    vec3 envR = env(refl, rough);
-    vec3 envD = envSoft(n);
+    vec3 envR = envSpecular(refl, rough);
+    if (uStudioKey == 1) envR += studioKey(refl, rough, uL);
+    vec3 envD = envDiffuse(n);
     vec3 ambD = albedo * (1.0 - metal) * envD * uAmbient;
     float specOcc = clamp(pow(ndv + ao, exp2(-16.0 * rough - 1.0)) - 1.0 + ao, 0.0, 1.0);
     float horizon = clamp(1.0 + 1.2 * dot(refl, back ? -N : N), 0.0, 1.0);
     vec3 ambS = envR * envBrdf(f0, rough, ndv) * uAmbient * specOcc * horizon * horizon;
-    vec3 col = ((diff + spec * uLightI * 1.2) * sh + diffFill + (ambD * ao + ambS)) * uExposure;
+    float keyVis = 1.0;
+    float envVis = 1.0;
+    if (uShadowMode != 0 && !back) {
+        float vis = shadowVis(N);
+        if (uShadowMode == 1) keyVis = vis;
+        else envVis = 1.0 - dominantShare(n) * (1.0 - vis);
+    }
+    vec3 col = ((diff + spec * uLightI * 1.2) * sh * keyVis + diffFill + (ambD * ao + ambS) * envVis) * uExposure * uEnvScale;
     if (uHasEmis == 1) col += textureGrad(uEmis, uv, gdx, gdy).rgb * uEmissiveIntensity;
     // linear radiance: exposure in stops, the tone curve and the display transform follow in the post stage
     oColor = vec4(col, 1.0);

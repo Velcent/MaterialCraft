@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Headless-friendly GPU viewer test: renders a procedural brick material with the GPU renderer and writes a screenshot.
 //! usage: cargo run --release --features gui --example gpu_shot -- out.png [shape 0|1|2] [relief 0..3] [width height] [nomsaa] [wire] [rough=0.3 metal=0 color=r,g,b]
+//!   [still] [env=map.hdr|map.exr] [bg=opacity] [blur=0..1] [envexp=stops] [noshadow] [world] [lightyaw=radians]
+//!   still: the Paint viewport's default display (accumulation, shadows), shot once the view has refined;
+//!   env: light with a prefiltered environment map instead of the studio; world: the light stays in the world
 use eframe::egui;
 use eframe::egui_glow;
-use materialcraft::gpu3d::{self, MapInputs, Shared};
+use materialcraft::gpu3d::{self, Display, MapInputs, Shared};
 use materialcraft::render3d::View;
 use materialcraft::tex::Tex;
 use std::sync::Arc;
@@ -44,6 +47,10 @@ fn bricks(n: usize) -> (Tex, Tex, Tex, Tex, Tex) {
 struct App {
     gpu: Shared,
     view: View,
+    display: Display,
+    /// Shoot once the accumulation is complete (else at frame 4).
+    still: bool,
+    shot_asked: bool,
     out: String,
     frame: u32,
 }
@@ -53,17 +60,21 @@ impl eframe::App for App {
         let ctx = &ui.ctx().clone();
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {
             let rect = ui.max_rect();
-            let (g, v) = (self.gpu.clone(), self.view.clone());
+            let (g, v, d) = (self.gpu.clone(), self.view.clone(), self.display);
             ui.painter().add(egui::PaintCallback {
                 rect,
-                callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| gpu3d::paint(&g, &info, painter, &v, &materialcraft::diag::NullSink))),
+                callback: Arc::new(egui_glow::CallbackFn::new(move |info, painter| {
+                    gpu3d::paint_with(&g, &info, painter, &v, &d, &materialcraft::diag::NullSink)
+                })),
             });
         });
         self.frame += 1;
-        if self.frame == 4 {
+        let ready = if self.still { self.frame >= 4 && !self.gpu.lock().unwrap().refining() } else { self.frame == 4 };
+        if ready && !self.shot_asked {
             self.gpu.lock().unwrap().want_shot = true;
+            self.shot_asked = true;
         }
-        if self.frame >= 6 {
+        if self.shot_asked {
             let mut g = self.gpu.lock().unwrap();
             if let Some(e) = &g.error {
                 eprintln!("GPU ERROR: {e}");
@@ -75,7 +86,7 @@ impl eframe::App for App {
                 println!("renderer: {} | {w}x{h} written to {}", g.renderer, self.out);
                 std::process::exit(0);
             }
-            if self.frame > 60 {
+            if self.frame > 600 {
                 eprintln!("no screenshot produced");
                 std::process::exit(3);
             }
@@ -130,12 +141,31 @@ fn main() -> eframe::Result<()> {
     };
     let gpu = gpu3d::new_shared();
     gpu.lock().unwrap().set_maps(maps);
-    let view = View { shape, relief, wireframe: wire, yaw: 0.35, pitch: 0.5, dist: if shape == 2 { 3.2 } else { 3.4 }, height_scale: 0.08, ..View::default() };
+    if let Some(path) = arg("env=") {
+        let t0 = std::time::Instant::now();
+        let env = materialcraft::envmap::EnvMap::from_bytes(&std::fs::read(&path).unwrap()).unwrap();
+        println!("environment {path}: prefiltered in {:?}, {} dominant lights", t0.elapsed(), env.lights.len());
+        gpu.lock().unwrap().set_environment(Some(Arc::new(env)));
+    }
+    let mut view =
+        View { shape, relief, wireframe: wire, yaw: 0.35, pitch: 0.5, dist: if shape == 2 { 3.2 } else { 3.4 }, height_scale: 0.08, ..View::default() };
+    view.light_follows_camera = !a.iter().any(|s| s == "world");
+    if let Some(y) = arg("lightyaw=").and_then(|s| s.parse().ok()) {
+        view.light_yaw = y;
+    }
+    let still = a.iter().any(|s| s == "still");
+    let mut display = if still { Display::default() } else { Display::plain() };
+    display.environment.backdrop.opacity = arg("bg=").and_then(|s| s.parse().ok()).unwrap_or(0.0);
+    display.environment.backdrop.blur = arg("blur=").and_then(|s| s.parse().ok()).unwrap_or(display.environment.backdrop.blur);
+    display.environment.exposure_stops = arg("envexp=").and_then(|s| s.parse().ok()).unwrap_or(0.0);
+    if a.iter().any(|s| s == "noshadow") {
+        display.shadows.enabled = false;
+    }
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([w, h]),
         multisampling: if a.iter().any(|s| s == "nomsaa") { 0 } else { 4 },
         depth_buffer: 24,
         ..Default::default()
     };
-    eframe::run_native("gpu_shot", options, Box::new(move |_cc| Ok(Box::new(App { gpu, view, out, frame: 0 }))))
+    eframe::run_native("gpu_shot", options, Box::new(move |_cc| Ok(Box::new(App { gpu, view, display, still, shot_asked: false, out, frame: 0 }))))
 }

@@ -1,18 +1,29 @@
-//! Shader programs: material programs from shader files, the background gradient, the post stage and the
-//! accumulation copy, with their uniform locations.
+//! Shader programs: the PBR material program, the shadow depth pass, the background, the post stage, the
+//! accumulation copy and the studio bake, with their uniform locations. Shared GLSL (the environment lookups, the
+//! studio, the tone stage) is put in front of the programs that use it.
 use crate::shading::ShaderFile;
 use eframe::egui_glow::glow;
 use glow::HasContext;
 use std::collections::HashMap;
 
+const VERSION: &str = "#version 330 core\n";
+const SHADOW_FS: &str = include_str!("glsl/shadow.frag");
 const BG_VS: &str = include_str!("glsl/background.vert");
 const BG_FS: &str = include_str!("glsl/background.frag");
 const FULL_VS: &str = include_str!("glsl/fullscreen.vert");
 const POST_FS: &str = include_str!("glsl/post.frag");
 const ACCUM_FS: &str = include_str!("glsl/accumulate.frag");
+const STUDIO_BAKE_FS: &str = include_str!("glsl/studio_bake.frag");
+// shared parts
+const ENVIRONMENT: &str = include_str!("glsl/environment.glsl");
+const STUDIO: &str = include_str!("glsl/studio.glsl");
+const TONE: &str = include_str!("glsl/tone.glsl");
 
 const POST_UNIFORMS: &[&str] = &["uSrc", "uOrigin", "uExposure", "uCurve", "uBypass"];
 const ACCUM_UNIFORMS: &[&str] = &["uSrc"];
+const BG_UNIFORMS: &[&str] =
+    &["uInvVP", "uOpacity", "uBlur", "uExposure", "uCurve", "uStudioKey", "uKey", "uEnvSharp", "uEnvSpec", "uEnvDiff", "uEnvLevels", "uEnvRot"];
+const STUDIO_BAKE_UNIFORMS: &[&str] = &["uSize", "uRough", "uDiffuse"];
 
 /// A linked program and the locations of the uniforms it uses.
 pub(super) struct Program {
@@ -24,11 +35,13 @@ pub(super) struct Program {
 // in `free`.
 impl Program {
     /// The material program of a shader file: the viewer's uniforms ([`crate::shading::decl::RESERVED_UNIFORMS`])
-    /// and the parameters it declares.
+    /// and the parameters it declares. The fragment stage gets the environment lookups and the studio
+    /// (`environment.glsl`, `studio.glsl`) after its `#version` line.
     pub unsafe fn material(gl: &glow::Context, file: &ShaderFile) -> Result<Program, String> {
         let names = crate::shading::decl::RESERVED_UNIFORMS.iter().copied().chain(file.decl.params.iter().map(|p| p.uniform.as_str()));
+        let fragment = with_library(&file.fragment_src);
         unsafe {
-            let program = Program::with_uniforms(gl, &file.vertex_src, &file.fragment_src, names)?;
+            let program = Program::with_uniforms(gl, &file.vertex_src, &fragment, names)?;
             if let Err(e) = check_param_types(gl, program.id, file) {
                 program.free(gl);
                 return Err(e);
@@ -37,9 +50,20 @@ impl Program {
         }
     }
 
+    /// The shadow pass: the built-in shader's vertices (displaced the same way), depth only.
+    pub unsafe fn shadow(gl: &glow::Context) -> Result<Program, String> {
+        let file = super::shading::builtin();
+        unsafe { Program::with_uniforms(gl, &file.vertex_src, &[VERSION, SHADOW_FS].concat(), crate::shading::decl::RESERVED_UNIFORMS.iter().copied()) }
+    }
+
     /// The post stage: exposure, tone curve and display transform of the HDR frame, blended over the background.
     pub unsafe fn post(gl: &glow::Context) -> Result<Program, String> {
-        unsafe { Program::with_uniforms(gl, FULL_VS, POST_FS, POST_UNIFORMS.iter().copied()) }
+        unsafe { Program::with_uniforms(gl, FULL_VS, &[VERSION, TONE, POST_FS].concat(), POST_UNIFORMS.iter().copied()) }
+    }
+
+    /// Bakes the studio into environment levels and its diffuse image.
+    pub unsafe fn studio_bake(gl: &glow::Context) -> Result<Program, String> {
+        unsafe { Program::with_uniforms(gl, FULL_VS, &[VERSION, STUDIO, STUDIO_BAKE_FS].concat(), STUDIO_BAKE_UNIFORMS.iter().copied()) }
     }
 
     /// Copies a frame into the accumulation target (the blend state does the averaging).
@@ -60,9 +84,9 @@ impl Program {
         }
     }
 
-    /// Full-screen background gradient (one triangle, no attributes).
+    /// Full-screen background: the gradient and the environment over it (one triangle, no attributes).
     pub unsafe fn background(gl: &glow::Context) -> Result<Program, String> {
-        unsafe { Ok(Program { id: compile(gl, BG_VS, BG_FS)?, locs: HashMap::new() }) }
+        unsafe { Program::with_uniforms(gl, &[VERSION, BG_VS].concat(), &[VERSION, TONE, ENVIRONMENT, STUDIO, BG_FS].concat(), BG_UNIFORMS.iter().copied()) }
     }
 
     pub fn loc(&self, name: &str) -> Option<&glow::UniformLocation> {
@@ -74,6 +98,20 @@ impl Program {
             gl.delete_program(self.id);
         }
     }
+}
+
+/// A material fragment source with the shared environment lookups and studio after its `#version` line (in front
+/// of it, with a `#version` of its own, when the source has none).
+fn with_library(src: &str) -> String {
+    let (head, body) = match src.trim_start().strip_prefix("#version") {
+        Some(_) => {
+            let start = src.len() - src.trim_start().len();
+            let end = src[start..].find('\n').map_or(src.len(), |i| start + i + 1);
+            (src[..end].to_string(), &src[end..])
+        }
+        None => (VERSION.to_string(), src),
+    };
+    [head.as_str(), if head.ends_with('\n') { "" } else { "\n" }, ENVIRONMENT, STUDIO, body].concat()
 }
 
 /// Checks that every declared parameter the program uses has the GLSL type its kind is sent as (a mismatch would

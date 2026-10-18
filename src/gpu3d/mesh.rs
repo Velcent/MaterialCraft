@@ -12,6 +12,8 @@ pub(super) struct GpuMesh {
     vbo: glow::Buffer,
     ebo: glow::Buffer,
     index_count: i32,
+    /// A sphere around the vertices: centre and radius (before displacement).
+    pub bounds: ([f32; 3], f32),
 }
 
 // SAFETY: GL calls on the current context (module invariant); buffer data comes from slices that outlive the call.
@@ -42,7 +44,7 @@ impl GpuMesh {
             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(ebo));
             gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, bytes_of(&m.tris), glow::STATIC_DRAW);
             gl.bind_vertex_array(None);
-            Ok(GpuMesh { vao, vbo, ebo, index_count: (m.tris.len() * 3) as i32 })
+            Ok(GpuMesh { vao, vbo, ebo, index_count: (m.tris.len() * 3) as i32, bounds: bounds(&m.pos) })
         }
     }
 
@@ -60,6 +62,23 @@ impl GpuMesh {
             gl.delete_buffer(self.ebo);
         }
     }
+}
+
+/// The centre of the vertices' box and the distance to the farthest vertex.
+fn bounds(pos: &[[f32; 3]]) -> ([f32; 3], f32) {
+    let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+    for p in pos.iter().filter(|p| p.iter().all(|v| v.is_finite())) {
+        for k in 0..3 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+    }
+    if lo[0] > hi[0] {
+        return ([0.0; 3], 1.0);
+    }
+    let c = [0, 1, 2].map(|k| (lo[k] + hi[k]) * 0.5);
+    let r = pos.iter().filter(|p| p.iter().all(|v| v.is_finite())).map(|p| (0..3).map(|k| (p[k] - c[k]).powi(2)).sum::<f32>()).fold(0.0f32, f32::max).sqrt();
+    (c, r)
 }
 
 /// Vertices per uv unit along u and v, estimated from triangle count and covered uv area (an n x n grid of quads over

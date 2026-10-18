@@ -1,8 +1,10 @@
 //! [`Display`]: how the viewport turns the scene into the picture, as plain data (DS-14: display only, never part
 //! of the document): the camera's settings, exposure in stops, the tone curve, frame accumulation, lit or unlit
-//! shading and the texture sharpness. Changing exposure or the tone curve only re-runs the post stage; everything
-//! else restarts the accumulation.
+//! shading, the texture sharpness, the environment's exposure and backdrop and the shadows. Changing exposure, the
+//! tone curve or the backdrop only re-runs the post stage and the background; everything else restarts the
+//! accumulation.
 
+use super::lighting::{EnvironmentLook, Shadows};
 use crate::camera::CameraSettings;
 
 /// The tone curve that maps scene radiance to the display range (PP-01, ADR 0008 mc2-vq9).
@@ -112,6 +114,19 @@ pub struct Display {
     pub shading: Shading,
     /// Mip-map bias, 0 (soft) … −3 (very sharp, shimmers).
     pub mip_bias: f32,
+    pub environment: EnvironmentLook,
+    pub shadows: Shadows,
+}
+
+/// The settings that change the drawn scene (see [`Display::scene_part`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct SceneSettings {
+    camera: CameraSettings,
+    antialiasing: Antialiasing,
+    shading: Shading,
+    mip_bias: u32,
+    environment_exposure: u32,
+    shadows: Shadows,
 }
 
 impl Default for Display {
@@ -124,6 +139,8 @@ impl Default for Display {
             antialiasing: Antialiasing::Standard,
             shading: Shading::Lit,
             mip_bias: 0.0,
+            environment: EnvironmentLook::default(),
+            shadows: Shadows::default(),
         }
     }
 }
@@ -132,15 +149,22 @@ impl Display {
     /// Exposure range of the settings, in stops.
     pub const EXPOSURE_RANGE: (f32, f32) = (-6.0, 6.0);
 
-    /// One frame per change and nothing else (views that don't keep repainting, like the node editor's preview).
+    /// One frame per change and nothing else (views that don't keep repainting, like the node editor's preview):
+    /// no accumulation and no scene shadows (they refine over frames).
     pub fn plain() -> Display {
-        Display { antialiasing: Antialiasing::Off, ..Display::default() }
+        Display { antialiasing: Antialiasing::Off, shadows: Shadows { enabled: false, ..Shadows::default() }, ..Display::default() }
     }
 
     /// Frames to accumulate for a still view (1 = draw once).
     pub fn frames(&self) -> u32 {
         let aa = self.antialiasing.frames();
-        if self.camera.blurs() { aa.max(DOF_FRAMES) } else { aa }
+        let aa = if self.camera.blurs() { aa.max(DOF_FRAMES) } else { aa };
+        if self.shadows_drawn() { aa.max(self.shadows.quality.frames()) } else { aa }
+    }
+
+    /// True if the scene is drawn with shadows (lit shading with shadows on).
+    pub fn shadows_drawn(&self) -> bool {
+        self.shading == Shading::Lit && self.shadows.active()
     }
 
     /// The linear scale of the exposure (finite; 1 for a broken value).
@@ -154,9 +178,17 @@ impl Display {
         if self.mip_bias.is_finite() { self.mip_bias.clamp(-3.0, 0.0) } else { 0.0 }
     }
 
-    /// The settings that change the drawn scene (exposure and the tone curve only change the post stage).
-    pub(super) fn scene_part(&self) -> (CameraSettings, Antialiasing, Shading, u32) {
-        (self.camera, self.antialiasing, self.shading, self.mip_bias().to_bits())
+    /// The settings that change the drawn scene (exposure, the tone curve and the backdrop only change the post
+    /// stage and the background).
+    pub(super) fn scene_part(&self) -> SceneSettings {
+        SceneSettings {
+            camera: self.camera,
+            antialiasing: self.antialiasing,
+            shading: self.shading,
+            mip_bias: self.mip_bias().to_bits(),
+            environment_exposure: self.environment.scale().to_bits(),
+            shadows: self.shadows,
+        }
     }
 }
 
@@ -176,6 +208,10 @@ mod tests {
         let d = Display::default();
         assert_eq!((d.tone_curve, d.exposure_scale(), d.mip_bias()), (ToneCurve::Filmic, 1.0, 0.0));
         assert_eq!(Display::plain().frames(), 1);
+        // shadows refine over their own frames, but not in unlit views
+        let shadowed = Display { shadows: Shadows::default(), ..Display::plain() };
+        assert_eq!(shadowed.frames(), 32);
+        assert_eq!(Display { shading: Shading::Unlit, ..shadowed }.frames(), 1);
     }
 
     #[test]

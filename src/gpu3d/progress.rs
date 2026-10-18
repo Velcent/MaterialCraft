@@ -9,7 +9,7 @@ use crate::render3d::View;
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct FrameKey {
     pub view: View,
-    pub display: (crate::camera::CameraSettings, super::display::Antialiasing, super::display::Shading, u32),
+    pub display: super::display::SceneSettings,
     /// Height self-shadowing and the anisotropic filtering request (as bits).
     pub opts: (bool, u32),
     /// Bumped by every change of the uploaded maps or parts.
