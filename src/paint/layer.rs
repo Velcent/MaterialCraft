@@ -10,6 +10,7 @@ use super::blend::BlendMode;
 use super::channel::Channel;
 use super::effect::{ContentEffect, EffectKind, Procedural};
 use super::fill_image::ImageFill;
+use super::fill_texture::TextureFill;
 use super::geometry_mask::GeometryMask;
 use super::image::TiledImage;
 use super::instance::InstanceLink;
@@ -71,6 +72,9 @@ pub enum FillSource {
     Material { path: String, params: Vec<(String, String)> },
     /// Images per channel (any size, sampled through the fill's projection) and constants for the other channels.
     Image(ImageFill),
+    /// Procedural textures per channel (generators of the effect registry evaluated at points, sampled through
+    /// the fill's projection) and constants for the other channels. Since format 0.16.
+    Texture(TextureFill),
 }
 
 /// A fill: its source and how the source is laid onto the texture set. Uniform values ignore the projection.
@@ -78,8 +82,8 @@ pub enum FillSource {
 pub struct Fill {
     pub source: FillSource,
     pub projection: Projection,
-    /// The procedural this fill stands in for (an imported Substance material replaced by one of ours), kept
-    /// unchanged so the choice can be made again later.
+    /// The procedural this fill stands in for (an imported Substance material or texture replaced by one of
+    /// ours), kept unchanged so the choice can be made again later.
     pub original: Option<Box<Procedural>>,
 }
 
@@ -112,6 +116,7 @@ impl Fill {
             FillSource::Uniform(v) => v.iter().map(|(c, _)| *c).collect(),
             FillSource::Material { .. } => Vec::new(),
             FillSource::Image(i) => i.channels(),
+            FillSource::Texture(t) => t.channels(),
         }
     }
 
@@ -119,7 +124,7 @@ impl Fill {
     pub fn uniform_value(&self, channel: Channel) -> Option<[f32; 4]> {
         match &self.source {
             FillSource::Uniform(v) => v.iter().find(|(c, _)| *c == channel).map(|(_, v)| *v),
-            FillSource::Material { .. } | FillSource::Image(_) => None,
+            FillSource::Material { .. } | FillSource::Image(_) | FillSource::Texture(_) => None,
         }
     }
 }

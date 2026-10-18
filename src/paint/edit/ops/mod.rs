@@ -8,7 +8,7 @@
 //! - [`drop`]: what dropping an asset onto the stack does (ADR 0008, q-effect-drop); [`drop_layers`]: the
 //!   layers a dropped material or smart material makes;
 //! - [`polygon_fill`]: the polygon fill tool's pick into the target stack's polygon fill effect;
-//! - [`projection`]: a fill layer's or fill effect's projection.
+//! - [`projection`]: a fill layer's or fill effect's projection; [`fill_source`]: its source (textures, values).
 //!
 //! Selections name layers by id. Before an operation a selection is put in stack order and layers whose
 //! group is selected too are left out (the group carries them), see [`normalize`].
@@ -16,6 +16,7 @@
 mod drop;
 mod drop_layers;
 mod effects;
+mod fill_source;
 mod instances;
 mod layers;
 mod masks;
@@ -28,6 +29,7 @@ mod tests;
 pub use drop::{AssetEffect, DropOutcome, DropPayload, DropTarget, EffectAsset, accepts, drop_onto};
 pub use drop_layers::MaterialAsset;
 pub use effects::{NewEffect, add_effect, new_effect, set_effect_enabled};
+pub use fill_source::set_fill_source;
 pub use instances::{instantiate, paste_instance};
 pub use layers::{NewLayer, create, delete, duplicate, duplicate_to, group, move_layers};
 pub use masks::{MaskStart, add_mask, invert_mask, remove_mask, set_mask_enabled};

@@ -233,3 +233,5 @@ mod tests_fills;
 mod tests_geometry;
 #[cfg(test)]
 mod tests_native;
+#[cfg(test)]
+mod tests_texture_fills;

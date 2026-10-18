@@ -17,6 +17,9 @@ use crate::projection::NotComputable;
 pub enum CompositeWarning {
     /// A material fill cannot be evaluated by the core; the layer was left out.
     MaterialFillSkipped { layer: String },
+    /// A texture fill names a texture no generator evaluates (an unknown id, or a generator that does not
+    /// evaluate at points); the channel was left out.
+    TextureFillSkipped { layer: String, texture: String },
     /// A group nested deeper than [`MAX_GROUP_DEPTH`]; it was left out.
     GroupTooDeep { layer: String },
     /// A paint image or mask does not match the texture set resolution; it was read as is (cropped / zero-padded).
@@ -51,6 +54,7 @@ impl Compositor<'_> {
                 LayerKind::Fill(f) => match self.fill_problem(f, channel) {
                     Some(FillProblem::NoEvaluator) => out.push(CompositeWarning::MaterialFillSkipped { layer: id() }),
                     Some(FillProblem::Projection(p)) => out.push(projection_warning(id(), None, p)),
+                    Some(FillProblem::UnknownTexture(texture)) => out.push(CompositeWarning::TextureFillSkipped { layer: id(), texture }),
                     None => {}
                 },
                 LayerKind::Group(_) if depth >= MAX_GROUP_DEPTH => out.push(CompositeWarning::GroupTooDeep { layer: id() }),

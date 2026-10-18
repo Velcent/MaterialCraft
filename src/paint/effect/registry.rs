@@ -9,7 +9,7 @@ use crate::mesh::SurfaceMap;
 use crate::paint::channel::Channel;
 use crate::paint::image::Rect;
 use crate::paint::texture_set::TextureSet;
-use crate::projection::SceneFrame;
+use crate::projection::{SceneFrame, Tap};
 use std::fmt;
 
 /// What an effect is evaluated for.
@@ -52,6 +52,19 @@ pub trait StackContext: fmt::Debug + Sync {
 pub trait GeneratorSource: Send + Sync {
     /// Writes `request.rect.area()` pixels, row by row. An error leaves the effect out.
     fn generate(&self, request: &EvalRequest, out: &mut [[f32; 4]]) -> Result<(), String>;
+
+    /// True if the generator is a function of image coordinates alone that [`Self::sample_points`] evaluates
+    /// (a procedural texture): such a generator can also fill channels ([`crate::paint::TextureFill`]), laid on
+    /// by the fill's projection.
+    fn samples_points(&self) -> bool {
+        false
+    }
+
+    /// The generator's value at each tap's image coordinates (`taps[i].uv`, repeating with period 1) into `out`
+    /// (same length): grey in RGB, alpha = coverage. Only for generators that [`Self::samples_points`].
+    fn sample_points(&self, _params: &[(String, String)], _taps: &[Tap], _out: &mut [[f32; 4]]) -> Result<(), String> {
+        Err("this generator does not evaluate at points".into())
+    }
 }
 
 /// The input of a filter: what is below the filter in its stack, over `rect` (the output rectangle grown by

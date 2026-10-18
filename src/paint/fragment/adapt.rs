@@ -74,6 +74,7 @@ fn retain_fill(f: &mut Fill, declared: &dyn Fn(Channel) -> bool) {
             }
             *fill = kept;
         }
+        FillSource::Texture(fill) => fill.retain(declared),
     }
 }
 

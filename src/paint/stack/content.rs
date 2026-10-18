@@ -151,7 +151,7 @@ fn is_noop(e: &ContentEffect, pass: &Pass) -> bool {
     match &e.kind {
         EffectKind::Paint(p) => p.image(pass.channel).is_none(),
         EffectKind::Fill(f) => match &f.source {
-            FillSource::Uniform(_) | FillSource::Image(_) => !f.channels().contains(&pass.channel),
+            FillSource::Uniform(_) | FillSource::Image(_) | FillSource::Texture(_) => !f.channels().contains(&pass.channel),
             FillSource::Material { .. } => false,
         },
         EffectKind::Anchor(_) => true,

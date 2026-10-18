@@ -305,3 +305,26 @@ fn a_failure_half_way_rolls_back_the_whole_operation() {
     }
     assert_eq!(d, before);
 }
+
+#[test]
+fn a_fill_gets_a_texture_source_and_keeps_its_projection() {
+    use crate::paint::edit::{Edit, StackEffect};
+    use crate::paint::{FillSource, TextureFill};
+    let mut d = doc();
+    let r = FillRef::new(lr("f"), FillAt::Layer);
+    let projection = crate::projection::Projection::uv(crate::projection::ImagePlacement::default());
+    step(&mut d, |tx| set_projection(tx, &r, projection.clone()));
+    let mut textures = TextureFill::default();
+    textures.set_texture(Channel::Roughness, Procedural::new("perlin"));
+    let source = FillSource::Texture(textures);
+    step(&mut d, |tx| set_fill_source(tx, &r, source.clone()));
+    assert_eq!(r.fill(&d).map(|f| (&f.source, &f.projection)), Some((&source, &projection)));
+    // a fill effect too; other layers and effects refuse
+    let fx = ContentEffect::new(Vec::new(), EffectKind::Fill(Fill::uniform(vec![])));
+    step(&mut d, |tx| tx.apply(Edit::InsertEffect { layer: lr("base"), index: 0, effect: StackEffect::Content(fx) }));
+    let e = FillRef::new(lr("base"), FillAt::Effect(0));
+    step(&mut d, |tx| set_fill_source(tx, &e, source.clone()));
+    assert_eq!(e.fill(&d).map(|f| &f.source), Some(&source));
+    refused(&mut d, |tx| set_fill_source(tx, &FillRef::new(lr("base"), FillAt::Layer), source.clone()));
+    refused(&mut d, |tx| set_fill_source(tx, &FillRef::new(lr("a"), FillAt::Effect(0)), source.clone()));
+}

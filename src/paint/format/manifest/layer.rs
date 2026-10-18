@@ -12,7 +12,9 @@ use crate::paint::format::FormatError;
 use crate::paint::format::slot::ImageSlot;
 use crate::paint::format::strokes::StrokeSlot;
 use crate::paint::stroke::StrokeOwner;
-use crate::paint::{Channel, ChannelSpec, ColorSpace, Fill, FillImageRef, FillSource, ImageFill, InstanceLink, Layer, LayerImage, LayerKind, PaintContent};
+use crate::paint::{
+    Channel, ChannelSpec, ColorSpace, Fill, FillImageRef, FillSource, ImageFill, InstanceLink, Layer, LayerImage, LayerKind, PaintContent, TextureFill,
+};
 use crate::projection::Projection;
 
 pub use blend::channel;
@@ -106,8 +108,9 @@ impl FillAt<'_> {
     }
 }
 
-/// A fill object: `{"values"}`, `{"material", "params"}` or `{"images", "values"}`, plus `"projection"` when it is
-/// not the default and `"original"` (`{"id", "params"}`) when the fill stands in for a procedural (format 0.10).
+/// A fill object: `{"values"}`, `{"material", "params"}`, `{"images", "values"}` or `{"textures", "values"}` (format
+/// 0.16; each texture `{"id", "params"}` as a generator's), plus `"projection"` when it is not the default and
+/// `"original"` (`{"id", "params"}`) when the fill stands in for a procedural (format 0.10).
 pub fn write_fill(f: &Fill, at: &FillAt, ctx: &WriteCtx) -> Value {
     let values = |list: &[(Channel, [f32; 4])]| {
         let mut obj = Value::object();
@@ -129,6 +132,15 @@ pub fn write_fill(f: &Fill, at: &FillAt, ctx: &WriteCtx) -> Value {
                 images.insert(c.id(), image_ref::write(path, img.image(), at.set.color_space(c), &loc(&at.here, "images", &c.id()), ctx.extras));
             }
             Value::object().with("images", images).with("values", values(fill.values()))
+        }
+        FillSource::Texture(fill) => {
+            let mut textures = Value::object();
+            for (c, t) in fill.textures() {
+                let mut o = Value::object();
+                effect_kinds::write_procedural(t, &mut o);
+                textures.insert(c.id(), o);
+            }
+            Value::object().with("textures", textures).with("values", values(fill.values()))
         }
     };
     if let Some(p) = projection::write(&f.projection, &format!("{}/projection", at.here), ctx.extras) {
@@ -222,9 +234,11 @@ pub fn read_fill(v: &Value, json: String, at: &FillAt, ctx: &mut ReadCtx) -> Res
                 let nums = nums.ok_or_else(|| o.error("values", format!("{k}: expected 4 numbers")))?;
                 values.push((c, [nums[0], nums[1], nums[2], nums[3]]));
             }
-            match o.opt("images") {
-                Some(_) => FillSource::Image(read_fill_images(&mut o, values, at, ctx)?),
-                None => FillSource::Uniform(values),
+            match (o.opt("images"), o.opt("textures")) {
+                (Some(_), Some(_)) => return Err(o.error("textures", "a fill has either images or textures")),
+                (Some(_), None) => FillSource::Image(read_fill_images(&mut o, values, at, ctx)?),
+                (None, Some(_)) => FillSource::Texture(read_fill_textures(&mut o, values)?),
+                (None, None) => FillSource::Uniform(values),
             }
         }
     };
@@ -238,6 +252,23 @@ pub fn read_fill(v: &Value, json: String, at: &FillAt, ctx: &mut ReadCtx) -> Res
     };
     ctx.extras.record(&at.here, &o);
     Ok(Fill { source, projection, original })
+}
+
+/// The `textures` of a texture fill, with `values` for the other channels.
+fn read_fill_textures(o: &mut Obj, values: Vec<(Channel, [f32; 4])>) -> Result<TextureFill, FormatError> {
+    let mut fill = TextureFill::default();
+    for (c, v) in values {
+        fill.set_value(c, v);
+    }
+    for (key, t) in o.entries("textures")? {
+        let c = channel(key, &o.path("textures"))?;
+        let tat = format!("{}.{key}", o.path("textures"));
+        if fill.value(c).is_some() {
+            return Err(FormatError::manifest(tat, "channel has both a texture and a value"));
+        }
+        fill.set_texture(c, effect_kinds::read_procedural(&mut Obj::new(t, tat)?)?);
+    }
+    Ok(fill)
 }
 
 /// The `images` of an image fill, with `values` for the other channels.

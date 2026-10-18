@@ -14,5 +14,6 @@ mod projections;
 mod round_trip;
 mod shading;
 mod strokes;
+mod texture_fills;
 mod unknown_fields;
 mod view;

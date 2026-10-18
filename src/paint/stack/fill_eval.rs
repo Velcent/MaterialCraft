@@ -1,10 +1,11 @@
-//! A fill's values over one rectangle: uniform values directly, images and other sources through the fill's
-//! projection (texel → [`Taps`] → source values), see [`super::fill_context`].
+//! A fill's values over one rectangle: uniform values directly, images, textures (generators of the effect
+//! registry that evaluate at points) and other sources through the fill's projection (texel → [`Taps`] → source
+//! values), see [`super::fill_context`].
 
 use super::Compositor;
 use super::fill_context::FillRequest;
 use super::pass::Pass;
-use crate::paint::effect::EvalTarget;
+use crate::paint::effect::{EvalTarget, Procedural};
 use crate::paint::fill_image::FillImage;
 use crate::paint::layer::{Fill, FillSource};
 use crate::projection::{Mirrored, NotComputable, Prepared, Projector, SurfacePoint, Tap, Taps};
@@ -42,6 +43,8 @@ pub(super) enum FillProblem {
     NoEvaluator,
     /// The projection cannot be evaluated.
     Projection(NotComputable),
+    /// A texture fill names a texture without a point-evaluating generator in the effect registry.
+    UnknownTexture(String),
 }
 
 impl Compositor<'_> {
@@ -54,6 +57,19 @@ impl Compositor<'_> {
                 Some(image) => {
                     let prepared = self.prepare(f).ok()?;
                     let px = self.projected(&prepared, pass, |taps, out| sample_image(image, f, pass, taps, out));
+                    px.map(FillTop::Pixels)
+                }
+                None => fill.value(pass.channel).map(|v| FillTop::Constant(pass.space.to_working([v[0], v[1], v[2], 1.0]))),
+            },
+            FillSource::Texture(fill) => match fill.texture(pass.channel) {
+                Some(texture) => {
+                    let generator = self.effects.generator(&texture.id).filter(|g| g.samples_points())?;
+                    let prepared = self.prepare(f).ok()?;
+                    let px = self.projected(&prepared, pass, |taps, out| {
+                        let sampled = generator.sample_points(&texture.params, taps, out).is_ok();
+                        out.iter_mut().for_each(|v| *v = pass.space.to_working(*v));
+                        sampled
+                    });
                     px.map(FillTop::Pixels)
                 }
                 None => fill.value(pass.channel).map(|v| FillTop::Constant(pass.space.to_working([v[0], v[1], v[2], 1.0]))),
@@ -79,6 +95,11 @@ impl Compositor<'_> {
     pub(super) fn fill_problem(&self, f: &Fill, channel: crate::paint::Channel) -> Option<FillProblem> {
         match &f.source {
             FillSource::Image(fill) if fill.image(channel).is_none() => None,
+            FillSource::Texture(fill) => match fill.texture(channel) {
+                Some(texture) if !self.texture_computable(texture) => Some(FillProblem::UnknownTexture(texture.id.clone())),
+                Some(_) => self.prepare(f).err().map(FillProblem::Projection),
+                None => None,
+            },
             _ => self.fill_computable(f).err(),
         }
     }
@@ -88,9 +109,19 @@ impl Compositor<'_> {
         match &f.source {
             FillSource::Uniform(_) => Ok(()),
             FillSource::Image(_) => self.prepare(f).map(|_| ()).map_err(FillProblem::Projection),
+            FillSource::Texture(fill) => match fill.textures().iter().find(|(_, t)| !self.texture_computable(t)) {
+                Some((_, t)) => Err(FillProblem::UnknownTexture(t.id.clone())),
+                None if fill.textures().is_empty() => Ok(()),
+                None => self.prepare(f).map(|_| ()).map_err(FillProblem::Projection),
+            },
             source if !self.fills.sources.handles(source) => Err(FillProblem::NoEvaluator),
             _ => self.prepare(f).map(|_| ()).map_err(FillProblem::Projection),
         }
+    }
+
+    /// True if the effect registry has a generator for `texture` that evaluates at points.
+    fn texture_computable(&self, texture: &Procedural) -> bool {
+        self.effects.generator(&texture.id).is_some_and(|g| g.samples_points())
     }
 
     fn prepare(&self, f: &Fill) -> Result<Mirrored<Prepared>, NotComputable> {

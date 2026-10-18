@@ -3,10 +3,13 @@
 //! texture is evaluated at the taps (weighted by the tap weights, alpha = the projection's coverage). The volume
 //! projections read the surface map's positions and vertex normals; texels without a surface point get no
 //! coverage there.
+//!
+//! As a channel fill's texture ([`crate::paint::TextureFill`]) the fill's projection places it instead:
+//! [`GeneratorSource::sample_points`] evaluates the texture at the taps the compositor projected.
 
 use super::{placement, texture};
 use crate::paint::effect::{EvalRequest, GeneratorSource};
-use crate::projection::{Projection, Projector, SurfacePoint, Taps};
+use crate::projection::{Projection, Projector, SurfacePoint, Tap, Taps};
 
 /// The texture registered under `id`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +69,20 @@ impl GeneratorSource for TextureSource {
                 *o = [v, v, v, taps.coverage.clamp(0.0, 1.0)];
             }
         });
+        Ok(())
+    }
+
+    fn samples_points(&self) -> bool {
+        true
+    }
+
+    /// The texture at the taps (its placement parameters are not used: the fill's projection placed the taps).
+    fn sample_points(&self, params: &[(String, String)], taps: &[Tap], out: &mut [[f32; 4]]) -> Result<(), String> {
+        if taps.len() != out.len() {
+            return Err("output size does not match the taps".into());
+        }
+        let tex = texture(self.id, params).ok_or_else(|| format!("unknown texture {}", self.id))?;
+        tex.sample_taps(taps, out);
         Ok(())
     }
 }

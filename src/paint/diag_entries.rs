@@ -51,6 +51,7 @@ pub fn composite_warning(set: &TextureSet, warning: &CompositeWarning) -> Entry 
     let layer = set.layer(layer_id).map_or(layer_id, |l| l.name.as_str());
     let what = match warning {
         CompositeWarning::MaterialFillSkipped { .. } => "its material fill can't be computed yet, so the layer is left out".to_owned(),
+        CompositeWarning::TextureFillSkipped { texture, .. } => format!("its fill's texture \"{texture}\" can't be computed, so that channel is left out"),
         CompositeWarning::GroupTooDeep { .. } => "the group is nested too deeply and is left out".to_owned(),
         CompositeWarning::ImageSizeMismatch { .. } => "an image or mask doesn't match the texture set's resolution and is read as is".to_owned(),
         CompositeWarning::EffectNotComputable { in_mask, index, kind, .. } => {
@@ -78,6 +79,7 @@ fn layer_of(w: &CompositeWarning) -> &str {
         | CompositeWarning::GroupEffectsSkipped { layer }
         | CompositeWarning::GeometryMaskNeedsMesh { layer }
         | CompositeWarning::UvTileMaskNotComputable { layer }
+        | CompositeWarning::TextureFillSkipped { layer, .. }
         | CompositeWarning::FillNeedsMesh { layer, .. }
         | CompositeWarning::ProjectionNotComputable { layer, .. } => layer,
     }
