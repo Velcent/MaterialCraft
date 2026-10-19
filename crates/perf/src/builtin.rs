@@ -1,10 +1,10 @@
 //! The shipped scenario table. Its sources are the user's corpus (never part of the repository): the folder is
-//! `$MC_PERF_CORPUS`, else [`CORPUS`]. Scenarios whose files are missing are skipped with a note.
+//! `$MC_PERF_CORPUS`, else [`CORPUS`] (a `Corpus` folder next to the repository). Scenarios whose files are missing are skipped with a note.
 
 use crate::scenario::{Action, EditKind, LayerChoice, PathShape, Scenario, Source, StrokeSpec, StrokeTarget, StrokeTool, Symmetry};
 use std::path::PathBuf;
 
-/// The corpus's default place.
+/// The corpus's default place, relative to the repository root (where mcperf runs).
 pub const CORPUS: &str = "../Corpus";
 pub const CORPUS_ENV: &str = "MC_PERF_CORPUS";
 

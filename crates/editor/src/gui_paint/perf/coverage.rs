@@ -17,6 +17,7 @@ use materialcraft_substance::translate::{Cancel, import_spp_with};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+/// The default project list, relative to the repository root (override: `MC_COVERAGE_LIST`).
 const LIST: &str = "../MaterialCraft-docs/corpus/feature-cover.txt";
 
 #[derive(Default)]
