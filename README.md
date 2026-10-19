@@ -57,24 +57,36 @@ make-it-tile photo / patch and more. Material: normal, ambient occlusion, curvat
 Structure: output (drives the 3D view), input color / grayscale (subgraphs), subgraph instances, bitmap, SVG, text, curve, pattern program map, pixel / value processor, input value, comment, frame, dot.
 
 ## Paint mode (texturing a mesh)
-Open a mesh project and paint its textures in a layer stack, PBR channels at a time (base colour, roughness, metallic, height,
-normal, AO, …), one stack per texture set.
+Start a project from a mesh and paint its textures in a layer stack, PBR channels at a time (base colour, roughness,
+metallic, height, normal, AO, …), one stack per texture set.
+
+- **New project:** File > New project (Ctrl+N) or the start screen: pick an OBJ or glTF mesh and get one texture set per
+  material, several objects per project, a default resolution up to 4K, the normal map format, physical size, cameras from
+  glTF and baked maps assigned by name (`TextureSetName_MeshMapName`); project templates, built in or saved by you.
 
 - **Layers and masks:** paint, fill and folder layers; masks with their own effect stacks; blend modes and opacity per
   channel; levels, colour selection on the ID map, anchors/references, polygon fill, effect layers; thumbnails, drag and
-  drop, duplicate, group. Every edit is one undo step, with a history timeline.
+  drop, duplicate, group, layer instances, geometry masks, see-through layers. Every edit is one undo step, with a
+  history timeline.
 - **Painting:** brush and eraser on the 3D model (strokes pulled into texture space per texel, so they cross UV seams),
-  pressure, lazy mouse, straight lines with angle snap, mirror and radial symmetry, quick mask, polygon fill by triangle /
-  face / mesh piece / UV island; the brush engine is PhotoCraft's (pinned, behind one adapter). Strokes are stored next to
-  the pixels, so they can be replayed.
-- **Procedural layers:** fills with tiling / UV / tri-planar / planar / spherical / cylindrical projection; materials from the
-  graph editor as fills; MaterialCraft's own mask generators driven by baked maps (dirt, edge wear, ambient occlusion,
+  pressure (on Linux Wayland through Xwayland), a brush cursor on the surface, lazy mouse, straight lines with angle snap,
+  mirror and radial symmetry, quick mask, polygon fill by triangle / face / mesh piece / UV island, smudge, clone,
+  stencils and projection painting, the material picker, painting in the 2D UV view; the brush engine is PhotoCraft's
+  (pinned, behind one adapter). Strokes are stored next to the pixels, so they can be replayed.
+- **Procedural layers:** fills with tiling / UV / tri-planar / planar / spherical / cylindrical / warp projection (with an
+  editable warp grid); materials from the graph editor as fills; procedural textures per channel; MaterialCraft's own mask generators driven by baked maps (dirt, edge wear, ambient occlusion,
   curvature, mask builder, UV border, height combination), noise / grunge / pattern textures and island-aware filters (blur,
-  sharpen, bevel, warp, slope blur, HSL, …), all written from scratch.
+  sharpen, bevel, warp, slope blur, HSL, …), all written from scratch. Every effect states how far it reads around a
+  texel (its reach, recorded in a tested ledger), so a change recomputes only what it can affect.
+- **Speed:** a brush stroke recomposites only the tiles it painted (through generators, filters and anchors), a stack
+  cache keeps expensive masks and the composite below the edited layer, and undo touches only the texture sets it
+  changed; `mcperf` measures it all against a history.
 - **Asset tray:** browse, filter, search (`steel*`, `!exact`, `"phrase"`, `tag:`, `-exclude`) and saved searches over your
-  libraries; drag materials, smart materials and smart masks onto the stack. A starter library (materials, smart masks,
-  textures, brush alphas, a studio environment) is generated from MaterialCraft's own graphs on first run (`mcstarter`).
-  Documents embed the assets they use, so they open anywhere.
+  libraries; drag materials, smart materials, smart masks, brushes and alphas onto the stack or the brush; rename, edit,
+  move and delete assets from a context menu (one asset store does every write). A starter library is generated on first
+  run (`mcstarter`): materials from MaterialCraft's own graphs, 116 reference materials from the CC0 values of
+  physicallybased.info, brushes, alphas, paper / canvas / noise and relief textures from PhotoCraft's generators, smart
+  masks and a studio environment. Documents embed the assets they use, so they open anywhere.
 - **Baking:** per texture set from a high-poly mesh or the model itself: normal, world normal, AO, curvature, position,
   thickness, ID; per-set bake settings, a bake queue with progress and cancel, and a Baking layout (F8).
 - **Workspace:** dockable panels and saved layouts, rebindable shortcuts (Alt-based navigation in the viewport), colour
@@ -82,7 +94,8 @@ normal, AO, …), one stack per texture set.
 - **Import:** Substance 3D Painter projects (`.spp`) are converted into `.mcpaint`: mesh, texture sets, baked maps, the
   layer structure with blend modes, fills, masks, native effects and brush strokes. Procedurals compiled into the project
   can be replaced by MaterialCraft's own equivalents in an import review (or kept as the project's saved result). The importer
-  only reads your own files; nothing vendor-made is shipped.
+  only reads your own files; nothing vendor-made is shipped. The review can also add the project's brushes, alphas,
+  stencils and textures to your own library.
 
 ## Command-line tools
     materialcraft render <graph.mcg|.mca> <outdir> [--sizes 512,1024] [--depth 16] [--param "Label=0.5"] [--variations 8] [--render3d]
@@ -95,13 +108,15 @@ normal, AO, …), one stack per texture set.
     mcsub analyze <in.spp>                                              # procedurals and available replacements (JSON)
     mcsub inspect | tree | doc | model | report | maps | compare | verify-layers …
     mcparity run <subject|all> --projects <list> [--jobs N]             # measure our results against the project's saved ones
+    mcperf list | run <id|all> | compare                                # performance scenarios with a history
     mcstarter <folder>                                                  # build the starter asset library (deterministic)
 
 ## Workspace layout
 `src/` the core library (graph engine and nodes, `paint` document model and compositor, `mesh`, `bake`, `projection`,
 `stamp`, `generators`, `filters`, `proc_textures`, `assets`, `history`, …) · `crates/editor` the editor ·
 `crates/substance` the `.spp` importer (`mcsub`) · `crates/parity` result measurements (`mcparity`) ·
-`crates/brush` the brush adapter · `crates/starter` the starter library (`mcstarter`). Contributor rules: [AGENTS.md](AGENTS.md).
+`crates/brush` the brush adapter · `crates/starter` the starter library (`mcstarter`) · `crates/perf` performance
+scenarios (`mcperf`). Contributor rules: [AGENTS.md](AGENTS.md).
 
 ## Platforms
 Windows, Linux and macOS use the same code: `eframe` (glow / OpenGL 3.3 core) for the window and the 3D viewport, `rfd` for
@@ -114,9 +129,8 @@ Linux needs the usual X11/Wayland/GL development packages (`libxkbcommon-dev lib
 ## Not implemented (honest list)
 **Material graph:** splines/paths, AxF import, OCIO/ACE colour management, scripting API, SVG gradients, OpenType (CFF)
 fonts, path-traced 3D rendering and custom mesh import in the graph editor's 3D view.
-**Paint mode:** 2D (UV) view painting, tablet tilt, smudge / clone, stencils and projection painting, warp projection,
-HDR environments and post effects in the viewport, camera import, layer instancing, UDIMs, effect groups with their own
-blending; replacements for the compiled procedurals of imported projects cover the common mask generators, textures and
+**Paint mode:** texture export, UDIMs, USD / FBX / Alembic meshes, automatic UV unwrapping, tablet tilt, native Wayland
+pen input (Xwayland is used instead), effect groups with their own blending; replacements for the compiled procedurals of imported projects cover the common mask generators, textures and
 filters only, and their looks are still being tuned.
 See ROADMAP.md for the complete list.
 
