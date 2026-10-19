@@ -3,6 +3,7 @@
 
 use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
+use super::super::input::pen_status::PenStatus;
 use super::super::projection_edit::GizmoSettings;
 use super::super::shell::Shell;
 use super::super::tools::BrushTools;
@@ -48,6 +49,8 @@ pub struct Screen<'a> {
     /// The shader files and the model's size, for the shader settings panel.
     pub shaders: &'a materialcraft::shading::ShaderLibrary,
     pub model: &'a crate::gui_paint::scene_shading::ModelScale,
+    /// Whether pen pressure reaches the brushes, for the pen settings and the brush panel.
+    pub pen_status: &'a PenStatus,
 }
 
 /// Draws the screen and returns what the user asked for.
@@ -93,6 +96,7 @@ pub fn show(ui: &mut egui::Ui, s: Screen) -> Vec<PanelEvent> {
             model: s.model,
             scale_draft: &mut shell.scale_draft,
             pen: &shell.settings.get().pen,
+            pen_status: s.pen_status,
             log: s.log,
             tray: s.tray,
             history: s.history,

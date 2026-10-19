@@ -87,12 +87,28 @@ pub struct PenSettings {
     /// `[pen pressure, brush pressure]` points (0 … 1) of a monotone curve; hand-editable. Fewer than two
     /// usable points is linear.
     pub pressure_curve: Vec<[f32; 2]>,
+    /// The window system under a Wayland session (read at start): pen pressure needs Xwayland there.
+    pub window: PenWindow,
 }
 
 impl Default for PenSettings {
     fn default() -> PenSettings {
-        PenSettings { use_pressure: true, pressure_curve: vec![[0.0, 0.0], [1.0, 1.0]] }
+        PenSettings { use_pressure: true, pressure_curve: vec![[0.0, 0.0], [1.0, 1.0]], window: PenWindow::Auto }
     }
+}
+
+/// Where the editor opens its window in a Wayland session (step 58). winit 0.30 doesn't bind Wayland's tablet
+/// protocol, so a native Wayland window gets a pen as a mouse; through Xwayland the XInput2 reader gets pressure.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PenWindow {
+    /// Xwayland when a pen tablet is connected at start, native Wayland otherwise.
+    #[default]
+    Auto,
+    /// Always native Wayland (no pen pressure).
+    Wayland,
+    /// Always Xwayland.
+    Xwayland,
 }
 
 /// A named search of the asset library (AS-16): type filter, folder and query text, hand-editable.

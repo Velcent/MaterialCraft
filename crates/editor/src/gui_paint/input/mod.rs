@@ -5,9 +5,12 @@
 //! ([`pressure_curve`]) before any brush sees it. A straight-line gesture (PT-31) gives one [`StrokeInput::Line`] at
 //! the click and ignores the drag after it.
 
+pub mod pen_status;
 pub mod pressure_curve;
 pub mod stylus;
 pub mod tablet;
+pub mod tablet_probe;
+pub mod window_system;
 
 use eframe::egui::{self, Event, Pos2, Rect};
 use stylus::{Stylus, StylusFeed};
@@ -228,7 +231,7 @@ mod tests {
     fn the_pressure_curve_applies_before_the_samples_leave() {
         let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 300.0));
         let mut log = PointerLog::default();
-        log.configure(&PenSettings { use_pressure: true, pressure_curve: vec![[0.0, 0.0], [0.5, 0.25], [1.0, 1.0]] });
+        log.configure(&PenSettings { use_pressure: true, pressure_curve: vec![[0.0, 0.0], [0.5, 0.25], [1.0, 1.0]], ..PenSettings::default() });
         log.feed().set(pen(0.5, 0.0, 0.0));
         log.down = true;
         log.record(&input(vec![Event::PointerMoved(pos2(1.0, 1.0))]), rect, true, false, false, None);
@@ -244,7 +247,7 @@ mod tests {
     fn a_mouse_after_the_pen_is_full_pressure_again() {
         let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 300.0));
         let mut log = PointerLog::default();
-        log.configure(&PenSettings { use_pressure: true, pressure_curve: vec![[0.0, 0.0], [1.0, 0.1]] });
+        log.configure(&PenSettings { use_pressure: true, pressure_curve: vec![[0.0, 0.0], [1.0, 0.1]], ..PenSettings::default() });
         let feed = log.feed();
         feed.set(pen(0.3, 5.0, 5.0));
         log.down = true;

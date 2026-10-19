@@ -5,6 +5,7 @@
 //! procedural tip or an alpha dropped from the tray (AS-06); "Save as preset…" asks for
 //! [`ToolEvent::SaveBrushPreset`].
 
+use super::super::input::pen_status::PenStatus;
 use super::super::screen_images::ImageEdit;
 use super::super::shell::tools::Tool;
 use super::super::tools::brush_state::{RetouchSettings, SmudgeMode};
@@ -12,6 +13,7 @@ use super::super::tools::screen_image::{ImageSlot, ScreenImages};
 use super::super::tools::{BrushTools, ToolEvent};
 use super::PanelEvent;
 use super::drop_zones::{self, BrushZone};
+use super::pen_settings;
 use crate::gui_assets::brush_item::tip_label;
 use crate::gui_theme;
 use crate::gui_widgets::SliderRow;
@@ -29,7 +31,8 @@ pub struct ImagesUi<'a> {
     pub events: &'a mut Vec<PanelEvent>,
 }
 
-pub fn show(ui: &mut Ui, brush: &mut BrushTools, tool: Tool, set: Option<&TextureSet>, mut images: ImagesUi) {
+/// `pen` says whether pen pressure reaches the brushes (a notice under the pressure switches when it doesn't).
+pub fn show(ui: &mut Ui, brush: &mut BrushTools, tool: Tool, set: Option<&TextureSet>, mut images: ImagesUi, pen: &PenStatus) {
     // brushes and alphas dragged from the tray land here (AS-06)
     drop_zones::mark(ui.ctx(), BrushZone::BrushPanel, ui.max_rect());
     let projection = tool == Tool::Projection;
@@ -52,7 +55,7 @@ pub fn show(ui: &mut Ui, brush: &mut BrushTools, tool: Tool, set: Option<&Textur
                 }
             });
             tip(ui, preset);
-            shape(ui, preset);
+            shape(ui, preset, pen);
             heading(ui, "Variation");
             variation(ui, preset);
             heading(ui, "Placement");
@@ -169,7 +172,7 @@ fn tip(ui: &mut Ui, p: &mut BrushPreset) {
     ui.weak("Drop an alpha from the assets here to make it the tip, or a brush to load it.");
 }
 
-fn shape(ui: &mut Ui, p: &mut BrushPreset) {
+fn shape(ui: &mut Ui, p: &mut BrushPreset, pen: &PenStatus) {
     let d = BrushPreset::default();
     let (range, unit, default) = size_range(p.size_space);
     SliderRow::new("Size", &mut p.size, range).default_value(default).suffix(unit).show(ui);
@@ -189,6 +192,9 @@ fn shape(ui: &mut Ui, p: &mut BrushPreset) {
     ui.checkbox(&mut p.follow_direction, "Turn with the stroke");
     ui.checkbox(&mut p.pressure.size, "Pen pressure drives size");
     ui.checkbox(&mut p.pressure.flow, "Pen pressure drives flow");
+    if p.pressure.size || p.pressure.flow {
+        pen_settings::pressure_notice(ui, pen);
+    }
 }
 
 fn variation(ui: &mut Ui, p: &mut BrushPreset) {

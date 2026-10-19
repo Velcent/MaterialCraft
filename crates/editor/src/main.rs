@@ -424,7 +424,11 @@ struct App {
 }
 
 impl App {
-    fn new(cc: &eframe::CreationContext<'_>, (diag, user_settings): (logging::Diagnostics, gui_settings::UserSettings)) -> App {
+    fn new(
+        cc: &eframe::CreationContext<'_>,
+        (diag, user_settings): (logging::Diagnostics, gui_settings::UserSettings),
+        window: gui_paint::WindowChoice,
+    ) -> App {
         apply_theme(&cc.egui_ctx);
         let (logo_tex, logo_note) = logo().clone();
         let logo_handle = cc.egui_ctx.load_texture("logo", qimg(&logo_tex), egui::TextureOptions::LINEAR);
@@ -449,7 +453,7 @@ impl App {
         let favorites: BTreeSet<String> = prefs.get().library.favorites.iter().cloned().collect();
         let recent: Vec<PathBuf> = prefs.get().recent.files.iter().map(PathBuf::from).collect();
         let mut paint = gui_paint::PaintMode::from_args(diag.sink(), user_settings);
-        paint.connect_tablet(cc);
+        paint.connect_tablet(cc, window);
         cc.egui_ctx.set_zoom_factor(paint.ui_scale());
         App {
             was_focused: true,

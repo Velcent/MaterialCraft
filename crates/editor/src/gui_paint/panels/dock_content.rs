@@ -6,6 +6,7 @@ use eframe::egui::{self, Ui};
 
 use super::super::channel_view::ChannelView;
 use super::super::document_state::OpenDocument;
+use super::super::input::pen_status::PenStatus;
 use super::super::projection_edit::GizmoSettings;
 use super::super::shell::actions;
 use super::super::shell::panels::PaintPanel;
@@ -48,6 +49,8 @@ pub struct Bodies<'a> {
     pub scale_draft: &'a mut f32,
     /// The pen settings, shown under the interface settings.
     pub pen: &'a PenSettings,
+    /// Whether pen pressure reaches the brushes (pen settings, brush panel).
+    pub pen_status: &'a PenStatus,
     pub log: &'a mut LogPanel,
     pub tray: &'a mut AssetTray,
     /// The session's diagnostics, for the log panel.
@@ -102,7 +105,7 @@ impl DockContent<PaintPanel> for Bodies<'_> {
             PaintPanel::Interface => {
                 margin.show(ui, |ui| {
                     interface_settings::show(ui, self.scale_draft, self.events);
-                    pen_settings::show(ui, self.pen, self.events);
+                    pen_settings::show(ui, self.pen, self.pen_status, self.events);
                 });
             }
             PaintPanel::Bakers => {
@@ -124,7 +127,7 @@ impl DockContent<PaintPanel> for Bodies<'_> {
             PaintPanel::Brush => {
                 let set = self.document.and_then(|d| self.layers.current_set(d.doc()));
                 let images = brush_panel::ImagesUi { images: self.images, key: self.shortcuts.label(actions::STENCIL), events: self.events };
-                margin.show(ui, |ui| brush_panel::show(ui, self.brush, self.tools.current, set, images));
+                margin.show(ui, |ui| brush_panel::show(ui, self.brush, self.tools.current, set, images, self.pen_status));
             }
             PaintPanel::Shader => {
                 margin.show(ui, |ui| match self.document {

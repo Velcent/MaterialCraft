@@ -2521,19 +2521,23 @@ fn main() -> eframe::Result<()> {
     if let Some(code) = gui_paint::perf::runner::from_args() {
         std::process::exit(code);
     }
+    // Logging starts before the window, so start-up messages (GL context, portal) are kept.
+    let first = boot();
+    // In a Wayland session the window opens through Xwayland when pen pressure needs it (step 58).
+    let window = gui_paint::WindowChoice::for_this_session(first.1.get().pen.window);
+    let state = std::cell::RefCell::new(Some(first));
     // 4x MSAA + depth buffer for the GPU viewport; fall back to no MSAA on drivers that cannot provide it.
     let make = |msaa: u16| eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1500.0, 920.0]).with_title("MaterialCraft").with_icon(window_icon()),
         multisampling: msaa,
         depth_buffer: 24,
+        event_loop_builder: window.event_loop_hook(),
         ..Default::default()
     };
-    // Logging starts before the window, so start-up messages (GL context, portal) are kept.
-    let state = std::cell::RefCell::new(Some(boot()));
     // The fallback run gets the same state if the first one never created the app.
     let take = || state.borrow_mut().take().unwrap_or_else(boot);
-    match eframe::run_native("MaterialCraft", make(4), Box::new(|cc| Ok(Box::new(App::new(cc, take()))))) {
-        Err(eframe::Error::NoGlutinConfigs(..)) => eframe::run_native("MaterialCraft", make(0), Box::new(|cc| Ok(Box::new(App::new(cc, take()))))),
+    match eframe::run_native("MaterialCraft", make(4), Box::new(|cc| Ok(Box::new(App::new(cc, take(), window))))) {
+        Err(eframe::Error::NoGlutinConfigs(..)) => eframe::run_native("MaterialCraft", make(0), Box::new(|cc| Ok(Box::new(App::new(cc, take(), window))))),
         other => other,
     }
 }

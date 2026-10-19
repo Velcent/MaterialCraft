@@ -80,6 +80,8 @@ mod view_thumbnail;
 mod viewport;
 mod window;
 
+pub use input::window_system::WindowChoice;
+
 use crate::gui_assets::AssetTray;
 use crate::gui_color::ColorPicker;
 use crate::gui_settings::UserSettings;
@@ -245,10 +247,18 @@ impl PaintMode {
         pm
     }
 
-    /// Starts the platform's pen reader for the window eframe created (once, from the app's creation).
-    pub fn connect_tablet(&mut self, cc: &eframe::CreationContext<'_>) {
-        self.tablet = input::tablet::TabletInput::start(cc, &self.viewport.pen_feed());
-        self.diag.info(Area::General, self.tablet.note.clone());
+    /// Starts the platform's pen reader for the window eframe created (once, from the app's creation); `window`
+    /// is where the window was asked to open. Pen pressure that isn't available is a warning (the status bar
+    /// shows it), not a silent mouse.
+    pub fn connect_tablet(&mut self, cc: &eframe::CreationContext<'_>, window: WindowChoice) {
+        self.tablet = input::tablet::TabletInput::start(cc, &self.viewport.pen_feed(), window);
+        self.diag.info(Area::General, window.describe().to_string());
+        let summary = self.tablet.status.summary();
+        if self.tablet.status.available() {
+            self.diag.info(Area::General, summary);
+        } else {
+            self.diag.warn(Area::General, summary);
+        }
     }
 
     /// True if a document was given on the command line (the editor then starts on this screen).
@@ -363,6 +373,7 @@ impl PaintMode {
             projection: &self.projection.settings,
             shaders: self.scene.shader_library(),
             model: self.scene.model_scale(),
+            pen_status: &self.tablet.status,
         };
         panels::layout::show(ui, screen)
     }

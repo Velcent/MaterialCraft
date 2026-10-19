@@ -30,6 +30,9 @@ photocraft-tablet = { git = "https://github.com/storytold/photocraft", rev = "5f
 [target.'cfg(target_os = "linux")'.dependencies]
 # Which display server eframe's window ended up on (the tablet reader needs X11); eframe's own version.
 raw-window-handle = "0.6"
+# eframe's own winit (already in Cargo.lock; no new crate): its X11 event-loop switch opens the window through
+# Xwayland in a Wayland session when pen pressure needs it (`gui_paint::input::window_system`, step 58).
+winit = { version = "0.30", default-features = false, features = ["x11"] }
 
 [dev-dependencies]
 # The bake queue's corpus gate compares its maps with mcparity's bake of the same project (tests only).

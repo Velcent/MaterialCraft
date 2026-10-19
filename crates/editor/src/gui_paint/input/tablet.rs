@@ -5,12 +5,15 @@
 //!
 //! - Linux X11: XInput2 raw events on a second X connection (pure Rust). Started only when the window itself is
 //!   on X11 (Xwayland counts): on native Wayland `$DISPLAY` is Xwayland, which sees none of this window's input.
-//! - Linux Wayland: no pen input in a native window (winit doesn't bind `zwp_tablet_v2`). Start the editor with
-//!   `WAYLAND_DISPLAY` unset so winit opens the window through Xwayland, where the X11 reader works.
+//! - Linux Wayland: no pen input in a native window (winit 0.30 doesn't bind `zwp_tablet_v2`). The window opens
+//!   through Xwayland instead when a tablet is connected or the pen settings ask for it ([`super::window_system`]);
+//!   otherwise the [`PenStatus`] says why there is no pressure.
 //! - macOS: an AppKit local event monitor, installed on the main thread once the window exists.
 //! - Windows: nothing to start; egui's touch force carries the pressure (no tilt or rotation).
 
+use super::pen_status::PenStatus;
 use super::stylus::{PenSample, StylusFeed};
+use super::window_system::WindowChoice;
 
 /// A tablet sample as the stylus's pen sample.
 #[cfg(any(target_os = "linux", target_os = "macos", test))]
@@ -33,24 +36,22 @@ pub enum Display {
     Other,
 }
 
-/// What starting the reader means on `display` (Linux).
+/// The pen status of a window on `display` that opened as `choice` says (Linux); `spawn` starts the X11 reader,
+/// `pens` lists the connected pens (both asked only for an X11 window).
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Plan {
-    /// Start the XInput2 reader.
-    X11,
-    /// No pen input; tell the user how to get it.
-    WaylandHint,
-    Nothing,
-}
-
-/// The plan for `display`.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-fn plan(display: Option<Display>) -> Plan {
+fn linux_status(display: Option<Display>, choice: WindowChoice, spawn: impl FnOnce() -> Result<(), String>, pens: impl FnOnce() -> Vec<String>) -> PenStatus {
     match display {
-        Some(Display::X11) => Plan::X11,
-        Some(Display::Wayland) => Plan::WaylandHint,
-        _ => Plan::Nothing,
+        Some(Display::X11) => match spawn() {
+            Ok(()) => {
+                let via = if choice.xwayland { "XInput2 through Xwayland" } else { "XInput2 (X11)" };
+                let pens = pens();
+                let how = if pens.is_empty() { format!("{via}; no pen tablet connected yet") } else { format!("{via}; {}", pens.join(", ")) };
+                PenStatus::Reading { how }
+            }
+            Err(e) => PenStatus::Unavailable { why: format!("the XInput2 reader didn't start ({e})"), fix: None },
+        },
+        Some(Display::Wayland) => PenStatus::native_wayland(choice.reason),
+        _ => PenStatus::Unavailable { why: "the window runs on a display server MaterialCraft reads no pen from".to_string(), fix: None },
     }
 }
 
@@ -58,8 +59,8 @@ fn plan(display: Option<Display>) -> Plan {
 pub struct TabletInput {
     #[cfg(target_os = "macos")]
     _monitor: Option<photocraft_tablet::macos::Monitor>,
-    /// What happened, for the log.
-    pub note: String,
+    /// Whether pressure reaches the brushes, for the log and the UI.
+    pub status: PenStatus,
 }
 
 impl TabletInput {
@@ -68,38 +69,30 @@ impl TabletInput {
         TabletInput {
             #[cfg(target_os = "macos")]
             _monitor: None,
-            note: String::new(),
+            status: PenStatus::NotStarted,
         }
     }
 
-    /// Starts the reader for the window eframe created (call from the app's creation, on the main thread).
-    pub fn start(cc: &eframe::CreationContext<'_>, feed: &StylusFeed) -> TabletInput {
+    /// Starts the reader for the window eframe created (call from the app's creation, on the main thread);
+    /// `choice` is where the window was asked to open.
+    pub fn start(cc: &eframe::CreationContext<'_>, feed: &StylusFeed, choice: WindowChoice) -> TabletInput {
         #[cfg(target_os = "linux")]
         {
-            let note = match plan(display_of(cc)) {
-                Plan::X11 => match photocraft_tablet::x11::spawn(None, sink(feed.clone())) {
-                    Ok(_) => "Pen tablet input: reading XInput2 (X11).".to_string(),
-                    Err(e) => format!("Pen tablet input is off ({e}); a pen paints like a mouse."),
-                },
-                Plan::WaylandHint => "Pen tablet input is off on native Wayland (a pen paints like a mouse, or not at all). \
-                     Start MaterialCraft with WAYLAND_DISPLAY unset to run it through Xwayland, where pen pressure and tilt work."
-                    .to_string(),
-                Plan::Nothing => "Pen tablet input: no supported display server; a pen paints like a mouse.".to_string(),
-            };
-            TabletInput { note }
+            let spawn = || photocraft_tablet::x11::spawn(None, sink(feed.clone())).map(drop).map_err(|e| e.to_string());
+            TabletInput { status: linux_status(display_of(cc), choice, spawn, super::tablet_probe::connected_pens) }
         }
         #[cfg(target_os = "macos")]
         {
-            let _ = cc;
+            let _ = (cc, choice);
             match photocraft_tablet::macos::Monitor::install(sink(feed.clone())) {
-                Ok(m) => TabletInput { _monitor: Some(m), note: "Pen tablet input: AppKit monitor installed.".into() },
-                Err(e) => TabletInput { _monitor: None, note: format!("Pen tablet input is off ({e}); a pen paints like a mouse.") },
+                Ok(m) => TabletInput { _monitor: Some(m), status: PenStatus::Reading { how: "AppKit tablet events".into() } },
+                Err(e) => TabletInput { _monitor: None, status: PenStatus::Unavailable { why: format!("the AppKit monitor didn't install ({e})"), fix: None } },
             }
         }
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         {
-            let _ = (cc, feed);
-            TabletInput { note: "Pen input: pressure from the system's pen events (no tilt or rotation).".into() }
+            let _ = (cc, feed, choice);
+            TabletInput { status: PenStatus::Reading { how: "pressure from the system's pen events (no tilt or rotation)".into() } }
         }
     }
 }
@@ -118,6 +111,7 @@ fn display_of(cc: &eframe::CreationContext<'_>) -> Option<Display> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gui_paint::input::window_system::Reason;
     use photocraft_tablet::Sample;
 
     #[test]
@@ -134,9 +128,17 @@ mod tests {
 
     #[test]
     fn only_an_x11_window_starts_the_x11_reader() {
-        assert_eq!(plan(Some(Display::X11)), Plan::X11);
-        assert_eq!(plan(Some(Display::Wayland)), Plan::WaylandHint);
-        assert_eq!(plan(Some(Display::Other)), Plan::Nothing);
-        assert_eq!(plan(None), Plan::Nothing);
+        let xwayland = WindowChoice { xwayland: true, reason: Reason::TabletFound };
+        let never = || -> Result<(), String> { panic!("no X11 reader for this window") };
+        let started = linux_status(Some(Display::X11), xwayland, || Ok(()), || vec!["Pen A".into()]);
+        assert_eq!(started, PenStatus::Reading { how: "XInput2 through Xwayland; Pen A".into() });
+        let x11 = linux_status(Some(Display::X11), WindowChoice::native(), || Ok(()), Vec::new);
+        assert_eq!(x11, PenStatus::Reading { how: "XInput2 (X11); no pen tablet connected yet".into() });
+        let failed = linux_status(Some(Display::X11), WindowChoice::native(), || Err("no XInput2".into()), Vec::new);
+        assert!(!failed.available() && failed.summary().contains("no XInput2"), "{failed:?}");
+        let no_tablet = WindowChoice { xwayland: false, reason: Reason::NoTablet };
+        assert_eq!(linux_status(Some(Display::Wayland), no_tablet, never, Vec::new), PenStatus::native_wayland(Reason::NoTablet));
+        assert!(!linux_status(Some(Display::Other), WindowChoice::native(), never, Vec::new).available());
+        assert!(!linux_status(None, WindowChoice::native(), never, Vec::new).available());
     }
 }
