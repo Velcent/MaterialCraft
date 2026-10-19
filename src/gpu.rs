@@ -191,25 +191,10 @@ mod imp {
                 return None;
             }
             let force = mode == "force";
-            let inst = wgpu::Instance::new(wgpu::InstanceDescriptor { backends: wgpu::Backends::all(), ..Default::default() });
-            let mut best: Option<wgpu::Adapter> = None;
-            let mut rank = 0;
-            for a in inst.enumerate_adapters(wgpu::Backends::all()) {
-                let info = a.get_info();
-                let r = match info.device_type {
-                    wgpu::DeviceType::DiscreteGpu => 4,
-                    wgpu::DeviceType::IntegratedGpu => 3,
-                    wgpu::DeviceType::VirtualGpu => 2,
-                    _ if force => 1,
-                    _ => 0, // software rendering is never faster than the CPU code
-                };
-                // compute shaders need storage buffers in the compute stage; skip adapters without them
-                if r > rank && a.limits().max_storage_buffers_per_shader_stage >= 4 {
-                    rank = r;
-                    best = Some(a);
-                }
-            }
-            let adapter = best?;
+            // GL only when no Vulkan/Metal/DX12 adapter qualifies: probing EGL on the Wayland platform panics inside
+            // wgpu (khronos-egl's make_current) when the editor's own window is an Xwayland window, and a GL
+            // adapter never outranks a native one anyway.
+            let adapter = Self::best_adapter(wgpu::Backends::PRIMARY, force).or_else(|| Self::best_adapter(wgpu::Backends::GL, force))?;
             let info = adapter.get_info();
             let lim = adapter.limits();
             let (dev, queue) = pollster::block_on(adapter.request_device(
@@ -244,6 +229,30 @@ mod imp {
             let bytes = unsafe { std::slice::from_raw_parts(tab.as_ptr() as *const u8, tab.len() * 8) };
             queue.write_buffer(&grad, 0, bytes);
             Some(Gpu { dev, queue, info, max_bytes, pipes: Mutex::new(HashMap::new()), grad })
+        }
+
+        /// The best adapter of `backends` for compute: a discrete GPU over an integrated or virtual one, software
+        /// rendering only if `force`.
+        fn best_adapter(backends: wgpu::Backends, force: bool) -> Option<wgpu::Adapter> {
+            let inst = wgpu::Instance::new(wgpu::InstanceDescriptor { backends, ..Default::default() });
+            let mut best: Option<wgpu::Adapter> = None;
+            let mut rank = 0;
+            for a in inst.enumerate_adapters(backends) {
+                let info = a.get_info();
+                let r = match info.device_type {
+                    wgpu::DeviceType::DiscreteGpu => 4,
+                    wgpu::DeviceType::IntegratedGpu => 3,
+                    wgpu::DeviceType::VirtualGpu => 2,
+                    _ if force => 1,
+                    _ => 0, // software rendering is never faster than the CPU code
+                };
+                // compute shaders need storage buffers in the compute stage; skip adapters without them
+                if r > rank && a.limits().max_storage_buffers_per_shader_stage >= 4 {
+                    rank = r;
+                    best = Some(a);
+                }
+            }
+            best
         }
 
         pub fn name(&self) -> String {
