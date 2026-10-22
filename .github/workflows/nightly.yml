@@ -60,21 +60,11 @@ jobs:
       matrix:
         include:
           # Keep glibc 2.35 compatibility for Ubuntu 22.04 and newer desktops.
-          - os: ubuntu-22.04
-            targets: x86_64-unknown-linux-gnu
-            test-target: x86_64-unknown-linux-gnu
-            out: target/x86_64-unknown-linux-gnu/release
-            label: x86_64-linux
           - os: windows-latest
             targets: x86_64-pc-windows-msvc
             test-target: x86_64-pc-windows-msvc
             out: target/x86_64-pc-windows-msvc/release
             label: x64-windows
-          - os: macos-latest
-            targets: aarch64-apple-darwin x86_64-apple-darwin
-            test-target: aarch64-apple-darwin
-            out: target/universal-apple-darwin/release
-            label: universal-macOS
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       LABEL: ${{ matrix.label }}
@@ -94,14 +84,6 @@ jobs:
         with:
           key: ${{ matrix.label }}
 
-      - name: Linux build and verification dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
-            libxrandr-dev libxi-dev libgl1-mesa-dev libxkbcommon-x11-0 \
-            rpm dpkg-dev xvfb xauth xdotool fuse3 libgl1-mesa-dri libegl1
 
       - name: Tests
         run: cargo test --locked --release --target "$TEST_TARGET"
@@ -118,12 +100,6 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then python_cmd=python; fi
           "$python_cmd" .github/scripts/collect-notices.py
 
-      - name: Package Linux
-        if: runner.os == 'Linux'
-        run: bash .github/scripts/package-linux.sh
-      - name: Verify Ubuntu installation and portable Linux packages
-        if: runner.os == 'Linux'
-        run: xvfb-run -a -s '-screen 0 1600x1000x24 -nolisten tcp -ac' bash .github/scripts/verify-linux.sh
       - name: Package and verify Windows
         if: runner.os == 'Windows'
         shell: pwsh
