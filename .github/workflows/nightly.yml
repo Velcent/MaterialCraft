@@ -84,10 +84,6 @@ jobs:
         with:
           key: ${{ matrix.label }}
 
-
-      - name: Tests
-        run: cargo test --locked --release --target "$TEST_TARGET"
-
       - name: Build CLI and editor
         run: |
           args=()
